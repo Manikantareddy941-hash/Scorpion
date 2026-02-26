@@ -19,39 +19,31 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
   useEffect(() => {
-    let isMounted = true;
-    // Timeout fallback: always end loading after 4s
-    const timeoutId = setTimeout(() => {
-      if (isMounted) setLoading(false);
+    let timeout = setTimeout(() => {
+      setLoading(false);
     }, 4000);
 
-    const init = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!isMounted) return;
-        setUser(data.session?.user ?? null);
-      } catch (err) {
-        if (import.meta.env.DEV) console.error("Session restore failed", err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-    init();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+      clearTimeout(timeout);
+    });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+      clearTimeout(timeout);
+    });
 
     return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
+      clearTimeout(timeout);
       listener.subscription.unsubscribe();
     };
   }, []);
