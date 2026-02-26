@@ -19,17 +19,15 @@ jobs:
         with:
           node-version: "18"
           cache: "npm"
-          cache-dependency-path: backend/package.json
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install Backend Dependencies
-        run: |
-          cd backend
-          npm ci
+        working-directory: backend
+        run: npm ci
 
       - name: Lint Backend
-        run: |
-          cd backend
-          npm run lint
+        working-directory: backend
+        run: npm run lint
 
       # Frontend
       - name: Setup Node.js (Frontend)
@@ -37,11 +35,10 @@ jobs:
         with:
           node-version: "18"
           cache: "npm"
-          cache-dependency-path: package.json
+          cache-dependency-path: package-lock.json
 
       - name: Install Frontend Dependencies
         run: npm ci
 
-      # Build Frontend (replaces basic linting for now as it checks TS too)
       - name: Build Frontend
         run: npm run build
