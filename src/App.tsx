@@ -16,39 +16,87 @@ import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import AIAnalytics from './pages/AIAnalytics';
 import { Shield } from 'lucide-react';
+import AuthCallback from './pages/AuthCallback';
+import Footer from './components/Footer';
+import NetworkErrorPanel from './components/NetworkErrorPanel';
+import { useEffect, useState } from 'react';
+import { supabase } from './lib/supabase';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
+import AuthSystemStatus from './components/AuthSystemStatus';
 
 function App() {
   const { user, loading } = useAuth();
+  const [networkError, setNetworkError] = useState(false);
+  const [checking, setChecking] = useState(true);
 
-  if (loading) {
+  // Global Supabase health check
+  const checkSupabase = async () => {
+    setChecking(true);
+    setNetworkError(false);
+    try {
+      // Use a lightweight call (auth or select 1)
+      const { error } = await supabase.auth.getSession();
+      if (error) throw error;
+      setNetworkError(false);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Supabase network error:', err);
+      setNetworkError(true);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    checkSupabase();
+    // Optionally, re-check on focus or interval
+    // window.addEventListener('focus', checkSupabase);
+    // return () => window.removeEventListener('focus', checkSupabase);
+  }, []);
+
+  if (loading || checking) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Shield className="w-12 h-12 text-blue-600 animate-pulse" />
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Authenticating Pilot...</h2>
+          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Checking authentication…</h2>
         </div>
       </div>
     );
   }
 
   return (
-    <Routes>
-      <Route path="/auth" element={!user ? <Auth /> : <Navigate to="/" />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/verify-otp" element={<VerifyOtp />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/devops" element={user ? <DevOpsDashboard /> : <Navigate to="/auth" />} />
-      <Route path="/projects/:id" element={user ? <ProjectDetail /> : <Navigate to="/auth" />} />
-      <Route path="/" element={user ? <Dashboard /> : <Navigate to="/auth" />} />
-      <Route path="/security" element={user ? <SecurityDashboard /> : <Navigate to="/auth" />} />
-      <Route path="/change-password" element={user ? <ChangePassword /> : <Navigate to="/auth" />} />
-      <Route path="/settings" element={user ? <SettingsPage /> : <Navigate to="/auth" />} />
-      <Route path="/teams" element={user ? <Teams /> : <Navigate to="/auth" />} />
-      <Route path="/alerts" element={user ? <Alerts /> : <Navigate to="/auth" />} />
-      <Route path="/reports" element={user ? <Reports /> : <Navigate to="/auth" />} />
-      <Route path="/insights" element={user ? <CodeInsights /> : <Navigate to="/auth" />} />
-      <Route path="/ai-insights" element={user ? <AIAnalytics /> : <Navigate to="/auth" />} />
-    </Routes>
+    <div className="min-h-screen flex flex-col">
+      <div className="w-full flex justify-center items-center py-2 bg-transparent z-40">
+        <AuthSystemStatus />
+      </div>
+      {networkError && (
+        <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
+          <NetworkErrorPanel onRetry={checkSupabase} />
+        </div>
+      )}
+      <div className="flex-1">
+        <Routes>
+          <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/verify-otp" element={<PublicRoute><VerifyOtp /></PublicRoute>} />
+          <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
+          <Route path="/devops" element={<ProtectedRoute><DevOpsDashboard /></ProtectedRoute>} />
+          <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/security" element={<ProtectedRoute><SecurityDashboard /></ProtectedRoute>} />
+          <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
+          <Route path="/ai-insights" element={<ProtectedRoute><AIAnalytics /></ProtectedRoute>} />
+        </Routes>
+      </div>
+      <Footer />
+    </div>
   );
 }
 

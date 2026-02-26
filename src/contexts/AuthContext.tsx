@@ -8,6 +8,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  signInWithOAuth: (provider: 'google' | 'github') => Promise<{ error?: any }>;
   requestReset: (email: string) => Promise<{ error?: string; message?: string }>;
   verifyResetOtp: (email: string, otp: string) => Promise<{ error?: string; resetToken?: string }>;
   completeReset: (resetToken: string, newPassword: string) => Promise<{ error?: string }>;
@@ -22,18 +23,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
   useEffect(() => {
-    // Check initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let isMounted = true;
+    // Timeout fallback: always end loading after 4s
+    const timeoutId = setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 4000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+    const init = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        setUser(data.session?.user ?? null);
+      } catch (err) {
+        if (import.meta.env.DEV) console.error("Session restore failed", err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    init();
 
-    return () => subscription.unsubscribe();
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      listener.subscription.unsubscribe();
+    };
   }, []);
+
 
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password });
@@ -42,6 +64,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
+  };
+
+  const signInWithOAuth = async (provider: 'google' | 'github') => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
     return { error };
   };
 
@@ -100,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, requestReset, verifyResetOtp, completeReset, updatePassword }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, signInWithOAuth, requestReset, verifyResetOtp, completeReset, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
