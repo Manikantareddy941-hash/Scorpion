@@ -1,8 +1,9 @@
 ﻿import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, AlertCircle, CheckCircle2, ArrowLeft, Mail } from 'lucide-react';
+import { LogIn, UserPlus, AlertCircle, CheckCircle2, ArrowLeft, Mail, Eye, EyeOff } from 'lucide-react';
 import AuthDiagnosticBanner from './AuthDiagnosticBanner';
+import SocialLoginButtons from './auth/SocialLoginButtons';
 import { authHealthCheck, AuthHealthResult } from '../lib/authHealthCheck';
 
 export default function Auth() {
@@ -10,6 +11,7 @@ export default function Auth() {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,6 +26,9 @@ export default function Auth() {
 
   const switchMode = (newMode: 'login' | 'signup' | 'forgot') => {
     setMode(newMode);
+    setEmail('');
+    setPassword('');
+    setShowPassword(false);
     clearMessages();
   };
 
@@ -44,7 +49,10 @@ export default function Auth() {
         const { error, message } = await requestReset(email);
         if (error) {
           setError(error);
-          await runDiagnostics();
+          // Only run diagnostics if it's a real auth error, not a network error
+          if (!error.toLowerCase().includes('network')) {
+            await runDiagnostics();
+          }
         } else {
           setSuccess(message || 'OTP sent! Redirecting...');
           setTimeout(() => navigate('/verify-otp', { state: { email } }), 1500);
@@ -56,7 +64,10 @@ export default function Auth() {
 
         if (error) {
           setError(error.message);
-          await runDiagnostics();
+          // Only run diagnostics if it's a real auth error, not a network error
+          if (!error.message?.toLowerCase().includes('network')) {
+            await runDiagnostics();
+          }
         } else if (mode === 'signup') {
           setSuccess('Account created! Please check your email to verify, then sign in.');
           switchMode('login');
@@ -64,7 +75,9 @@ export default function Auth() {
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
-      await runDiagnostics();
+      if (!err.message?.toLowerCase().includes('network')) {
+        await runDiagnostics();
+      }
     } finally {
       setLoading(false);
     }
@@ -139,7 +152,7 @@ export default function Auth() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               placeholder="you@example.com"
             />
           </div>
@@ -149,16 +162,30 @@ export default function Auth() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                placeholder="••••••••"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
@@ -192,6 +219,18 @@ export default function Auth() {
             )}
           </button>
         </form>
+
+        {/* Divider and Social Login Buttons */}
+        {mode !== 'forgot' && (
+          <div className="my-6">
+            <div className="flex items-center mb-4">
+              <div className="flex-grow border-t border-gray-200 dark:border-gray-700" />
+              <span className="mx-3 text-gray-400 text-xs uppercase tracking-widest">or continue with</span>
+              <div className="flex-grow border-t border-gray-200 dark:border-gray-700" />
+            </div>
+            <SocialLoginButtons />
+          </div>
+        )}
 
         <div className="mt-6 text-center space-y-2">
           {mode === 'forgot' ? (

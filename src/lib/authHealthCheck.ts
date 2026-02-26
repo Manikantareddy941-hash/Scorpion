@@ -14,10 +14,13 @@ export const authHealthCheck = async (): Promise<AuthHealthResult> => {
 
   // 1. Check backend connectivity
   try {
-    const response = await fetch('/api/health');
+    const response = await fetch('http://localhost:3001/health', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
     if (response.ok) {
       const data = await response.json();
-      if (data.service === 'stackpilot-backend') {
+      if (data.service === 'stackpilot-backend' || data.status === 'ok') {
         result.backendReachable = true;
       } else {
         result.errorType = 'UNKNOWN';
@@ -27,22 +30,10 @@ export const authHealthCheck = async (): Promise<AuthHealthResult> => {
     }
   } catch (error) {
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      // This is a generic network error. It could be CORS or the server is down.
-      // We'll hint at both possibilities. The browser console will show the real error.
-      result.errorType = 'NETWORK'; // Default to NETWORK
-
-      // A simple check to see if it *might* be a CORS issue.
-      // This is not foolproof.
-      if (typeof window !== 'undefined' && window.location.origin !== 'http://localhost:3001') {
-        // A more specific check for CORS would be to check the response headers,
-        // but if fetch fails, we don't have a response.
-        // A better approach is to rely on the user seeing the error in the console.
-        // Let's check for 'cors' in the error message. Some browsers might include it.
-        if (error.stack?.toLowerCase().includes('cors')) {
-          result.errorType = 'CORS';
-        }
+      result.errorType = 'NETWORK';
+      if (error.stack?.toLowerCase().includes('cors')) {
+        result.errorType = 'CORS';
       }
-
     } else {
       result.errorType = 'UNKNOWN';
     }
