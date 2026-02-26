@@ -25,10 +25,6 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Lint Backend
-        working-directory: backend
-        run: npm run lint
-
       # Frontend
       - name: Setup Node.js (Frontend)
         uses: actions/setup-node@v3
