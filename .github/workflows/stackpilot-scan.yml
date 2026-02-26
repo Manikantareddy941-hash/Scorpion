@@ -1,0 +1,20 @@
+name: StackPilot Security Audit
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  audit:
+    name: StackPilot Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Trigger StackPilot API
+        run: |
+          curl -X POST "http://localhost:3001/api/webhooks/scan-trigger" \
+            -H "X-API-KEY: ${{ secrets.STACKPILOT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"repo_url\": \"${{ github.event.repository.html_url }}\"}"
