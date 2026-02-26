@@ -1,44 +1,4 @@
-// --- Auth Diagnostic Endpoint ---
-app.get('/api/health/auth', async (req: Request, res: Response) => {
-    const origin = req.headers.origin;
-    const env = {
-        SUPABASE_URL: !!process.env.SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        FRONTEND_URL: !!process.env.FRONTEND_URL,
-    };
-    let backend = 'ok';
-    let supabaseStatus = 'ok';
-    let corsStatus = 'ok';
-    const timestamp = new Date().toISOString();
-
-    // CORS check
-    if (!origin || origin !== process.env.FRONTEND_URL) corsStatus = 'fail';
-
-    // Supabase check
-    try {
-        const { error } = await supabase.auth.getUser('test-token'); // lightweight call
-        if (error) throw error;
-    } catch (err) {
-        supabaseStatus = 'fail';
-        if (process.env.NODE_ENV === 'development') console.error('Supabase connection error:', err);
-    }
-
-    // Backend check
-    try {
-        backend = 'ok';
-    } catch (err) {
-        backend = 'fail';
-        if (process.env.NODE_ENV === 'development') console.error('Backend error:', err);
-    }
-
-    res.json({
-        backend,
-        supabase: supabaseStatus,
-        env,
-        cors: corsStatus,
-        timestamp,
-    });
-});
+// ...existing code (first set of imports and const app = express())...
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
