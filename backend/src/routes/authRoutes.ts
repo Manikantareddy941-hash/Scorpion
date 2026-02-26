@@ -18,16 +18,33 @@ router.post('/request-reset', async (req: Request, res: Response) => {
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
     try {
-        // Check if user exists using Supabase Admin API
-        const { data: { users }, error: userError } = await supabase.auth.admin.listUsers();
+        let userExists = true;
 
-        if (userError) throw userError;
+        // Try to check if user exists using Supabase Admin API
+        try {
+            const { data: { users }, error: userError } = await supabase.auth.admin.listUsers();
 
-        const user = users.find(u => u.email === email);
+            if (userError) throw userError;
 
-        // To prevent email enumeration, we always return success even if user not found
-        if (!user) {
-            console.log(`[Auth] Reset requested for non-existent email: ${email}`);
+            const user = users.find(u => u.email === email);
+
+            // To prevent email enumeration, we always return success even if user not found
+            if (!user) {
+                console.log(`[Auth] Reset requested for non-existent email: ${email}`);
+                userExists = false;
+            }
+        } catch (supabaseError: any) {
+            // If Supabase is unreachable, allow in dev mode
+            if (process.env.NODE_ENV === 'production') {
+                throw supabaseError;
+            }
+            console.warn('[Auth] Supabase unreachable, proceeding in dev mode:', supabaseError.message);
+            // In dev mode, assume user exists to allow testing
+            userExists = true;
+        }
+
+        // In dev mode, always continue even for non-existent users
+        if (!userExists && process.env.NODE_ENV === 'production') {
             return res.json({ message: 'If an account exists, an OTP has been sent.' });
         }
 
@@ -36,26 +53,44 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         const otpHash = await bcrypt.hash(otp, 10);
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
 
-        // Save to database
-        const { error: resetError } = await supabase
-            .from('password_resets')
-            .upsert({
-                email,
-                otp_hash: otpHash,
-                expires_at: expiresAt,
-                attempts: 0,
-                created_at: new Date().toISOString()
-            }, { onConflict: 'email' });
+        // Save to database with error handling for dev mode
+        try {
+            const { error: resetError } = await supabase
+                .from('password_resets')
+                .upsert({
+                    email,
+                    otp_hash: otpHash,
+                    expires_at: expiresAt,
+                    attempts: 0,
+                    created_at: new Date().toISOString()
+                }, { onConflict: 'email' });
 
-        if (resetError) throw resetError;
+            if (resetError) throw resetError;
+        } catch (dbError: any) {
+            console.warn('[Auth] Database save failed:', dbError.message);
+            // In dev mode, continue without saving to DB
+            if (process.env.NODE_ENV === 'production') {
+                throw dbError;
+            }
+            console.log('[DEV] Skipping DB save, continuing with OTP send for testing');
+        }
 
-        // Send email
-        await sendOtpEmail(email, otp);
+        // Send email with fallback for dev mode
+        try {
+            await sendOtpEmail(email, otp);
+        } catch (emailError: any) {
+            console.error('[Auth] Email sending failed, but continuing:', emailError.message);
+            // In development, we still allow the reset to proceed
+            if (process.env.NODE_ENV === 'production') {
+                throw emailError;
+            }
+            console.log(`[DEV-OTP] Password reset OTP for ${email}: ${otp}`);
+        }
 
         res.json({ message: 'If an account exists, an OTP has been sent.' });
     } catch (error: any) {
         console.error('[Auth] Error in request-reset:', error);
-        res.status(500).json({ error: 'Failed to process request' });
+        res.status(500).json({ error: error.message || 'Failed to process request' });
     }
 });
 
@@ -103,7 +138,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         res.json({ resetToken, message: 'OTP verified successfully' });
     } catch (error: any) {
         console.error('[Auth] Error in verify-otp:', error);
-        res.status(500).json({ error: 'Failed to verify OTP' });
+        res.status(500).json({ error: error.message || 'Failed to verify OTP' });
     }
 });
 
@@ -140,7 +175,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
         if (error.name === 'JsonWebTokenError') {
             return res.status(401).json({ error: 'Invalid or expired reset token' });
         }
-        res.status(500).json({ error: 'Failed to reset password' });
+        res.status(500).json({ error: error.message || 'Failed to reset password' });
     }
 });
 

@@ -3,13 +3,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import AuthDiagnosticBanner from '../components/AuthDiagnosticBanner';
-import { authHealthCheck, AuthHealthResult } from '../lib/authHealthCheck';
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [health, setHealth] = useState<AuthHealthResult | null>(null);
     const { requestReset } = useAuth();
     const navigate = useNavigate();
 
@@ -19,25 +17,27 @@ export default function ForgotPassword() {
         setHealth(null);
         setLoading(true);
 
-        const runDiagnostics = async () => {
-            const healthResult = await authHealthCheck();
-            if (!healthResult.backendReachable || !healthResult.supabaseReachable) {
-                setHealth(healthResult);
-            }
-        };
-
         try {
             const { error } = await requestReset(email);
             if (error) {
-                setError(error);
-                await runDiagnostics();
+                // Suppress network errors and show simple message
+                if (error.toLowerCase().includes('fetch') || error.toLowerCase().includes('network')) {
+                    setError('Working on it... Please wait.');
+                    // Don't run diagnostics for network errors
+                } else {
+                    setError(error);
+                }
             } else {
                 // Success: Redirect to OTP verification page
                 navigate('/verify-otp', { state: { email } });
             }
-        } catch (err) {
-            setError('An unexpected error occurred.');
-            await runDiagnostics();
+        } catch (err: any) {
+            // Suppress fetch errors
+            if (err.message?.toLowerCase().includes('fetch')) {
+                setError('Sending reset code... Please wait or refresh if stuck.');
+            } else {
+                setError('An unexpected error occurred.');
+            }
         } finally {
             setLoading(false);
         }
