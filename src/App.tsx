@@ -30,31 +30,42 @@ function App() {
   const [networkError, setNetworkError] = useState(false);
   const [checking, setChecking] = useState(true);
 
-  // Global Supabase health check
-  const checkSupabase = async () => {
-    setChecking(true);
-    setNetworkError(false);
-    try {
-      // Use a lightweight call (auth or select 1)
-      const { error } = await supabase.auth.getSession();
-      if (error) throw error;
-      setNetworkError(false);
-    } catch (err) {
-      if (import.meta.env.DEV) console.error('Supabase network error:', err);
-      setNetworkError(true);
-    } finally {
-      setChecking(false);
-    }
-  };
-
+  // Env validation (do not block UI)
   useEffect(() => {
-    checkSupabase();
-    // Optionally, re-check on focus or interval
-    // window.addEventListener('focus', checkSupabase);
-    // return () => window.removeEventListener('focus', checkSupabase);
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      // eslint-disable-next-line no-console
+      console.warn('Missing Supabase env vars: VITE_SUPABASE_URL and/or VITE_SUPABASE_ANON_KEY');
+    }
   }, []);
 
-  if (loading || checking) {
+  // Global Supabase health check (background only)
+  useEffect(() => {
+    let timeout = setTimeout(() => setChecking(false), 4000);
+
+    const checkSupabase = async () => {
+      try {
+        const { error } = await supabase.auth.getSession();
+        if (error) throw error;
+        setNetworkError(false);
+      } catch (err) {
+        if (import.meta.env.DEV) console.error('Supabase network error:', err);
+        setNetworkError(true);
+      } finally {
+        setChecking(false);
+        clearTimeout(timeout);
+      }
+    };
+    checkSupabase()
+      .catch(() => {})
+      .finally(() => {
+        setChecking(false);
+        clearTimeout(timeout);
+      });
+    return () => clearTimeout(timeout);
+  }, []);
+
+  // Only loading (from AuthContext) should block routing
+  if (loading) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
