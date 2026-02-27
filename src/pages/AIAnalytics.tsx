@@ -8,9 +8,12 @@ import {
     Clock, Target, Brain, ArrowUpRight, ShieldCheck, ChevronRight, Activity
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 
 export default function AIAnalytics() {
     const { theme } = useTheme();
+    const { accessToken } = useAuth();
     const [summary, setSummary] = useState<any>(null);
     const [trends, setTrends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -21,18 +24,13 @@ export default function AIAnalytics() {
 
     const fetchData = async () => {
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const [summaryRes, trendsRes] = await Promise.all([
-                fetch(`${apiBase}/api/ai/metrics/summary`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch(`${apiBase}/api/ai/metrics/trends`, { headers: { 'Authorization': `Bearer ${token}` } })
+            const [summaryData, trendsData] = await Promise.all([
+                apiFetch(`/api/ai/metrics/summary`, { token: accessToken }),
+                apiFetch(`/api/ai/metrics/trends`, { token: accessToken })
             ]);
 
-            if (summaryRes.ok) setSummary(await summaryRes.json());
-            if (trendsRes.ok) setTrends(await trendsRes.json());
+            if (summaryData) setSummary(summaryData);
+            if (trendsData) setTrends(trendsData);
         } catch (err) {
             console.error('Failed to fetch AI analytics:', err);
         } finally {
