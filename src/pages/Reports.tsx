@@ -8,9 +8,12 @@ import {
     Filter, ChevronRight, Activity, Loader2, Download
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 
 export default function Reports() {
     const { theme } = useTheme();
+    const { accessToken } = useAuth();
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [stats, setStats] = useState<any>(null);
@@ -25,21 +28,15 @@ export default function Reports() {
     const fetchStats = async () => {
         setLoading(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const params = new URLSearchParams();
+            params.append('scope', scope);
+            if (scopeId) params.append('id', scopeId);
 
-            const url = new URL(`${apiBase}/api/reports/stats`);
-            url.searchParams.append('scope', scope);
-            if (scopeId) url.searchParams.append('id', scopeId);
-
-            const response = await fetch(url.toString(), {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const data = await apiFetch(`/api/reports/stats?${params.toString()}`, {
+                token: accessToken
             });
 
-            if (response.ok) {
-                const data = await response.json();
+            if (data) {
                 setStats(data.stats);
                 setTrend(data.trend);
             }
@@ -53,17 +50,9 @@ export default function Reports() {
     const handleExport = async () => {
         setGenerating(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/reports/generate`, {
+            const blob = await apiFetch(`/api/reports/generate`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
+                token: accessToken,
                 body: JSON.stringify({
                     scope,
                     id: scopeId,
@@ -71,8 +60,7 @@ export default function Reports() {
                 })
             });
 
-            if (response.ok) {
-                const blob = await response.blob();
+            if (blob) {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;

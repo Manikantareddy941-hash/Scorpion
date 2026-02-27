@@ -8,6 +8,8 @@ import {
 import {
     ResponsiveContainer, AreaChart, Area
 } from 'recharts';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 
 interface CodeMetric {
     tool: 'eslint' | 'trivy' | 'npm_audit';
@@ -35,6 +37,7 @@ interface TrendData {
 }
 
 export default function CodeInsights() {
+    const { accessToken } = useAuth();
     const [loading, setLoading] = useState(true);
     const [scans, setScans] = useState<Scan[]>([]);
     const [trends, setTrends] = useState<TrendData[]>([]);
@@ -49,29 +52,20 @@ export default function CodeInsights() {
 
     const fetchData = async () => {
         try {
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const [summaryRes, trendsRes] = await Promise.all([
-                fetch(`${apiBase}/api/insights/summary`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+            const [summaryData, trendsData] = await Promise.all([
+                apiFetch(`/api/insights/summary`, {
+                    token: accessToken
                 }),
-                fetch(`${apiBase}/api/insights/trends`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                apiFetch(`/api/insights/trends`, {
+                    token: accessToken
                 })
             ]);
 
-            if (!summaryRes.ok || !trendsRes.ok) throw new Error('Failed to fetch data');
-
-            const insightsData = await summaryRes.json();
-            const trendsData = await trendsRes.json();
-
-            setScans(insightsData.scans || []);
-            setOverallScore(insightsData.overallScore || 0);
+            setScans(summaryData?.scans || []);
+            setOverallScore(summaryData?.overallScore || 0);
             setTrends(trendsData || []);
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Failed to fetch data');
         } finally {
             setLoading(false);
         }

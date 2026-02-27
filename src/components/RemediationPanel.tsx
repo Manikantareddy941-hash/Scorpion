@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 
 interface RemediationPanelProps {
     vulnerabilityId: string;
@@ -7,6 +9,7 @@ interface RemediationPanelProps {
 }
 
 export default function RemediationPanel({ vulnerabilityId, onClose }: RemediationPanelProps) {
+    const { accessToken } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [fix, setFix] = useState<any>(null);
@@ -20,23 +23,15 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            await fetch(`${apiBase}/api/ai/metrics/event`, {
+            await apiFetch(`/api/ai/metrics/event`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify({
                     finding_id: vulnerabilityId,
                     suggestion_id: suggestionId,
                     action,
                     confidence_score: confidence
-                })
+                }),
+                token: accessToken
             });
         } catch (err) {
             console.error('Failed to track AI event:', err);
@@ -47,18 +42,12 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         setLoading(true);
         setError('');
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
+            const data = await apiFetch(`/api/vulns/${vulnerabilityId}/remediate`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                token: accessToken
             });
 
-            if (response.ok) {
-                const data = await response.json();
+            if (data) {
                 setFix(data);
                 // Track Viewed
                 trackEvent('viewed', data.id, data.confidence_score);
@@ -80,18 +69,10 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const handleFeedback = async (type: 'helpful' | 'ignore') => {
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/feedback`, {
+            await apiFetch(`/api/vulns/${vulnerabilityId}/feedback`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } })
+                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } }),
+                token: accessToken
             });
 
             // Track Interaction
@@ -107,18 +88,12 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         if (!fix?.id) return;
         setPrLoading(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/fixes/${fix.id}/pr`, {
+            const data = await apiFetch(`/api/fixes/${fix.id}/pr`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                token: accessToken
             });
 
-            if (response.ok) {
-                const data = await response.json();
+            if (data) {
                 setPrResult({ url: data.url, branch: data.branch_name });
             } else {
                 alert('Failed to create PR. Please check backend logs.');

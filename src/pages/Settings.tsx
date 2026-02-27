@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { apiFetch } from '../lib/apiClient';
 import {
     ArrowLeft, Settings as SettingsIcon, Bell, ScanSearch, Save,
     Plus, AlertCircle, Loader2, User, Globe, Github, Slack, Key, CheckCircle2,
@@ -15,7 +16,7 @@ interface NotificationPreferences {
 }
 
 export default function SettingsPage() {
-    const { user } = useAuth();
+    const { user, accessToken } = useAuth();
     const [activeTab, setActiveTab] = useState<'profile' | 'scan' | 'notifications' | 'integrations' | 'developer'>('profile');
 
     // Profile state
@@ -49,12 +50,7 @@ export default function SettingsPage() {
 
     const fetchApiKeys = async () => {
         try {
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/keys`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
+            const data = await apiFetch(`/api/keys`, { token: accessToken });
             setApiKeys(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Error fetching API keys:', err);
@@ -66,18 +62,12 @@ export default function SettingsPage() {
         if (!newKeyName.trim()) return;
         setGeneratingKey(true);
         try {
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/keys`, {
+            const data = await apiFetch(`/api/keys`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name: newKeyName })
+                body: JSON.stringify({ name: newKeyName }),
+                token: accessToken
             });
-            const data = await response.json();
-            if (data.api_key) {
+            if (data?.api_key) {
                 setNewlyCreatedKey(data.api_key);
                 setApiKeys([data, ...apiKeys]);
                 setNewKeyName('');
@@ -92,11 +82,9 @@ export default function SettingsPage() {
     const handleRevokeKey = async (id: string) => {
         if (!confirm('Are you sure you want to revoke this API key? Pipelines using it will fail.')) return;
         try {
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/keys/${id}`, {
+            await apiFetch(`/api/keys/${id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+                token: accessToken
             });
             setApiKeys(apiKeys.filter(k => k.id !== id));
         } catch (err) {
@@ -128,21 +116,12 @@ export default function SettingsPage() {
         e.preventDefault();
         setUpdatingProfile(true);
         try {
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/user/profile`, {
+            await apiFetch(`/api/user/profile`, {
                 method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ displayName })
+                body: JSON.stringify({ displayName }),
+                token: accessToken
             });
-
-            if (response.ok) {
-                alert('Profile updated successfully!');
-            }
+            alert('Profile updated successfully!');
         } catch (err) {
             console.error(err);
         } finally {
@@ -166,11 +145,9 @@ export default function SettingsPage() {
                 .select().single();
             if (repoError) throw repoError;
 
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-            await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/repos/${repo.id}/scan`, {
+            await apiFetch(`/api/repos/${repo.id}/scan`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                token: accessToken
             });
 
             setScanMessage(`Scan triggered for ${repoUrl}! Check Control Center for results.`);

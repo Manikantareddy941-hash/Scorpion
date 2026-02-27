@@ -9,6 +9,8 @@ import {
 import { FindingsTable } from '../components/FindingsTable';
 import { ScanHistory } from '../components/ScanHistory';
 import RemediationPanel from '../components/RemediationPanel';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 
 interface Vulnerability {
     id: string;
@@ -31,6 +33,7 @@ interface Scan {
 
 export default function ProjectDetail() {
     const { id } = useParams();
+    const { accessToken } = useAuth();
     const [repo, setRepo] = useState<any>(null);
     const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
     const [scans, setScans] = useState<Scan[]>([]);
@@ -75,21 +78,20 @@ export default function ProjectDetail() {
             setScans(scanResults || []);
 
             // Fetch Policy
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (policyRes.ok) setPolicy(await policyRes.json());
+            try {
+                const policyData = await apiFetch(`/api/repos/${id}/policy`, { token: accessToken });
+                setPolicy(policyData);
+            } catch (e) {
+                // ignore
+            }
 
             // Fetch Access
-            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (accessRes.ok) setProjectAccess(await accessRes.json());
+            try {
+                const accessData = await apiFetch(`/api/repos/${id}/access`, { token: accessToken });
+                setProjectAccess(accessData);
+            } catch (e) {
+                // ignore
+            }
 
         } catch (err) {
             console.error('Error fetching project data:', err);
@@ -102,26 +104,14 @@ export default function ProjectDetail() {
         if (!id) return;
         setTriggering(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
+            await apiFetch(`/api/repos/${id}/scan`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                token: accessToken
             });
-
-            if (!response.ok) {
-                const data = await response.json();
-                alert(data.error || 'Failed to trigger scan');
-            } else {
-                fetchProjectData();
-            }
-        } catch (err) {
+            fetchProjectData();
+        } catch (err: any) {
             console.error('Error triggering scan:', err);
+            alert(err.message || 'Failed to trigger scan');
         } finally {
             setTriggering(null as any);
             setTriggering(false);
@@ -131,22 +121,15 @@ export default function ProjectDetail() {
     const handleConvertToIssue = async (vulnId: string) => {
         setConverting(vulnId);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
+            await apiFetch(`/api/vulnerabilities/${vulnId}/convert`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                token: accessToken
             });
-
-            if (response.ok) {
-                alert('Finding converted to Task successfully!');
-                fetchProjectData();
-            }
-        } catch (err) {
+            alert('Finding converted to Task successfully!');
+            fetchProjectData();
+        } catch (err: any) {
             console.error('Error converting vulnerability:', err);
+            alert(err.message || 'Failed to convert finding');
         } finally {
             setConverting(null);
         }
@@ -283,33 +266,21 @@ export default function ProjectDetail() {
 }
 
 function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: string, onUpdate: () => void }) {
+    const { accessToken } = useAuth();
     const [updating, setUpdating] = useState(false);
 
     const updatePolicy = async (profile: string) => {
         setUpdating(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
+            await apiFetch(`/api/repos/${repoId}/policy`, {
                 method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ policy_name: profile })
+                body: JSON.stringify({ policy_name: profile }),
+                token: accessToken
             });
-
-            if (response.ok) {
-                onUpdate();
-            } else {
-                const err = await response.json();
-                alert(err.error || 'Failed to update policy');
-            }
-        } catch (err) {
+            onUpdate();
+        } catch (err: any) {
             console.error('Error updating policy:', err);
+            alert(err.message || 'Failed to update policy');
         } finally {
             setUpdating(false);
         }
@@ -378,6 +349,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
 }
 
 function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: string, onUpdate: () => void }) {
+    const { accessToken } = useAuth();
     const [granting, setGranting] = useState(false);
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamId, setSelectedTeamId] = useState('');
@@ -395,24 +367,13 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
         if (!selectedTeamId) return;
         setGranting(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
+            await apiFetch(`/api/repos/${repoId}/access`, {
                 method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ team_id: selectedTeamId, action: 'grant' })
+                body: JSON.stringify({ team_id: selectedTeamId, action: 'grant' }),
+                token: accessToken
             });
-
-            if (response.ok) {
-                onUpdate();
-                setSelectedTeamId('');
-            }
+            onUpdate();
+            setSelectedTeamId('');
         } catch (err) {
             console.error('Error granting access:', err);
         } finally {
@@ -422,23 +383,12 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
 
     const revokeAccess = async (teamId: string) => {
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
+            await apiFetch(`/api/repos/${repoId}/access`, {
                 method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ team_id: teamId, action: 'revoke' })
+                body: JSON.stringify({ team_id: teamId, action: 'revoke' }),
+                token: accessToken
             });
-
-            if (response.ok) {
-                onUpdate();
-            }
+            onUpdate();
         } catch (err) {
             console.error('Error revoking access:', err);
         }
