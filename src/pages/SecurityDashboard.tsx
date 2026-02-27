@@ -1,6 +1,8 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 import {
     Shield, CheckCircle, XCircle,
     RefreshCw, Play, ExternalLink, ArrowLeft,
@@ -25,6 +27,7 @@ interface RepoMetric {
 }
 
 export default function SecurityDashboard() {
+    const { accessToken } = useAuth();
     const [results, setResults] = useState<ScanResult[]>([]);
     const [repos, setRepos] = useState<RepoMetric[]>([]);
     const [loading, setLoading] = useState(true);
@@ -75,26 +78,14 @@ export default function SecurityDashboard() {
     const handleRunScan = async (repoId: string) => {
         setTriggering(repoId);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/scan`, {
+            await apiFetch(`/api/repos/${repoId}/scan`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                token: accessToken
             });
-
-            if (!response.ok) {
-                const data = await response.json();
-                alert(data.error || 'Failed to trigger scan');
-            } else {
-                fetchDashboardData();
-            }
-        } catch (err) {
+            fetchDashboardData();
+        } catch (err: any) {
             console.error('Error triggering scan:', err);
+            alert(err.message || 'Failed to trigger scan');
         } finally {
             setTriggering(null);
         }

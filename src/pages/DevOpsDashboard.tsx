@@ -6,6 +6,8 @@ import {
     AlertTriangle, Activity, Layout, Github, Shield,
     BarChart3, Clock, Database, Mail, RefreshCw, Zap
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../lib/apiClient';
 
 interface DashboardStats {
     avgRiskScore: number;
@@ -32,6 +34,7 @@ interface ActivityItem {
 }
 
 export default function DevOpsDashboard() {
+    const { accessToken } = useAuth();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -45,21 +48,11 @@ export default function DevOpsDashboard() {
 
     const fetchAllData = async () => {
         try {
-            const session = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}');
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            const [statsRes, healthRes, activitiesRes] = await Promise.all([
-                fetch(`${apiBase}/api/dashboard/stats`, { headers }),
-                fetch(`${apiBase}/health`),
-                fetch(`${apiBase}/api/dashboard/activities`, { headers })
+            const [statsData, healthData, activitiesData] = await Promise.all([
+                apiFetch(`/api/dashboard/stats`, { token: accessToken }),
+                apiFetch(`/health`),
+                apiFetch(`/api/dashboard/activities`, { token: accessToken })
             ]);
-
-            const statsData = await statsRes.json();
-            const healthData = await healthRes.json();
-            const activitiesData = await activitiesRes.json();
 
             setStats(statsData);
             setHealth(healthData);
