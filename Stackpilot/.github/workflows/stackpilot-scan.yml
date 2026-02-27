@@ -1,0 +1,13 @@
+name: StackPilot Security Audit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: StackPilot Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Placeholder step
+        run: echo "Security scan will run when backend is deployed"
