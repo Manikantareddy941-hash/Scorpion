@@ -1,23 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
 import { notifyScanCompletion } from './notificationService';
 import { orchestrateScan } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, Finding } from './scan/parsers';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 // ---------------------------------------------------------------------------
 // Core scan trigger
 // ---------------------------------------------------------------------------
 
 export const triggerScan = async (repoId: string): Promise<{ scanId: string | null; error: string | null }> => {
-    const supabase = getSupabase();
 
     // 1. Rigorous Repo Validation
     const { data: repo, error: repoErr } = await supabase
@@ -187,7 +179,6 @@ export const triggerScan = async (repoId: string): Promise<{ scanId: string | nu
 // ---------------------------------------------------------------------------
 
 export const getInsightsSummary = async (userId: string) => {
-    const supabase = getSupabase();
 
     const { data: repos } = await supabase
         .from('repositories')

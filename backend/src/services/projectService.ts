@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabase } from '../lib/supabase';
 
 export const createProject = async (userId: string, name: string, description?: string) => {
     const { data, error } = await supabase
