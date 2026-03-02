@@ -1,16 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
 import { triggerScan } from '../services/scanService';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl) throw new Error('SUPABASE_URL is required');
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 export const scanRepositories = async () => {
     console.log('[Scanner] Starting repository scan cycle...');
-    const supabase = getSupabase();
 
     // 1. Fetch repositories that haven't been scanned in 24h
     // (Rate limiting cooldown is also handled inside triggerScan)

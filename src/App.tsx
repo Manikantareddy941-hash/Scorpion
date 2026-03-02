@@ -23,12 +23,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
-import AuthSystemStatus from './components/AuthSystemStatus';
 
 function App() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   const [networkError, setNetworkError] = useState(false);
-  const [checking, setChecking] = useState(true);
 
   // Env validation (do not block UI)
   useEffect(() => {
@@ -38,30 +36,20 @@ function App() {
     }
   }, []);
 
+  const checkSupabase = async () => {
+    try {
+      const { error } = await supabase.auth.getSession();
+      if (error) throw error;
+      setNetworkError(false);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Supabase network error:', err);
+      setNetworkError(true);
+    }
+  };
+
   // Global Supabase health check (background only)
   useEffect(() => {
-    let timeout = setTimeout(() => setChecking(false), 4000);
-
-    const checkSupabase = async () => {
-      try {
-        const { error } = await supabase.auth.getSession();
-        if (error) throw error;
-        setNetworkError(false);
-      } catch (err) {
-        if (import.meta.env.DEV) console.error('Supabase network error:', err);
-        setNetworkError(true);
-      } finally {
-        setChecking(false);
-        clearTimeout(timeout);
-      }
-    };
-    checkSupabase()
-      .catch(() => {})
-      .finally(() => {
-        setChecking(false);
-        clearTimeout(timeout);
-      });
-    return () => clearTimeout(timeout);
+    checkSupabase();
   }, []);
 
   // Only loading (from AuthContext) should block routing
@@ -78,9 +66,6 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="w-full flex justify-center items-center py-2 bg-transparent z-40">
-        <AuthSystemStatus />
-      </div>
       {networkError && (
         <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
           <NetworkErrorPanel onRetry={checkSupabase} />
@@ -104,6 +89,8 @@ function App() {
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
           <Route path="/ai-insights" element={<ProtectedRoute><AIAnalytics /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
       <Footer />

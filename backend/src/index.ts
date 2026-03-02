@@ -11,6 +11,7 @@ import authRoutes from './routes/authRoutes';
 import projectRoutes from './routes/projectRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import healthRoutes from './routes/healthRoutes';
+import { supabase, checkSupabaseConnection } from './lib/supabase';
 import crypto from 'crypto';
 
 import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from './services/reportingService';
@@ -95,11 +96,7 @@ const scanLimiter = rateLimit({
 
 app.use('/auth', authLimiter, authRoutes);
 
-// Supabase client for service-role operations
-const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Removed local createClient call
 
 interface AuthenticatedRequest extends Request {
     user?: User;
@@ -170,25 +167,7 @@ app.use('/api', healthRoutes);
 app.use('/api/projects', authenticate, projectRoutes);
 app.use('/api/upload', authenticate, uploadRoutes);
 
-// Health check with basic diagnostic
-app.get('/health', async (req: Request, res: Response) => {
-    try {
-        // Simple probe to verify connectivity
-        const { error } = await supabase.from('repositories').select('id').limit(1);
-
-        res.json({
-            status: 'ok',
-            timestamp: new Date().toISOString(),
-            services: {
-                database: error ? 'disconnected' : 'healthy',
-                email: 'active', // Placeholder for actual service health
-                gateway: 'healthy'
-            }
-        });
-    } catch (err) {
-        res.status(500).json({ status: 'error', message: 'Health check failed' });
-    }
-});
+// These are now handled by healthRoutes or moved under /api
 
 // --- Repository Endpoints ---
 
@@ -1040,7 +1019,7 @@ app.post('/api/ai/metrics/event', authenticate, async (req: AuthenticatedRequest
 
 app.get('/api/ai/metrics/summary', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const summary = await getAIAggregates();
+        const summary = await getAIAggregates(req.user!.id);
         res.json(summary);
     } catch (err) {
         next(err);
@@ -1066,7 +1045,6 @@ app.post('/api/fixes/:id/pr', authenticate, async (req: AuthenticatedRequest, re
         const result = await createPullRequest(id);
 
         // Update DB with PR info
-        const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
         await supabase
             .from('vulnerability_fixes')
             .update({
@@ -1085,7 +1063,6 @@ app.post('/api/fixes/:id/pr', authenticate, async (req: AuthenticatedRequest, re
 app.get('/api/fixes/:id/pr/status', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
         const { data, error } = await supabase
             .from('vulnerability_fixes')
             .select('pr_status, pr_url, branch_name')

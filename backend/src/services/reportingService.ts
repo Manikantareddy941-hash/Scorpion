@@ -1,13 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
 import PDFDocument from 'pdfkit';
 import { Finding } from './scan/parsers';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 // Heuristic mapping of tool results to OWASP Top 10 categories
 const MAP_OWASP = (finding: any) => {
@@ -34,7 +27,6 @@ const MAP_OWASP = (finding: any) => {
 };
 
 export const getSecurityPostureStats = async (userId: string, scope: 'global' | 'team' | 'project', id?: string) => {
-    const supabase = getSupabase();
 
     let repoQuery = supabase.from('repositories').select('id, name, risk_score, vulnerability_count');
 
@@ -83,7 +75,6 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
 };
 
 export const getTrendData = async (userId: string, repoIds: string[]) => {
-    const supabase = getSupabase();
 
     const { data: scans } = await supabase
         .from('scan_results')
