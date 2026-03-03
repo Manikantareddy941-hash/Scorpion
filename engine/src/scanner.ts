@@ -29,12 +29,12 @@ export const runScan = async (scanId: string, repoUrl: string) => {
             {
                 name: 'gitleaks',
                 image: 'zricethezav/gitleaks:latest',
-                cmd: 'detect --source /repo --format json --report-path -'
+                cmd: 'detect --source /repo --report-format json --report-path -'
             },
             {
                 name: 'trivy',
                 image: 'aquasec/trivy:latest',
-                cmd: 'fs --format json /repo'
+                cmd: 'fs --skip-db-update --format json /repo'
             },
             {
                 name: 'semgrep',
