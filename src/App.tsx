@@ -1,8 +1,9 @@
 ﻿import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import SecurityDashboard from './pages/SecurityDashboard';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 import ResetPassword from './pages/ResetPassword';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyOtp from './pages/VerifyOtp';
@@ -73,7 +74,9 @@ function App() {
       )}
       <div className="flex-1">
         <Routes>
-          <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+          <Route path="/auth" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/verify-otp" element={<PublicRoute><VerifyOtp /></PublicRoute>} />

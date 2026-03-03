@@ -14,7 +14,7 @@ export const authHealthCheck = async (): Promise<AuthHealthResult> => {
 
   // 1. Check backend connectivity
   try {
-    const response = await fetch('http://localhost:3001/health', {
+    const response = await fetch('http://localhost:3001/api/health', {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
