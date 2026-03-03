@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { triggerScan } from './scanService';
 
 export const createProject = async (userId: string, name: string, description?: string) => {
     const { data, error } = await supabase
@@ -47,12 +48,42 @@ export const getProjectDashboard = async (projectId: string, userId: string) => 
 
     if (reposErr) return { error: reposErr };
 
-    // 3. Aggregate stats
+    // 3. Get all scans for these repos to calculate Patch Rate & Fix Time
+    const repoIds = repos.map(r => r.id);
+    const { data: scans } = await supabase
+        .from('scan_results')
+        .select('details, status')
+        .in('repo_id', repoIds)
+        .eq('status', 'completed');
+
+    // 4. Aggregate stats
     const totalRepos = repos.length;
     const totalVulns = repos.reduce((acc, r) => acc + (r.vulnerability_count || 0), 0);
-    const avgRiskScore = totalRepos > 0
-        ? repos.reduce((acc, r) => acc + (Number(r.risk_score) || 0), 0) / totalRepos
-        : 0;
+
+    // Get all vulnerabilities for these repos
+    const { data: allVulns, error: vulnsErr } = await supabase
+        .from('vulnerabilities')
+        .select('created_at, updated_at, resolution_status, severity')
+        .in('repo_id', repoIds);
+
+    if (vulnsErr) return { error: vulnsErr };
+
+    // Calculate Health Score (Avg Score across repos)
+    const avgHealthScore = scans && scans.length > 0
+        ? scans.reduce((acc, s) => acc + (s.details?.security_score || 0), 0) / scans.length
+        : 100;
+
+    // Calculate Patch Rate
+    const resolvedVulns = allVulns?.filter((v: any) => v.resolution_status === 'resolved' || v.resolution_status === 'auto_closed').length || 0;
+    const patchRate = allVulns && allVulns.length > 0 ? (resolvedVulns / allVulns.length) * 100 : 100;
+
+    // Calculate Avg Fix Time (in hours)
+    const fixTimes = allVulns?.filter((v: any) => (v.resolution_status === 'auto_closed' || v.resolution_status === 'resolved') && v.updated_at)
+        .map((v: any) => (new Date(v.updated_at).getTime() - new Date(v.created_at).getTime()) / (1000 * 60 * 60)) || [];
+
+    const avgFixTime = fixTimes.length > 0 ? fixTimes.reduce((a: number, b: number) => a + b, 0) / fixTimes.length : 0;
+
+    const criticalRisks = allVulns?.filter((v: any) => v.severity === 'critical' && v.resolution_status === 'open').length || 0;
 
     return {
         data: {
@@ -60,7 +91,10 @@ export const getProjectDashboard = async (projectId: string, userId: string) => 
             stats: {
                 totalRepos,
                 totalVulns,
-                avgRiskScore: Math.round(avgRiskScore * 100) / 100
+                healthScore: Math.round(avgHealthScore),
+                patchRate: Math.round(patchRate),
+                avgFixTime: Math.round(avgFixTime),
+                criticalRisks
             },
             repositories: repos
         }
@@ -79,7 +113,7 @@ export const importRepoToProject = async (projectId: string, userId: string, url
     if (projectErr || !project) return { error: 'Project not found or access denied' };
 
     // 2. Upsert repository and link to project
-    const { data, error } = await supabase
+    const { data: repo, error } = await supabase
         .from('repositories')
         .upsert({
             user_id: userId,
@@ -91,7 +125,13 @@ export const importRepoToProject = async (projectId: string, userId: string, url
         .select()
         .single();
 
-    return { data, error };
+    if (repo && !error) {
+        // TRIGGER SCAN AUTOMATICALLY
+        console.log(`[ProjectService] Triggering automatic scan for newly imported repo: ${repo.id}`);
+        triggerScan(repo.id).catch(err => console.error('[ProjectService] Auto-scan trigger failed:', err));
+    }
+
+    return { data: repo, error };
 };
 
 export const getProjectScanHistory = async (projectId: string, userId: string) => {

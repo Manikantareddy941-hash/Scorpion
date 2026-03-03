@@ -13,6 +13,7 @@ import uploadRoutes from './routes/uploadRoutes';
 import healthRoutes from './routes/healthRoutes';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
 import crypto from 'crypto';
+import morgan from 'morgan';
 
 import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from './services/reportingService';
 import { Role, hasRequiredRole } from './services/rbacService';
@@ -68,10 +69,16 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // --- Security Middleware ---
+console.log(`[CORS] Configuring with FRONTEND_URL: ${process.env.FRONTEND_URL}`);
+
+app.use(morgan('dev')); // Log requests to console
 app.use(helmet());
 app.use(cors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true, // Support credentials (cookies/auth headers)
+    origin: (origin, callback) => {
+        console.log(`[CORS Request] Origin: ${origin}`);
+        callback(null, true); // Allow all origins for debugging
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
