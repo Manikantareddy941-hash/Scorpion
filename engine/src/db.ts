@@ -8,15 +8,18 @@ const pool = new Pool({
 });
 
 export const query = (text: string, params?: any[]) => pool.query(text, params);
+export const getClient = () => pool.connect();
 
 export const updateScanStatus = async (
     scanId: string,
     newStatus: string,
     previousStatus?: string,
-    extra?: Record<string, any>
+    extra?: Record<string, any>,
+    client?: any
 ) => {
     let sql = 'UPDATE scans SET status = $1, updated_at = NOW()';
     const params: any[] = [newStatus, scanId];
+    const exec = client || pool;
 
     if (previousStatus) {
         sql += ' WHERE id = $2 AND status = $3';
@@ -26,7 +29,7 @@ export const updateScanStatus = async (
     }
 
     if (extra) {
-        Object.entries(extra).forEach(([key, value], index) => {
+        Object.entries(extra).forEach(([key, value]) => {
             sql = sql.replace('SET', `SET ${key} = $${params.length + 1},`);
             params.push(value);
         });
@@ -35,7 +38,7 @@ export const updateScanStatus = async (
     // Clean up potential trailing comma if extra fields were added
     sql = sql.replace(', WHERE', ' WHERE');
 
-    const result = await pool.query(sql, params);
+    const result = await exec.query(sql, params);
     return (result.rowCount ?? 0) > 0;
 };
 

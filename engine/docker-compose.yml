@@ -14,6 +14,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/scanner
       - LOG_LEVEL=info
+      - SEMGREP_RULES_PATH=${SEMGREP_RULES_PATH:-/home/ubuntu/Stackpilot/engine/semgrep-rules}
     depends_on:
       redis:
         condition: service_healthy
@@ -22,6 +23,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./temp:/tmp
+      - ./semgrep-rules:/semgrep-rules:ro
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/scan/health" ] # Will implement this endpoint
       interval: 30s
@@ -39,6 +41,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/scanner
       - LOG_LEVEL=info
+      - SEMGREP_RULES_PATH=/home/ubuntu/Stackpilot/engine/semgrep-rules
     depends_on:
       redis:
         condition: service_healthy
@@ -47,6 +50,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./temp:/tmp
+      - ./semgrep-rules:/semgrep-rules:ro
     # Worker health check based on process existence and redis connection
     healthcheck:
       test: [ "CMD-SHELL", "pgrep node || exit 1" ]
