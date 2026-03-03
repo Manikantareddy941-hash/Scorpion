@@ -34,7 +34,7 @@ export const runScan = async (scanId: string, repoUrl: string) => {
             {
                 name: 'trivy',
                 image: 'aquasec/trivy:latest',
-                cmd: 'fs --skip-db-update --format json /repo'
+                cmd: 'fs --format json /repo'
             },
             {
                 name: 'semgrep',
