@@ -48,7 +48,7 @@ app.post('/scan', async (req: Request, res: Response) => {
         );
 
         // 2. Add job to BullMQ
-        await scanQueue.add('run-scan', { scanId, repo_url });
+        await scanQueue.add('run-scan', { scanId });
 
         // 3. Update status = scan_queued (Atomic)
         const updated = await updateScanStatus(scanId, 'scan_queued', 'created');
