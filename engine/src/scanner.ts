@@ -87,7 +87,11 @@ export const runScan = async (scanId: string, repoUrl: string) => {
     } finally {
         // 6. Cleanup
         try {
-            await fs.rm(repoPath, { recursive: true, force: true });
+            const exists = await fs.access(repoPath).then(() => true).catch(() => false);
+            if (exists) {
+                await fs.rm(repoPath, { recursive: true, force: true });
+                console.log(`[Scanner] Successfully cleaned up ${repoPath}`);
+            }
         } catch (e) {
             console.error(`[Scanner] Cleanup failed for ${scanId}:`, e);
         }

@@ -36,7 +36,7 @@ export const updateScanStatus = async (
     sql = sql.replace(', WHERE', ' WHERE');
 
     const result = await pool.query(sql, params);
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
 };
 
 export default pool;

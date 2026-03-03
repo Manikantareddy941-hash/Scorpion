@@ -11,7 +11,7 @@ const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379'
 export const SCAN_QUEUE_NAME = 'scan-queue';
 
 export const scanQueue = new Queue(SCAN_QUEUE_NAME, {
-    connection,
+    connection: connection as any,
     defaultJobOptions: {
         attempts: 3,
         backoff: {
