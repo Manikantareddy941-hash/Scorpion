@@ -30,10 +30,35 @@ app.get('/scan/health', async (req: Request, res: Response) => {
 });
 
 const scanSchema = z.object({
-    repo_url: z.string().url().refine((url: string) => {
-        // Basic validation to prevent local file path injection
-        return url.startsWith('http://') || url.startsWith('https://');
-    }, "Only http/https URLs are allowed")
+    repo_url: z.string().refine((value: string) => {
+        // PRE-PARSING SECURITY: Strictly whitelist the prefix at the string level
+        if (!value.startsWith("https://github.com/")) return false;
+        if (value.includes('..')) return false;
+
+        try {
+            const url = new URL(value);
+
+            // 1. Enforce HTTPS only (Already checked by prefix, but good for depth)
+            if (url.protocol !== "https:") return false;
+
+            // 2. Enforce GitHub only
+            if (url.hostname !== "github.com") return false;
+
+            // 3. Enforce /owner/repo format specifically
+            const pathParts = url.pathname.split("/").filter(Boolean);
+            if (pathParts.length !== 2) return false;
+
+            // 4. Block path traversal or extra segments
+            // Prefix check + split check makes this extremely robust
+            if (pathParts.some(part => part === '..' || part === '.')) return false;
+
+            return true;
+        } catch {
+            return false;
+        }
+    }, {
+        message: "Only valid GitHub HTTPS repository URLs (https://github.com/owner/repo) are allowed."
+    })
 });
 
 app.post('/scan', async (req: Request, res: Response) => {
