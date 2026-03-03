@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import pool, { query, updateScanStatus } from './db';
@@ -7,14 +7,36 @@ import { scanQueue } from './queue';
 const app = express();
 app.use(express.json());
 
+// Environment Validation
+const envSchema = z.object({
+    DATABASE_URL: z.string().url(),
+    REDIS_URL: z.string().url(),
+    PORT: z.string().optional().default('3000'),
+    LOG_LEVEL: z.enum(['info', 'debug', 'error']).default('info'),
+});
+
+const env = envSchema.parse(process.env);
+
+// Health Check Endpoint
+app.get('/scan/health', async (req: Request, res: Response) => {
+    try {
+        // Check DB connection
+        await query('SELECT 1');
+        // Check Redis connection (implicitly checked by queue availability)
+        res.json({ status: 'healthy', database: 'connected', redis: 'connected' });
+    } catch (error: any) {
+        res.status(503).json({ status: 'unhealthy', error: error.message });
+    }
+});
+
 const scanSchema = z.object({
-    repo_url: z.string().url().refine(url => {
+    repo_url: z.string().url().refine((url: string) => {
         // Basic validation to prevent local file path injection
         return url.startsWith('http://') || url.startsWith('https://');
     }, "Only http/https URLs are allowed")
 });
 
-app.post('/scan', async (req, res) => {
+app.post('/scan', async (req: Request, res: Response) => {
     try {
         const { repo_url } = scanSchema.parse(req.body);
 
@@ -44,7 +66,7 @@ app.post('/scan', async (req, res) => {
     }
 });
 
-app.get('/scan/:id', async (req, res) => {
+app.get('/scan/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
 

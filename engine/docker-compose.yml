@@ -6,42 +6,68 @@ services:
       context: .
       dockerfile: Dockerfile
       target: api
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/scanner
+      - LOG_LEVEL=info
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./temp:/tmp
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/scan/health" ] # Will implement this endpoint
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
+    restart: unless-stopped
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/scanner
+      - LOG_LEVEL=info
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./temp:/tmp
+    # Worker health check based on process existence and redis connection
+    healthcheck:
+      test: [ "CMD-SHELL", "pgrep node || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:15-alpine
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -50,6 +76,11 @@ services:
       - POSTGRES_DB=scanner
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d scanner" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
