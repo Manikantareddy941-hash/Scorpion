@@ -20,7 +20,7 @@ jobs:
           REPO_URL: "https://github.com/${{ github.repository }}"
         run: |
           # Download the CI runner
-          curl -sSL https://raw.githubusercontent.com/your-org/stackpilot/main/backend/scripts/stackpilot-ci.sh -o stackpilot-ci.sh
+          curl -sSL https://raw.githubusercontent.com/<your-org>/stackpilot/main/backend/scripts/stackpilot-ci.sh -o stackpilot-ci.sh
           chmod +x stackpilot-ci.sh
           
           # Run the scan
