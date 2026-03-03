@@ -34,7 +34,7 @@ export const runScan = async (scanId: string, repoUrl: string) => {
             {
                 name: 'trivy',
                 image: 'aquasec/trivy:latest',
-                cmd: 'fs --format json /repo'
+                cmd: 'fs --skip-db-update --format json /repo'
             },
             {
                 name: 'semgrep',
@@ -48,8 +48,13 @@ export const runScan = async (scanId: string, repoUrl: string) => {
         for (const tool of tools) {
             console.log(`[Scanner] Running ${tool.name} for scan ${scanId}`);
             try {
+                let volumeMounts = `-v "${repoPath}":/repo:ro`;
+                if (tool.name === 'trivy') {
+                    volumeMounts += ` -v "/root/.cache/trivy":/root/.cache/trivy`;
+                }
+
                 const { stdout } = await execAsync(
-                    `docker run --rm --network none --memory 512m --cpus="1.0" -v "${repoPath}":/repo:ro ${tool.image} ${tool.cmd}`,
+                    `docker run --rm --network none --memory 512m --cpus="1.0" ${volumeMounts} ${tool.image} ${tool.cmd}`,
                     { timeout: 300000 } // 5 minute timeout per tool
                 );
 
