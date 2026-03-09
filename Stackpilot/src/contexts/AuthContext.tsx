@@ -1,14 +1,13 @@
 ﻿import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { account, ID } from '../lib/appwrite';
 
 interface AuthContextType {
-  user: User | null;
+  user: any | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, name?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  signInWithOAuth: (provider: 'google' | 'github') => Promise<{ error?: any }>;
+  signInWithOAuth: (provider: 'google' | 'github') => Promise<void>;
   requestReset: (email: string) => Promise<{ error?: string; message?: string }>;
   verifyResetOtp: (email: string, otp: string) => Promise<{ error?: string; resetToken?: string }>;
   completeReset: (resetToken: string, newPassword: string) => Promise<{ error?: string }>;
@@ -18,59 +17,59 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+  const checkUser = async () => {
+    try {
+      const currentUser = await account.get();
+      setUser(currentUser);
+    } catch (err) {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let timeout = setTimeout(() => {
-      setLoading(false);
-    }, 4000);
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      clearTimeout(timeout);
-    });
-
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-      clearTimeout(timeout);
-    });
-
-    return () => {
-      clearTimeout(timeout);
-      listener.subscription.unsubscribe();
-    };
+    checkUser();
   }, []);
 
-
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error };
+  const signUp = async (email: string, password: string, name: string = 'User') => {
+    try {
+      await account.create(ID.unique(), email, password, name);
+      await account.createEmailPasswordSession(email, password);
+      await checkUser();
+      return { error: null };
+    } catch (error: any) {
+      return { error };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    try {
+      await account.createEmailPasswordSession(email, password);
+      await checkUser();
+      return { error: null };
+    } catch (error: any) {
+      return { error };
+    }
   };
 
   const signInWithOAuth = async (provider: 'google' | 'github') => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    return { error };
+    const successUrl = `${window.location.origin}/auth/callback`;
+    const failureUrl = `${window.location.origin}/auth`;
+    await account.createOAuth2Session(provider, successUrl, failureUrl);
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await account.deleteSession('current');
+      setUser(null);
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
   };
 
   const requestReset = async (email: string) => {
@@ -119,12 +118,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    return { error };
+    try {
+      await account.updatePassword(newPassword);
+      return { error: null };
+    } catch (error: any) {
+      return { error };
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, signInWithOAuth, requestReset, verifyResetOtp, completeReset, updatePassword }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      signUp,
+      signIn,
+      signOut,
+      signInWithOAuth,
+      requestReset,
+      verifyResetOtp,
+      completeReset,
+      updatePassword
+    }}>
       {children}
     </AuthContext.Provider>
   );

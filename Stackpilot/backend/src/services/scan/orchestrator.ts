@@ -35,34 +35,49 @@ export const validateTools = async (): Promise<{ tool: string, status: 'installe
 
     return results;
 };
-
 export const runSemgrep = async (targetPath: string): Promise<ScanResult> => {
     try {
-        const { stdout, stderr } = await execAsync(`semgrep scan --json --config auto "${targetPath}"`, { timeout: SCAN_TIMEOUT_MS });
+        // Use 'p/javascript' directly to avoid git requirement of '--config auto' during local tests
+        const cmd = `semgrep scan --json --config "p/javascript" "${targetPath}"`;
+        const { stdout, stderr } = await execAsync(cmd, {
+            timeout: SCAN_TIMEOUT_MS,
+            maxBuffer: 10 * 1024 * 1024,
+            env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }
+        });
         return { tool: 'semgrep', stdout, stderr };
     } catch (error: any) {
-        if (error.killed) return { tool: 'semgrep', stdout: '', stderr: 'Scan timed out', error: 'TIMEOUT' };
-        return { tool: 'semgrep', stdout: error.stdout || '', stderr: error.stderr || '' };
+        console.error('[Orchestrator] Semgrep failed:', error.message);
+        return { tool: 'semgrep', stdout: error.stdout || '', stderr: error.stderr || error.message, error: error.killed ? 'TIMEOUT' : 'ERROR' };
     }
 };
 
 export const runGitleaks = async (targetPath: string): Promise<ScanResult> => {
     try {
-        const { stdout, stderr } = await execAsync(`gitleaks detect --source "${targetPath}" --format json --report-path -`, { timeout: SCAN_TIMEOUT_MS });
+        const cmd = `gitleaks detect --source "${targetPath}" --no-git --report-format json --report-path -`;
+        const { stdout, stderr } = await execAsync(cmd, {
+            timeout: SCAN_TIMEOUT_MS,
+            maxBuffer: 5 * 1024 * 1024,
+            env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }
+        });
         return { tool: 'gitleaks', stdout, stderr };
     } catch (error: any) {
-        if (error.killed) return { tool: 'gitleaks', stdout: '', stderr: 'Scan timed out', error: 'TIMEOUT' };
-        return { tool: 'gitleaks', stdout: error.stdout || '', stderr: error.stderr || '' };
+        // Gitleaks returns exit code 1 when leaks are found, which is caught here.
+        // We only log if it's a real failure (e.g. command not found).
+        if (!error.stdout && !error.stderr) {
+            console.error('[Orchestrator] Gitleaks execution failed:', error.message);
+        }
+        return { tool: 'gitleaks', stdout: error.stdout || '', stderr: error.stderr || error.message, error: error.killed ? 'TIMEOUT' : undefined };
     }
 };
 
 export const runTrivy = async (targetPath: string): Promise<ScanResult> => {
     try {
-        const { stdout, stderr } = await execAsync(`trivy fs --format json "${targetPath}"`, { timeout: SCAN_TIMEOUT_MS });
+        const cmd = `trivy fs --format json "${targetPath}"`;
+        const { stdout, stderr } = await execAsync(cmd, { timeout: SCAN_TIMEOUT_MS });
         return { tool: 'trivy', stdout, stderr };
     } catch (error: any) {
-        if (error.killed) return { tool: 'trivy', stdout: '', stderr: 'Scan timed out', error: 'TIMEOUT' };
-        return { tool: 'trivy', stdout: error.stdout || '', stderr: error.stderr || '' };
+        console.error('[Orchestrator] Trivy failed:', error.message);
+        return { tool: 'trivy', stdout: error.stdout || '', stderr: error.stderr || error.message, error: error.killed ? 'TIMEOUT' : 'ERROR' };
     }
 };
 
@@ -79,5 +94,12 @@ export const orchestrateScan = async (targetPath: string) => {
     const duration = ((Date.now() - start) / 1000).toFixed(2);
     console.log(`[Orchestrator] Scans finalized in ${duration}s`);
 
-    return results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean) as ScanResult[];
+    const fulfilled = results.map((r, i) => {
+        if (r.status === 'fulfilled') return r.value;
+        const tools: Array<'semgrep' | 'gitleaks' | 'trivy'> = ['semgrep', 'gitleaks', 'trivy'];
+        console.error(`[Orchestrator] ${tools[i]} failed to resolve:`, r.reason);
+        return null;
+    }).filter(Boolean) as ScanResult[];
+
+    return fulfilled;
 };

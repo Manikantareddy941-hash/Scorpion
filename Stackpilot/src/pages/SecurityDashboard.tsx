@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, Query, account } from '../lib/appwrite';
 import {
     Shield, CheckCircle, XCircle,
     RefreshCw, Play, ExternalLink, ArrowLeft,
@@ -8,17 +8,17 @@ import {
 } from 'lucide-react';
 
 interface ScanResult {
-    id: string;
+    $id: string;
     repo_id: string;
     repo_url: string;
     status: 'queued' | 'in_progress' | 'completed' | 'failed';
     details: any;
-    created_at: string;
+    $createdAt: string;
     repo_name?: string;
 }
 
 interface RepoMetric {
-    id: string;
+    $id: string;
     name: string;
     risk_score: number;
     vulnerability_count: number;
@@ -38,32 +38,28 @@ export default function SecurityDashboard() {
 
     const fetchDashboardData = async () => {
         try {
-            const { data: scanData, error: scanErr } = await supabase
-                .from('scan_results')
-                .select(`
-                    *,
-                    repositories (
-                        name,
-                        url
-                    )
-                `)
-                .order('created_at', { ascending: false });
+            const [scanRes, repoRes] = await Promise.all([
+                databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(20)
+                ]),
+                databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(50)
+                ])
+            ]);
 
-            if (scanErr) throw scanErr;
+            // Enrich scans with repo names in one pass
+            const repoMap: Record<string, any> = {};
+            repoRes.documents.forEach((r: any) => { repoMap[r.$id] = r; });
 
-            const { data: repoData, error: repoErr } = await supabase
-                .from('repositories')
-                .select('id, name, risk_score, vulnerability_count');
-
-            if (repoErr) throw repoErr;
-
-            setResults(scanData.map((item: any) => ({
+            setResults(scanRes.documents.map((item: any) => ({
                 ...item,
-                repo_name: item.repositories?.name || item.repositories?.url,
-                repo_url: item.repositories?.url
+                repo_name: repoMap[item.repo_id]?.name || item.repo_id,
+                repo_url: repoMap[item.repo_id]?.url || ''
             })));
 
-            setRepos(repoData || []);
+            setRepos(repoRes.documents as any);
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -75,15 +71,14 @@ export default function SecurityDashboard() {
     const handleRunScan = async (repoId: string) => {
         setTriggering(repoId);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
+            // Get Appwrite JWT session token
+            const jwt = await account.createJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
             const response = await fetch(`${apiBase}/api/repos/${repoId}/scan`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${jwt.jwt}`
                 }
             });
 
@@ -91,7 +86,7 @@ export default function SecurityDashboard() {
                 const data = await response.json();
                 alert(data.error || 'Failed to trigger scan');
             } else {
-                fetchDashboardData();
+                setTimeout(fetchDashboardData, 500);
             }
         } catch (err) {
             console.error('Error triggering scan:', err);
@@ -178,7 +173,7 @@ export default function SecurityDashboard() {
                                     </div>
                                 ) : (
                                     results.map((scan) => (
-                                        <ScanItem key={scan.id} scan={scan} onRescan={handleRunScan} isTriggering={triggering === scan.repo_id} />
+                                        <ScanItem key={scan.$id} scan={scan} onRescan={handleRunScan} isTriggering={triggering === scan.repo_id} />
                                     ))
                                 )}
                             </div>
@@ -225,10 +220,10 @@ function ScanItem({ scan, onRescan, isTriggering }: { scan: ScanResult, onRescan
                     <div>
                         <div className="flex items-center gap-3 mb-1">
                             <span className="font-black text-lg text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-blue-600 transition-colors uppercase italic">{scan.repo_name}</span>
-                            <span className="text-[10px] font-mono text-slate-300 uppercase tracking-widest">#{scan.id.slice(0, 8)}</span>
+                            <span className="text-[10px] font-mono text-slate-300 uppercase tracking-widest">#{scan.$id.slice(0, 8)}</span>
                         </div>
                         <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
-                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(scan.created_at).toLocaleTimeString()}</span>
+                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(scan.$createdAt).toLocaleTimeString()}</span>
                             <span className="w-1 h-1 bg-slate-200 rounded-full" />
                             <span className={
                                 scan.status === 'completed' ? 'text-green-500' :

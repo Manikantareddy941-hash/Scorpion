@@ -1,25 +1,32 @@
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
 
 async function findUser() {
-    // Note: auth.users is special, but sometimes we can list via rpc or just check a linked table
-    const { data, error } = await supabase.from('repositories').select('user_id').limit(1);
+    try {
+        // Find a user ID from repositories
+        const repos = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.limit(1)]
+        );
 
-    if (error || !data || data.length === 0) {
-        console.log('No users found in repositories table. Checking tasks...');
-        const { data: tasks } = await supabase.from('tasks').select('user_id').limit(1);
-        if (tasks && tasks.length > 0) {
-            console.log('USER_ID:', tasks[0].user_id);
+        if (repos.total > 0) {
+            console.log('USER_ID:', repos.documents[0].user_id);
         } else {
-            console.log('No user IDs found. Please provide a valid UUID from your auth.users table.');
+            console.log('No user IDs found in repositories. Checking tasks...');
+            const tasks = await databases.listDocuments(
+                DB_ID,
+                COLLECTIONS.TASKS,
+                [Query.limit(1)]
+            );
+            if (tasks.total > 0) {
+                console.log('USER_ID:', tasks.documents[0].user_id);
+            } else {
+                console.log('No user IDs found. Please provide a valid Appwrite User ID.');
+            }
         }
-    } else {
-        console.log('USER_ID:', data[0].user_id);
+    } catch (error) {
+        console.error('Error finding user ID:', error);
     }
 }
 

@@ -1,10 +1,9 @@
 ﻿import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, AlertCircle, CheckCircle2, ArrowLeft, Mail, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import AuthDiagnosticBanner from './AuthDiagnosticBanner';
 import SocialLoginButtons from './auth/SocialLoginButtons';
-import { authHealthCheck, AuthHealthResult } from '../lib/authHealthCheck';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -15,13 +14,11 @@ export default function Auth() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [health, setHealth] = useState<AuthHealthResult | null>(null);
   const { signIn, signUp, requestReset } = useAuth();
 
   const clearMessages = () => {
     setError('');
     setSuccess('');
-    setHealth(null);
   };
 
   const switchMode = (newMode: 'login' | 'signup' | 'forgot') => {
@@ -32,12 +29,7 @@ export default function Auth() {
     clearMessages();
   };
 
-  const runDiagnostics = async () => {
-    const healthResult = await authHealthCheck();
-    if (!healthResult.backendReachable || !healthResult.supabaseReachable) {
-      setHealth(healthResult);
-    }
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,10 +41,6 @@ export default function Auth() {
         const { error, message } = await requestReset(email);
         if (error) {
           setError(error);
-          // Only run diagnostics if it's a real auth error, not a network error
-          if (!error.toLowerCase().includes('network')) {
-            await runDiagnostics();
-          }
         } else {
           setSuccess(message || 'OTP sent! Redirecting...');
           setTimeout(() => navigate('/verify-otp', { state: { email } }), 1500);
@@ -63,11 +51,7 @@ export default function Auth() {
           : await signUp(email, password);
 
         if (error) {
-          setError(error.message);
-          // Only run diagnostics if it's a real auth error, not a network error
-          if (!error.message?.toLowerCase().includes('network')) {
-            await runDiagnostics();
-          }
+          setError(error.message || 'Authentication failed');
         } else if (mode === 'signup') {
           setSuccess('Account created! Please check your email to verify, then sign in.');
           switchMode('login');
@@ -75,179 +59,145 @@ export default function Auth() {
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
-      if (!err.message?.toLowerCase().includes('network')) {
-        await runDiagnostics();
-      }
     } finally {
       setLoading(false);
     }
   };
 
-  const getIcon = () => {
-    if (mode === 'forgot') return <Mail className="w-8 h-8 text-white" />;
-    if (mode === 'login') return <LogIn className="w-8 h-8 text-white" />;
-    return <UserPlus className="w-8 h-8 text-white" />;
-  };
-
-  const getTitle = () => {
-    if (mode === 'forgot') return 'Reset Password';
-    if (mode === 'login') return 'Welcome back!';
-    return 'Create your account';
-  };
-
   const getButtonLabel = () => {
     if (mode === 'forgot') return 'Send Reset Code';
-    if (mode === 'login') return 'Sign In';
-    return 'Sign Up';
-  };
-
-  const getButtonIcon = () => {
-    if (mode === 'forgot') return <Mail className="w-5 h-5" />;
-    if (mode === 'login') return <LogIn className="w-5 h-5" />;
-    return <UserPlus className="w-5 h-5" />;
+    if (mode === 'login') return 'Sign in';
+    return 'Create account';
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-            {getIcon()}
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            DevOps Task Tracker
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 animate-fade-up">
+      <div className="w-full max-w-[400px]">
+        <div className="text-center mb-10">
+          <div className="logo-mark !w-10 !h-10 mx-auto mb-6 !text-[15px]">SP</div>
+          <h1 className="text-[32px] font-normal tracking-tight mb-2">
+            {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create account' : 'Reset password'}
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">{getTitle()}</p>
-          {mode === 'forgot' && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-              Enter your email and we'll send you a 6-digit code.
-            </p>
+          <p className="text-[14.5px] text-text-muted">
+            {mode === 'login' ? 'Enter your details to access your pilot.' :
+              mode === 'signup' ? 'Start your journey with StackPilot today.' :
+                'Enter your email to receive a reset code.'}
+          </p>
+        </div>
+
+        <div className="card shadow-sm border-border">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="bg-danger-light border border-danger/10 rounded-md p-3.5 flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+                <p className="text-[12.5px] text-danger font-medium leading-relaxed">{error}</p>
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-success-light border border-success/10 rounded-md p-3.5 flex items-start gap-3">
+                <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
+                <p className="text-[12.5px] text-success font-medium leading-relaxed">{success}</p>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="email" className="block text-[13px] font-medium text-text-muted mb-2">
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-md text-[14px] outline-none focus:border-accent transition-colors placeholder:text-text-subtle"
+                placeholder="name@company.com"
+              />
+            </div>
+
+            {mode !== 'forgot' && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label htmlFor="password" className="block text-[13px] font-medium text-text-muted">
+                    Password
+                  </label>
+                  {mode === 'login' && (
+                    <button
+                      type="button"
+                      onClick={() => switchMode('forgot')}
+                      className="text-[12px] text-accent hover:underline font-medium"
+                    >
+                      Forgot?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full px-3.5 py-2.5 bg-surface border border-border rounded-md text-[14px] outline-none focus:border-accent transition-colors placeholder:text-text-subtle"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-text-subtle hover:text-text transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full justify-center !py-2.5 !text-[14px] h-[42px]"
+            >
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                getButtonLabel()
+              )}
+            </button>
+          </form>
+
+          {mode !== 'forgot' && (
+            <div className="mt-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="flex-grow h-px bg-border" />
+                <span className="text-[10px] text-text-subtle uppercase tracking-widest font-semibold">Or continue with</span>
+                <div className="flex-grow h-px bg-border" />
+              </div>
+              <SocialLoginButtons />
+            </div>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
-
-          {health && <AuthDiagnosticBanner health={health} />}
-
-          {success && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-green-800">{success}</p>
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Email Address
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          {mode !== 'forgot' && (
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {mode === 'login' && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => switchMode('forgot')}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Forgot password?
-              </button>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Please wait...</span>
-              </div>
-            ) : (
-              <>
-                {getButtonIcon()}
-                {getButtonLabel()}
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Divider and Social Login Buttons */}
-        {mode !== 'forgot' && (
-          <div className="my-6">
-            <div className="flex items-center mb-4">
-              <div className="flex-grow border-t border-gray-200 dark:border-gray-700" />
-              <span className="mx-3 text-gray-400 text-xs uppercase tracking-widest">or continue with</span>
-              <div className="flex-grow border-t border-gray-200 dark:border-gray-700" />
-            </div>
-            <SocialLoginButtons />
-          </div>
-        )}
-
-        <div className="mt-6 text-center space-y-2">
+        <div className="mt-8 text-center">
           {mode === 'forgot' ? (
             <button
               onClick={() => switchMode('login')}
-              className="text-blue-600 hover:text-blue-700 font-medium text-sm inline-flex items-center gap-1 mx-auto"
+              className="text-accent hover:underline font-medium text-[13px] inline-flex items-center gap-1.5"
             >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Sign In
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Return to login
             </button>
           ) : (
-            <button
-              onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
-              className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-            >
-              {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </button>
+            <p className="text-[13px] text-text-muted">
+              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              <button
+                onClick={() => switchMode(mode === 'login' ? 'signup' : 'login')}
+                className="text-accent hover:underline font-medium"
+              >
+                {mode === 'login' ? 'Sign up' : 'Sign in'}
+              </button>
+            </p>
           )}
         </div>
       </div>

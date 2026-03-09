@@ -1,12 +1,7 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 import unzipper from 'unzipper';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_EXTENSIONS = ['.ts', '.js', '.py', '.go', '.java', '.cpp', '.h', '.md', '.json', '.yml', '.yaml'];
@@ -47,24 +42,25 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
 
         // 4. Link to project (Create a mock repository entry for the upload)
         const repoName = `upload_${path.basename(filePath)}`;
-        const { data: repo, error } = await supabase
-            .from('repositories')
-            .insert({
+
+        const repo = await databases.createDocument(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            ID.unique(),
+            {
                 user_id: userId,
                 project_id: projectId,
                 name: repoName,
                 url: `upload://${repoName}`,
                 local_path: extractionPath,
-                updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (error) throw error;
+                updated_at: new Date().toISOString(),
+                created_at: new Date().toISOString()
+            }
+        );
 
         return {
             message: 'Ingestion successful',
-            repoId: repo.id,
+            repoId: repo.$id,
             filesCount: files.length,
             extractionPath
         };

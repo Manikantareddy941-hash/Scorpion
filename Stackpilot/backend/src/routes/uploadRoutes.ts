@@ -1,13 +1,11 @@
-import { Router, Response } from 'express';
+import { Router, Response, Request } from 'express';
 import multer from 'multer';
-const path = require('path');
-const fs = require('fs');
-import { User } from '@supabase/supabase-js';
-import { Request } from 'express';
+import path from 'path';
+import fs from 'fs';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
 
 interface AuthenticatedRequest extends Request {
-    user?: User;
+    user?: any;
 }
 
 const router = Router();

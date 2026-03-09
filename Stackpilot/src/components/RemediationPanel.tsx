@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Loader2, GitPullRequest, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface RemediationPanelProps {
     vulnerabilityId: string;
@@ -131,85 +131,84 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-300">
-            <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] shadow-2xl w-full max-w-2xl overflow-hidden border border-[var(--border-subtle)] transition-all">
-                <div className="flex items-center justify-between p-8 border-b border-[var(--border-subtle)] bg-[var(--bg-accent)]/30">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[4px] flex items-center justify-center p-6 z-[100] animate-fade-up">
+            <div className="bg-white rounded-xl shadow-[0_20px_48px_rgba(0,0,0,0.12)] border border-border w-full max-w-[640px] max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-8 py-6 border-b border-border bg-surface/30">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                        <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
                             <Sparkles className="w-6 h-6" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase italic">Remediation AI</h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic flex items-center gap-1.5 font-mono">
-                                <Code className="w-3 h-3" /> INTELLECTUAL PATTERN MATCHING
-                            </p>
+                            <h2 className="text-[20px] font-serif italic text-text tracking-tight leading-tight">Remediation Intelligence</h2>
+                            <p className="text-[11px] text-text-muted font-medium uppercase tracking-[0.15em] mt-0.5">Vector Analysis & Resolution</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-3 hover:bg-[var(--bg-primary)] rounded-2xl border border-transparent hover:border-[var(--border-subtle)] transition-all text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-white">
-                        <X className="w-6 h-6" />
+                    <button onClick={onClose} className="p-2 text-text-muted hover:text-text hover:bg-surface rounded-md transition-colors">
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="p-8 overflow-y-auto flex-1">
                     {loading ? (
-                        <div className="py-20 flex flex-col items-center justify-center gap-4">
-                            <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic animate-pulse">Deep scanning resolution vectors...</p>
+                        <div className="py-24 flex flex-col items-center justify-center gap-6 text-center">
+                            <div className="relative">
+                                <div className="absolute inset-0 bg-accent/20 blur-xl rounded-full animate-pulse"></div>
+                                <Loader2 className="w-12 h-12 text-accent animate-spin relative z-10" />
+                            </div>
+                            <div>
+                                <p className="text-[14px] text-text font-semibold mb-1">Synthesizing Resolution Vectors</p>
+                                <p className="text-[12px] text-text-muted">Analyzing pattern matches across established security protocols...</p>
+                            </div>
                         </div>
                     ) : error ? (
-                        <div className="py-20 text-center flex flex-col items-center justify-center">
-                            <div className="w-16 h-16 bg-rose-50 dark:bg-rose-500/10 rounded-3xl flex items-center justify-center mb-6 border border-rose-100 dark:border-rose-500/20">
-                                <AlertCircle className="w-8 h-8 text-rose-500" />
+                        <div className="py-16 text-center">
+                            <div className="w-16 h-16 bg-danger-light rounded-full flex items-center justify-center mx-auto mb-6 border border-danger/10">
+                                <AlertCircle className="w-8 h-8 text-danger" />
                             </div>
-                            <p className="text-slate-900 dark:text-white font-black text-sm uppercase italic tracking-tight">Connection Error</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 italic">{error}</p>
+                            <h3 className="text-[16px] font-semibold text-text mb-2">Synthesis Interrupted</h3>
+                            <p className="text-[13px] text-text-muted max-w-[320px] mx-auto mb-8">{error}</p>
                             <button
                                 onClick={fetchFix}
-                                className="mt-6 px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center gap-2"
+                                className="btn-primary"
                             >
-                                <RefreshCw className="w-3 h-3" /> Retry Analysis
+                                <RefreshCw className="w-4 h-4" />
+                                Re-initiate Analysis
                             </button>
                         </div>
                     ) : fix ? (
                         <div className="space-y-10">
-                            <section>
+                            <section className="animate-fade-up">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-600">
-                                        <Info className="w-4 h-4" />
-                                    </div>
-                                    <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Technical Analysis</h3>
-                                    <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">
+                                    <h3 className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">Analysis Overview</h3>
+                                    <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-success-light text-success rounded-full border border-success/10 text-[11px] font-bold">
                                         <CheckCircle className="w-3.5 h-3.5" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest italic">Confidence: {(fix.confidence_score * 100).toFixed(0)}%</span>
+                                        Confidence: {(fix.confidence_score * 100).toFixed(0)}%
                                     </div>
                                 </div>
-                                <div className="text-slate-600 dark:text-slate-300 dark:text-slate-400 text-sm leading-relaxed font-medium bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 dark:border-slate-800">
+                                <div className="text-[14px] text-text leading-relaxed bg-surface/50 p-6 rounded-xl border border-border">
                                     {fix.explanation}
                                 </div>
                             </section>
 
-                            <section>
+                            <section className="animate-fade-up [animation-delay:100ms]">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-600">
-                                        <Code className="w-4 h-4" />
-                                    </div>
-                                    <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Remediation Patch</h3>
+                                    <h3 className="text-[12px] font-semibold text-text-muted uppercase tracking-wider">Suggested Patch</h3>
                                 </div>
-                                <div className="bg-slate-950 rounded-3xl p-6 overflow-x-auto shadow-2xl border border-slate-800">
-                                    <pre className="text-[11px] text-blue-300 font-mono leading-relaxed">
+                                <div className="bg-slate-900 rounded-xl p-6 overflow-x-auto shadow-inner border border-slate-800">
+                                    <pre className="text-[12px] font-mono leading-relaxed text-slate-300">
                                         <code>{fix.code_diff}</code>
                                     </pre>
                                 </div>
                             </section>
 
-                            <div className="bg-blue-600/5 dark:bg-blue-600/10 rounded-[2rem] p-8 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-8">
-                                <div className="flex items-center gap-5">
-                                    <div className="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-blue-100 dark:border-slate-800 flex items-center justify-center text-blue-600 shrink-0">
+                            <div className="bg-accent/5 rounded-2xl p-8 border border-accent/10 flex flex-col md:flex-row items-center justify-between gap-6 animate-fade-up [animation-delay:200ms]">
+                                <div className="flex items-center gap-5 text-center md:text-left">
+                                    <div className="w-14 h-14 bg-white rounded-xl shadow-md border border-accent/10 flex items-center justify-center text-accent shrink-0">
                                         <GitPullRequest className="w-6 h-6" />
                                     </div>
                                     <div>
-                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic mb-1">Automated Resolution</div>
-                                        <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase italic tracking-tight">Deploy Fix via Pull Request</h4>
+                                        <h4 className="text-[15px] font-semibold text-text leading-tight">Automated Deployment</h4>
+                                        <p className="text-[12px] text-text-muted mt-1">Apply this fix directly to your asset repository.</p>
                                     </div>
                                 </div>
                                 {prResult ? (
@@ -217,7 +216,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                                         href={prResult.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-500/20 italic"
+                                        className="btn-success !py-3 !px-6 animate-fade-up"
                                     >
                                         Inspect Pull Request <ExternalLink className="w-4 h-4" />
                                     </a>
@@ -225,42 +224,42 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                                     <button
                                         onClick={handleCreatePR}
                                         disabled={prLoading}
-                                        className="flex items-center gap-3 px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/40 italic"
+                                        className="btn-primary !py-3 !px-8 flex-1 md:flex-none justify-center"
                                     >
                                         {prLoading ? (
                                             <>
-                                                <Loader2 className="w-4 h-4 animate-spin" /> Patching Fleet...
+                                                <Loader2 className="w-4 h-4 animate-spin" /> Patching Asset...
                                             </>
                                         ) : (
                                             <>
-                                                <GitPullRequest className="w-4 h-4" /> Open Fix PR
+                                                <GitPullRequest className="w-4 h-4" /> Deploy Resolution
                                             </>
                                         )}
                                     </button>
                                 )}
                             </div>
 
-                            <div className="pt-8 border-t border-[var(--border-subtle)] flex items-center justify-between">
-                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic">Human Verification</div>
-                                <div className="flex gap-4">
+                            <div className="pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="text-[11px] font-semibold text-text-subtle uppercase tracking-wider">Signal Verification</div>
+                                <div className="flex gap-2">
                                     {feedbackSent ? (
-                                        <div className="flex items-center gap-2 px-6 py-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
+                                        <div className="flex items-center gap-2 px-4 py-2 bg-success-light text-success rounded-lg border border-success/10 text-[12px] font-semibold">
                                             <ThumbsUp className="w-4 h-4" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest italic">Feedback Registered</span>
+                                            Signal Registered
                                         </div>
                                     ) : (
                                         <>
                                             <button
                                                 onClick={() => handleFeedback('helpful')}
-                                                className="flex items-center gap-3 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-2xl hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600 transition-all font-black text-[10px] uppercase tracking-widest border border-slate-200 dark:border-slate-700 dark:border-slate-800"
+                                                className="btn-ghost !text-[12px] !py-2 !px-4"
                                             >
-                                                <ThumbsUp className="w-4 h-4" /> Helpful
+                                                <ThumbsUp className="w-4 h-4" /> Useful
                                             </button>
                                             <button
                                                 onClick={() => handleFeedback('ignore')}
-                                                className="flex items-center gap-3 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 transition-all font-black text-[10px] uppercase tracking-widest border border-slate-200 dark:border-slate-700 dark:border-slate-800"
+                                                className="btn-ghost !text-[12px] !py-2 !px-4 hover:!text-danger hover:!bg-danger-light"
                                             >
-                                                <ThumbsDown className="w-4 h-4" /> Ignore
+                                                <ThumbsDown className="w-4 h-4" /> Inaccurate
                                             </button>
                                         </>
                                     )}
@@ -268,12 +267,12 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                             </div>
                         </div>
                     ) : (
-                        <div className="py-20 text-center flex flex-col items-center justify-center">
-                            <div className="w-16 h-16 bg-rose-50 dark:bg-rose-500/10 rounded-3xl flex items-center justify-center mb-6 border border-rose-100 dark:border-rose-500/20">
-                                <AlertCircle className="w-8 h-8 text-rose-500" />
+                        <div className="py-16 text-center">
+                            <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mx-auto mb-6 border border-border">
+                                <AlertCircle className="w-8 h-8 text-text-subtle" />
                             </div>
-                            <p className="text-slate-900 dark:text-white font-black text-sm uppercase italic tracking-tight">Intelligence Failure</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 italic">Unable to synthesize remediation vector for this finding.</p>
+                            <h3 className="text-[16px] font-semibold text-text mb-2">Synthesis Failed</h3>
+                            <p className="text-[13px] text-text-muted">Unable to generate a reliable remediation vector for this finding.</p>
                         </div>
                     )}
                 </div>

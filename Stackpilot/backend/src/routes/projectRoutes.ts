@@ -1,6 +1,4 @@
-import { Router, Response } from 'express';
-import { User } from '@supabase/supabase-js';
-import { Request } from 'express';
+import { Router, Response, Request } from 'express';
 import {
     createProject,
     getProjects,
@@ -10,7 +8,7 @@ import {
 } from '../services/projectService';
 
 interface AuthenticatedRequest extends Request {
-    user?: User;
+    user?: any;
 }
 
 const router = Router();
