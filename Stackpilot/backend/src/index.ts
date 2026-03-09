@@ -4,7 +4,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createClient, User } from '@supabase/supabase-js';
+import { account, databases, users, DB_ID, COLLECTIONS } from './lib/appwrite';
+import { Client, Account, ID, Query } from 'node-appwrite';
 import { initScheduler } from './jobs/scheduler';
 import { triggerScan, getInsightsSummary } from './services/scanService';
 import authRoutes from './routes/authRoutes';
@@ -23,8 +24,10 @@ import { getRemediationFix, recordFeedback } from './services/aiService';
 
 // --- Environment Validation ---
 const requiredEnv = [
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
+    'APPWRITE_ENDPOINT',
+    'APPWRITE_PROJECT_ID',
+    'APPWRITE_API_KEY',
+    'APPWRITE_DATABASE_ID',
     'FRONTEND_URL'
 ];
 
@@ -95,29 +98,33 @@ const scanLimiter = rateLimit({
 
 app.use('/auth', authLimiter, authRoutes);
 
-// Supabase client for service-role operations
-const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 interface AuthenticatedRequest extends Request {
-    user?: User;
+    user?: any;
 }
 
-// Auth Middleware: Validate Supabase JWT (Standard Dashboard Auth)
+// Auth Middleware: Validate Appwrite JWT or Session
 const authenticate = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Missing authorization header' });
+    const sessionToken = req.headers['x-appwrite-session'] as string;
+    if (!sessionToken) return res.status(401).json({ error: 'Missing session token' });
 
-    const token = authHeader.split(' ')[1];
     try {
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (error || !user) return res.status(401).json({ error: 'Invalid or expired token' });
-        req.user = user;
+        // In Appwrite server SDK, we should create a new client for each request
+        // if we are verifying a JWT from the frontend.
+        const userClient = new Client()
+            .setEndpoint(process.env.APPWRITE_ENDPOINT!)
+            .setProject(process.env.APPWRITE_PROJECT_ID!)
+            .setJWT(sessionToken);
+
+        const userAccount = new Account(userClient);
+        const user = await userAccount.get();
+        if (!user) return res.status(401).json({ error: 'Invalid or expired session' });
+
+        req.user = { ...user, id: user.$id };
         next();
-    } catch (err) {
-        next(err);
+    } catch (err: any) {
+        // Fallback for developers using master keys or other auth methods if needed
+        // but for now, we enforce the JWT flow.
+        res.status(401).json({ error: 'Authentication failed', details: err.message });
     }
 };
 
@@ -128,7 +135,7 @@ const requireRole = (requiredRole: Role) => {
         if (!repoId) return res.status(400).json({ error: 'Missing repository ID for permission check' });
 
         try {
-            const hasPermission = await hasRequiredRole(req.user!.id, repoId, requiredRole);
+            const hasPermission = await hasRequiredRole(req.user!.$id || req.user!.id, repoId, requiredRole);
             if (!hasPermission) {
                 return res.status(403).json({ error: `Requires ${requiredRole} permission for this repository` });
             }
@@ -145,21 +152,20 @@ const authenticateApiKey = async (req: AuthenticatedRequest, res: Response, next
     if (!apiKey) return res.status(401).json({ error: 'Missing X-API-KEY header' });
 
     try {
-        // Hash the incoming key to compare with stored hashes
         const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
 
-        const { data: keyRecord, error } = await supabase
-            .from('api_keys')
-            .select('user_id')
-            .eq('key_hash', keyHash)
-            .single();
+        const response = await databases.listDocuments(
+            DB_ID,
+            'api_keys',
+            [Query.equal('key_hash', keyHash), Query.limit(1)]
+        );
 
-        if (error || !keyRecord) {
+        if (response.total === 0) {
             return res.status(401).json({ error: 'Invalid or expired API Key' });
         }
 
-        // Mock a user object for authentication consistency
-        req.user = { id: keyRecord.user_id } as User;
+        const keyRecord = response.documents[0];
+        req.user = { $id: keyRecord.user_id, id: keyRecord.user_id };
         next();
     } catch (err) {
         next(err);
@@ -173,15 +179,14 @@ app.use('/api/upload', authenticate, uploadRoutes);
 // Health check with basic diagnostic
 app.get('/health', async (req: Request, res: Response) => {
     try {
-        // Simple probe to verify connectivity
-        const { error } = await supabase.from('repositories').select('id').limit(1);
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.limit(1)]);
 
         res.json({
             status: 'ok',
             timestamp: new Date().toISOString(),
             services: {
-                database: error ? 'disconnected' : 'healthy',
-                email: 'active', // Placeholder for actual service health
+                database: 'healthy',
+                email: 'active',
                 gateway: 'healthy'
             }
         });
@@ -198,19 +203,39 @@ app.post('/api/repos', authenticate, async (req: AuthenticatedRequest, res: Resp
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
     try {
-        const { data, error } = await supabase
-            .from('repositories')
-            .upsert({
-                user_id: req.user!.id,
-                url,
-                name: url.split('/').pop(),
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id,url' })
-            .select()
-            .single();
+        const userId = req.user!.$id || req.user!.id;
+        const repoName = url.split('/').pop();
 
-        if (error) throw error;
-        res.json(data);
+        // Check if exists
+        const existing = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId), Query.equal('url', url)]
+        );
+
+        let repo;
+        if (existing.total > 0) {
+            repo = await databases.updateDocument(
+                DB_ID,
+                COLLECTIONS.REPOSITORIES,
+                existing.documents[0].$id,
+                { name: repoName, updated_at: new Date().toISOString() }
+            );
+        } else {
+            repo = await databases.createDocument(
+                DB_ID,
+                COLLECTIONS.REPOSITORIES,
+                ID.unique(),
+                {
+                    user_id: userId,
+                    url,
+                    name: repoName,
+                    updated_at: new Date().toISOString()
+                }
+            );
+        }
+
+        res.json(repo);
     } catch (error: unknown) {
         next(error);
     }
@@ -219,20 +244,17 @@ app.post('/api/repos', authenticate, async (req: AuthenticatedRequest, res: Resp
 // List repos (owned or shared via teams)
 app.get('/api/repos', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const userId = req.user!.id;
+        const userId = req.user!.$id || req.user!.id;
 
-        // Fetch repos where user is owner OR has team-based access via project_access
-        const { data, error } = await supabase
-            .from('repositories')
-            .select(`
-                *,
-                project_access!left(team_id, teams!inner(team_members!inner(user_id)))
-            `)
-            .or(`user_id.eq.${userId},project_access.teams.team_members.user_id.eq.${userId}`)
-            .order('updated_at', { ascending: false });
+        // Fetch repos.
+        // Complex permissions should be handled in services.
+        const response = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId), Query.orderDesc('updated_at')]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (error: unknown) {
         next(error);
     }
@@ -270,20 +292,29 @@ app.put('/api/repos/:id/policy', authenticate, requireRole('admin'), async (req:
         const repoId = req.params.id;
         const { policy_id, custom_max_critical, custom_max_high, custom_min_risk_score } = req.body;
 
-        const { data, error } = await supabase
-            .from('project_policies')
-            .upsert({
-                repo_id: repoId,
-                policy_id,
-                custom_max_critical,
-                custom_max_high,
-                custom_min_risk_score,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'repo_id' })
-            .select()
-            .single();
+        // Check if exists
+        const existing = await databases.listDocuments(
+            DB_ID,
+            'project_policies',
+            [Query.equal('repo_id', repoId)]
+        );
 
-        if (error) throw error;
+        let data;
+        const payload = {
+            repo_id: repoId,
+            policy_id,
+            custom_max_critical,
+            custom_max_high,
+            custom_min_risk_score,
+            updated_at: new Date().toISOString()
+        };
+
+        if (existing.total > 0) {
+            data = await databases.updateDocument(DB_ID, 'project_policies', existing.documents[0].$id, payload);
+        } else {
+            data = await databases.createDocument(DB_ID, 'project_policies', ID.unique(), payload);
+        }
+
         res.json(data);
     } catch (err) {
         next(err);
@@ -293,13 +324,13 @@ app.put('/api/repos/:id/policy', authenticate, requireRole('admin'), async (req:
 // List system policies
 app.get('/api/policies', authenticate, async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { data, error } = await supabase
-            .from('policies')
-            .select('*')
-            .order('name', { ascending: true });
+        const response = await databases.listDocuments(
+            DB_ID,
+            'policies',
+            [Query.orderAsc('name')]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (err) {
         next(err);
     }
@@ -308,11 +339,10 @@ app.get('/api/policies', authenticate, async (req: Request, res: Response, next:
 // Manually re-evaluate a scan against current policy
 app.post('/api/scans/:id/evaluate', authenticate, async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Special check: we need the repo_id from the scan to check permissions
-        const { data: scan } = await supabase.from('scan_results').select('repo_id').eq('id', req.params.id).single();
+        const scan = await databases.getDocument(DB_ID, 'scan_results', req.params.id);
         if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
-        const hasPerm = await hasRequiredRole((req as any).user.id, scan.repo_id, 'developer');
+        const hasPerm = await hasRequiredRole((req as any).user.$id || (req as any).user.id, scan.repo_id, 'developer');
         if (!hasPerm) return res.status(403).json({ error: 'Requires developer permission' });
 
         const evaluation = await evaluateScan(req.params.id);
@@ -327,15 +357,14 @@ app.post('/api/scans/:id/evaluate', authenticate, async (req: Request, res: Resp
 // Get notification history
 app.get('/api/notifications', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data, error } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', req.user!.id)
-            .order('created_at', { ascending: false })
-            .limit(50);
+        const userId = req.user!.$id || req.user!.id;
+        const response = await databases.listDocuments(
+            DB_ID,
+            'notifications',
+            [Query.equal('user_id', userId), Query.orderDesc('created_at'), Query.limit(50)]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (err) {
         next(err);
     }
@@ -344,13 +373,14 @@ app.get('/api/notifications', authenticate, async (req: AuthenticatedRequest, re
 // Get notification preferences
 app.get('/api/notifications/preferences', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data, error } = await supabase
-            .from('notification_preferences')
-            .select('*')
-            .eq('user_id', req.user!.id);
+        const userId = req.user!.$id || req.user!.id;
+        const response = await databases.listDocuments(
+            DB_ID,
+            'notification_preferences',
+            [Query.equal('user_id', userId)]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (err) {
         next(err);
     }
@@ -363,13 +393,29 @@ app.put('/api/notifications/preferences', authenticate, async (req: Authenticate
         if (!Array.isArray(preferences)) throw new Error('Preferences must be an array');
 
         for (const pref of preferences) {
-            await supabase
-                .from('notification_preferences')
-                .upsert({
-                    user_id: req.user!.id,
-                    ...pref,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id,repo_id,channel,event_type' });
+            const userId = req.user!.$id || req.user!.id;
+            const existing = await databases.listDocuments(
+                DB_ID,
+                'notification_preferences',
+                [
+                    Query.equal('user_id', userId),
+                    Query.equal('repo_id', pref.repo_id || ''),
+                    Query.equal('channel', pref.channel),
+                    Query.equal('event_type', pref.event_type)
+                ]
+            );
+
+            const payload = {
+                user_id: userId,
+                ...pref,
+                updated_at: new Date().toISOString()
+            };
+
+            if (existing.total > 0) {
+                await databases.updateDocument(DB_ID, 'notification_preferences', existing.documents[0].$id, payload);
+            } else {
+                await databases.createDocument(DB_ID, 'notification_preferences', ID.unique(), payload);
+            }
         }
 
         res.json({ message: 'Preferences updated successfully' });
@@ -427,37 +473,35 @@ app.post('/api/findings/:id/resolve', authenticate, async (req: AuthenticatedReq
         const { state, reason } = req.body; // 'fixed', 'accepted_risk'
 
         // RBAC Check
-        const { data: finding } = await supabase.from('vulnerabilities').select('repo_id').eq('id', findingId).single();
+        const finding = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, findingId);
         if (!finding) return res.status(404).json({ error: 'Finding not found' });
 
-        const hasPerm = await hasRequiredRole(req.user!.id, finding.repo_id, 'developer');
+        const userId = req.user!.$id || req.user!.id;
+        const hasPerm = await hasRequiredRole(userId, finding.repo_id, 'developer');
         if (!hasPerm) return res.status(403).json({ error: 'Requires developer permission' });
 
         if (!['fixed', 'accepted_risk'].includes(state)) {
             return res.status(400).json({ error: 'Invalid state' });
         }
 
-        const { data: resolution, error: resErr } = await supabase
-            .from('finding_resolutions')
-            .insert({
+        const resolution = await databases.createDocument(
+            DB_ID,
+            'finding_resolutions',
+            ID.unique(),
+            {
                 finding_id: findingId,
                 state,
                 reason,
-                user_id: req.user!.id
-            })
-            .select()
-            .single();
+                user_id: userId,
+                created_at: new Date().toISOString()
+            }
+        );
 
-        if (resErr) throw resErr;
-
-        await supabase
-            .from('vulnerabilities')
-            .update({
-                resolution_status: state,
-                resolution_id: resolution.id,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', findingId);
+        await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, findingId, {
+            resolution_status: state,
+            resolution_id: resolution.$id,
+            updated_at: new Date().toISOString()
+        });
 
         res.json({ message: `Finding marked as ${state}`, resolution });
     } catch (err) {
@@ -473,18 +517,21 @@ app.post('/api/teams', authenticate, async (req: AuthenticatedRequest, res: Resp
         const { name } = req.body;
         if (!name) return res.status(400).json({ error: 'Team name is required' });
 
-        const { data: team, error: teamErr } = await supabase
-            .from('teams')
-            .insert({ name, owner_id: req.user!.id })
-            .select()
-            .single();
-
-        if (teamErr) throw teamErr;
+        const userId = req.user!.$id || req.user!.id;
+        const team = await databases.createDocument(
+            DB_ID,
+            'teams',
+            ID.unique(),
+            { name, owner_id: userId, created_at: new Date().toISOString() }
+        );
 
         // Add creator as owner
-        await supabase
-            .from('team_members')
-            .insert({ team_id: team.id, user_id: req.user!.id, role: 'owner' });
+        await databases.createDocument(
+            DB_ID,
+            'team_members',
+            ID.unique(),
+            { team_id: team.$id, user_id: userId, role: 'owner', created_at: new Date().toISOString() }
+        );
 
         res.json(team);
     } catch (err) {
@@ -499,35 +546,39 @@ app.post('/api/teams/:id/invite', authenticate, async (req: AuthenticatedRequest
         const { email, role } = req.body; // role: admin, developer, viewer
 
         // Check if requester is at least admin of the team
-        const { data: membership } = await supabase
-            .from('team_members')
-            .select('role')
-            .eq('team_id', teamId)
-            .eq('user_id', req.user!.id)
-            .single();
+        const userId = req.user!.$id || req.user!.id;
+        // Check if requester is at least admin of the team
+        const memberships = await databases.listDocuments(
+            DB_ID,
+            'team_members',
+            [Query.equal('team_id', teamId), Query.equal('user_id', userId), Query.limit(1)]
+        );
 
-        if (!membership || !['owner', 'admin'].includes(membership.role)) {
+        if (memberships.total === 0 || !['owner', 'admin'].includes(memberships.documents[0].role)) {
             return res.status(403).json({ error: 'Only team owners or admins can invite members' });
         }
 
-        // Find user by email
-        const { data: invitedUser, error: findErr } = await supabase
-            .from('users') // Assuming a users profile table exists
-            .select('id')
-            .eq('email', email)
-            .single();
+        // Find user by email (Assuming we can query users by email in Appwrite Users API)
+        const invitedUsers = await users.list([Query.equal('email', email)]);
 
-        if (findErr || !invitedUser) {
+        if (invitedUsers.total === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        const { data, error } = await supabase
-            .from('team_members')
-            .insert({ team_id: teamId, user_id: invitedUser.id, role: role || 'viewer' })
-            .select()
-            .single();
+        const invitedUser = invitedUsers.users[0];
 
-        if (error) throw error;
+        const data = await databases.createDocument(
+            DB_ID,
+            'team_members',
+            ID.unique(),
+            {
+                team_id: teamId,
+                user_id: invitedUser.$id,
+                role: role || 'viewer',
+                created_at: new Date().toISOString()
+            }
+        );
+
         res.json({ message: 'User invited successfully', data });
     } catch (err) {
         next(err);
@@ -537,13 +588,13 @@ app.post('/api/teams/:id/invite', authenticate, async (req: AuthenticatedRequest
 // Manage project access
 app.get('/api/repos/:id/access', authenticate, requireRole('admin'), async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { data, error } = await supabase
-            .from('project_access')
-            .select('*, teams(id, name)')
-            .eq('repo_id', req.params.id);
+        const response = await databases.listDocuments(
+            DB_ID,
+            'project_access',
+            [Query.equal('repo_id', req.params.id)]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (err) {
         next(err);
     }
@@ -555,9 +606,23 @@ app.put('/api/repos/:id/access', authenticate, requireRole('admin'), async (req:
         const { team_id, action } = req.body; // action: grant, revoke
 
         if (action === 'grant') {
-            await supabase.from('project_access').upsert({ repo_id: repoId, team_id });
+            const existing = await databases.listDocuments(
+                DB_ID,
+                'project_access',
+                [Query.equal('repo_id', repoId), Query.equal('team_id', team_id)]
+            );
+            if (existing.total === 0) {
+                await databases.createDocument(DB_ID, 'project_access', ID.unique(), { repo_id: repoId, team_id });
+            }
         } else {
-            await supabase.from('project_access').delete().eq('repo_id', repoId).eq('team_id', team_id);
+            const existing = await databases.listDocuments(
+                DB_ID,
+                'project_access',
+                [Query.equal('repo_id', repoId), Query.equal('team_id', team_id)]
+            );
+            if (existing.total > 0) {
+                await databases.deleteDocument(DB_ID, 'project_access', existing.documents[0].$id);
+            }
         }
 
         res.json({ message: `Access ${action}ed successfully` });
@@ -573,25 +638,26 @@ app.post('/api/ci/scan', authenticateApiKey, scanLimiter, async (req: Authentica
     if (!repo_url) return res.status(400).json({ error: 'repo_url is required' });
 
     try {
+        const userId = req.user!.$id || req.user!.id;
         // 1. Find the repository for this user
-        const { data: repo, error } = await supabase
-            .from('repositories')
-            .select('id')
-            .eq('user_id', req.user!.id)
-            .eq('url', repo_url)
-            .single();
+        const repos = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId), Query.equal('url', repo_url), Query.limit(1)]
+        );
 
-        if (error || !repo) {
+        if (repos.total === 0) {
             return res.status(404).json({ error: 'Repository not connected to StackPilot. Please add it via the dashboard first.' });
         }
+        const repo = repos.documents[0];
 
         // 2. Trigger scan
-        const { scanId, error: scanErr } = await triggerScan(repo.id);
+        const { scanId, error: scanErr } = await triggerScan(repo.$id);
         if (scanErr) return res.status(400).json({ error: scanErr });
 
         // 3. Link Git metadata if provided
         if (scanId && commit_hash) {
-            await linkCommitToScan(scanId, repo.id, { commit_hash, branch, pr_number });
+            await linkCommitToScan(scanId, repo.$id, { commit_hash, branch, pr_number });
         }
 
         res.json({
@@ -607,17 +673,13 @@ app.post('/api/ci/scan', authenticateApiKey, scanLimiter, async (req: Authentica
 // Get scan status for CI polling
 app.get('/api/ci/scans/:id/status', authenticateApiKey, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data: scan, error } = await supabase
-            .from('scan_results')
-            .select('*, repositories(user_id)')
-            .eq('id', req.params.id)
-            .single();
+        const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, req.params.id);
+        if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
-        if (error || !scan) return res.status(404).json({ error: 'Scan not found' });
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scan.repo_id);
 
         // Security: Ensure the API key user owns the repository
-        const repo: any = scan.repositories;
-        if (repo.user_id !== req.user!.id) {
+        if (repo.user_id !== (req.user!.$id || req.user!.id)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
@@ -629,7 +691,7 @@ app.get('/api/ci/scans/:id/status', authenticateApiKey, async (req: Authenticate
         const pass = scan.status === 'completed' && (scan.details?.critical_count || 0) === 0;
 
         res.json({
-            id: scan.id,
+            id: scan.$id,
             status: scan.status,
             finished: isFinished,
             pass: isFinished ? pass : null,
@@ -654,13 +716,13 @@ app.get('/api/insights/summary', authenticate, async (req: AuthenticatedRequest,
 // Get vulnerabilities for a specific scan
 app.get('/api/scans/:id/vulnerabilities', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data, error } = await supabase
-            .from('vulnerabilities')
-            .select('*')
-            .eq('scan_result_id', req.params.id);
+        const response = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.VULNERABILITIES,
+            [Query.equal('scan_result_id', req.params.id)]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (error: unknown) {
         next(error);
     }
@@ -670,35 +732,38 @@ app.get('/api/scans/:id/vulnerabilities', authenticate, async (req: Authenticate
 app.post('/api/vulnerabilities/:id/convert', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         // 1. Get vulnerability details
-        const { data: vuln, error: vulnErr } = await supabase
-            .from('vulnerabilities')
-            .select('*, repositories(name)')
-            .eq('id', req.params.id)
-            .single();
+        const vuln = await databases.getDocument(
+            DB_ID,
+            COLLECTIONS.VULNERABILITIES,
+            req.params.id
+        );
 
-        if (vulnErr || !vuln) return res.status(404).json({ error: 'Vulnerability not found' });
+        if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
 
         // 2. Create task
-        const { data: task, error: taskErr } = await supabase
-            .from('tasks')
-            .insert({
-                user_id: req.user!.id,
+        const userId = req.user!.$id || req.user!.id;
+        const task = await databases.createDocument(
+            DB_ID,
+            COLLECTIONS.TASKS,
+            ID.unique(),
+            {
+                user_id: userId,
                 title: `Fix ${vuln.tool} finding: ${vuln.message.substring(0, 50)}...`,
                 description: `Tool: ${vuln.tool}\nSeverity: ${vuln.severity}\nFile: ${vuln.file_path}:${vuln.line_number}\n\nOriginal Message: ${vuln.message}`,
                 priority: vuln.severity === 'critical' || vuln.severity === 'high' ? 'high' : 'medium',
                 status: 'todo',
-                repository_id: vuln.repo_id
-            })
-            .select()
-            .single();
-
-        if (taskErr) throw taskErr;
+                repository_id: vuln.repo_id,
+                created_at: new Date().toISOString()
+            }
+        );
 
         // 3. Update vulnerability status
-        await supabase
-            .from('vulnerabilities')
-            .update({ status: 'resolved' })
-            .eq('id', vuln.id);
+        await databases.updateDocument(
+            DB_ID,
+            COLLECTIONS.VULNERABILITIES,
+            vuln.$id,
+            { resolution_status: 'resolved', updated_at: new Date().toISOString() }
+        );
 
         res.json(task);
     } catch (error: unknown) {
@@ -709,28 +774,30 @@ app.post('/api/vulnerabilities/:id/convert', authenticate, async (req: Authentic
 // Global Dashboard Stats
 app.get('/api/dashboard/stats', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data: repos, error: repoErr } = await supabase
-            .from('repositories')
-            .select('risk_score, vulnerability_count')
-            .eq('user_id', req.user!.id);
+        const userId = req.user!.$id || req.user!.id;
 
-        if (repoErr) throw repoErr;
+        const reposResponse = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId)]
+        );
+        const repos = reposResponse.documents;
 
-        const { data: tasks, error: taskErr } = await supabase
-            .from('tasks')
-            .select('status, priority')
-            .eq('user_id', req.user!.id);
-
-        if (taskErr) throw taskErr;
+        const tasksResponse = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.TASKS,
+            [Query.equal('user_id', userId)]
+        );
+        const tasks = tasksResponse.documents;
 
         const totalRepos = repos.length;
         const avgRiskScore = totalRepos > 0
-            ? repos.reduce((acc, r) => acc + (Number(r.risk_score) || 0), 0) / totalRepos
+            ? repos.reduce((acc: number, r: any) => acc + (Number(r.risk_score) || 0), 0) / totalRepos
             : 0;
-        const totalVulns = repos.reduce((acc, r) => acc + (r.vulnerability_count || 0), 0);
+        const totalVulns = repos.reduce((acc: number, r: any) => acc + (r.vulnerability_count || 0), 0);
 
-        const openTasks = tasks.filter(t => t.status !== 'completed').length;
-        const highPriorityTasks = tasks.filter(t => t.priority === 'high' && t.status !== 'completed').length;
+        const openTasks = tasks.filter((t: any) => t.status !== 'completed').length;
+        const highPriorityTasks = tasks.filter((t: any) => t.priority === 'high' && t.status !== 'completed').length;
 
         res.json({
             avgRiskScore: Math.round(avgRiskScore * 100) / 100,
@@ -738,7 +805,7 @@ app.get('/api/dashboard/stats', authenticate, async (req: AuthenticatedRequest, 
             totalRepos,
             openTasks,
             highPriorityTasks,
-            scanCount: 0 // Placeholder for total scans if needed
+            scanCount: 0
         });
     } catch (error: unknown) {
         next(error);
@@ -748,57 +815,55 @@ app.get('/api/dashboard/stats', authenticate, async (req: AuthenticatedRequest, 
 // Activity Feed Endpoint
 app.get('/api/dashboard/activities', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const userId = req.user!.id;
+        const userId = req.user!.$id || req.user!.id;
 
         // Fetch recent repositories
-        const { data: repos } = await supabase
-            .from('repositories')
-            .select('id, name, created_at, url')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(5);
+        const reposRes = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId), Query.orderDesc('created_at'), Query.limit(5)]
+        );
+        const repos = reposRes.documents;
 
         // Fetch recent scans
-        const { data: scans } = await supabase
-            .from('scan_results')
-            .select('id, status, created_at, repositories(name)')
-            .eq('repositories.user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(5);
+        const scansRes = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.SCANS,
+            [Query.orderDesc('created_at'), Query.limit(5)]
+        );
+        const scans = scansRes.documents;
 
-        // Fetch recent tasks (conversions)
-        const { data: tasks } = await supabase
-            .from('tasks')
-            .select('id, title, created_at')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(5);
+        // Fetch recent tasks
+        const tasksRes = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.TASKS,
+            [Query.equal('user_id', userId), Query.orderDesc('created_at'), Query.limit(5)]
+        );
+        const tasks = tasksRes.documents;
 
         // Transform into unified activity stream
         const activities = [
-            ...(repos || []).map(r => ({
-                id: `repo-${r.id}`,
+            ...(repos || []).map((r: any) => ({
+                id: `repo-${r.$id}`,
                 text: `Repository '${r.name}' connected`,
-                time: r.created_at,
+                time: r.$createdAt,
                 type: 'info'
             })),
-            ...(scans || []).filter(s => s.repositories).map(s => {
-                const repo: any = s.repositories;
-                const repoName = Array.isArray(repo) ? repo[0]?.name : repo?.name;
+            ...(scans || []).map((s: any) => {
                 return {
-                    id: `scan-${s.id}`,
-                    text: `Security scan ${s.status === 'completed' ? 'finished' : 'started'} for ${repoName || 'Unknown'}`,
-                    time: s.created_at,
+                    id: `scan-${s.$id}`,
+                    text: `Security scan ${s.status === 'completed' ? 'finished' : 'started'} for project`,
+                    time: s.$createdAt,
                     type: s.status === 'completed' ? 'success' : 'info'
                 };
             }),
-            ...(tasks || []).map(t => ({
-                id: `task-${t.id}`,
+            ...(tasks || []).map((t: any) => ({
+                id: `task-${t.$id}`,
                 text: `Issue converted to task: ${t.title.substring(0, 30)}...`,
-                time: t.created_at,
+                time: t.$createdAt,
                 type: 'warning'
             }))
-        ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+        ].sort((a: any, b: any) => new Date(b.time).getTime() - new Date(a.time).getTime())
             .slice(0, 15);
 
         res.json(activities);
@@ -810,20 +875,19 @@ app.get('/api/dashboard/activities', authenticate, async (req: AuthenticatedRequ
 // Get historical trends for charts
 app.get('/api/insights/trends', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data: scans, error } = await supabase
-            .from('scan_results')
-            .select('created_at, details')
-            .order('created_at', { ascending: true })
-            .limit(20);
+        const response = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.SCANS,
+            [Query.orderAsc('created_at'), Query.limit(20)]
+        );
+        const scans = response.documents;
 
-        if (error) throw error;
-
-        const trends = scans.reduce((acc: any[], scan) => {
-            const date = new Date(scan.created_at).toLocaleDateString();
+        const trends = scans.reduce((acc: any[], scan: any) => {
+            const date = new Date(scan.$createdAt).toLocaleDateString();
             const score = scan.details?.security_score || 0;
             const vulns = scan.details?.total_vulnerabilities || 0;
 
-            const existing = acc.find(t => t.date === date);
+            const existing = acc.find((t: any) => t.date === date);
             if (existing) {
                 existing.score = (existing.score + score) / 2;
                 existing.vulnerabilities += vulns;
@@ -843,12 +907,9 @@ app.get('/api/insights/trends', authenticate, async (req: AuthenticatedRequest, 
 app.patch('/api/user/profile', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { displayName } = req.body;
     try {
-        const { data, error } = await supabase.auth.updateUser({
-            data: { display_name: displayName }
-        });
-
-        if (error) throw error;
-        res.json({ message: 'Profile updated', user: data.user });
+        const userId = req.user!.$id || req.user!.id;
+        const user = await users.updateName(userId, displayName);
+        res.json({ message: 'Profile updated', user });
     } catch (error: unknown) {
         next(error);
     }
@@ -859,14 +920,14 @@ app.patch('/api/user/profile', authenticate, async (req: AuthenticatedRequest, r
 // List API Keys
 app.get('/api/keys', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { data, error } = await supabase
-            .from('api_keys')
-            .select('id, name, created_at')
-            .eq('user_id', req.user!.id)
-            .order('created_at', { ascending: false });
+        const userId = req.user!.$id || req.user!.id;
+        const response = await databases.listDocuments(
+            DB_ID,
+            'api_keys',
+            [Query.equal('user_id', userId), Query.orderDesc('created_at')]
+        );
 
-        if (error) throw error;
-        res.json(data);
+        res.json(response.documents);
     } catch (err) {
         next(err);
     }
@@ -878,21 +939,21 @@ app.post('/api/keys', authenticate, async (req: AuthenticatedRequest, res: Respo
     if (!name) return res.status(400).json({ error: 'Key name is required' });
 
     try {
+        const userId = req.user!.$id || req.user!.id;
         const rawKey = `sp_${crypto.randomBytes(24).toString('hex')}`;
         const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-        const { data, error } = await supabase
-            .from('api_keys')
-            .insert({
-                user_id: req.user!.id,
+        const data = await databases.createDocument(
+            DB_ID,
+            'api_keys',
+            ID.unique(),
+            {
+                user_id: userId,
                 name,
                 key_hash: keyHash,
                 created_at: new Date().toISOString()
-            })
-            .select('id, name, created_at')
-            .single();
-
-        if (error) throw error;
+            }
+        );
 
         // Return raw key ONLY ONCE during creation
         res.json({ ...data, api_key: rawKey });
@@ -904,13 +965,12 @@ app.post('/api/keys', authenticate, async (req: AuthenticatedRequest, res: Respo
 // Delete API Key
 app.delete('/api/keys/:id', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const { error } = await supabase
-            .from('api_keys')
-            .delete()
-            .eq('id', req.params.id)
-            .eq('user_id', req.user!.id);
+        const userId = req.user!.$id || req.user!.id;
+        // Verify ownership
+        const key = await databases.getDocument(DB_ID, 'api_keys', req.params.id);
+        if (key.user_id !== userId) return res.status(403).json({ error: 'Access denied' });
 
-        if (error) throw error;
+        await databases.deleteDocument(DB_ID, 'api_keys', req.params.id);
         res.json({ message: 'API Key revoked' });
     } catch (err) {
         next(err);
@@ -927,18 +987,21 @@ initScheduler();
 
 app.get('/api/reports/stats', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+        const userId = req.user!.$id || req.user!.id;
         const { scope, id } = req.query; // scope: global, team, project
-        const stats = await getSecurityPostureStats(req.user!.id, (scope as any) || 'global', id as string);
+        const stats = await getSecurityPostureStats(userId, (scope as any) || 'global', id as string);
 
         if (!stats) return res.status(404).json({ error: 'No data found for the given scope' });
 
         // If global, fetch trend for all accessible repos
-        const { data: repos } = await supabase
-            .from('repositories')
-            .select('id')
-            .or(`user_id.eq.${req.user!.id},project_access.teams.team_members.user_id.eq.${req.user!.id}`);
+        const reposRes = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId)]
+        );
+        const repos = reposRes.documents;
 
-        const trend = await getTrendData(req.user!.id, repos?.map(r => r.id) || []);
+        const trend = await getTrendData(userId, repos?.map((r: any) => r.$id) || []);
 
         res.json({ stats, trend });
     } catch (err) {
@@ -948,17 +1011,20 @@ app.get('/api/reports/stats', authenticate, async (req: AuthenticatedRequest, re
 
 app.post('/api/reports/generate', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+        const userId = req.user!.$id || req.user!.id;
         const { scope, id, title } = req.body;
-        const stats = await getSecurityPostureStats(req.user!.id, (scope as any) || 'global', id as string);
+        const stats = await getSecurityPostureStats(userId, (scope as any) || 'global', id as string);
 
         if (!stats) return res.status(404).json({ error: 'No data found for report generation' });
 
-        const { data: repos } = await supabase
-            .from('repositories')
-            .select('id')
-            .or(`user_id.eq.${req.user!.id},project_access.teams.team_members.user_id.eq.${req.user!.id}`);
+        const reposRes = await databases.listDocuments(
+            DB_ID,
+            COLLECTIONS.REPOSITORIES,
+            [Query.equal('user_id', userId)]
+        );
+        const repos = reposRes.documents;
 
-        const trend = await getTrendData(req.user!.id, repos?.map(r => r.id) || []);
+        const trend = await getTrendData(userId, repos?.map((r: any) => r.$id) || []);
 
         const buffer = await generatePDFReportBuffer({
             title: title || `Security Report - ${scope}`,
@@ -967,20 +1033,19 @@ app.post('/api/reports/generate', authenticate, async (req: AuthenticatedRequest
         });
 
         // Store report record
-        const { data: report, error: repoErr } = await supabase
-            .from('security_reports')
-            .insert({
-                user_id: req.user!.id,
+        const report = await databases.createDocument(
+            DB_ID,
+            'security_reports',
+            ID.unique(),
+            {
+                user_id: userId,
                 scope,
                 name: title || `Report ${new Date().toLocaleDateString()}`,
-                stats_snapshot: stats,
+                stats_snapshot: JSON.stringify(stats),
                 repo_id: scope === 'project' ? id : null,
                 team_id: scope === 'team' ? id : null
-            })
-            .select()
-            .single();
-
-        if (repoErr) throw repoErr;
+            }
+        );
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=StackPilot_Report_${scope}.pdf`);
@@ -1010,15 +1075,17 @@ app.post('/api/vulns/:id/feedback', authenticate, async (req: AuthenticatedReque
         const { feedback } = req.body;
 
         // Find fix for this vuln (id in params is vuln ID, but recordFeedback needs fix ID)
-        const { data: fix } = await supabase
-            .from('vulnerability_fixes')
-            .select('id')
-            .eq('vulnerability_id', id)
-            .single();
+        // Find fix for this vuln
+        const response = await databases.listDocuments(
+            DB_ID,
+            'vulnerability_fixes',
+            [Query.equal('vulnerability_id', id), Query.limit(1)]
+        );
 
-        if (!fix) return res.status(404).json({ error: 'No fix found for this vulnerability' });
+        if (response.total === 0) return res.status(404).json({ error: 'No fix found for this vulnerability' });
 
-        await recordFeedback(fix.id, feedback);
+        const fix = response.documents[0];
+        await recordFeedback(fix.$id, feedback);
         res.json({ success: true });
     } catch (err) {
         next(err);
@@ -1066,15 +1133,16 @@ app.post('/api/fixes/:id/pr', authenticate, async (req: AuthenticatedRequest, re
         const result = await createPullRequest(id);
 
         // Update DB with PR info
-        const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-        await supabase
-            .from('vulnerability_fixes')
-            .update({
+        await databases.updateDocument(
+            DB_ID,
+            'vulnerability_fixes',
+            id,
+            {
                 pr_url: result.url,
                 pr_status: result.status,
                 branch_name: result.branch_name
-            })
-            .eq('id', id);
+            }
+        );
 
         res.json(result);
     } catch (err) {
@@ -1085,15 +1153,12 @@ app.post('/api/fixes/:id/pr', authenticate, async (req: AuthenticatedRequest, re
 app.get('/api/fixes/:id/pr/status', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
-        const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-        const { data, error } = await supabase
-            .from('vulnerability_fixes')
-            .select('pr_status, pr_url, branch_name')
-            .eq('id', id)
-            .single();
-
-        if (error) throw error;
-        res.json(data);
+        const data = await databases.getDocument(DB_ID, 'vulnerability_fixes', id);
+        res.json({
+            pr_status: data.pr_status,
+            pr_url: data.pr_url,
+            branch_name: data.branch_name
+        });
     } catch (err) {
         next(err);
     }

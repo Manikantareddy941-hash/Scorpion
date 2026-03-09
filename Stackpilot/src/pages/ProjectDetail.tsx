@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, Query, account } from '../lib/appwrite';
 import {
     ArrowLeft, Github, List,
     Shield, Clock,
@@ -11,22 +11,22 @@ import { ScanHistory } from '../components/ScanHistory';
 import RemediationPanel from '../components/RemediationPanel';
 
 interface Vulnerability {
-    id: string;
+    $id: string;
     tool: string;
     severity: string;
     message: string;
     file_path: string;
     line_number?: number;
     status: 'open' | 'resolved' | 'false_positive';
-    created_at: string;
+    $createdAt: string;
 }
 
 interface Scan {
-    id: string;
+    $id: string;
     repo_id: string;
     status: 'queued' | 'in_progress' | 'completed' | 'failed';
     details: any;
-    created_at: string;
+    $createdAt: string;
 }
 
 export default function ProjectDetail() {
@@ -52,44 +52,38 @@ export default function ProjectDetail() {
 
     const fetchProjectData = async () => {
         try {
-            const { data: repository } = await supabase
-                .from('repositories')
-                .select('*')
-                .eq('id', id)
-                .single();
+            const [repository, vulnsRes, scansRes] = await Promise.all([
+                databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, id!),
+                databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                    Query.equal('repo_id', id!),
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(100)
+                ]),
+                databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                    Query.equal('repo_id', id!),
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(5)
+                ])
+            ]);
             setRepo(repository);
+            setVulnerabilities(vulnsRes.documents as any);
+            setScans(scansRes.documents as any);
 
-            const { data: vulns } = await supabase
-                .from('vulnerabilities')
-                .select('*')
-                .eq('repo_id', id)
-                .order('created_at', { ascending: false });
-            setVulnerabilities(vulns || []);
+            // Fetch Policy & Access via API
+            try {
+                const jwt = await account.createJWT();
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                const headers = { 'Authorization': `Bearer ${jwt.jwt}` };
 
-            const { data: scanResults } = await supabase
-                .from('scan_results')
-                .select('*')
-                .eq('repo_id', id)
-                .order('created_at', { ascending: false })
-                .limit(5);
-            setScans(scanResults || []);
-
-            // Fetch Policy
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (policyRes.ok) setPolicy(await policyRes.json());
-
-            // Fetch Access
-            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (accessRes.ok) setProjectAccess(await accessRes.json());
+                const [policyRes, accessRes] = await Promise.all([
+                    fetch(`${apiBase}/api/repos/${id}/policy`, { headers }),
+                    fetch(`${apiBase}/api/repos/${id}/access`, { headers })
+                ]);
+                if (policyRes.ok) setPolicy(await policyRes.json());
+                if (accessRes.ok) setProjectAccess(await accessRes.json());
+            } catch (apiErr) {
+                console.warn('Policy/Access fetch skipped:', apiErr);
+            }
 
         } catch (err) {
             console.error('Error fetching project data:', err);
@@ -102,28 +96,23 @@ export default function ProjectDetail() {
         if (!id) return;
         setTriggering(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
+            const jwt = await account.createJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
             const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${jwt.jwt}` }
             });
 
             if (!response.ok) {
                 const data = await response.json();
                 alert(data.error || 'Failed to trigger scan');
             } else {
-                fetchProjectData();
+                setTimeout(fetchProjectData, 500);
             }
         } catch (err) {
             console.error('Error triggering scan:', err);
         } finally {
-            setTriggering(null as any);
             setTriggering(false);
         }
     };
@@ -131,14 +120,12 @@ export default function ProjectDetail() {
     const handleConvertToIssue = async (vulnId: string) => {
         setConverting(vulnId);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
+            const jwt = await account.createJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
             const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${jwt.jwt}` }
             });
 
             if (response.ok) {
@@ -387,23 +374,27 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
     }, []);
 
     const fetchTeams = async () => {
-        const { data } = await supabase.from('teams').select('id, name');
-        setTeams(data || []);
+        try {
+            const res = await databases.listDocuments(DB_ID, COLLECTIONS.USERS, [
+                Query.limit(50)
+            ]);
+            setTeams(res.documents);
+        } catch (e) {
+            console.warn('Could not load teams:', e);
+        }
     };
 
     const grantAccess = async () => {
         if (!selectedTeamId) return;
         setGranting(true);
         try {
-            const sessionData = localStorage.getItem('supabase.auth.token');
-            const session = sessionData ? JSON.parse(sessionData) : null;
-            const token = session?.currentSession?.access_token;
+            const jwt = await account.createJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
             const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
                 method: 'PUT',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${jwt.jwt}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ team_id: selectedTeamId, action: 'grant' })

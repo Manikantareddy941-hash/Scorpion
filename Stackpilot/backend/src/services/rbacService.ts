@@ -1,10 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { databases, COLLECTIONS, DB_ID, Query, ID } from '../lib/appwrite';
 
 export type Role = 'owner' | 'admin' | 'developer' | 'viewer';
 
@@ -19,44 +13,50 @@ const rolePriority: Record<Role, number> = {
  * Resolves the effective role for a user on a specific repository.
  */
 export const getUserEffectiveRole = async (userId: string, repoId: string): Promise<Role | null> => {
-    const supabase = getSupabase();
+    try {
+        // 1. Check if user is the direct owner of the repository
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+        if (repo.user_id === userId) return 'owner';
 
-    // 1. Check if user is the direct owner of the repository
-    const { data: repo, error: repoErr } = await supabase
-        .from('repositories')
-        .select('user_id')
-        .eq('id', repoId)
-        .single();
+        // 2. Check team-based access
+        // Find project access records for this repo
+        const accessRes = await databases.listDocuments(
+            DB_ID,
+            'project_access',
+            [Query.equal('repo_id', repoId)]
+        );
 
-    if (repoErr || !repo) return null;
-    if (repo.user_id === userId) return 'owner';
+        if (accessRes.total === 0) return null;
 
-    // 2. Check team-based access
-    // Find all teams the user is in and that have access to this repo
-    const { data: memberRoles, error: memErr } = await supabase
-        .from('team_members')
-        .select(`
-            role,
-            team_id,
-            teams!inner(
-                id,
-                project_access!inner(repo_id)
-            )
-        `)
-        .eq('user_id', userId)
-        .eq('teams.project_access.repo_id', repoId);
+        // Get teams user belongs to
+        const memberRes = await databases.listDocuments(
+            DB_ID,
+            'team_members',
+            [Query.equal('user_id', userId)]
+        );
 
-    if (memErr || !memberRoles || memberRoles.length === 0) return null;
+        if (memberRes.total === 0) return null;
 
-    // Return the highest role found across all teams
-    let highestRole: Role = 'viewer';
-    memberRoles.forEach((mr: any) => {
-        if (rolePriority[mr.role as Role] > rolePriority[highestRole]) {
-            highestRole = mr.role as Role;
-        }
-    });
+        const userTeams = memberRes.documents;
+        const permittedTeams = accessRes.documents;
 
-    return highestRole;
+        let highestRole: Role = 'viewer';
+        let found = false;
+
+        permittedTeams.forEach((access: any) => {
+            const membership = userTeams.find((m: any) => m.team_id === access.team_id);
+            if (membership) {
+                found = true;
+                if (rolePriority[membership.role as Role] > rolePriority[highestRole]) {
+                    highestRole = membership.role as Role;
+                }
+            }
+        });
+
+        return found ? highestRole : null;
+    } catch (err) {
+        return null;
+    }
 };
 
 /**
@@ -78,14 +78,19 @@ export const logRbacAction = async (data: {
     target_user_id?: string;
     team_id?: string;
     repo_id?: string;
-    details?: any;
+    details?: string;
 }) => {
-    const supabase = getSupabase();
-    const { error } = await supabase
-        .from('rbac_audit_log')
-        .insert(data);
-
-    if (error) {
+    try {
+        await databases.createDocument(
+            DB_ID,
+            COLLECTIONS.AUDIT_LOGS,
+            ID.unique(),
+            {
+                ...data,
+                created_at: new Date().toISOString()
+            }
+        );
+    } catch (error) {
         console.error('[RBAC] Failed to log action:', error);
     }
 };

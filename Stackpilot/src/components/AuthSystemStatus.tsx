@@ -62,53 +62,47 @@ export default function AuthSystemStatus() {
 
   const { backend, supabase, env, cors } = status || {};
 
-  const allOk =
-    backend === 'ok' &&
-    supabase === 'ok' &&
-    env?.SUPABASE_URL &&
-    env?.SUPABASE_SERVICE_ROLE_KEY &&
-    env?.FRONTEND_URL &&
-    cors === 'ok';
+  const envOk = env?.SUPABASE_URL && env?.SUPABASE_SERVICE_ROLE_KEY && env?.FRONTEND_URL;
+  const allOk = backend === 'ok' && supabase === 'ok' && envOk && cors === 'ok';
 
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className={backend === 'ok' ? 'text-green-600' : 'text-red-600'}>
-        ● Backend {backend === 'ok' ? 'reachable' : 'fail'}
-      </span>
+    <div className="flex flex-wrap items-center gap-3 py-2 px-4 bg-surface/50 border border-border rounded-lg animate-fade-up">
+      <div className="flex items-center gap-4 mr-4">
+        <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">Intelligence Health</span>
+      </div>
 
-      <span className={supabase === 'ok' ? 'text-green-600' : 'text-red-600'}>
-        ● Supabase {supabase === 'ok' ? 'reachable' : 'fail'}
-      </span>
-
-      <span
-        className={
-          env?.SUPABASE_URL &&
-            env?.SUPABASE_SERVICE_ROLE_KEY &&
-            env?.FRONTEND_URL
-            ? 'text-green-600'
-            : 'text-red-600'
-        }
-      >
-        ● Env configured
-      </span>
-
-      <span className={cors === 'ok' ? 'text-green-600' : 'text-red-600'}>
-        ● CORS {cors === 'ok' ? 'ok' : 'fail'}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge label="Engine" status={backend === 'ok' ? 'success' : 'danger'} />
+        <StatusBadge label="Storage" status={supabase === 'ok' ? 'success' : 'danger'} />
+        <StatusBadge label="Config" status={envOk ? 'success' : 'danger'} />
+        <StatusBadge label="Network" status={cors === 'ok' ? 'success' : 'danger'} />
+      </div>
 
       {!allOk && (
-        <>
-          <span className="text-red-600 font-semibold ml-2">
-            Authentication system misconfigured. Check backend logs.
-          </span>
+        <div className="flex items-center gap-3 ml-auto pl-4 border-l border-border">
+          <span className="text-[12px] text-danger font-medium">Critical configuration failure detected</span>
           <button
             onClick={fetchStatus}
-            className="ml-2 px-2 py-1 rounded bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-200"
+            className="btn-primary !py-1 !px-3 !text-[11px]"
           >
-            Retry
+            Retry Sync
           </button>
-        </>
+        </div>
       )}
+    </div>
+  );
+}
+
+function StatusBadge({ label, status }: { label: string, status: 'success' | 'danger' | 'warning' | 'neutral' }) {
+  return (
+    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border ${status === 'success' ? 'bg-success-light border-success/10 text-success' :
+      status === 'danger' ? 'bg-danger-light border-danger/10 text-danger' :
+        'bg-surface border-border text-text-muted'
+      }`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${status === 'success' ? 'bg-success' :
+        status === 'danger' ? 'bg-danger' : 'bg-subtle'
+        }`} />
+      <span className="text-[10px] font-bold uppercase tracking-tight">{label}</span>
     </div>
   );
 }
