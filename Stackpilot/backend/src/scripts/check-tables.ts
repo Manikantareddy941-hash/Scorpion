@@ -1,26 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import 'dotenv/config';
 
-const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
-
 async function checkTables() {
-    // Check for repositories tables to see if anything exists
-    const { data, error } = await supabase.from('repositories').select('*').limit(1);
-    if (error) {
-        console.error('Error selecting from repositories:', error);
-    } else {
-        console.log('Repositories found:', data.length);
-    }
+    try {
+        // Check for repositories
+        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.limit(1)]);
+        console.log('Repositories found:', repos.total);
 
-    // Check for password_resets
-    const { data: resets, error: resetError } = await supabase.from('password_resets').select('*').limit(1);
-    if (resetError) {
-        console.error('Error selecting from password_resets:', resetError);
-    } else {
-        console.log('Password resets found:', resets.length);
+        // Check for tasks
+        const tasks = await databases.listDocuments(DB_ID, COLLECTIONS.TASKS, [Query.limit(1)]);
+        console.log('Tasks found:', tasks.total);
+    } catch (error) {
+        console.error('Error checking Appwrite collections:', error);
     }
 }
 

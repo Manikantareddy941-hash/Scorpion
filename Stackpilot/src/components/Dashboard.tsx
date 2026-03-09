@@ -2,25 +2,65 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { supabase, Task } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-  LogOut, Plus, CheckCircle2, Clock, AlertCircle, Edit2, Trash2, Filter,
-  Github, Shield, Settings, ChevronDown, Activity, Users,
-  BarChart3, Sparkles, Sun, Moon, ArrowUpRight
+  LogOut, Plus, AlertCircle, Edit2, Trash2,
+  Github, Settings, ChevronDown, Moon, Sun
 } from 'lucide-react';
-
 import TaskModal from './TaskModal';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<any | null>(null);
   const [filter, setFilter] = useState<'all' | 'todo' | 'in_progress' | 'completed'>('all');
   const [isNavOpen, setIsNavOpen] = useState(false);
+
+  // Security metrics from Appwrite
+  const [secMetrics, setSecMetrics] = useState({ critical: 0, high: 0, medium: 0, scans: 0 });
+
+  // Debug connection check + security metrics fetch
+  useEffect(() => {
+    async function fetchSecurityMetrics() {
+      try {
+        const [criticalRes, highRes, medRes, scanRes] = await Promise.all([
+          databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('severity', 'critical'),
+            Query.equal('resolution_status', 'open'),
+            Query.limit(1)
+          ]),
+          databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('severity', 'high'),
+            Query.equal('resolution_status', 'open'),
+            Query.limit(1)
+          ]),
+          databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('severity', 'medium'),
+            Query.equal('resolution_status', 'open'),
+            Query.limit(1)
+          ]),
+          databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('status', 'completed'),
+            Query.limit(1)
+          ])
+        ]);
+        setSecMetrics({
+          critical: criticalRes.total,
+          high: highRes.total,
+          medium: medRes.total,
+          scans: scanRes.total
+        });
+        console.log('✅ Appwrite connection works. Total vulnerabilities:', criticalRes.total + highRes.total + medRes.total);
+      } catch (e: any) {
+        console.error('❌ Appwrite connection failed:', e.message);
+      }
+    }
+    fetchSecurityMetrics();
+  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -29,13 +69,12 @@ export default function Dashboard() {
   const fetchTasks = async () => {
     try {
       setError('');
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTasks(data || []);
+      const response = await databases.listDocuments(
+        DB_ID,
+        COLLECTIONS.TASKS,
+        [Query.orderDesc('$createdAt')]
+      );
+      setTasks(response.documents);
     } catch (error: any) {
       console.error('Error fetching tasks:', error);
       setError(error.message || 'Failed to load tasks');
@@ -46,23 +85,20 @@ export default function Dashboard() {
 
   const deleteTask = async (id: string) => {
     try {
-      const { error } = await supabase.from('tasks').delete().eq('id', id);
-      if (error) throw error;
-      setTasks(tasks.filter((task) => task.id !== id));
+      await databases.deleteDocument(DB_ID, COLLECTIONS.TASKS, id);
+      setTasks(tasks.filter((task) => task.$id !== id));
     } catch (error) {
       console.error('Error deleting task:', error);
     }
   };
 
-  const updateTaskStatus = async (id: string, status: Task['status']) => {
+  const updateTaskStatus = async (id: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-      if (error) throw error;
-      setTasks(tasks.map((task) => (task.id === id ? { ...task, status } : task)));
+      await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, id, {
+        status,
+        updated_at: new Date().toISOString()
+      });
+      setTasks(tasks.map((task) => (task.$id === id ? { ...task, status } : task)));
     } catch (error) {
       console.error('Error updating task:', error);
     }
@@ -74,38 +110,21 @@ export default function Dashboard() {
     setEditingTask(null);
   };
 
-  const filteredTasks = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter);
+  const filteredTasks = filter === 'all' ? tasks : tasks.filter((task: any) => task.status === filter);
 
   const stats = {
     total: tasks.length,
-    todo: tasks.filter((t) => t.status === 'todo').length,
-    inProgress: tasks.filter((t) => t.status === 'in_progress').length,
-    completed: tasks.filter((t) => t.status === 'completed').length,
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'text-rose-600 bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20';
-      case 'medium': return 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20';
-      case 'low': return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20';
-      default: return 'text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-500/10 border-slate-100 dark:border-slate-800 dark:border-slate-500/20';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-      case 'in_progress': return <Clock className="w-5 h-5 text-blue-500" />;
-      default: return <AlertCircle className="w-5 h-5 text-slate-400" />;
-    }
+    todo: tasks.filter((t: any) => t.status === 'todo').length,
+    inProgress: tasks.filter((t: any) => t.status === 'in_progress').length,
+    completed: tasks.filter((t: any) => t.status === 'completed').length,
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Shield className="w-12 h-12 text-blue-600 animate-pulse" />
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Initializing Pilot...</h2>
+          <div className="logo-mark !w-12 !h-12 !text-xl animate-pulse">SP</div>
+          <h2 className="text-xs font-semibold text-text-subtle uppercase tracking-widest animate-pulse">Initializing Pilot...</h2>
         </div>
       </div>
     );
@@ -113,290 +132,213 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col transition-colors duration-300">
-      <nav className="bg-[var(--bg-secondary)]/80 backdrop-blur-md shadow-sm border-b border-[var(--border-subtle)] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-blue-600 rounded-lg shadow-lg shadow-blue-500/20">
-                <Shield className="w-6 h-6 text-white" />
+      <nav className="nav-header">
+        <Link to="/" className="nav-logo">
+          <div className="logo-mark">SP</div>
+          StackPilot
+        </Link>
+        <ul className="hidden md:flex items-center gap-1 list-none flex-1">
+          <li><Link to="/security" className="btn-ghost">Security</Link></li>
+          <li><Link to="/ai-insights" className="btn-ghost">AI Engine</Link></li>
+          <li><Link to="/teams" className="btn-ghost">Team</Link></li>
+          <li><Link to="/reports" className="btn-ghost">Reports</Link></li>
+        </ul>
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={toggleTheme}
+            className="p-2 hover:bg-surface rounded-md transition-colors text-text-muted"
+          >
+            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setIsNavOpen(!isNavOpen)}
+              className="flex items-center gap-2 p-1 hover:bg-surface rounded-md transition border border-transparent"
+            >
+              <div className="w-7 h-7 bg-accent rounded-md flex items-center justify-center text-white font-bold text-[11px]">
+                {user?.email?.[0].toUpperCase()}
               </div>
-              <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter italic uppercase">StackPilot</h1>
-            </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-text-subtle transition-transform ${isNavOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={toggleTheme}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all text-slate-500 dark:text-slate-400 border border-transparent hover:border-[var(--border-subtle)]"
-              >
-                {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-              </button>
-
-              <div className="relative">
-                <button
-                  onClick={() => setIsNavOpen(!isNavOpen)}
-                  className="flex items-center gap-3 p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition border border-transparent hover:border-[var(--border-subtle)]"
-                >
-                  <div className="text-right hidden sm:block">
-                    <p className="text-xs font-bold text-gray-900 dark:text-white leading-none mb-1">
-                      {user?.email?.split('@')[0]}
-                    </p>
-                    <p className="text-[9px] text-gray-500 dark:text-gray-400 dark:text-gray-400 font-bold uppercase tracking-widest leading-none italic">
-                      Security Lead
-                    </p>
+            {isNavOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsNavOpen(false)} />
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-border py-2 z-50 animate-fade-up">
+                  <div className="px-4 py-2 border-b border-border mb-1 text-[11px] font-medium text-text-muted uppercase tracking-wider">
+                    {user?.email}
                   </div>
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-xs shadow-lg shadow-blue-500/20">
-                    {user?.email?.[0].toUpperCase()}
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNavOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isNavOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsNavOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-64 bg-[var(--bg-secondary)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] py-3 z-50 animate-in fade-in zoom-in duration-200">
-                      <div className="px-4 py-3 border-b border-[var(--border-subtle)] mb-2">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-1">Signed in as</p>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.email}</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        {[
-                          { to: '/security', icon: Shield, label: 'Security Dashboard' },
-                          { to: '/ai-insights', icon: Sparkles, label: 'AI Insights' },
-                          { to: '/reports', icon: BarChart3, label: 'Reports & Export' },
-                          { to: '/teams', icon: Users, label: 'Team Members' },
-                          { to: '/settings', icon: Settings, label: 'Global Settings' },
-                        ].map((link) => (
-                          <Link
-                            key={link.to}
-                            to={link.to}
-                            className="flex items-center gap-3 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-800/50 dark:hover:bg-slate-800 hover:text-blue-600 transition italic uppercase tracking-tight"
-                            onClick={() => setIsNavOpen(false)}
-                          >
-                            <link.icon className="w-4 h-4" />
-                            {link.label}
-                          </Link>
-                        ))}
-                      </div>
-
-                      <div className="h-px bg-[var(--border-subtle)] my-2" />
-                      <button
-                        onClick={() => { signOut(); setIsNavOpen(false); }}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-xs font-black text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition italic uppercase tracking-tighter"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Terminate Session
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+                  <Link to="/settings" className="flex items-center gap-2 px-4 py-2 text-[13px] text-text-muted hover:text-text hover:bg-surface" onClick={() => setIsNavOpen(false)}>
+                    <Settings className="w-4 h-4" /> Settings
+                  </Link>
+                  <button
+                    onClick={() => { signOut(); setIsNavOpen(false); }}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-[13px] text-danger hover:bg-danger-light transition"
+                  >
+                    <LogOut className="w-4 h-4" /> Sign out
+                  </button>
+                </div>
+              </>
+            )}
           </div>
+          <Link to="/" className="btn-primary h-[34px] !px-4 !py-0 !text-[13.5px]">
+            Get started →
+          </Link>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow">
-        {/* Hero Security Pulse Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-          <div className="lg:col-span-2 premium-card p-10 relative overflow-hidden group">
-            <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-600/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-10">
-                <div className="p-2.5 bg-blue-600/10 rounded-xl text-blue-600">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <h2 className="text-sm font-black uppercase tracking-widest italic text-slate-900 dark:text-white">Security Intelligence Pulse</h2>
-                <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-black uppercase tracking-widest italic">+12.5% Optimal</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row items-center gap-16">
-                <div className="relative w-52 h-52 flex items-center justify-center">
-                  <svg className="w-full h-full -rotate-90">
-                    <circle cx="104" cy="104" r="92" strokeWidth="18" stroke="currentColor" fill="transparent" className="text-slate-100 dark:text-slate-800" />
-                    <circle cx="104" cy="104" r="92" strokeWidth="18" stroke="currentColor" fill="transparent" strokeDasharray={578} strokeDashoffset={578 * (1 - 0.82)} className="text-blue-600 drop-shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-6xl font-black tracking-tighter italic text-gray-900 dark:text-white">82</span>
-                    <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 dark:text-gray-300 uppercase tracking-widest italic mt-1">Health Score</span>
-                  </div>
-                </div>
-
-                <div className="flex-1 grid grid-cols-2 gap-6 w-full">
-                  {[
-                    { label: 'Critical Risks', value: '03', color: 'text-rose-500' },
-                    { label: 'Patch Rate', value: '94%', color: 'text-emerald-500' },
-                    { label: 'Avg Fix Time', value: '12h', color: 'text-blue-500' },
-                    { label: 'Managed Repos', value: '42', color: 'text-slate-900 dark:text-white' },
-                  ].map((item) => (
-                    <div key={item.label} className="p-5 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 dark:border-slate-800/50">
-                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-2">{item.label}</div>
-                      <div className={`text-3xl font-black italic tracking-tighter ${item.color}`}>{item.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+      <main className="max-w-[1100px] mx-auto px-12 py-20 flex-grow">
+        {/* HERO */}
+        <div className="text-center mb-16 animate-fade-up">
+          <div className="inline-flex items-center gap-2 bg-accent-light text-accent border border-accent-mid px-3 py-1 rounded-full text-[12.5px] font-medium mb-7">
+            <div className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
+            Security Intelligence Platform
           </div>
-
-          <div className="premium-card p-10 bg-gradient-to-br from-blue-700 via-indigo-700 to-indigo-900 text-white relative overflow-hidden group flex flex-col justify-between">
-            <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-            <div className="relative z-10">
-              <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/20 mb-8">
-                <Sparkles className="w-8 h-8" />
-              </div>
-              <h3 className="text-3xl font-black tracking-tighter uppercase italic leading-[0.9]">AI Agent Intelligence</h3>
-              <p className="text-blue-100 text-xs font-bold mt-4 uppercase tracking-widest italic opacity-80 decoration-blue-400 underline underline-offset-4">08 New remediation patches</p>
-            </div>
-            <Link to="/ai-insights" className="relative z-10 mt-10 px-6 py-4 bg-white dark:bg-slate-900 text-blue-700 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center hover:bg-blue-50 transition-all shadow-xl shadow-blue-950/40 border-b-4 border-slate-200 dark:border-slate-700 active:border-b-0 active:translate-y-1">
-              Review Fleet Health
-            </Link>
+          <h1 className="text-[clamp(32px,5vw,52px)] font-normal leading-[1.1] mb-6">
+            Security that keeps pace<br /><em className="italic text-accent">with your team</em>
+          </h1>
+          <p className="text-[17px] text-text-muted max-w-[520px] mx-auto mb-10 leading-relaxed">
+            StackPilot automates vulnerability detection, governance enforcement, and AI-driven remediation — continuously, across every repository.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <Link to="/ai-insights" className="btn-primary px-7 py-3 !text-sm lg:!text-[14px]">Get started with AI →</Link>
+            <Link to="/security" className="btn-secondary px-6 py-3 !text-sm lg:!text-[14px]">View Security Health</Link>
           </div>
         </div>
 
-        {/* Action Center Section */}
-        <div className="mb-12">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-1 bg-blue-600 rounded-full" />
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] italic text-slate-400">Security Action Center</h2>
+        {/* METRICS GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border rounded-lg overflow-hidden mb-16 animate-fade-up" style={{ animationDelay: '0.1s' }}>
+          {[
+            { label: 'Health Score', value: Math.max(0, 100 - secMetrics.critical * 25 - secMetrics.high * 10), type: 'success' },
+            { label: 'Critical Risks', value: String(secMetrics.critical).padStart(2, '0'), type: 'danger' },
+            { label: 'High Risks', value: String(secMetrics.high).padStart(2, '0'), type: 'danger' },
+            { label: 'Scans Run', value: String(secMetrics.scans), type: 'neutral' },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white p-8">
+              <p className="text-[10.5px] font-medium text-text-muted uppercase tracking-wider mb-2">{stat.label}</p>
+              <p className={`text-4xl font-semibold tracking-tighter ${stat.type === 'danger' ? 'text-danger' :
+                stat.type === 'success' ? 'text-success' : 'text-text'
+                }`}>
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* ACTION CENTER */}
+        <div className="mb-16 animate-fade-up" style={{ animationDelay: '0.2s' }}>
+          <div className="flex items-center gap-2 mb-6">
+            <span className="text-[12px] font-semibold text-accent uppercase tracking-wider">Security Information</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[
-              { label: 'Active Tasks', value: stats.total, icon: Filter, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-500/10' },
-              { label: 'Pending', value: stats.todo, icon: AlertCircle, color: 'text-slate-600 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-500/10' },
-              { label: 'In Progress', value: stats.inProgress, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-              { label: 'Resolved', value: stats.completed, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+              { label: 'Active Tasks', value: stats.total, badge: 'badge-neutral' },
+              { label: 'Pending', value: stats.todo, badge: 'badge-warning' },
+              { label: 'In Progress', value: stats.inProgress, badge: 'badge-neutral' },
+              { label: 'Resolved', value: stats.completed, badge: 'badge-success' },
             ].map((stat) => (
-              <div key={stat.label} className="premium-card p-6 flex items-center justify-between group hover:border-blue-500 transition-colors">
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-2">{stat.label}</p>
-                  <p className={`text-4xl font-black tracking-tighter italic ${stat.color}`}>{stat.value}</p>
+              <div key={stat.label} className="card group">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[11px] font-medium text-text-muted uppercase tracking-wider">{stat.label}</p>
+                  <span className={`badge ${stat.badge}`}>Live</span>
                 </div>
-                <div className={`w-14 h-14 ${stat.bg} rounded-2xl flex items-center justify-center ${stat.color} group-hover:scale-110 transition-transform`}>
-                  <stat.icon className="w-7 h-7" />
-                </div>
+                <p className="text-3xl font-semibold tracking-tighter text-text">{stat.value}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Task Management Section */}
-        <div className="premium-card overflow-hidden">
-          <div className="px-10 py-8 border-b border-[var(--border-subtle)] bg-slate-50/30 dark:bg-slate-900/10">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">Security Tasks</h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic">Operations & Remediation</p>
-              </div>
-              <div className="flex gap-4 w-full md:w-auto">
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value as any)}
-                  className="px-6 py-3 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black uppercase italic tracking-widest outline-none focus:ring-2 focus:ring-blue-600 transition-all appearance-none pr-10 relative bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
-                >
-                  <option value="all">Global Fleet</option>
-                  <option value="todo">Pending Stage</option>
-                  <option value="in_progress">Active Remediation</option>
-                  <option value="completed">Production Ready</option>
-                </select>
-                <button
-                  onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
-                  className="btn-premium flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Deploy Task
-                </button>
-              </div>
+        {/* TASK MANAGEMENT */}
+        <div className="card !p-0 overflow-hidden animate-fade-up" style={{ animationDelay: '0.3s' }}>
+          <div className="px-8 py-6 border-b border-border flex justify-between items-center bg-surface/50">
+            <div>
+              <h2 className="text-[16px] font-semibold tracking-tight">Security Task Inventory</h2>
+              <p className="text-[11px] text-text-muted font-medium uppercase tracking-wider mt-0.5">Fleet Operations & Compliance</p>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as any)}
+                className="px-3 py-1.5 bg-white border border-border rounded-md text-[12px] font-medium outline-none focus:border-accent transition-colors"
+              >
+                <option value="all">All Channels</option>
+                <option value="todo">Pending</option>
+                <option value="in_progress">Executing</option>
+                <option value="completed">Verified</option>
+              </select>
+              <button
+                onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
+                className="btn-primary !py-1.5 !px-4 !text-[13px]"
+              >
+                <Plus className="w-4 h-4" /> Deploy Task
+              </button>
             </div>
           </div>
 
-          <div className="divide-y divide-[var(--border-subtle)]">
+          <div className="divide-y divide-border">
             {error ? (
-              <div className="p-24 text-center">
-                <div className="w-20 h-20 bg-rose-50 dark:bg-rose-900/20 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-rose-100 dark:border-rose-800">
-                  <AlertCircle className="w-10 h-10 text-rose-500" />
-                </div>
-                <p className="text-sm font-black text-slate-900 dark:text-white uppercase italic tracking-tight">Connection Error</p>
-                <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mt-2 italic">{error}</p>
-                <button
-                  onClick={fetchTasks}
-                  className="mt-6 px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
-                >
-                  Retry Connection
-                </button>
+              <div className="p-16 text-center">
+                <AlertCircle className="w-10 h-10 text-danger mx-auto mb-4" />
+                <p className="text-[15px] font-semibold mb-1">Fleet Connection Failure</p>
+                <p className="text-[13px] text-text-muted mb-6">{error}</p>
+                <button onClick={fetchTasks} className="btn-secondary mx-auto">Retry Deployment</button>
               </div>
             ) : filteredTasks.length === 0 ? (
-              <div className="p-24 text-center">
-                <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 dark:border-slate-800 dark:border-slate-800">
-                  <AlertCircle className="w-10 h-10 text-slate-300" />
-                </div>
-                <p className="text-sm font-black text-slate-900 dark:text-white uppercase italic tracking-tight">Clear Radar</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 italic">No active security tasks detected in current vector</p>
+              <div className="p-16 text-center">
+                <p className="text-[13px] text-text-muted font-medium italic">No security tasks detected in the current vector.</p>
               </div>
             ) : (
               filteredTasks.map((task) => (
-                <div key={task.id} className="p-8 hover:bg-slate-50 dark:bg-slate-800/50 dark:hover:bg-slate-800/30 transition-all group">
-                  <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-                    <div className="flex items-start gap-6 flex-1">
-                      <div className="mt-1.5 p-2 bg-[var(--bg-primary)] rounded-lg shadow-sm">
-                        {getStatusIcon(task.status)}
+                <div key={task.id} className="p-6 hover:bg-surface/30 transition-all group">
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-[15px] font-medium text-text group-hover:text-accent transition-colors">{task.title}</h3>
+                        <span className={`badge ${(task as any).priority === 'high' ? 'badge-danger' :
+                          (task as any).priority === 'medium' ? 'badge-warning' : 'badge-success'
+                          }`}>
+                          {task.priority}
+                        </span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-3 mb-3">
-                          <h3 className="text-lg font-black text-slate-900 dark:text-white leading-tight italic uppercase tracking-tight">{task.title}</h3>
-                          <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.15em] italic border ${getPriorityColor(task.priority)}`}>
-                            {task.priority} Priority
-                          </span>
-                        </div>
-                        {task.description && (
-                          <p className="text-slate-500 dark:text-slate-400 text-xs font-medium leading-relaxed mb-6 max-w-2xl">
-                            {task.description}
-                          </p>
+                      <p className="text-[13px] text-text-muted leading-relaxed mb-4 max-w-2xl line-clamp-2">
+                        {task.description || 'No additional intelligence provided for this operation.'}
+                      </p>
+                      <div className="flex items-center gap-4">
+                        <select
+                          value={task.status}
+                          onChange={(e) => updateTaskStatus(task.$id, e.target.value as any)}
+                          className="px-2 py-1 bg-surface border border-border rounded text-[11px] font-medium outline-none"
+                        >
+                          <option value="todo">Pending</option>
+                          <option value="in_progress">Executing</option>
+                          <option value="completed">Verified</option>
+                        </select>
+                        {(task.repo_url || task.issue_url) && (
+                          <div className="flex gap-2">
+                            {task.repo_url && (
+                              <a href={task.repo_url} target="_blank" rel="noopener noreferrer" className="text-text-muted hover:text-text transition-colors">
+                                <Github className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
                         )}
-                        <div className="flex flex-wrap items-center gap-4">
-                          <select
-                            value={task.status}
-                            onChange={(e) => updateTaskStatus(task.id, e.target.value as Task['status'])}
-                            className="px-4 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-[9px] font-black uppercase tracking-widest italic outline-none focus:ring-2 focus:ring-blue-600 transition-all"
-                          >
-                            <option value="todo">Pending</option>
-                            <option value="in_progress">Executing</option>
-                            <option value="completed">Verified</option>
-                          </select>
-
-                          {(task.repo_url || task.issue_url) && (
-                            <div className="flex gap-2">
-                              {task.repo_url && (
-                                <a href={task.repo_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition-colors shadow-sm">
-                                  <Github className="w-3.5 h-3.5" />
-                                </a>
-                              )}
-                              {task.issue_url && (
-                                <a href={task.issue_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm border border-slate-200 dark:border-slate-700">
-                                  <AlertCircle className="w-3.5 h-3.5" />
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </div>
 
-                    <div className="flex md:flex-col items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => { setEditingTask(task); setIsModalOpen(true); }}
-                        className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl transition-all border border-transparent hover:border-blue-100"
+                        className="p-2 text-text-muted hover:text-accent hover:bg-accent-light rounded transition-colors"
                       >
-                        <Edit2 className="w-5 h-5" />
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => { if (confirm('Erase this task from logs?')) deleteTask(task.id); }}
-                        className="p-3 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all border border-transparent hover:border-rose-100"
+                        onClick={() => { if (confirm('Purge this task from intelligence?')) deleteTask(task.$id); }}
+                        className="p-2 text-text-muted hover:text-danger hover:bg-danger-light rounded transition-colors"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -407,31 +349,17 @@ export default function Dashboard() {
         </div>
       </main>
 
-      <footer className="bg-[var(--bg-secondary)] border-t border-[var(--border-subtle)] py-12 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-10">
-            <div className="flex flex-col items-center md:items-start gap-4">
-              <div className="flex items-center gap-2 grayscale opacity-50 contrast-125">
-                <Shield className="w-6 h-6 text-blue-600" />
-                <span className="text-xl font-black text-slate-900 dark:text-white tracking-widest uppercase italic">StackPilot</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] italic">
-                Advanced Security Orchestration &bull; v1.4.2 PREMIUM
-              </p>
-            </div>
-
-            <div className="flex flex-col items-center md:items-end gap-6 text-center md:text-right">
-              <div className="flex gap-10">
-                {['Security', 'Automation', 'Intelligence', 'Fleet'].map(item => (
-                  <a key={item} href="#" className="text-[9px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest italic transition-colors">
-                    {item}
-                  </a>
-                ))}
-              </div>
-              <p className="text-sm text-text-secondaryLight dark:text-text-secondaryDark">
-                MANIKANT REDDY FROM MANIK
-              </p>
-            </div>
+      <footer className="border-t border-border py-12 bg-white mt-20">
+        <div className="max-w-[1100px] mx-auto px-12 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="flex items-center gap-3">
+            <div className="logo-mark !w-6 !h-6 !text-[11px]">SP</div>
+            <span className="text-[14px] font-semibold text-text">StackPilot</span>
+            <span className="text-border mx-2">·</span>
+            <span className="text-[12px] text-text-subtle font-medium">DevSecOps Intelligence Engine</span>
+          </div>
+          <div className="flex items-center gap-8">
+            <span className="text-[12px] text-text-subtle">© 2025 StackPilot. All rights reserved.</span>
+            <span className="text-[12px] text-text-subtle font-medium italic">v1.4.2 Enterprise</span>
           </div>
         </div>
       </footer>

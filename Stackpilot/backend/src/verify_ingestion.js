@@ -1,16 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
-const { createClient } = require('@supabase/supabase-js');
+const { Client, Databases, ID, Query } = require('node-appwrite');
 const unzipper = require('unzipper');
 
-// Load environment variables manually if dotnev is not used in raw JS
+// Load environment variables
 require('dotenv').config();
 
-const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const client = new Client()
+    .setEndpoint(process.env.APPWRITE_ENDPOINT)
+    .setProject(process.env.APPWRITE_PROJECT_ID)
+    .setKey(process.env.APPWRITE_API_KEY);
+
+const databases = new Databases(client);
+const DB_ID = process.env.APPWRITE_DATABASE_ID;
 
 const ALLOWED_EXTENSIONS = ['.ts', '.js', '.py', '.go', '.java', '.cpp', '.h', '.md', '.json', '.yml', '.yaml'];
 
@@ -45,23 +48,23 @@ async function ingestZip(filePath, projectId, userId) {
     walkSync(extractionPath);
 
     const repoName = `upload_${path.basename(filePath)}`;
-    const { data: repo, error } = await supabase
-        .from('repositories')
-        .insert({
+
+    const repo = await databases.createDocument(
+        DB_ID,
+        'repositories',
+        ID.unique(),
+        {
             user_id: userId,
             project_id: projectId,
             name: repoName,
             url: `upload://${repoName}`,
             updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-    if (error) throw error;
+        }
+    );
 
     return {
         message: 'Ingestion successful',
-        repoId: repo.id,
+        repoId: repo.$id,
         filesCount: files.length,
         extractionPath
     };
@@ -76,25 +79,25 @@ function cleanupWorkspace(dirPath) {
 async function verifyIngestion() {
     console.log('🚀 Starting Verification: Code Ingestion Module (JS)');
 
-    const testUserId = 'a95d9aa5-8992-4f2a-beb5-8ccdeb0bcd26';
+    const testUserId = ID.unique();
     let testProjectId;
     const zipPath = path.join(__dirname, 'test_project_js.zip');
 
     try {
         console.log('\n--- 0. Creating Test Project ---');
-        const { data: project, error: pError } = await supabase
-            .from('projects')
-            .insert({
+        const project = await databases.createDocument(
+            DB_ID,
+            'projects',
+            ID.unique(),
+            {
                 user_id: testUserId,
                 name: 'Ingestion Test Project ' + Date.now(),
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+            }
+        );
 
-        if (pError) throw pError;
-        testProjectId = project.id;
+        testProjectId = project.$id;
         console.log('✅ Project created:', project.name, 'ID:', testProjectId);
 
         console.log('\n--- 1. Creating Mock ZIP ---');

@@ -14,43 +14,51 @@ const AuthDiagnosticBanner = ({ health }: AuthDiagnosticBannerProps) => {
     switch (health.errorType) {
       case 'CORS':
         return {
-          icon: <AlertCircle className="w-5 h-5 text-red-500" />,
-          title: 'CORS Misconfiguration',
-          message: 'The frontend cannot reach the backend. Check that the FRONTEND_URL environment variable on the backend matches your browser\'s URL. The browser console may have more details.'
+          icon: <AlertCircle className="w-5 h-5" />,
+          title: 'Infrastructure Misconfiguration',
+          message: 'Security orchestration cannot establish a handshake with the primary mission control. Verify CORS protocols and backend environment synchronization.',
+          type: 'danger'
         };
       case 'NETWORK':
         return {
-          icon: <WifiOff className="w-5 h-5 text-yellow-500" />,
-          title: 'Cannot Connect to Authentication Server',
-          message: 'Could not connect to the backend server. Please ensure the backend is running and accessible.'
+          icon: <WifiOff className="w-5 h-5" />,
+          title: 'Mission Control Unreachable',
+          message: 'The operational backend is currently offline or unreachable via the provided network vector. Re-verify service uptime.',
+          type: 'warning'
         };
       case 'DNS_BLOCK':
         return {
-          icon: <ShieldOff className="w-5 h-5 text-blue-500" />,
-          title: 'Supabase Unreachable',
-          message: 'The Supabase domain may be blocked by your ISP. Try changing your DNS to 1.1.1.1 or 8.8.8.8, or use a VPN.'
+          icon: <ShieldOff className="w-5 h-5" />,
+          title: 'Storage Link Obstructed',
+          message: 'Intelligence storage layers are currently inaccessible. This may be caused by network-level DNS interception or firewall policies.',
+          type: 'danger'
         };
       case 'UNKNOWN':
       default:
         return {
-          icon: <AlertCircle className="w-5 h-5 text-gray-500" />,
-          title: 'Unexpected Network Error',
-          message: 'Authentication failed due to an unexpected network error. Please check your internet connection and try again.'
+          icon: <AlertCircle className="w-5 h-5" />,
+          title: 'Signal Synthesis Error',
+          message: 'An unexpected intercept occurred during authentication synthesis. Transmission was interrupted by an unknown vector.',
+          type: 'neutral'
         };
     }
   };
 
-  const { icon, title, message } = getErrorInfo();
+  const { icon, title, message, type } = getErrorInfo();
+
+  const containerClass = {
+    danger: 'bg-danger-light border-danger/10 text-danger',
+    warning: 'bg-warning-light border-warning/10 text-warning',
+    neutral: 'bg-surface border-border text-text-muted'
+  }[type as 'danger' | 'warning' | 'neutral'];
 
   return (
-    <div className="bg-red-500/10 dark:bg-red-500/10 border border-red-500/20 rounded-lg p-4 mt-4">
-      <div className="flex">
-        <div className="flex-shrink-0">{icon}</div>
-        <div className="ml-3">
-          <h3 className="text-sm font-medium text-red-800 dark:text-red-300">{title}</h3>
-          <div className="mt-2 text-sm text-red-700 dark:text-red-200">
-            <p>{message}</p>
-          </div>
+    <div className={`mt-6 p-5 rounded-xl border ${containerClass} animate-fade-up`}>
+      <div className="flex gap-4">
+        <div className="shrink-0">{icon}</div>
+        <div>
+          <h3 className="text-[14px] font-semibold leading-none mb-2">{title}</h3>
+          <p className="text-[12px] opacity-80 leading-relaxed font-medium">{message}</p>
         </div>
       </div>
     </div>

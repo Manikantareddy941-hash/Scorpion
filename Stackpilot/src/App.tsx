@@ -1,4 +1,4 @@
-﻿import { Routes, Route, Navigate } from 'react-router-dom';
+﻿import { Routes, Route } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
@@ -15,7 +15,6 @@ import Teams from './pages/Teams';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import AIAnalytics from './pages/AIAnalytics';
-import { Shield } from 'lucide-react';
 import AuthCallback from './pages/AuthCallback';
 import Footer from './components/Footer';
 import NetworkErrorPanel from './components/NetworkErrorPanel';
@@ -26,51 +25,39 @@ import PublicRoute from './components/PublicRoute';
 import AuthSystemStatus from './components/AuthSystemStatus';
 
 function App() {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
   const [networkError, setNetworkError] = useState(false);
-  const [checking, setChecking] = useState(true);
 
-  // Env validation (do not block UI)
-  useEffect(() => {
-    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      // eslint-disable-next-line no-console
-      console.warn('Missing Supabase env vars: VITE_SUPABASE_URL and/or VITE_SUPABASE_ANON_KEY');
+  // Global Supabase health check
+  const checkSupabase = async () => {
+    try {
+      const { error } = await supabase.auth.getSession();
+      if (error) throw error;
+      setNetworkError(false);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Supabase network error:', err);
+      setNetworkError(true);
     }
+  };
+
+  useEffect(() => {
+    checkSupabase().catch(() => { });
   }, []);
 
-  // Global Supabase health check (background only)
+  // Env validation
   useEffect(() => {
-    let timeout = setTimeout(() => setChecking(false), 4000);
-
-    const checkSupabase = async () => {
-      try {
-        const { error } = await supabase.auth.getSession();
-        if (error) throw error;
-        setNetworkError(false);
-      } catch (err) {
-        if (import.meta.env.DEV) console.error('Supabase network error:', err);
-        setNetworkError(true);
-      } finally {
-        setChecking(false);
-        clearTimeout(timeout);
-      }
-    };
-    checkSupabase()
-      .catch(() => {})
-      .finally(() => {
-        setChecking(false);
-        clearTimeout(timeout);
-      });
-    return () => clearTimeout(timeout);
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      console.warn('Missing Supabase env vars');
+    }
   }, []);
 
   // Only loading (from AuthContext) should block routing
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Shield className="w-12 h-12 text-blue-600 animate-pulse" />
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Checking authentication…</h2>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-6">
+          <div className="logo-mark !w-16 !h-16 !text-2xl animate-pulse">SP</div>
+          <p className="text-[13px] font-semibold text-text-subtle uppercase tracking-[0.2em] animate-pulse">Synchronizing Security Stack</p>
         </div>
       </div>
     );

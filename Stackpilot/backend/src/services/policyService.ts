@@ -1,11 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { databases, COLLECTIONS, DB_ID, Query, ID } from '../lib/appwrite';
 import { notifyPolicyFailure } from './notificationService';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
 
 export interface PolicyEvaluation {
     result: 'PASS' | 'WARN' | 'FAIL';
@@ -22,15 +16,34 @@ export interface PolicyEvaluation {
  * Retrieves the effective policy for a given repository.
  */
 export const getEffectivePolicy = async (repoId: string) => {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-        .from('effective_project_policies')
-        .select('*')
-        .eq('repo_id', repoId)
-        .single();
+    try {
+        // Appwrite doesn't have views, so we check for a custom policy or return default
+        const response = await databases.listDocuments(
+            DB_ID,
+            'project_policies',
+            [Query.equal('repo_id', repoId), Query.limit(1)]
+        );
 
-    if (error || !data) {
-        console.warn(`[PolicyService] Could not find policy for repo ${repoId}, defaulting to balanced.`);
+        if (response.total === 0) {
+            return {
+                policy_name: 'balanced',
+                max_critical: 0,
+                max_high: 5,
+                min_risk_score: 80
+            };
+        }
+
+        const data = response.documents[0];
+        // If it's a link to a system policy, we might need to fetch that, 
+        // but for now we'll assume the fields are on the document or it's a simple mapping.
+        return {
+            policy_name: data.policy_name || 'custom',
+            max_critical: data.max_critical ?? 0,
+            max_high: data.max_high ?? 5,
+            min_risk_score: data.min_risk_score ?? 80
+        };
+    } catch (err) {
+        console.warn(`[PolicyService] Error fetching policy for repo ${repoId}, defaulting to balanced.`);
         return {
             policy_name: 'balanced',
             max_critical: 0,
@@ -38,33 +51,25 @@ export const getEffectivePolicy = async (repoId: string) => {
             min_risk_score: 80
         };
     }
-    return data;
 };
 
 /**
  * Evaluates a completed scan result against the project's policy.
  */
 export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> => {
-    const supabase = getSupabase();
-
     // 1. Get scan metadata
-    const { data: scan, error: scanErr } = await supabase
-        .from('scan_results')
-        .select('*, repositories(id, name)')
-        .eq('id', scanId)
-        .single();
+    const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
 
-    if (scanErr || !scan || scan.status !== 'completed') {
+    if (!scan || scan.status !== 'completed') {
         throw new Error('Scan result not available for evaluation');
     }
 
-    const repoId = (scan.repositories as any).id;
+    const repoId = scan.repo_id;
     const policy = await getEffectivePolicy(repoId);
 
-    const findings = scan.details || {};
+    const findings = typeof scan.details === 'string' ? JSON.parse(scan.details) : (scan.details || {});
     const criticalFound = findings.critical_count || 0;
     const highFound = findings.high_count || 0;
-    const riskScoreFound = 100 - (findings.security_score || 0); // Logic consistent with Dashboard
 
     const details = {
         critical: { found: criticalFound, allowed: policy.max_critical },
@@ -87,13 +92,19 @@ export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> =>
     }
 
     // Persist evaluation
-    await supabase.from('policy_evaluations').insert({
-        scan_id: scanId,
-        repo_id: repoId,
-        policy_name: policy.policy_name,
-        result,
-        details: { ...details, reason }
-    });
+    await databases.createDocument(
+        DB_ID,
+        'policy_evaluations',
+        ID.unique(),
+        {
+            scan_id: scanId,
+            repo_id: repoId,
+            policy_name: policy.policy_name,
+            result,
+            details: JSON.stringify({ ...details, reason }),
+            created_at: new Date().toISOString()
+        }
+    );
 
     console.log(`[PolicyEngine] Evaluation for ${scanId}: ${result}. Reason: ${reason}`);
 
