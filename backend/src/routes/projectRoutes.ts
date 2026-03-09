@@ -1,6 +1,6 @@
-import { Router, Response } from 'express';
+import { Router, Response, Request } from 'express';
 import { User } from '@supabase/supabase-js';
-import { Request } from 'express';
+
 import {
     createProject,
     getProjects,
@@ -15,45 +15,91 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
-// Create Project
+/* -------------------------------------------------------------------------- */
+/* CREATE PROJECT */
+/* -------------------------------------------------------------------------- */
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
-    const { name, description } = req.body;
-    if (!name) return res.status(400).json({ error: 'Project name is required' });
+    try {
+        const { name, description } = req.body;
+        if (!name) return res.status(400).json({ error: 'Project name is required' });
 
-    const { data, error } = await createProject(req.user!.id, name, description);
-    if (error) return res.status(500).json({ error: error.message });
-    res.status(201).json(data);
+        const { data, error } = await createProject(req.user!.id, name, description);
+
+        if (error) return res.status(500).json({ error: error.message });
+
+        res.json(data);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// List Projects
+/* -------------------------------------------------------------------------- */
+/* LIST PROJECTS */
+/* -------------------------------------------------------------------------- */
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
-    const { data, error } = await getProjects(req.user!.id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    try {
+        const { data, error } = await getProjects(req.user!.id);
+        if (error) return res.status(500).json({ error: error.message });
+
+        res.json(data);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Project Dashboard
+/* -------------------------------------------------------------------------- */
+/* PROJECT DASHBOARD */
+/* -------------------------------------------------------------------------- */
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
-    const { data, error } = await getProjectDashboard(req.params.id, req.user!.id);
-    if (error) return res.status(typeof error === 'string' ? 404 : 500).json({ error: typeof error === 'string' ? error : (error as any).message });
-    res.json(data);
+    try {
+        const { data, error } = await getProjectDashboard(req.params.id, req.user!.id);
+
+        if (error) {
+            return res
+                .status(typeof error === 'string' ? 404 : 500)
+                .json({ error: typeof error === 'string' ? error : (error as any).message });
+        }
+
+        res.json(data);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Import Repo to Project
+/* -------------------------------------------------------------------------- */
+/* IMPORT REPO */
+/* -------------------------------------------------------------------------- */
 router.post('/:id/repos', async (req: AuthenticatedRequest, res: Response) => {
-    const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'Repo URL is required' });
+    try {
+        const { url } = req.body;
+        if (!url) return res.status(400).json({ error: 'Repo URL is required' });
 
-    const { data, error } = await importRepoToProject(req.params.id, req.user!.id, url);
-    if (error) return res.status(500).json({ error: typeof error === 'string' ? error : (error as any).message });
-    res.json(data);
+        const { data, error } = await importRepoToProject(req.params.id, req.user!.id, url);
+
+        if (error)
+            return res.status(500).json({
+                error: typeof error === 'string' ? error : (error as any).message
+            });
+
+        res.json(data);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-// Project Scan History (Placeholder)
+/* -------------------------------------------------------------------------- */
+/* PROJECT SCAN HISTORY */
+/* -------------------------------------------------------------------------- */
 router.get('/:id/scans', async (req: AuthenticatedRequest, res: Response) => {
-    const { data, error } = await getProjectScanHistory(req.params.id, req.user!.id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+    try {
+        const { data, error } = await getProjectScanHistory(req.params.id, req.user!.id);
+
+        if (error) return res.status(500).json({ error: error.message });
+
+        res.json(data);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 export default router;
