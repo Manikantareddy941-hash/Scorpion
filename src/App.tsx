@@ -15,6 +15,7 @@ import Teams from './pages/Teams';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import AIAnalytics from './pages/AIAnalytics';
+import Compliance from './pages/Compliance'; // ✅ ADD THIS
 import { Shield } from 'lucide-react';
 import AuthCallback from './pages/AuthCallback';
 import Footer from './components/Footer';
@@ -30,15 +31,12 @@ function App() {
   const [networkError, setNetworkError] = useState(false);
   const [checking, setChecking] = useState(true);
 
-  // Env validation (do not block UI)
   useEffect(() => {
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      // eslint-disable-next-line no-console
       console.warn('Missing Supabase env vars: VITE_SUPABASE_URL and/or VITE_SUPABASE_ANON_KEY');
     }
   }, []);
 
-  // Global Supabase health check (background only)
   useEffect(() => {
     let timeout = setTimeout(() => setChecking(false), 4000);
 
@@ -55,22 +53,25 @@ function App() {
         clearTimeout(timeout);
       }
     };
+
     checkSupabase()
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         setChecking(false);
         clearTimeout(timeout);
       });
+
     return () => clearTimeout(timeout);
   }, []);
 
-  // Only loading (from AuthContext) should block routing
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Shield className="w-12 h-12 text-blue-600 animate-pulse" />
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Checking authentication…</h2>
+          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">
+            Checking authentication…
+          </h2>
         </div>
       </div>
     );
@@ -81,11 +82,13 @@ function App() {
       <div className="w-full flex justify-center items-center py-2 bg-transparent z-40">
         <AuthSystemStatus />
       </div>
+
       {networkError && (
         <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
-          <NetworkErrorPanel onRetry={checkSupabase} />
+          <NetworkErrorPanel onRetry={() => window.location.reload()} />
         </div>
       )}
+
       <div className="flex-1">
         <Routes>
           <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
@@ -97,6 +100,7 @@ function App() {
           <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/security" element={<ProtectedRoute><SecurityDashboard /></ProtectedRoute>} />
+          <Route path="/compliance" element={<ProtectedRoute><Compliance /></ProtectedRoute>} /> {/* ✅ NEW ROUTE */}
           <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
@@ -106,12 +110,10 @@ function App() {
           <Route path="/ai-insights" element={<ProtectedRoute><AIAnalytics /></ProtectedRoute>} />
         </Routes>
       </div>
+
       <Footer />
     </div>
   );
 }
 
 export default App;
-
-
-
