@@ -1,0 +1,27 @@
+name: StackPilot Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Trigger StackPilot Scan
+        env:
+          STACKPILOT_API_URL: ${{ secrets.STACKPILOT_API_URL }}
+          STACKPILOT_CI_TOKEN: ${{ secrets.STACKPILOT_CI_TOKEN }}
+          REPO_URL: "https://github.com/${{ github.repository }}"
+        run: |
+          # Download the CI runner
+          curl -sSL https://raw.githubusercontent.com/<your-org>/stackpilot/main/backend/scripts/stackpilot-ci.sh -o stackpilot-ci.sh
+          chmod +x stackpilot-ci.sh
+          
+          # Run the scan
+          ./stackpilot-ci.sh "$STACKPILOT_API_URL" "$STACKPILOT_CI_TOKEN" "$REPO_URL"
