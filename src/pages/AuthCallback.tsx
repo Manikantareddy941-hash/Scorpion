@@ -1,45 +1,49 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { account } from '../lib/appwrite';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('Signing you in...');
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error || !data.session) {
-          setError('Authentication failed. Please try again.');
-          return;
+    async function handleCallback() {
+      // Wait for Appwrite to set the session cookie
+      await new Promise(r => setTimeout(r, 1500));
+
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      while (attempts < maxAttempts) {
+        try {
+          const user = await account.get();
+          if (user) {
+            console.log('OAuth success, user:', user.$id);
+            navigate('/dashboard', { replace: true });
+            return;
+          }
+        } catch (err: any) {
+          console.log(`Attempt ${attempts + 1} failed:`, err.message);
+          attempts++;
+          if (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
         }
-        // Wait for AuthContext to update user
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 500);
-      } catch (err: any) {
-        setError('An unexpected error occurred.');
       }
-    };
-    checkSession();
+
+      console.error('All attempts failed');
+      setStatus('Authentication failed. Please try again.');
+      setTimeout(() => navigate('/login', { replace: true }), 2000);
+    }
+
+    handleCallback();
   }, [navigate]);
 
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard');
-    }
-  }, [user, loading, navigate]);
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8 flex flex-col items-center">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Signing you in…</h2>
-        {error && <p className="text-red-600 text-center mt-2">{error}</p>}
-        {!error && <p className="text-gray-500 dark:text-gray-400">Please wait while we verify your account.</p>}
+    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+      <div className="bg-white rounded-2xl p-10 text-center shadow-xl">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-slate-700 font-medium">{status}</p>
       </div>
     </div>
   );
