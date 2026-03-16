@@ -9,6 +9,10 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+
+export default function AIAnalytics() {
+    const { theme } = useTheme();
+    const { getJWT } = useAuth();
     const [summary, setSummary] = useState<any>(null);
     const [trends, setTrends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -19,10 +23,17 @@ import { useAuth } from '../contexts/AuthContext';
 
     const fetchData = async () => {
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const headers = { 'x-appwrite-session': token || '' };
+
+            const [summaryRes, trendsRes] = await Promise.all([
+                fetch(`${apiBase}/api/ai/metrics/summary`, { headers }),
+                fetch(`${apiBase}/api/ai/metrics/trends`, { headers })
             ]);
 
-            if (summaryData) setSummary(summaryData);
-            if (trendsData) setTrends(trendsData);
+            if (summaryRes.ok) setSummary(await summaryRes.json());
+            if (trendsRes.ok) setTrends(await trendsRes.json());
         } catch (err) {
             console.error('Failed to fetch AI analytics:', err);
         } finally {
