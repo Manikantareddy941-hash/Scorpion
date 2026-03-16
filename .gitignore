@@ -33,4 +33,4 @@ tools/
 *.exe
 *.zip
 *.tar
-*.gz
+*.gznode_modules/
