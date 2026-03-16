@@ -1,10 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-import 'dotenv/config';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+import { supabase } from '../lib/supabase';
 
 async function checkUsers() {
     const { data: { users }, error } = await supabase.auth.admin.listUsers();

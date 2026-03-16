@@ -1,21 +1,13 @@
 import OpenAI from 'openai';
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'mock-key',
 });
 
 export const getRemediationFix = async (vulnerabilityId: string) => {
-    const supabase = getSupabase();
 
     // 1. Fetch Finding Details
     const { data: vuln, error: vErr } = await supabase
@@ -123,7 +115,6 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
 };
 
 export const recordFeedback = async (fixId: string, feedback: any) => {
-    const supabase = getSupabase();
     const { error } = await supabase
         .from('vulnerability_fixes')
         .update({ feedback })
