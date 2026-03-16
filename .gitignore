@@ -34,3 +34,4 @@ tools/
 *.zip
 *.tar
 *.gznode_modules/
+gitleaks-report.json
