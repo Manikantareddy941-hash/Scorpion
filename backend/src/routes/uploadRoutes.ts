@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-const path = require('path');
-const fs = require('fs');
+import path from 'path';
+import fs from 'fs';
 import { User } from '@supabase/supabase-js';
 import { Request } from 'express';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
