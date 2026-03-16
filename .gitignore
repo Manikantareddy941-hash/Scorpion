@@ -35,3 +35,12 @@ tools/
 *.tar
 *.gznode_modules/
 gitleaks-report.json
+.env
+.env.local
+*.env
+dist/
+.DS_Store
+*.log
+trivy-report*
+snyk-report*
+*-report.json
