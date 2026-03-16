@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export default function ScorpionIcon({ size = 32, color = "#E8440A" }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -16,5 +17,14 @@ export default function ScorpionIcon({ size = 32, color = "#E8440A" }: { size?: 
       {/* Legs */}
       <path d="M42 52 L28 46 M42 58 L26 55 M58 52 L72 46 M58 58 L74 55" stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
     </svg>
+=======
+export default function ScorpionIcon({ size = 32 }: { size?: number; color?: string }) {
+  return (
+    <img
+      src="/src/assets/scorpio-logo.jpg"
+      alt="SCORPION"
+      style={{ width: size, height: size, objectFit: 'contain' }}
+    />
+>>>>>>> 98f3544 (ui updates)
   );
 }

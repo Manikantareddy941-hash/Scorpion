@@ -1,16 +1,16 @@
-﻿import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
+import { databases, DB_ID, Query, COLLECTIONS } from '../lib/appwrite';
 import {
     Bell, ShieldAlert, CheckCircle, Info, Filter, Calendar,
     Activity, Clock, ShieldCheck, ArrowRight, Share2
 } from 'lucide-react';
 
 interface Notification {
-    id: string;
+    $id: string;
     event_type: string;
     repo_id: string;
-    created_at: string;
-    details: any;
+    $createdAt: string;
+    details: string; // Appwrite might return string if JSON isn't parsed or object
     repo_name?: string;
 }
 
@@ -26,17 +26,28 @@ export default function Alerts() {
     const fetchNotifications = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('notifications')
-                .select('*, repositories(name)')
-                .order('created_at', { ascending: false })
-                .limit(50);
+            const response = await databases.listDocuments(
+                DB_ID,
+                COLLECTIONS.NOTIFICATIONS || 'notifications',
+                [Query.orderDesc('$createdAt'), Query.limit(50)]
+            );
 
-            if (error) throw error;
+            const data = response.documents as unknown as Notification[];
+            
+            // Resolve repo names (Optional: could be optimized with a join or cache)
+            const repoIds = [...new Set(data.map(n => n.repo_id))].filter(Boolean);
+            const reposResponse = await databases.listDocuments(
+                DB_ID,
+                COLLECTIONS.REPOSITORIES || 'repositories',
+                repoIds.length > 0 ? [Query.equal('$id', repoIds)] : []
+            );
+            
+            const repoMap = new Map(reposResponse.documents.map(r => [r.$id, r.name]));
 
-            const formatted = data.map((n: any) => ({
+            const formatted = data.map((n) => ({
                 ...n,
-                repo_name: n.repositories?.name || 'Unknown'
+                repo_name: repoMap.get(n.repo_id) || 'Unknown',
+                details: typeof n.details === 'string' ? JSON.parse(n.details) : n.details
             }));
 
             setNotifications(formatted);
@@ -125,7 +136,7 @@ export default function Alerts() {
                     <div className="space-y-6">
                         {filteredAlerts.map((n) => (
                             <div
-                                key={n.id}
+                                key={n.$id}
                                 className="premium-card p-8 group hover:border-blue-600/50 transition-all animate-in slide-in-from-bottom-2 duration-300"
                             >
                                 <div className="flex flex-col md:flex-row items-start gap-8">
@@ -143,16 +154,16 @@ export default function Alerts() {
                                             </span>
                                         </div>
                                         <h3 className="text-slate-900 dark:text-white font-black text-xl mb-4 leading-tight uppercase italic tracking-tight group-hover:text-blue-600 transition-colors">
-                                            {n.details?.message || `Tactical security update for repo: ${n.repo_name}`}
+                                            {(n.details as any)?.message || `Tactical security update for repo: ${n.repo_name}`}
                                         </h3>
                                         <div className="flex flex-wrap items-center gap-8 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">
                                             <div className="flex items-center gap-2">
                                                 <Calendar className="w-3.5 h-3.5 text-slate-300 dark:text-slate-700" />
-                                                {new Date(n.created_at).toLocaleDateString()}
+                                                {new Date(n.$createdAt).toLocaleDateString()}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Clock className="w-3.5 h-3.5 text-slate-300 dark:text-slate-700" />
-                                                {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                {new Date(n.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                         </div>
                                     </div>
@@ -177,6 +188,3 @@ export default function Alerts() {
         </div>
     );
 }
-
-
-

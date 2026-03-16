@@ -1,8 +1,8 @@
-import { supabase } from '../../lib/supabase';
 import { useState } from 'react';
 import { FcGoogle } from 'react-icons/fc';
 import { FaGithub } from 'react-icons/fa';
 import NetworkErrorPanel from '../NetworkErrorPanel';
+import { useAuth } from '../../contexts/AuthContext';
 
 const providers = [
   {
@@ -21,29 +21,23 @@ export default function SocialLoginButtons() {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [networkError, setNetworkError] = useState(false);
+  const { signInWithOAuth } = useAuth();
 
   const handleOAuth = async (provider: string) => {
     setError(null);
     setNetworkError(false);
     setLoadingProvider(provider);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: provider as any,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
+      const { error } = await signInWithOAuth(provider as 'google' | 'github');
       if (error) {
         setError(error.message || 'OAuth error.');
         setLoadingProvider(null);
       }
     } catch (err: any) {
-      // Detect network/SSL/DNS errors
       if (
         err?.name === 'TypeError' ||
         /network|ssl|dns|fetch|failed/i.test(err?.message || '')
       ) {
-        if (import.meta.env.DEV) console.error('Supabase network error:', err);
         setNetworkError(true);
       } else {
         setError('OAuth popup closed or error occurred.');

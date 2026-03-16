@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     AreaChart, Area, Cell, PieChart, Pie
@@ -9,11 +9,18 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+<<<<<<< HEAD
 import { apiFetch } from '../lib/apiClient';
 
 export default function AIAnalytics() {
     const { theme } = useTheme();
     const { accessToken } = useAuth();
+=======
+
+export default function AIAnalytics() {
+    const { theme } = useTheme();
+    const { getJWT } = useAuth();
+>>>>>>> 98f3544 (ui updates)
     const [summary, setSummary] = useState<any>(null);
     const [trends, setTrends] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -24,9 +31,19 @@ export default function AIAnalytics() {
 
     const fetchData = async () => {
         try {
+<<<<<<< HEAD
             const [summaryData, trendsData] = await Promise.all([
                 apiFetch(`/api/ai/metrics/summary`, { token: accessToken }),
                 apiFetch(`/api/ai/metrics/trends`, { token: accessToken })
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const headers = { 'x-appwrite-session': token || '' };
+
+            const [summaryRes, trendsRes] = await Promise.all([
+                fetch(`${apiBase}/api/ai/metrics/summary`, { headers }),
+                fetch(`${apiBase}/api/ai/metrics/trends`, { headers })
+>>>>>>> 98f3544 (ui updates)
             ]);
 
             if (summaryData) setSummary(summaryData);
@@ -214,6 +231,3 @@ function LegendItem({ label, value, color }: any) {
         </div>
     );
 }
-
-
-

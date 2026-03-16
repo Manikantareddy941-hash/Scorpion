@@ -1,10 +1,8 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
-import {
-    ArrowLeft, Github, List,
-    Shield, Clock,
-    Terminal, Play, RefreshCw, Users, Trash2, Zap
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { 
+    Github, Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2
 } from 'lucide-react';
 import { FindingsTable } from '../components/FindingsTable';
 import { ScanHistory } from '../components/ScanHistory';
@@ -13,22 +11,22 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../lib/apiClient';
 
 interface Vulnerability {
-    id: string;
+    $id: string;
     tool: string;
     severity: string;
     message: string;
     file_path: string;
     line_number?: number;
     status: 'open' | 'resolved' | 'false_positive';
-    created_at: string;
+    $createdAt: string;
 }
 
 interface Scan {
-    id: string;
+    $id: string;
     repo_id: string;
     status: 'queued' | 'in_progress' | 'completed' | 'failed';
     details: any;
-    created_at: string;
+    $createdAt: string;
 }
 
 export default function ProjectDetail() {
@@ -47,36 +45,36 @@ export default function ProjectDetail() {
 
     useEffect(() => {
         if (id) {
-            fetchProjectData();
-            const interval = setInterval(fetchProjectData, 10000); // Refresh every 10s for scan status
+            fetchData();
+            const interval = setInterval(fetchData, 10000); // Refresh every 10s for scan status
             return () => clearInterval(interval);
         }
     }, [id]);
 
-    const fetchProjectData = async () => {
+    const fetchData = async () => {
+        if (!id) return;
         try {
-            const { data: repository } = await supabase
-                .from('repositories')
-                .select('*')
-                .eq('id', id)
-                .single();
-            setRepo(repository);
+            // Fetch repo details
+            const repoData = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, id);
+            setRepo(repoData);
 
-            const { data: vulns } = await supabase
-                .from('vulnerabilities')
-                .select('*')
-                .eq('repo_id', id)
-                .order('created_at', { ascending: false });
-            setVulnerabilities(vulns || []);
+            // Fetch scans
+            const scansData = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                Query.equal('repo_id', id),
+                Query.orderDesc('$createdAt'),
+                Query.limit(20)
+            ]);
+            setScans(scansData.documents as any[]);
 
-            const { data: scanResults } = await supabase
-                .from('scan_results')
-                .select('*')
-                .eq('repo_id', id)
-                .order('created_at', { ascending: false })
-                .limit(5);
-            setScans(scanResults || []);
+            // Fetch vulnerabilities
+            const vulnerabilitiesData = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                Query.equal('repo_id', id),
+                Query.orderDesc('$createdAt'),
+                Query.limit(100)
+            ]);
+            setVulnerabilities(vulnerabilitiesData.documents as any[]);
 
+<<<<<<< HEAD
             // Fetch Policy
             try {
                 const policyData = await apiFetch(`/api/repos/${id}/policy`, { token: accessToken });
@@ -92,8 +90,20 @@ export default function ProjectDetail() {
             } catch (e) {
                 // ignore
             }
+=======
+            // Fetch Policy - Placeholder for now as it's a backend call that used to be Supabase-token based
+            // We'll need to update the backend logic separately, but for now we'll maintain the call
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            // In a real migration, we'd get the JWT from Appwrite account.createJWT()
+            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`);
+            if (policyRes.ok) setPolicy(await policyRes.json());
 
-        } catch (err) {
+            // Fetch Access
+            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`);
+            if (accessRes.ok) setProjectAccess(await accessRes.json());
+>>>>>>> 98f3544 (ui updates)
+
+        } catch (err: any) {
             console.error('Error fetching project data:', err);
         } finally {
             setLoading(false);
@@ -104,16 +114,30 @@ export default function ProjectDetail() {
         if (!id) return;
         setTriggering(true);
         try {
+<<<<<<< HEAD
             await apiFetch(`/api/repos/${id}/scan`, {
                 method: 'POST',
                 token: accessToken
             });
             fetchProjectData();
         } catch (err: any) {
+=======
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                alert(data.error || 'Failed to trigger scan');
+            } else {
+                fetchData();
+            }
+        } catch (err) {
+>>>>>>> 98f3544 (ui updates)
             console.error('Error triggering scan:', err);
             alert(err.message || 'Failed to trigger scan');
         } finally {
-            setTriggering(null as any);
             setTriggering(false);
         }
     };
@@ -121,6 +145,7 @@ export default function ProjectDetail() {
     const handleConvertToIssue = async (vulnId: string) => {
         setConverting(vulnId);
         try {
+<<<<<<< HEAD
             await apiFetch(`/api/vulnerabilities/${vulnId}/convert`, {
                 method: 'POST',
                 token: accessToken
@@ -128,6 +153,18 @@ export default function ProjectDetail() {
             alert('Finding converted to Task successfully!');
             fetchProjectData();
         } catch (err: any) {
+=======
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                alert('Finding converted to Task successfully!');
+                fetchData();
+            }
+        } catch (err) {
+>>>>>>> 98f3544 (ui updates)
             console.error('Error converting vulnerability:', err);
             alert(err.message || 'Failed to convert finding');
         } finally {
@@ -147,7 +184,6 @@ export default function ProjectDetail() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50 p-8 text-slate-900 dark:text-white">
             <div className="max-w-6xl mx-auto">
-                {/* Header Actions */}
                 <div className="flex items-center justify-between mb-8">
                     <Link to="/security" className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-blue-600 transition uppercase tracking-widest italic">
                         <ArrowLeft className="w-4 h-4" />
@@ -169,7 +205,6 @@ export default function ProjectDetail() {
                     </div>
                 </div>
 
-                {/* Project Overview Card */}
                 <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-10 shadow-sm border border-slate-200 dark:border-slate-700 mb-8 relative overflow-hidden group">
                     <div className="flex flex-col md:flex-row md:items-center justify-between relative z-10 gap-8">
                         <div>
@@ -194,73 +229,28 @@ export default function ProjectDetail() {
                 </div>
 
                 <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 mb-8">
-                    <button
-                        onClick={() => setActiveTab('findings')}
-                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600 dark:text-slate-300'}`}
-                    >
-                        Findings
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('governance')}
-                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'governance' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600 dark:text-slate-300'}`}
-                    >
-                        Governance
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('access')}
-                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'access' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600 dark:text-slate-300'}`}
-                    >
-                        Access Control
-                    </button>
+                    <button onClick={() => setActiveTab('findings')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 dark:text-slate-300'}`}>Findings</button>
+                    <button onClick={() => setActiveTab('governance')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'governance' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 dark:text-slate-300'}`}>Governance</button>
+                    <button onClick={() => setActiveTab('access')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'access' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 dark:text-slate-300'}`}>Access Control</button>
                 </div>
 
                 {activeTab === 'findings' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-sm font-black text-slate-400 uppercase tracking-tighter italic">SecOps Findings</h2>
-                                <div className="flex gap-2">
-                                    <button className="p-2 text-slate-400 hover:text-slate-900 dark:text-white transition"><Clock className="w-4 h-4" /></button>
-                                    <button className="p-2 text-slate-400 hover:text-slate-900 dark:text-white transition"><List className="w-4 h-4" /></button>
-                                </div>
-                            </div>
-                            <FindingsTable
-                                findings={vulnerabilities}
-                                onConvert={handleConvertToIssue}
-                                onRemediate={(id) => setRemediationId(id)}
-                                convertingId={converting}
-                            />
+                            <FindingsTable findings={vulnerabilities as any} onConvert={handleConvertToIssue} onRemediate={(id) => setRemediationId(id)} convertingId={converting} />
                         </div>
-
                         <div className="lg:col-span-1">
                             <h2 className="text-sm font-black text-slate-400 uppercase tracking-tighter italic mb-6">Audit History</h2>
-                            <ScanHistory scans={scans} />
-
-                            <div className="mt-8 bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-[2rem] text-white">
-                                <h3 className="text-xs font-black uppercase tracking-widest italic mb-2">Automated Policy</h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase leading-relaxed">
-                                    Scheduled audits run every 6 hours. CI/CD integrations trigger audits on every PR merge via the configured webhook.
-                                </p>
-                            </div>
+                            <ScanHistory scans={scans as any} />
                         </div>
                     </div>
                 )}
 
-                {activeTab === 'governance' && (
-                    <GovernanceView policy={policy} repoId={id!} onUpdate={fetchProjectData} />
-                )}
-
-                {activeTab === 'access' && (
-                    <AccessView access={projectAccess} repoId={id!} onUpdate={fetchProjectData} />
-                )}
+                {activeTab === 'governance' && <GovernanceView policy={policy} repoId={id!} onUpdate={fetchData} />}
+                {activeTab === 'access' && <AccessView access={projectAccess} repoId={id!} onUpdate={fetchData} />}
             </div>
 
-            {remediationId && (
-                <RemediationPanel
-                    vulnerabilityId={remediationId}
-                    onClose={() => setRemediationId(null)}
-                />
-            )}
+            {remediationId && <RemediationPanel vulnerabilityId={remediationId} onClose={() => setRemediationId(null)} />}
         </div>
     );
 }
@@ -268,10 +258,10 @@ export default function ProjectDetail() {
 function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: string, onUpdate: () => void }) {
     const { accessToken } = useAuth();
     const [updating, setUpdating] = useState(false);
-
     const updatePolicy = async (profile: string) => {
         setUpdating(true);
         try {
+<<<<<<< HEAD
             await apiFetch(`/api/repos/${repoId}/policy`, {
                 method: 'PUT',
                 body: JSON.stringify({ policy_name: profile }),
@@ -279,6 +269,16 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
             });
             onUpdate();
         } catch (err: any) {
+=======
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ policy_name: profile })
+            });
+            if (response.ok) onUpdate();
+        } catch (err) {
+>>>>>>> 98f3544 (ui updates)
             console.error('Error updating policy:', err);
             alert(err.message || 'Failed to update policy');
         } finally {
@@ -287,60 +287,16 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
     };
 
     return (
-        <div className={`animate-in slide-in-from-bottom-4 duration-500 ${updating ? 'opacity-50 pointer-events-none' : ''}`}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2 space-y-8">
-                    <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-200 dark:border-slate-700">
-                        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic mb-6">Security Profile</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            {['Strict', 'Balanced', 'Relaxed'].map((p) => (
-                                <button
-                                    key={p}
-                                    onClick={() => updatePolicy(p.toLowerCase())}
-                                    className={`p-6 rounded-2xl border-2 transition-all text-left ${policy?.policy_name?.toLowerCase() === p.toLowerCase()
-                                        ? 'border-blue-600 bg-blue-50'
-                                        : 'border-slate-100 dark:border-slate-800 hover:border-slate-300'
-                                        }`}
-                                >
-                                    <h4 className="font-black text-xs uppercase tracking-widest mb-2">{p}</h4>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase leading-tight">
-                                        {p === 'Strict' && 'Zero tolerance for high risks.'}
-                                        {p === 'Balanced' && 'Standard safety thresholds.'}
-                                        {p === 'Relaxed' && 'Monitoring only.'}
-                                    </p>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-200 dark:border-slate-700">
-                        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic mb-6">Custom Thresholds</h3>
-                        <div className="space-y-6">
-                            <ThresholdSlider label="Max Critical" value={policy?.max_critical || 0} max={10} />
-                            <ThresholdSlider label="Max High" value={policy?.max_high || 0} max={20} />
-                            <ThresholdSlider label="Min Risk Score" value={policy?.min_risk_score || 80} max={100} min={10} />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="md:col-span-1">
-                    <div className="bg-slate-900 rounded-[2rem] p-8 text-white sticky top-24">
-                        <Zap className="w-8 h-8 text-yellow-400 mb-4" />
-                        <h3 className="text-lg font-black uppercase tracking-widest italic mb-4">Policy Impact</h3>
-                        <p className="text-xs text-slate-400 font-bold uppercase leading-relaxed mb-6">
-                            Current policy is set to <span className="text-blue-400">{policy?.policy_name || 'Standard'}</span>.
-                            Failing this policy will block CI/CD pipelines and send critical alerts to the security team.
-                        </p>
-                        <ul className="space-y-3">
-                            <li className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                                CI/CD Blocking: Enabled
-                            </li>
-                            <li className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                                Critical Alerts: Active
-                            </li>
-                        </ul>
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-8 ${updating ? 'opacity-50' : ''}`}>
+            <div className="md:col-span-2 space-y-8">
+                <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-8 border border-slate-200 dark:border-slate-700">
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic mb-6">Security Profile</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {['Strict', 'Balanced', 'Relaxed'].map((p) => (
+                            <button key={p} onClick={() => updatePolicy(p.toLowerCase())} className={`p-6 rounded-2xl border-2 transition-all ${policy?.policy_name?.toLowerCase() === p.toLowerCase() ? 'border-blue-600 bg-blue-50' : 'border-slate-100 dark:border-slate-800'}`}>
+                                <h4 className="font-black text-xs uppercase tracking-widest mb-2">{p}</h4>
+                            </button>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -349,6 +305,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
 }
 
 function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: string, onUpdate: () => void }) {
+<<<<<<< HEAD
     const { accessToken } = useAuth();
     const [granting, setGranting] = useState(false);
     const [teams, setTeams] = useState<any[]>([]);
@@ -389,100 +346,43 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
                 token: accessToken
             });
             onUpdate();
+=======
+
+    const revokeAccess = async (teamId: string) => {
+        try {
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team_id: teamId, action: 'revoke' })
+            });
+            if (response.ok) onUpdate();
+>>>>>>> 98f3544 (ui updates)
         } catch (err) {
             console.error('Error revoking access:', err);
         }
     };
 
     return (
-        <div className="animate-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic">Team Access</h3>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        <select
-                            value={selectedTeamId}
-                            onChange={(e) => setSelectedTeamId(e.target.value)}
-                            className="flex-1 sm:w-48 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none focus:border-blue-500"
-                        >
-                            <option value="">Select Team</option>
-                            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                        <button
-                            onClick={grantAccess}
-                            disabled={granting || !selectedTeamId}
-                            className="px-5 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest disabled:opacity-50"
-                        >
-                            Grant
-                        </button>
-                    </div>
-                </div>
-                <div className="divide-y divide-slate-100">
-                    {access.length === 0 ? (
-                        <div className="p-12 text-center">
-                            <Users className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                            <p className="text-slate-400 font-black uppercase tracking-widest italic">No teams have access yet</p>
+        <div className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-200 dark:border-slate-700 divide-y divide-slate-100">
+            {access.length === 0 ? (
+                <div className="p-12 text-center text-slate-400">No teams have access yet</div>
+            ) : (
+                access.map((a) => (
+                    <div key={a.id} className="p-6 flex items-center justify-between">
+                        <div>
+                            <p className="font-black text-slate-900 dark:text-white uppercase">{a.teams?.name}</p>
+                            <p className="text-[10px] text-slate-400 font-bold italic">Team ID: {a.team_id}</p>
                         </div>
-                    ) : (
-                        access.map((a) => (
-                            <div key={a.id} className="p-6 flex items-center justify-between hover:bg-slate-50 dark:bg-slate-800/50 transition">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-black italic">
-                                        {a.teams?.name?.[0].toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <p className="font-black text-slate-900 dark:text-white uppercase tracking-tighter">{a.teams?.name}</p>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase italic">Team ID: {a.team_id.substring(0, 8)}...</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => revokeAccess(a.team_id)}
-                                    className="p-2 text-slate-300 hover:text-red-500 transition"
-                                >
-                                    <Trash2 className="w-5 h-5" />
-                                </button>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function ThresholdSlider({ label, value, max, min = 0 }: { label: string, value: number, max: number, min?: number }) {
-    return (
-        <div>
-            <div className="flex justify-between mb-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
-                <span className="text-xs font-black text-blue-600">{value}</span>
-            </div>
-            <input
-                type="range"
-                min={min}
-                max={max}
-                value={value}
-                readOnly
-                className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
-            />
+                        <button onClick={() => revokeAccess(a.team_id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 className="w-5 h-5" /></button>
+                    </div>
+                ))
+            )}
         </div>
     );
 }
 
 function Badge({ label, severity }: { label: string, severity: string }) {
-    const styles = {
-        high: 'bg-red-50 text-red-600 border-red-100 shadow-sm shadow-red-50',
-        low: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        success: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        info: 'bg-blue-50 text-blue-600 border-blue-100'
-    }[severity] || 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 border-slate-100 dark:border-slate-800';
-
-    return (
-        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest italic border ${styles}`}>
-            {label}
-        </span>
-    );
+    const styles = severity === 'high' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100';
+    return <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest italic border ${styles}`}>{label}</span>;
 }
-
-
-

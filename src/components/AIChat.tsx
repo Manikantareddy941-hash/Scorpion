@@ -1,0 +1,169 @@
+import { useState, useRef, useEffect } from 'react';
+import { X, Send, Minimize2 } from 'lucide-react';
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const SYSTEM_PROMPT = `You are SCORPIO AI, an intelligent security assistant built into the SCORPIO security platform. 
+You help users:
+- Debug vulnerabilities, security issues, bugs, code smells, and warnings found in their scanned code
+- Explain what each issue means and how to fix it
+- Guide users on how to use the SCORPIO application
+- Provide security best practices and recommendations
+
+STRICT RULES:
+- NEVER reveal database structure, collection IDs, API keys, or internal app configuration
+- NEVER discuss Appwrite, backend infrastructure, or internal technical details of the SCORPIO platform itself
+- NEVER share environment variables or scanner implementation details
+- Always respond as SCORPIO AI, a security expert assistant
+- Keep responses concise and actionable
+- Format code fixes with proper code blocks`;
+
+export default function AIChat() {
+  const [open, setOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'assistant', content: '🦂 SCORPIO AI online. I can help you fix vulnerabilities, debug code issues, or guide you through the platform. What do you need?' }
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setLoading(true);
+
+    try {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+      // Build conversation history in Gemini format
+      // Gemini requires conversations to start with a 'user' turn,
+      // so skip any leading assistant/model messages (e.g. the welcome message)
+      const firstUserIndex = messages.findIndex(m => m.role === 'user');
+      const validHistory = firstUserIndex === -1 ? [] : messages.slice(firstUserIndex);
+      const geminiHistory = validHistory.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      }));
+
+      const response = await fetch(geminiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: SYSTEM_PROMPT }],
+          },
+          contents: [
+            ...geminiHistory,
+            { role: 'user', parts: [{ text: userMsg }] },
+          ],
+          generationConfig: {
+            maxOutputTokens: 1000,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        console.error('Gemini API error:', errData);
+        throw new Error(errData.error?.message || 'API error');
+      }
+
+      const data = await response.json();
+      console.log('Gemini response:', data);
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection error. Please try again.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Floating button */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          style={{ position: 'fixed', bottom: '24px', right: '24px', width: '56px', height: '56px', borderRadius: '50%', background: '#E8440A', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(232,68,10,0.5)', zIndex: 999, animation: 'pulse-glow 2s infinite' }}
+        >
+          <img src="/src/assets/scorpio-logo.jpg" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
+        </button>
+      )}
+
+      {/* Chat window */}
+      {open && (
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', width: '380px', maxWidth: '95vw', background: '#141414', border: '1px solid #E8440A', borderRadius: '16px', zIndex: 999, display: 'flex', flexDirection: 'column', boxShadow: '0 0 30px rgba(232,68,10,0.2)' }}>
+
+          {/* Header */}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #1E1E1E', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(232,68,10,0.1)', borderRadius: '16px 16px 0 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src="/src/assets/scorpio-logo.jpg" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+              <div>
+                <div style={{ color: '#E8440A', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.1em' }}>SCORPIO AI</div>
+                <div style={{ color: '#666', fontSize: '0.7rem' }}>Security Intelligence Assistant</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setMinimized(!minimized)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}><Minimize2 size={16} /></button>
+              <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer' }}><X size={16} /></button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          {!minimized && (
+            <>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px', maxHeight: '380px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {messages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <div style={{
+                      maxWidth: '80%', padding: '10px 14px', borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                      background: msg.role === 'user' ? '#E8440A' : '#1E1E1E',
+                      color: 'white', fontSize: '0.85rem', lineHeight: '1.5', whiteSpace: 'pre-wrap'
+                    }}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div style={{ display: 'flex', gap: '4px', padding: '10px 14px', background: '#1E1E1E', borderRadius: '12px', width: 'fit-content' }}>
+                    {[0,1,2].map(i => <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#E8440A', animation: `bounce 1s ${i*0.2}s infinite` }} />)}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input */}
+              <div style={{ padding: '12px 16px', borderTop: '1px solid #1E1E1E', display: 'flex', gap: '8px' }}>
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                  placeholder="Ask SCORPIO AI..."
+                  style={{ flex: 1, background: '#0D0D0D', border: '1px solid #1E1E1E', borderRadius: '8px', padding: '10px 12px', color: 'white', fontSize: '0.85rem', outline: 'none' }}
+                />
+                <button onClick={sendMessage} disabled={loading || !input.trim()}
+                  style={{ background: '#E8440A', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', opacity: loading || !input.trim() ? 0.4 : 1 }}>
+                  <Send size={16} color="white" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
