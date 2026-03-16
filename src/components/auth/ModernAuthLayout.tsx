@@ -11,11 +11,11 @@ export default function ModernAuthLayout({
     subtext = "Clarity. Security. Productivity.",
 }: ModernAuthLayoutProps) {
     return (
-        <div style={{ position: 'relative', minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div style={{ position: 'relative', minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}>
 
             {/* Scorpion SVG background */}
-            <div style={{ position: 'absolute', inset: 0, zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <svg viewBox="0 0 500 750" width="800" height="900" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#f97316" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35, overflow: 'visible' }}>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', overflow: 'visible' }}>
+              <svg viewBox="0 0 500 750" width="900" height="1000" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#f97316" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4, overflow: 'visible' }}>
                 <ellipse cx="250" cy="370" rx="38" ry="50" stroke="#f97316" strokeWidth="3"/>
                 <ellipse cx="250" cy="318" rx="34" ry="28" stroke="#f97316" strokeWidth="3"/>
                 <ellipse cx="250" cy="285" rx="30" ry="22" stroke="#f97316" strokeWidth="3"/>
