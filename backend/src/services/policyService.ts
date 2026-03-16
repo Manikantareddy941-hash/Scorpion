@@ -1,11 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { notifyPolicyFailure } from './notificationService';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 export interface PolicyEvaluation {
     result: 'PASS' | 'WARN' | 'FAIL';
@@ -22,7 +16,6 @@ export interface PolicyEvaluation {
  * Retrieves the effective policy for a given repository.
  */
 export const getEffectivePolicy = async (repoId: string) => {
-    const supabase = getSupabase();
     const { data, error } = await supabase
         .from('effective_project_policies')
         .select('*')
@@ -45,7 +38,6 @@ export const getEffectivePolicy = async (repoId: string) => {
  * Evaluates a completed scan result against the project's policy.
  */
 export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> => {
-    const supabase = getSupabase();
 
     // 1. Get scan metadata
     const { data: scan, error: scanErr } = await supabase

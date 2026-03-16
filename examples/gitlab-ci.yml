@@ -2,7 +2,7 @@ stackpilot_security_scan:
   stage: test
   image: curlimages/curl:latest
   script:
-    - curl -sSL https://raw.githubusercontent.com/your-org/stackpilot/main/backend/scripts/stackpilot-ci.sh -o stackpilot-ci.sh
+    - curl -sSL https://raw.githubusercontent.com/<your-org>/stackpilot/main/backend/scripts/stackpilot-ci.sh -o stackpilot-ci.sh
     - chmod +x stackpilot-ci.sh
     - ./stackpilot-ci.sh "$STACKPILOT_API_URL" "$STACKPILOT_CI_TOKEN" "$CI_REPOSITORY_URL"
   only:

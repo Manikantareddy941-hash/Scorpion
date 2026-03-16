@@ -1,12 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 export interface PRResult {
     url: string;
@@ -18,8 +12,6 @@ export interface PRResult {
  * Orchestrates the PR creation workflow for a vulnerability fix.
  */
 export const createPullRequest = async (fixId: string): Promise<PRResult> => {
-    const supabase = getSupabase();
-
     // 1. Fetch fix and vulnerability details
     const { data: fix, error: fixError } = await supabase
         .from('vulnerability_fixes')

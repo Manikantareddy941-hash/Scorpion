@@ -1,14 +1,10 @@
 import express, { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { createClient } from '@supabase/supabase-js';
 import { sendOtpEmail } from '../services/emailService';
+import { supabase } from '../lib/supabase';
 
 const router = express.Router();
-const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
 
 const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'your-fallback-secret';
 
