@@ -8,6 +8,7 @@ interface RemediationPanelProps {
 }
 
 export default function RemediationPanel({ vulnerabilityId, onClose }: RemediationPanelProps) {
+    const { getJWT } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [fix, setFix] = useState<any>(null);
@@ -21,13 +22,21 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            await fetch(`${apiBase}/api/ai/metrics/event`, {
+                method: 'POST',
+                headers: {
+                    'x-appwrite-session': token || '',
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     finding_id: vulnerabilityId,
                     suggestion_id: suggestionId,
                     action,
                     confidence_score: confidence
-                }),
-                token: accessToken
+                })
             });
         } catch (err) {
             console.error('Failed to track AI event:', err);
@@ -38,9 +47,16 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         setLoading(true);
         setError('');
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
+                method: 'POST',
+                headers: { 'x-appwrite-session': token || '' }
             });
 
-            if (data) {
+            if (response.ok) {
+                const data = await response.json();
                 setFix(data);
                 // Track Viewed
                 trackEvent('viewed', data.id, data.confidence_score);
@@ -62,6 +78,16 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const handleFeedback = async (type: 'helpful' | 'ignore') => {
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/feedback`, {
+                method: 'POST',
+                headers: {
+                    'x-appwrite-session': token || '',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } })
             });
 
             // Track Interaction
@@ -77,9 +103,16 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         if (!fix?.id) return;
         setPrLoading(true);
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const response = await fetch(`${apiBase}/api/fixes/${fix.id}/pr`, {
+                method: 'POST',
+                headers: { 'x-appwrite-session': token || '' }
             });
 
-            if (data) {
+            if (response.ok) {
+                const data = await response.json();
                 setPrResult({ url: data.url, branch: data.branch_name });
             } else {
                 alert('Failed to create PR. Please check backend logs.');
