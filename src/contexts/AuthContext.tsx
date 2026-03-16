@@ -5,13 +5,6 @@ import { Models, OAuthProvider } from "appwrite";
 type AppUser = Models.User<Models.Preferences>;
 
 interface AuthContextType {
-<<<<<<< HEAD
-  user: User | null;
-  session: any;
-  accessToken: string | null;
-=======
-  user: AppUser | null;
->>>>>>> 98f3544 (ui updates)
   loading: boolean;
   setUser: (user: AppUser | null) => void;
 
@@ -170,26 +163,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-<<<<<<< HEAD
-    <AuthContext.Provider value={{ user, session, accessToken: session?.access_token ?? null, loading, signUp, signIn, signOut, signInWithOAuth, requestReset, verifyResetOtp, completeReset, updatePassword }}>
-=======
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        setUser,
-        signUp,
-        signIn,
-        signOut,
-        signInWithOAuth,
-        requestReset,
-        verifyResetOtp,
-        completeReset,
-        updatePassword,
-        getJWT,
-      }}
-    >
->>>>>>> 98f3544 (ui updates)
       {children}
     </AuthContext.Provider>
   );
