@@ -9,10 +9,6 @@ import {
     ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
-<<<<<<< HEAD
-import { apiFetch } from '../lib/apiClient';
-=======
->>>>>>> 98f3544 (ui updates)
 
 interface CodeMetric {
     tool: 'eslint' | 'trivy' | 'npm_audit';
@@ -40,11 +36,6 @@ interface TrendData {
 }
 
 export default function CodeInsights() {
-<<<<<<< HEAD
-    const { accessToken } = useAuth();
-=======
-    const { getJWT } = useAuth();
->>>>>>> 98f3544 (ui updates)
     const [loading, setLoading] = useState(true);
     const [scans, setScans] = useState<Scan[]>([]);
     const [trends, setTrends] = useState<TrendData[]>([]);
@@ -59,23 +50,6 @@ export default function CodeInsights() {
 
     const fetchData = async () => {
         try {
-<<<<<<< HEAD
-            const [summaryData, trendsData] = await Promise.all([
-                apiFetch(`/api/insights/summary`, {
-                    token: accessToken
-                }),
-                apiFetch(`/api/insights/trends`, {
-                    token: accessToken
-                })
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const headers = { 'x-appwrite-session': token || '' };
-
-            const [summaryRes, trendsRes] = await Promise.all([
-                fetch(`${apiBase}/api/insights/summary`, { headers }),
-                fetch(`${apiBase}/api/insights/trends`, { headers })
->>>>>>> 98f3544 (ui updates)
             ]);
 
             setScans(summaryData?.scans || []);
