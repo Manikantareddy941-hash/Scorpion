@@ -4,9 +4,9 @@ import path from "path";
 // Paths to local portable binaries (relative to project root)
 // Backend runs from project/backend/, so we step up one level to reach project/tools/
 const toolPaths: Record<string, string> = {
-    semgrep: "semgrep",
-    gitleaks: path.resolve(__dirname, "../../../tools/gitleaks/gitleaks.exe"),
-    trivy: path.resolve(__dirname, "../../../tools/trivy/trivy.exe"),
+    semgrep: "C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\semgrep.exe",
+    gitleaks: "c:\\Users\\LENOVO\\Stackpilot\\tools\\gitleaks\\gitleaks.exe",
+    trivy: "c:\\Users\\LENOVO\\Stackpilot\\tools\\trivy\\trivy.exe",
 };
 
 export const checkTool = (cmd: string): boolean => {

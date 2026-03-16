@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 import archiver from 'archiver';
 import { ingestZip, cleanupWorkspace } from './services/ingestionService';
 

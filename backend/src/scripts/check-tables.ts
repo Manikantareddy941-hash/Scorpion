@@ -1,12 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+import { supabase } from '../lib/supabase';
 
 async function checkTables() {
+    console.log('Checking database tables...');
     // Check for repositories tables to see if anything exists
     const { data, error } = await supabase.from('repositories').select('*').limit(1);
     if (error) {
