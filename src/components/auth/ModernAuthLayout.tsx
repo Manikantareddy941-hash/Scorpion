@@ -14,39 +14,39 @@ export default function ModernAuthLayout({
     return (
         <div style={{ position: 'relative', minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
 
-            {/* Real scorpion image - left side, claws facing card */}
+            {/* Scorpion left side - claws facing card */}
             <img
                 src={scorpionBg}
                 alt=""
                 style={{
                     position: 'fixed',
-                    left: '-120px',
+                    left: '-80px',
                     top: '50%',
-                    transform: 'translateY(-50%) scaleX(-1)',
-                    width: '680px',
+                    transform: 'translateY(-50%)',
+                    width: '650px',
+                    height: 'auto',
+                    opacity: 0.35,
+                    zIndex: 0,
+                    pointerEvents: 'none',
+                    filter: 'brightness(0.9) sepia(1) saturate(4) hue-rotate(5deg)',
+                }}
+            />
+
+            {/* Scorpion right side - tail facing card */}
+            <img
+                src={scorpionBg}
+                alt=""
+                style={{
+                    position: 'fixed',
+                    right: '-150px',
+                    top: '50%',
+                    transform: 'translateY(-50%) scaleX(-1) rotate(15deg)',
+                    width: '580px',
                     height: 'auto',
                     opacity: 0.25,
                     zIndex: 0,
                     pointerEvents: 'none',
-                    filter: 'brightness(0) invert(0) sepia(1) saturate(5) hue-rotate(5deg) brightness(0.7)',
-                }}
-            />
-
-            {/* Tail side - right, flipped */}
-            <img
-                src={scorpionBg}
-                alt=""
-                style={{
-                    position: 'fixed',
-                    right: '-200px',
-                    top: '50%',
-                    transform: 'translateY(-60%) rotate(180deg)',
-                    width: '580px',
-                    height: 'auto',
-                    opacity: 0.15,
-                    zIndex: 0,
-                    pointerEvents: 'none',
-                    filter: 'brightness(0) invert(0) sepia(1) saturate(5) hue-rotate(5deg) brightness(0.7)',
+                    filter: 'brightness(0.9) sepia(1) saturate(4) hue-rotate(5deg)',
                 }}
             />
 
