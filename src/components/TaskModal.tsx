@@ -1,10 +1,10 @@
-﻿import { useState, useEffect } from 'react';
-import { supabase, Task } from '../lib/supabase';
+import { useState, useEffect } from 'react';
+import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface TaskModalProps {
-  task: Task | null;
+  task: any | null;
   onClose: () => void;
   onSave: () => void;
 }
@@ -13,8 +13,8 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
   const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<Task['status']>('todo');
-  const [priority, setPriority] = useState<Task['priority']>('medium');
+  const [status, setStatus] = useState<string>('todo');
+  const [priority, setPriority] = useState<string>('medium');
   const [dueDate, setDueDate] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [issueUrl, setIssueUrl] = useState('');
@@ -51,13 +51,12 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       };
 
       if (task) {
-        const { error } = await supabase.from('tasks').update(taskData).eq('id', task.id);
-        if (error) throw error;
+        await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, task.$id, taskData);
       } else {
-        const { error } = await supabase
-          .from('tasks')
-          .insert([{ ...taskData, user_id: user?.id }]);
-        if (error) throw error;
+        await databases.createDocument(DB_ID, COLLECTIONS.TASKS, ID.unique(), {
+          ...taskData,
+          user_id: user?.$id,
+        });
       }
 
       onSave();
@@ -127,7 +126,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               <select
                 id="status"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as Task['status'])}
+                onChange={(e) => setStatus(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               >
                 <option value="todo">To Do</option>
@@ -135,7 +134,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 <option value="completed">Completed</option>
               </select>
             </div>
-
+ 
             <div>
               <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Priority
@@ -143,7 +142,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               <select
                 id="priority"
                 value={priority}
-                onChange={(e) => setPriority(e.target.value as Task['priority'])}
+                onChange={(e) => setPriority(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
               >
                 <option value="low">Low</option>

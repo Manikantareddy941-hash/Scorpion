@@ -1,24 +1,24 @@
-﻿import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
+import { databases, DB_ID, account, ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, Plus, Shield, UserPlus, Trash2, Mail, ChevronRight, X, User } from 'lucide-react';
 
 interface Team {
-    id: string;
+    $id: string;
     name: string;
     owner_id: string;
-    created_at: string;
+    $createdAt: string;
 }
 
 interface TeamMember {
-    id: string;
+    $id: string;
     user_id: string;
     role: 'owner' | 'admin' | 'developer' | 'viewer';
     user_email?: string;
 }
 
 export default function Teams() {
-    const { user } = useAuth();
+    const { user, getJWT } = useAuth();
     const [teams, setTeams] = useState<Team[]>([]);
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
     const [members, setMembers] = useState<TeamMember[]>([]);
@@ -38,16 +38,17 @@ export default function Teams() {
     const fetchTeams = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('teams')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const response = await databases.listDocuments(
+                DB_ID,
+                'teams',
+                [Query.orderDesc('$createdAt')]
+            );
 
-            if (error) throw error;
-            setTeams(data || []);
-            if (data && data.length > 0) {
+            const data = response.documents as unknown as Team[];
+            setTeams(data);
+            if (data.length > 0) {
                 setSelectedTeam(data[0]);
-                fetchMembers(data[0].id);
+                fetchMembers(data[0].$id);
             }
         } catch (error) {
             console.error('Error fetching teams:', error);
@@ -58,17 +59,14 @@ export default function Teams() {
 
     const fetchMembers = async (teamId: string) => {
         try {
-            const { data, error } = await supabase
-                .from('team_members')
-                .select('*, users(email)')
-                .eq('team_id', teamId);
+            const response = await databases.listDocuments(
+                DB_ID,
+                'team_members',
+                [Query.equal('team_id', teamId)]
+            );
 
-            if (error) throw error;
-            const formattedMembers = data.map((m: any) => ({
-                ...m,
-                user_email: m.users?.email
-            }));
-            setMembers(formattedMembers);
+            const data = response.documents as unknown as TeamMember[];
+            setMembers(data.map(m => ({ ...m, user_email: m.user_id })));
         } catch (error) {
             console.error('Error fetching members:', error);
         }
@@ -76,26 +74,28 @@ export default function Teams() {
 
     const handleCreateTeam = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newTeamName) return;
+        if (!newTeamName || !user) return;
 
         setSubmitting(true);
         setError(null);
         try {
-            const { data: team, error: teamErr } = await supabase
-                .from('teams')
-                .insert({ name: newTeamName, owner_id: user?.id })
-                .select()
-                .single();
+            const team = await databases.createDocument(
+                DB_ID,
+                'teams',
+                ID.unique(),
+                { name: newTeamName, owner_id: user.$id, created_at: new Date().toISOString() }
+            ) as unknown as Team;
 
-            if (teamErr) throw teamErr;
-
-            await supabase
-                .from('team_members')
-                .insert({ team_id: team.id, user_id: user?.id, role: 'owner' });
+            await databases.createDocument(
+                DB_ID,
+                'team_members',
+                ID.unique(),
+                { team_id: team.$id, user_id: user.$id, role: 'owner', created_at: new Date().toISOString() }
+            );
 
             setTeams([team, ...teams]);
             setSelectedTeam(team);
-            setMembers([{ id: 'temp', user_id: user?.id || '', role: 'owner', user_email: user?.email }]);
+            setMembers([{ $id: ID.unique(), user_id: user.$id, role: 'owner', user_email: user.email }]);
             setShowCreateModal(false);
             setNewTeamName('');
         } catch (error: any) {
@@ -111,30 +111,25 @@ export default function Teams() {
         if (!inviteEmail || !selectedTeam) return;
 
         try {
-            const { data: userData, error: userErr } = await supabase
-                .from('users')
-                .select('id')
-                .eq('email', inviteEmail)
-                .single();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = await getJWT();
+            
+            const response = await fetch(`${apiBase}/api/teams/${selectedTeam.$id}/invite`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-appwrite-session': token || ''
+                },
+                body: JSON.stringify({ email: inviteEmail, role: inviteRole })
+            });
 
-            if (userErr || !userData) {
-                alert('User not found. They must sign up for StackPilot first.');
+            if (!response.ok) {
+                const data = await response.json();
+                alert(data.error || 'Failed to invite member');
                 return;
             }
 
-            const { error } = await supabase
-                .from('team_members')
-                .insert({
-                    team_id: selectedTeam.id,
-                    user_id: userData.id,
-                    role: inviteRole
-                })
-                .select()
-                .single();
-
-            if (error) throw error;
-
-            fetchMembers(selectedTeam.id);
+            fetchMembers(selectedTeam.$id);
             setShowInviteModal(false);
             setInviteEmail('');
         } catch (error) {
@@ -147,7 +142,7 @@ export default function Teams() {
             case 'owner': return 'text-purple-600 bg-purple-50 dark:bg-purple-500/10 border-purple-100 dark:border-purple-500/20';
             case 'admin': return 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20';
             case 'developer': return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20';
-            default: return 'text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-500/10 border-slate-100 dark:border-slate-800 dark:border-slate-500/20';
+            default: return 'text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800';
         }
     };
 
@@ -185,7 +180,7 @@ export default function Teams() {
 
                 {teams.length === 0 ? (
                     <div className="premium-card p-24 text-center flex flex-col items-center">
-                        <div className="w-24 h-24 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 rounded-[2rem] flex items-center justify-center mb-8 border border-slate-100 dark:border-slate-800 dark:border-slate-800">
+                        <div className="w-24 h-24 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] flex items-center justify-center mb-8 border border-slate-100 dark:border-slate-800">
                             <Users className="w-10 h-10 text-slate-200" />
                         </div>
                         <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight mb-2">Lone Pilot Detected</h2>
@@ -207,19 +202,19 @@ export default function Teams() {
                             <div className="space-y-4">
                                 {teams.map((t) => (
                                     <button
-                                        key={t.id}
+                                        key={t.$id}
                                         onClick={() => {
                                             setSelectedTeam(t);
-                                            fetchMembers(t.id);
+                                            fetchMembers(t.$id);
                                         }}
-                                        className={`w-full text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.id === t.id
+                                        className={`w-full text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.$id === t.$id
                                             ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30'
-                                            : 'hover:bg-slate-50 dark:bg-slate-800/50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-300 dark:text-slate-400 border border-transparent'
+                                            : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 border border-transparent'
                                             }`}
                                     >
                                         <span className="font-black text-xs uppercase tracking-tight italic z-10">{t.name}</span>
-                                        <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.id === t.id ? 'translate-x-1' : 'opacity-0'}`} />
-                                        {selectedTeam?.id === t.id && (
+                                        <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.$id === t.$id ? 'translate-x-1' : 'opacity-0'}`} />
+                                        {selectedTeam?.$id === t.$id && (
                                             <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-100" />
                                         )}
                                     </button>
@@ -237,16 +232,16 @@ export default function Teams() {
                                                 <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">{selectedTeam.name}</h2>
                                                 <div className="flex items-center gap-2">
                                                     <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 rounded text-[9px] font-black uppercase tracking-widest italic border border-blue-500/10">
-                                                        Cluster ID: {selectedTeam.id.slice(0, 8)}
+                                                        Cluster ID: {selectedTeam.$id.slice(0, 8)}
                                                     </span>
                                                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">
-                                                        &bull; DEPLOYED {new Date(selectedTeam.created_at).toLocaleDateString()}
+                                                        &bull; DEPLOYED {new Date(selectedTeam.$createdAt).toLocaleDateString()}
                                                     </span>
                                                 </div>
                                             </div>
                                             <button
                                                 onClick={() => setShowInviteModal(true)}
-                                                className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 dark:bg-slate-800 text-blue-600 border border-blue-200 dark:border-slate-700 rounded-2xl hover:bg-blue-50 dark:hover:bg-slate-700 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/5"
+                                                className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 text-blue-600 border border-blue-200 dark:border-slate-700 rounded-2xl hover:bg-blue-50 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/5"
                                             >
                                                 <UserPlus className="w-4 h-4 text-blue-500" />
                                                 Add Operator
@@ -258,16 +253,16 @@ export default function Teams() {
                                         <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest italic">Operations Personnel</h3>
                                         <div className="space-y-4">
                                             {members.map((member) => (
-                                                <div key={member.id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 dark:border-slate-800 hover:border-blue-500/30 transition-all group">
+                                                <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-blue-500/30 transition-all group">
                                                     <div className="flex items-center gap-5 w-full md:w-auto">
-                                                        <div className="w-12 h-12 bg-white dark:bg-slate-900 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm font-black group-hover:scale-110 transition-transform">
+                                                        <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm font-black group-hover:scale-110 transition-transform">
                                                             <User className="w-6 h-6" />
                                                         </div>
                                                         <div>
                                                             <p className="font-black text-slate-900 dark:text-white italic uppercase tracking-tight text-sm mb-1">{member.user_email}</p>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest italic">
-                                                                    {member.user_id === user?.id ? 'Primary Controller' : 'Sub-Operator'}
+                                                                    {member.user_id === user?.$id ? 'Primary Controller' : 'Sub-Operator'}
                                                                 </span>
                                                                 <span className="w-1 h-1 bg-slate-200 rounded-full" />
                                                                 <span className="text-[9px] text-emerald-500 font-black uppercase tracking-widest italic">Online-Ready</span>
@@ -278,7 +273,7 @@ export default function Teams() {
                                                         <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] italic border shadow-sm ${getRoleBadgeColor(member.role)}`}>
                                                             {member.role}
                                                         </span>
-                                                        {member.user_id !== user?.id && (
+                                                        {member.user_id !== user?.$id && (
                                                             <button className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all border border-transparent hover:border-rose-100">
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
@@ -304,7 +299,7 @@ export default function Teams() {
                                 <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">New Fleet Cluster</h3>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic mt-1">Initialize organizational vector</p>
                             </div>
-                            <button onClick={() => setShowCreateModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-white transition-colors">
+                            <button onClick={() => setShowCreateModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:text-white transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
@@ -320,7 +315,7 @@ export default function Teams() {
                                             value={newTeamName}
                                             onChange={(e) => setNewTeamName(e.target.value)}
                                             placeholder="e.g. CORE-OPS"
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black uppercase italic text-sm tracking-tight"
+                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black uppercase italic text-sm tracking-tight"
                                         />
                                     </div>
                                     {error && <p className="mt-2 text-[10px] font-bold text-rose-500 uppercase tracking-widest italic">{error}</p>}
@@ -330,7 +325,7 @@ export default function Teams() {
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateModal(false)}
-                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-700 dark:border-slate-800"
+                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-800"
                                 >
                                     Abort
                                 </button>
@@ -356,7 +351,7 @@ export default function Teams() {
                                 <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Add Personnel</h3>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic mt-1">Onboard new security operator</p>
                             </div>
-                            <button onClick={() => setShowInviteModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-white transition-colors">
+                            <button onClick={() => setShowInviteModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:text-white transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
@@ -372,7 +367,7 @@ export default function Teams() {
                                             value={inviteEmail}
                                             onChange={(e) => setInviteEmail(e.target.value)}
                                             placeholder="operator@sector.com"
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black italic text-sm tracking-tight"
+                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black italic text-sm tracking-tight"
                                         />
                                     </div>
                                 </div>
@@ -383,7 +378,7 @@ export default function Teams() {
                                         <select
                                             value={inviteRole}
                                             onChange={(e) => setInviteRole(e.target.value as any)}
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black italic text-sm tracking-tight appearance-none"
+                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black italic text-sm tracking-tight appearance-none"
                                         >
                                             <option value="viewer">Viewer Protocol (Read-Only)</option>
                                             <option value="developer">Developer Protocol (Scan & Resolve)</option>
@@ -396,7 +391,7 @@ export default function Teams() {
                                 <button
                                     type="button"
                                     onClick={() => setShowInviteModal(false)}
-                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-700 dark:border-slate-800"
+                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-800"
                                 >
                                     Abort
                                 </button>
@@ -414,6 +409,3 @@ export default function Teams() {
         </div>
     );
 }
-
-
-

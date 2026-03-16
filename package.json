@@ -12,7 +12,7 @@
         "install": "node -e \"process.platform === 'win32' ? require('child_process').execSync('powershell -ExecutionPolicy Bypass -File scripts/install-security-tools.ps1', {stdio: 'inherit'}) : require('child_process').execSync('bash scripts/install-security-tools.sh', {stdio: 'inherit'})\""
     },
     "dependencies": {
-        "@supabase/supabase-js": "^2.57.4",
+        "appwrite": "^23.0.0",
         "axios": "^1.13.5",
         "lucide-react": "^0.344.0",
         "react": "^18.3.1",
@@ -36,6 +36,7 @@
         "postcss": "^8.4.35",
         "prettier": "^3.8.1",
         "tailwindcss": "^3.4.1",
+        "ts-node-dev": "^2.0.0",
         "typescript": "^5.5.3",
         "typescript-eslint": "^8.56.1",
         "vite": "^5.4.2"

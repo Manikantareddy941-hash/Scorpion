@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip
 } from 'recharts';
@@ -7,7 +7,10 @@ import {
     BarChart3, Clock, Database, Mail, RefreshCw, Zap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+<<<<<<< HEAD
 import { apiFetch } from '../lib/apiClient';
+=======
+>>>>>>> 98f3544 (ui updates)
 
 interface DashboardStats {
     avgRiskScore: number;
@@ -34,7 +37,11 @@ interface ActivityItem {
 }
 
 export default function DevOpsDashboard() {
+<<<<<<< HEAD
     const { accessToken } = useAuth();
+=======
+    const { getJWT } = useAuth();
+>>>>>>> 98f3544 (ui updates)
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -48,10 +55,22 @@ export default function DevOpsDashboard() {
 
     const fetchAllData = async () => {
         try {
+<<<<<<< HEAD
             const [statsData, healthData, activitiesData] = await Promise.all([
                 apiFetch(`/api/dashboard/stats`, { token: accessToken }),
                 apiFetch(`/health`),
                 apiFetch(`/api/dashboard/activities`, { token: accessToken })
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const headers = { 'x-appwrite-session': token || '' };
+
+            const [statsRes, healthRes, activitiesRes] = await Promise.all([
+                fetch(`${apiBase}/api/dashboard/stats`, { headers }),
+                fetch(`${apiBase}/health`),
+                fetch(`${apiBase}/api/dashboard/activities`, { headers })
+>>>>>>> 98f3544 (ui updates)
             ]);
 
             setStats(statsData);
@@ -184,9 +203,9 @@ export default function DevOpsDashboard() {
                         <div className="bg-white dark:bg-slate-900 p-10 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group">
                             <h2 className="text-sm font-black uppercase tracking-widest mb-6 italic text-slate-400">Intelligence Narrative</h2>
                             <p className="text-slate-600 dark:text-slate-300 leading-relaxed font-bold text-lg tracking-tight relative z-10">
-                                Global systems report an average risk posture of <span className="text-red-600">{stats?.avgRiskScore}%</span>.
-                                Secure deployment protocol is <span className="text-emerald-600">Active</span> across {stats?.totalRepos} endpoints.
-                                <span className="text-blue-600"> {stats?.openTasks} remediation tasks</span> are currently queued for architectural review.
+                                Global systems report an average risk posture of <span className="text-red-600">{stats?.avgRiskScore || 0}%</span>.
+                                Secure deployment protocol is <span className="text-emerald-600">Active</span> across {stats?.totalRepos || 0} endpoints.
+                                <span className="text-blue-600"> {stats?.openTasks || 0} remediation tasks</span> are currently queued for architectural review.
                             </p>
                             <Shield className="absolute -right-12 -bottom-12 w-64 h-64 text-slate-50 opacity-50 group-hover:scale-110 transition-transform duration-[2s]" />
                         </div>
@@ -258,6 +277,7 @@ function SystemStatus({ health }: { health: HealthStatus | null }) {
 
 function ActivityFeed({ activities }: { activities: ActivityItem[] }) {
     const formatTime = (isoString: string) => {
+        if (!isoString) return '...';
         const date = new Date(isoString);
         const now = new Date();
         const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -300,6 +320,3 @@ function ActivityFeed({ activities }: { activities: ActivityItem[] }) {
         </div>
     );
 }
-
-
-

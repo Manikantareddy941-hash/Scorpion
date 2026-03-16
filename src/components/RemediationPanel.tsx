@@ -1,7 +1,10 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+<<<<<<< HEAD
 import { apiFetch } from '../lib/apiClient';
+=======
+>>>>>>> 98f3544 (ui updates)
 
 interface RemediationPanelProps {
     vulnerabilityId: string;
@@ -9,7 +12,11 @@ interface RemediationPanelProps {
 }
 
 export default function RemediationPanel({ vulnerabilityId, onClose }: RemediationPanelProps) {
+<<<<<<< HEAD
     const { accessToken } = useAuth();
+=======
+    const { getJWT } = useAuth();
+>>>>>>> 98f3544 (ui updates)
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [fix, setFix] = useState<any>(null);
@@ -23,8 +30,20 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
+<<<<<<< HEAD
             await apiFetch(`/api/ai/metrics/event`, {
                 method: 'POST',
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            await fetch(`${apiBase}/api/ai/metrics/event`, {
+                method: 'POST',
+                headers: {
+                    'x-appwrite-session': token || '',
+                    'Content-Type': 'application/json'
+                },
+>>>>>>> 98f3544 (ui updates)
                 body: JSON.stringify({
                     finding_id: vulnerabilityId,
                     suggestion_id: suggestionId,
@@ -42,9 +61,18 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         setLoading(true);
         setError('');
         try {
+<<<<<<< HEAD
             const data = await apiFetch(`/api/vulns/${vulnerabilityId}/remediate`, {
                 method: 'POST',
                 token: accessToken
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
+                method: 'POST',
+                headers: { 'x-appwrite-session': token || '' }
+>>>>>>> 98f3544 (ui updates)
             });
 
             if (data) {
@@ -69,10 +97,23 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const handleFeedback = async (type: 'helpful' | 'ignore') => {
         try {
+<<<<<<< HEAD
             await apiFetch(`/api/vulns/${vulnerabilityId}/feedback`, {
                 method: 'POST',
                 body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } }),
                 token: accessToken
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/feedback`, {
+                method: 'POST',
+                headers: {
+                    'x-appwrite-session': token || '',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } })
+>>>>>>> 98f3544 (ui updates)
             });
 
             // Track Interaction
@@ -88,9 +129,18 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         if (!fix?.id) return;
         setPrLoading(true);
         try {
+<<<<<<< HEAD
             const data = await apiFetch(`/api/fixes/${fix.id}/pr`, {
                 method: 'POST',
                 token: accessToken
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const response = await fetch(`${apiBase}/api/fixes/${fix.id}/pr`, {
+                method: 'POST',
+                headers: { 'x-appwrite-session': token || '' }
+>>>>>>> 98f3544 (ui updates)
             });
 
             if (data) {
@@ -158,7 +208,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                                         <span className="text-[9px] font-black uppercase tracking-widest italic">Confidence: {(fix.confidence_score * 100).toFixed(0)}%</span>
                                     </div>
                                 </div>
-                                <div className="text-slate-600 dark:text-slate-300 dark:text-slate-400 text-sm leading-relaxed font-medium bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 dark:border-slate-800">
+                                <div className="text-slate-600 dark:text-slate-300 font-medium bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 leading-relaxed text-sm">
                                     {fix.explanation}
                                 </div>
                             </section>
@@ -227,13 +277,13 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                                         <>
                                             <button
                                                 onClick={() => handleFeedback('helpful')}
-                                                className="flex items-center gap-3 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-2xl hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600 transition-all font-black text-[10px] uppercase tracking-widest border border-slate-200 dark:border-slate-700 dark:border-slate-800"
+                                                className="flex items-center gap-3 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 rounded-2xl hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600 transition-all font-black text-[10px] uppercase tracking-widest border border-slate-200 dark:border-slate-700"
                                             >
                                                 <ThumbsUp className="w-4 h-4" /> Helpful
                                             </button>
                                             <button
                                                 onClick={() => handleFeedback('ignore')}
-                                                className="flex items-center gap-3 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 dark:text-slate-400 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 transition-all font-black text-[10px] uppercase tracking-widest border border-slate-200 dark:border-slate-700 dark:border-slate-800"
+                                                className="flex items-center gap-3 px-6 py-3 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 transition-all font-black text-[10px] uppercase tracking-widest border border-slate-200 dark:border-slate-700"
                                             >
                                                 <ThumbsDown className="w-4 h-4" /> Ignore
                                             </button>
