@@ -36,6 +36,7 @@ interface TrendData {
 }
 
 export default function CodeInsights() {
+    const { getJWT } = useAuth();
     const [loading, setLoading] = useState(true);
     const [scans, setScans] = useState<Scan[]>([]);
     const [trends, setTrends] = useState<TrendData[]>([]);
@@ -50,13 +51,25 @@ export default function CodeInsights() {
 
     const fetchData = async () => {
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const headers = { 'x-appwrite-session': token || '' };
+
+            const [summaryRes, trendsRes] = await Promise.all([
+                fetch(`${apiBase}/api/insights/summary`, { headers }),
+                fetch(`${apiBase}/api/insights/trends`, { headers })
             ]);
 
-            setScans(summaryData?.scans || []);
-            setOverallScore(summaryData?.overallScore || 0);
+            if (!summaryRes.ok || !trendsRes.ok) throw new Error('Failed to fetch data');
+
+            const insightsData = await summaryRes.json();
+            const trendsData = await trendsRes.json();
+
+            setScans(insightsData.scans || []);
+            setOverallScore(insightsData.overallScore || 0);
             setTrends(trendsData || []);
         } catch (err: any) {
-            setError(err.message || 'Failed to fetch data');
+            setError(err.message);
         } finally {
             setLoading(false);
         }

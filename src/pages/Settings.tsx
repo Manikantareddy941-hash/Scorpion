@@ -8,6 +8,16 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
+export default function Settings() {
+    const { user, signOut, updatePassword, getJWT } = useAuth();
+    const { theme, toggleTheme } = useTheme();
+    const [loading, setLoading] = useState(true);
+    const [updating, setUpdating] = useState(false);
+    const [profile, setProfile] = useState<any>({
+        name: user?.name || '',
+        email: user?.email || '',
+        company: '',
+        role: ''
     });
 
     const [prefEmail, setPrefEmail] = useState(true);
@@ -19,12 +29,30 @@ import { useTheme } from '../contexts/ThemeContext';
     const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
     useEffect(() => {
+        if (user) {
+            fetchSettings();
         }
     }, [user]);
 
     const fetchSettings = async () => {
         setLoading(true);
         try {
+            // Fetch profile extras from databases if exists
+            // For now, we'll just use the account info
+            
+            // Fetch notification preferences
+            const prefResponse = await databases.listDocuments(
+                DB_ID,
+                'notification_preferences',
+                [Query.equal('user_id', user?.$id || '')]
+            );
+            
+            if (prefResponse.total > 0) {
+                // Simplified preference handling
+                const prefs = prefResponse.documents;
+                setPrefEmail(prefs.some(p => p.channel === 'email' && p.enabled));
+                setPrefSlack(prefs.some(p => p.channel === 'slack' && p.enabled));
+                setPrefWebhook(prefs.find(p => p.channel === 'webhook')?.target || '');
             }
 
             // Fetch API Keys
@@ -38,6 +66,7 @@ import { useTheme } from '../contexts/ThemeContext';
         } catch (error) {
             console.error('Error fetching settings:', error);
         } finally {
+            setLoading(false);
         }
     };
 
@@ -45,6 +74,42 @@ import { useTheme } from '../contexts/ThemeContext';
         e.preventDefault();
         setUpdating(true);
         try {
+            await account.updateName(profile.name);
+            // In Appwrite, email update requires verification flow, so we'll skip for now or use account.updateEmail
+            
+            alert('Profile updated successfully');
+        } catch (error) {
+            console.error('Update profile error:', error);
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleSaveNotifications = async () => {
+        setUpdating(true);
+        try {
+            // This would ideally use a backend API or batch updates
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            
+            await fetch(`${apiBase}/api/notifications/preferences`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-appwrite-session': token || ''
+                },
+                body: JSON.stringify({
+                    preferences: [
+                        { channel: 'email', enabled: prefEmail, event_type: 'scan_completed' },
+                        { channel: 'slack', enabled: prefSlack, event_type: 'scan_completed' },
+                        { channel: 'webhook', target: prefWebhook, enabled: !!prefWebhook, event_type: 'scan_completed' }
+                    ]
+                })
+            });
+
+            alert('Preferences saved');
+        } catch (error) {
+            console.error('Error saving notifications:', error);
         } finally {
             setUpdating(false);
         }
@@ -54,6 +119,16 @@ import { useTheme } from '../contexts/ThemeContext';
         if (!newKeyName) return;
         setUpdating(true);
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            
+            const response = await fetch(`${apiBase}/api/auth/api-key`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-appwrite-session': token || ''
+                },
+                body: JSON.stringify({ name: newKeyName })
             });
 
             const data = await response.json();
