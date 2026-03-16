@@ -33,6 +33,7 @@ interface ActivityItem {
 }
 
 export default function DevOpsDashboard() {
+    const { getJWT } = useAuth();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -46,7 +47,20 @@ export default function DevOpsDashboard() {
 
     const fetchAllData = async () => {
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const headers = { 'x-appwrite-session': token || '' };
+
+            const [statsRes, healthRes, activitiesRes] = await Promise.all([
+                fetch(`${apiBase}/api/dashboard/stats`, { headers }),
+                fetch(`${apiBase}/health`),
+                fetch(`${apiBase}/api/dashboard/activities`, { headers })
             ]);
+
+            const statsData = await statsRes.json();
+            const healthData = await healthRes.json();
+            const activitiesData = await activitiesRes.json();
 
             setStats(statsData);
             setHealth(healthData);
