@@ -9,19 +9,33 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        setStatus('Verifying session...');
+        setStatus('Establishing session...');
+        // Give Appwrite time to set the session cookie
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         const user = await account.get();
         if (user) {
-          setStatus('Welcome back!');
-          setTimeout(() => navigate('/'), 500);
+          setStatus('Welcome! Redirecting...');
+          navigate('/', { replace: true });
         } else {
-          setStatus('Session not found. Redirecting...');
-          setTimeout(() => navigate('/login'), 1500);
+          navigate('/login', { replace: true });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('OAuth callback error:', err);
-        setStatus('Authentication failed. Redirecting...');
-        setTimeout(() => navigate('/login'), 1500);
+        // If 401, session might still be valid - try navigating anyway
+        if (err?.code === 401) {
+          setStatus('Checking credentials...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          try {
+            const user = await account.get();
+            if (user) {
+              navigate('/', { replace: true });
+              return;
+            }
+          } catch {}
+        }
+        setStatus('Auth failed: ' + (err?.message || 'Unknown error'));
+        setTimeout(() => navigate('/login', { replace: true }), 2000);
       }
     };
 
