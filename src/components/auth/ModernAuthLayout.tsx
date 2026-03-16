@@ -13,93 +13,79 @@ export default function ModernAuthLayout({
     return (
         <div style={{ position: 'relative', minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
 
-            {/* Scorpion hugging the card */}
+            {/* Scorpion SVG background */}
             <div style={{ position: 'fixed', inset: 0, zIndex: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <svg viewBox="0 0 900 600" width="900" height="600" xmlns="http://www.w3.org/2000/svg" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.45 }}>
+              <svg viewBox="0 0 1200 600" width="1200" height="600" xmlns="http://www.w3.org/2000/svg" style={{ opacity: 0.45 }}>
 
-                {/* ===================== */}
-                {/* BODY - horizontal, behind card */}
-                {/* ===================== */}
-                <ellipse cx="450" cy="300" rx="50" ry="28" stroke="#f97316" strokeWidth="3"/>
-                <ellipse cx="380" cy="300" rx="38" ry="25" stroke="#f97316" strokeWidth="3"/>
-                <ellipse cx="320" cy="300" rx="32" ry="22" stroke="#f97316" strokeWidth="3"/>
-                <ellipse cx="268" cy="300" rx="26" ry="20" stroke="#f97316" strokeWidth="3"/>
+                {/* BODY segments - horizontal */}
+                <ellipse cx="600" cy="300" rx="55" ry="32" fill="#f97316" opacity="0.8"/>
+                <ellipse cx="520" cy="300" rx="42" ry="28" fill="#f97316" opacity="0.8"/>
+                <ellipse cx="450" cy="300" rx="35" ry="25" fill="#f97316" opacity="0.8"/>
+                <ellipse cx="390" cy="300" rx="30" ry="22" fill="#f97316" opacity="0.8"/>
+                <ellipse cx="338" cy="300" rx="26" ry="20" fill="#f97316" opacity="0.8"/>
 
-                {/* HEAD - left side */}
-                <ellipse cx="220" cy="300" rx="24" ry="22" stroke="#f97316" strokeWidth="3"/>
-                {/* Eyes */}
-                <circle cx="210" cy="293" r="4" fill="#f97316"/>
-                <circle cx="225" cy="290" r="4" fill="#f97316"/>
-                {/* Mouth */}
-                <path d="M210 308 Q220 314 230 308" stroke="#f97316" strokeWidth="2"/>
+                {/* HEAD */}
+                <ellipse cx="290" cy="300" rx="30" ry="26" fill="#f97316" opacity="0.9"/>
+                <circle cx="278" cy="290" r="5" fill="white"/>
+                <circle cx="298" cy="287" r="5" fill="white"/>
+                <circle cx="279" cy="290" r="2.5" fill="#0D0D0D"/>
+                <circle cx="299" cy="287" r="2.5" fill="#0D0D0D"/>
 
-                {/* ===================== */}
-                {/* LEFT CLAW (front of scorpion - left side of card) */}
-                {/* ===================== */}
-                {/* Left arm upper */}
-                <path d="M205 288 Q185 268 162 248" stroke="#f97316" strokeWidth="3.5"/>
-                <path d="M162 248 Q142 228 118 210" stroke="#f97316" strokeWidth="3"/>
-                {/* Knuckle */}
-                <circle cx="118" cy="210" r="7" fill="#f97316"/>
-                {/* Upper pincer */}
-                <path d="M118 210 Q95 190 72 172" stroke="#f97316" strokeWidth="3"/>
-                <path d="M72 172 Q52 155 38 140" stroke="#f97316" strokeWidth="2.5"/>
-                {/* Lower pincer */}
-                <path d="M118 210 Q100 225 82 232" stroke="#f97316" strokeWidth="3"/>
-                <path d="M82 232 Q62 240 45 242" stroke="#f97316" strokeWidth="2.5"/>
+                {/* CLAW ARM 1 - upper left */}
+                <path d="M268 282 C248 265 222 248 195 232 C175 220 155 210 132 198"
+                  stroke="#f97316" strokeWidth="5" fill="none" strokeLinecap="round"/>
+                <circle cx="132" cy="198" r="9" fill="#f97316"/>
+                <path d="M132 198 C112 182 90 165 72 148 C58 135 46 120 38 105"
+                  stroke="#f97316" strokeWidth="4" fill="none" strokeLinecap="round"/>
+                <path d="M38 105 C30 92 28 78 35 68"
+                  stroke="#f97316" strokeWidth="3" fill="none" strokeLinecap="round"/>
+                <path d="M132 198 C118 215 102 228 84 238 C68 246 52 250 36 248"
+                  stroke="#f97316" strokeWidth="4" fill="none" strokeLinecap="round"/>
+                <path d="M36 248 C22 247 12 240 8 230"
+                  stroke="#f97316" strokeWidth="3" fill="none" strokeLinecap="round"/>
 
-                {/* Left arm lower */}
-                <path d="M205 312 Q182 330 158 348" stroke="#f97316" strokeWidth="3.5"/>
-                <path d="M158 348 Q135 365 110 378" stroke="#f97316" strokeWidth="3"/>
-                {/* Knuckle */}
-                <circle cx="110" cy="378" r="7" fill="#f97316"/>
-                {/* Upper pincer */}
-                <path d="M110 378 Q88 360 68 345" stroke="#f97316" strokeWidth="3"/>
-                <path d="M68 345 Q48 330 35 318" stroke="#f97316" strokeWidth="2.5"/>
-                {/* Lower pincer */}
-                <path d="M110 378 Q90 395 72 405" stroke="#f97316" strokeWidth="3"/>
-                <path d="M72 405 Q52 415 38 420" stroke="#f97316" strokeWidth="2.5"/>
+                {/* CLAW ARM 2 - lower left */}
+                <path d="M268 318 C248 335 222 352 195 368 C175 380 155 390 132 402"
+                  stroke="#f97316" strokeWidth="5" fill="none" strokeLinecap="round"/>
+                <circle cx="132" cy="402" r="9" fill="#f97316"/>
+                <path d="M132 402 C112 388 90 372 72 358 C58 346 46 332 38 318"
+                  stroke="#f97316" strokeWidth="4" fill="none" strokeLinecap="round"/>
+                <path d="M38 318 C30 305 28 292 35 282"
+                  stroke="#f97316" strokeWidth="3" fill="none" strokeLinecap="round"/>
+                <path d="M132 402 C118 418 102 432 84 442 C68 450 52 454 36 452"
+                  stroke="#f97316" strokeWidth="4" fill="none" strokeLinecap="round"/>
+                <path d="M36 452 C22 450 12 442 8 432"
+                  stroke="#f97316" strokeWidth="3" fill="none" strokeLinecap="round"/>
 
-                {/* ===================== */}
                 {/* LEGS - 4 pairs */}
-                {/* ===================== */}
-                {/* Leg pair 1 */}
-                <path d="M320 283 Q310 255 295 232" stroke="#f97316" strokeWidth="2"/>
-                <path d="M320 317 Q310 345 295 368" stroke="#f97316" strokeWidth="2"/>
-                {/* Leg pair 2 */}
-                <path d="M365 280 Q358 250 345 225" stroke="#f97316" strokeWidth="2"/>
-                <path d="M365 320 Q358 350 345 375" stroke="#f97316" strokeWidth="2"/>
-                {/* Leg pair 3 */}
-                <path d="M415 278 Q412 248 405 220" stroke="#f97316" strokeWidth="2"/>
-                <path d="M415 322 Q412 352 405 380" stroke="#f97316" strokeWidth="2"/>
-                {/* Leg pair 4 */}
-                <path d="M462 278 Q465 248 468 220" stroke="#f97316" strokeWidth="2"/>
-                <path d="M462 322 Q465 352 468 380" stroke="#f97316" strokeWidth="2"/>
+                <path d="M370 282 C362 258 350 235 335 215" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M370 318 C362 342 350 365 335 385" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M420 280 C415 255 408 230 398 208" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M420 320 C415 345 408 370 398 392" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M480 278 C480 252 480 226 478 202" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M480 322 C480 348 480 374 478 398" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M545 278 C550 252 555 226 558 202" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                <path d="M545 322 C550 348 555 374 558 398" stroke="#f97316" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
 
-                {/* ===================== */}
-                {/* TAIL - right side, curling up with stinger */}
-                {/* ===================== */}
-                {/* Tail segment 1 */}
-                <path d="M500 300 Q530 295 558 288" stroke="#f97316" strokeWidth="4"/>
-                <circle cx="558" cy="288" r="5" fill="#f97316"/>
-                {/* Tail segment 2 */}
-                <path d="M558 288 Q590 280 618 268" stroke="#f97316" strokeWidth="4"/>
-                <circle cx="618" cy="268" r="5" fill="#f97316"/>
-                {/* Tail segment 3 */}
-                <path d="M618 268 Q650 252 672 232" stroke="#f97316" strokeWidth="3.5"/>
-                <circle cx="672" cy="232" r="5" fill="#f97316"/>
-                {/* Tail segment 4 - curling up */}
-                <path d="M672 232 Q698 208 712 178" stroke="#f97316" strokeWidth="3.5"/>
-                <circle cx="712" cy="178" r="5" fill="#f97316"/>
-                {/* Tail segment 5 - curling inward */}
-                <path d="M712 178 Q728 148 720 118" stroke="#f97316" strokeWidth="3"/>
-                <circle cx="720" cy="118" r="4" fill="#f97316"/>
-                {/* Tail segment 6 - curling back */}
-                <path d="M720 118 Q715 90 698 72" stroke="#f97316" strokeWidth="3"/>
-                {/* Stinger */}
-                <path d="M698 72 Q688 55 678 42" stroke="#f97316" strokeWidth="2.5"/>
-                <path d="M678 42 Q668 28 672 15" stroke="#f97316" strokeWidth="2.5"/>
-                <ellipse cx="674" cy="12" rx="5" ry="9" fill="#f97316" transform="rotate(-20 674 12)"/>
+                {/* TAIL - right side curling up */}
+                <path d="M655 300 C688 298 720 292 750 280"
+                  stroke="#f97316" strokeWidth="7" fill="none" strokeLinecap="round"/>
+                <circle cx="750" cy="280" r="7" fill="#f97316"/>
+                <path d="M750 280 C782 268 812 252 838 230"
+                  stroke="#f97316" strokeWidth="6" fill="none" strokeLinecap="round"/>
+                <circle cx="838" cy="230" r="7" fill="#f97316"/>
+                <path d="M838 230 C865 208 888 182 902 152"
+                  stroke="#f97316" strokeWidth="5.5" fill="none" strokeLinecap="round"/>
+                <circle cx="902" cy="152" r="6" fill="#f97316"/>
+                <path d="M902 152 C918 122 925 90 918 58"
+                  stroke="#f97316" strokeWidth="5" fill="none" strokeLinecap="round"/>
+                <circle cx="918" cy="58" r="6" fill="#f97316"/>
+                <path d="M918 58 C910 32 892 15 868 8"
+                  stroke="#f97316" strokeWidth="4.5" fill="none" strokeLinecap="round"/>
+                <circle cx="868" cy="8" r="5" fill="#f97316"/>
+                <path d="M868 8 C848 2 830 5 818 18"
+                  stroke="#f97316" strokeWidth="4" fill="none" strokeLinecap="round"/>
+                <ellipse cx="812" cy="22" rx="6" ry="12" fill="#f97316" transform="rotate(-40 812 22)"/>
 
               </svg>
             </div>
