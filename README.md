@@ -1,79 +1,114 @@
-# 🛡️ StackPilot
+# 🛡️ StackPilot: Unified Security Orchestration
 
-### One Platform. Unified Security. Total Governance.
-
-StackPilot is a modern Security Orchestration, Automation, and Response (SOAR) platform designed specifically for developer-first organizations. We turn disparate security scanning tools into a unified, policy-driven security posture.
+StackPilot is a modern **Security Orchestration, Automation, and Response (SOAR)** platform. It integrates multiple security scanning tools into a single, cohesive dashboard, providing developer-first organizations with a unified view of their security posture.
 
 ---
 
 ## ✨ Key Features
+- **Centralized Orchestration**: Run **Semgrep**, **Gitleaks**, and **Trivy** in parallel.
+- **Governance-as-Code**: Define and enforce security policies across all repositories.
+- **RBAC & Project Management**: Manage teams, permissions (Admin/Developer/Viewer), and repository access.
+- **AI-Powered Insights**: Get automated remediation suggestions for detected vulnerabilities.
+- **Integrated Health Diagnostics**: Real-time monitoring of backend, database, and security tool availability.
 
-### 🔍 Multi-Tool Orchestration
-Scan your codebases with **Semgrep (SAST)**, **Gitleaks (Secrets)**, and **Trivy (SCA)** simultaneously. Standardized results provide a "single source of truth" for your security health.
+---
 
-### ⚖️ Governance-as-Code
-Define global and per-project security policies. Use pre-defined profiles (**Strict**, **Balanced**, **Relaxed**) to decide when builds should pass or break.
+## 🏗️ Project Structure
 
-### 👥 Team-Based RBAC
-Secure by design. Manage multiple teams, repository access, and user roles (Admin, Developer, Viewer) through a centralized governance dashboard.
-
-### 📊 Strategic Reporting
-Executive-level visibility with trend analysis and compliance mapping (OWASP Top 10). Export professional PDF reports for stakeholders in one click.
-
-### ⚡ CI/CD Integration
-Seamlessly integrate into your development workflow with the StackPilot CLI and built-in webhook support for GitHub Actions and GitLab CI.
+```text
+Stackpilot/
+├── backend/                # Node.js + Express Backend
+│   ├── src/
+│   │   ├── lib/            # Centralized Supabase & Third-party clients
+│   │   ├── routes/         # Express API Routes (Auth, Projects, Health)
+│   │   ├── services/       # Business Logic (Scanning, Reporting, RBAC)
+│   │   ├── utils/          # Universal Utilities (Tool Check, Logging)
+│   │   └── index.ts        # Server Entry Point & Middleware
+│   ├── scripts/            # Database maintenance & migration scripts
+│   └── package.json        # Backend dependencies & scripts
+├── src/                    # Vite + React Frontend
+│   ├── components/         # Reusable UI Components (Auth, Dashboards, Tables)
+│   ├── pages/              # Main Application Pages (Security, Reports, Settings)
+│   ├── contexts/           # React Context Providers (AuthContext)
+│   ├── lib/                # Frontend Supabase client
+│   └── App.tsx             # Main Routing & Layout
+├── tools/                  # Portable security tool binaries
+│   ├── gitleaks/           # Gitleaks executable
+│   └── trivy/              # Trivy executable
+├── supabase/               # Database migrations & configuration
+├── package.json            # Frontend dependencies & scripts
+└── README.md               # You are here
+```
 
 ---
 
 ## 🛠️ Tech Stack
-
-- **Frontend**: React (TS) + Vite + Tailwind CSS + Recharts
-- **Backend**: Node.js + Express
-- **Database**: Supabase (PostgreSQL + RLS)
-- **Scanning Engine**: Dockerized Orchestration (Semgrep, Gitleaks, Trivy)
-- **Reporting**: PDFKit Engine
+- **Frontend**: React 18, Vite, Tailwind CSS, Recharts, Lucide Icons.
+- **Backend**: Node.js, Express, TypeScript, `ts-node-dev`.
+- **Database**: Supabase (PostgreSQL, Auth, Row Level Security).
+- **Security Scanners**: 
+  - **Gitleaks**: Secret detection and prevention.
+  - **Trivy**: Vulnerability and misconfiguration scanner.
+  - **Semgrep**: Lightweight static analysis (SAST) for 30+ languages.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Setup & Installation
 
 ### 1. Prerequisites
-- Docker (for scanning engine)
-- Supabase account & project
-- Node.js (v18+)
+- **Node.js**: v18 or higher.
+- **Python 3.12**: Required for Semgrep (Backend).
+- **Supabase**: Active project with URL and Service Role Key.
 
-### 2. Installation
+### 2. Environment Configuration
+Create a `.env` file in the `backend/` directory:
+```env
+PORT=3001
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+FRONTEND_URL=http://localhost:5173
+```
+
+### 3. Installation
 ```bash
-git clone https://github.com/your-org/stackpilot.git
-cd stackpilot/project
-
-# Install dependencies
+# Install root/frontend dependencies
 npm install
 
-# Setup Environment
-cp .env.example .env
+# Install backend dependencies
+cd backend
+npm install
+```
 
-# Run development servers
+### 4. Running the Application
+**Frontend (Root):**
+```bash
+npm run dev
+```
+**Backend (backend/):**
+```bash
 npm run dev
 ```
 
-### 3. Trigger Your First Scan
-```bash
-./scripts/stackpilot-ci.sh --repo-id [YOUR_REPO_ID] --token [YOUR_API_KEY]
-```
+---
+
+## 🛡️ Security Toolchain Verification
+The backend includes a built-in diagnostic suite to ensure all security tools are operational.
+Root to: `GET /api/health/auth` returns the status of:
+- **Service Role** connectivity.
+- **Gitleaks** binary detection.
+- **Trivy** binary detection.
+- **Semgrep** Python package detection.
 
 ---
 
-## 🗺️ User Journey
-
-| Role | Responsibility | Key Flow |
-| :--- | :--- | :--- |
-| **Developer** | Remediation | Scan locally → Fix findings before PR |
-| **Security Team** | Policy Design | Define thresholds → Review Alerts Hub |
-| **Executive** | Risk Oversight | Monitor Trends → Export Reporting |
+## ⚠️ Troubleshooting (Known Issues)
+### DNS Redirection (ISP Specific)
+If you encounter a "Connection Timeout" or "404" specifically from Supabase domains (`supabase.co`), your ISP may be redirecting traffic. 
+**Solution**: Change your system DNS to:
+- **Google DNS**: 8.8.8.8 | 8.8.4.4
+- **Cloudflare DNS**: 1.1.1.1
 
 ---
 
 ## 📜 License
-Distribute under the MIT License. See `LICENSE` for more information.
-# Stackpilot
+Distribute under the MIT License.

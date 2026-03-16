@@ -5,5 +5,5 @@ import { ReactNode } from 'react';
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return null;
-  return user ? <>{children}</> : <Navigate to="/auth" replace />;
+  return user ? <>{children}</> : <Navigate to="/login" replace />;
 }

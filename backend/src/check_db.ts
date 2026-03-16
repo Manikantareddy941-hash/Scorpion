@@ -1,10 +1,5 @@
 import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabase } from './lib/supabase';
 
 async function checkConstraints() {
     console.log('Checking constraints for table: repositories');

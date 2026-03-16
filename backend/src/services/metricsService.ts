@@ -1,11 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    if (!supabaseUrl) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 export interface AIEvent {
     finding_id: string;
@@ -16,7 +9,6 @@ export interface AIEvent {
 }
 
 export const recordAIEvent = async (event: AIEvent) => {
-    const supabase = getSupabase();
 
     // If accepted, we might want to calculate time to resolution
     let time_to_resolution = null;
@@ -46,8 +38,7 @@ export const recordAIEvent = async (event: AIEvent) => {
     if (error) throw error;
 };
 
-export const getAIAggregates = async () => {
-    const supabase = getSupabase();
+export const getAIAggregates = async (userId: string) => { // Added userId even if not used to match signature if needed
 
     // 1. Total suggestions & breakdowns
     const { data: counts } = await supabase
@@ -80,7 +71,6 @@ export const getAIAggregates = async () => {
 };
 
 export const getAITrends = async () => {
-    const supabase = getSupabase();
 
     // Group by day
     const { data: trends, error } = await supabase

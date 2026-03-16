@@ -1,10 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 export type Role = 'owner' | 'admin' | 'developer' | 'viewer';
 
@@ -19,7 +13,6 @@ const rolePriority: Record<Role, number> = {
  * Resolves the effective role for a user on a specific repository.
  */
 export const getUserEffectiveRole = async (userId: string, repoId: string): Promise<Role | null> => {
-    const supabase = getSupabase();
 
     // 1. Check if user is the direct owner of the repository
     const { data: repo, error: repoErr } = await supabase
@@ -80,7 +73,6 @@ export const logRbacAction = async (data: {
     repo_id?: string;
     details?: any;
 }) => {
-    const supabase = getSupabase();
     const { error } = await supabase
         .from('rbac_audit_log')
         .insert(data);
