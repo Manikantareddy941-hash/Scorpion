@@ -5,6 +5,7 @@ import { Models, OAuthProvider } from "appwrite";
 type AppUser = Models.User<Models.Preferences>;
 
 interface AuthContextType {
+  user: AppUser | null;
   loading: boolean;
   setUser: (user: AppUser | null) => void;
 
@@ -29,21 +30,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
-  // ✅ Runs once on app load
   useEffect(() => {
     const checkUser = async () => {
       try {
         const currentUser = await account.get();
-        console.log("Context user:", currentUser);
         setUser(currentUser);
       } catch {
-        console.log("No active session");
         setUser(null);
       } finally {
         setLoading(false);
       }
     };
-
     checkUser();
   }, []);
 
@@ -99,10 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-
       const data = await response.json();
       if (!response.ok) return { error: data.error };
-
       return { message: data.message };
     } catch {
       return { error: "Failed to connect to authentication server" };
@@ -116,10 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp }),
       });
-
       const data = await response.json();
       if (!response.ok) return { error: data.error };
-
       return { resetToken: data.resetToken };
     } catch {
       return { error: "Failed to connect to authentication server" };
@@ -133,10 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken, newPassword }),
       });
-
       const data = await response.json();
       if (!response.ok) return { error: data.error };
-
       return {};
     } catch {
       return { error: "Failed to connect to authentication server" };
@@ -163,6 +154,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        setUser,
+        signUp,
+        signIn,
+        signOut,
+        signInWithOAuth,
+        requestReset,
+        verifyResetOtp,
+        completeReset,
+        updatePassword,
+        getJWT,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
