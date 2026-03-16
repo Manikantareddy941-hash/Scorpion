@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, UserPlus, AlertCircle, CheckCircle2, ArrowLeft, Mail, Eye, EyeOff } from 'lucide-react';
@@ -34,8 +34,8 @@ export default function Auth() {
 
   const runDiagnostics = async () => {
     const healthResult = await authHealthCheck();
-    if (!healthResult.backendReachable || !healthResult.supabaseReachable) {
-      setHealth(healthResult);
+    if (!healthResult.backendReachable || !healthResult.appwriteReachable) {
+      setHealth(healthResult as any);
     }
   };
 

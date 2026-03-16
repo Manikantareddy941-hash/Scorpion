@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     LineChart, Line, PieChart, Pie, Cell
@@ -9,11 +9,18 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+<<<<<<< HEAD
 import { apiFetch } from '../lib/apiClient';
 
 export default function Reports() {
     const { theme } = useTheme();
     const { accessToken } = useAuth();
+=======
+
+export default function Reports() {
+    const { theme } = useTheme();
+    const { getJWT } = useAuth();
+>>>>>>> 98f3544 (ui updates)
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [stats, setStats] = useState<any>(null);
@@ -28,12 +35,26 @@ export default function Reports() {
     const fetchStats = async () => {
         setLoading(true);
         try {
+<<<<<<< HEAD
             const params = new URLSearchParams();
             params.append('scope', scope);
             if (scopeId) params.append('id', scopeId);
 
             const data = await apiFetch(`/api/reports/stats?${params.toString()}`, {
                 token: accessToken
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const url = new URL(`${apiBase}/api/reports/stats`);
+            url.searchParams.append('scope', scope);
+            if (scopeId) url.searchParams.append('id', scopeId);
+
+            const response = await fetch(url.toString(), {
+                headers: { 
+                    'x-appwrite-session': token || ''
+                }
+>>>>>>> 98f3544 (ui updates)
             });
 
             if (data) {
@@ -50,9 +71,21 @@ export default function Reports() {
     const handleExport = async () => {
         setGenerating(true);
         try {
+<<<<<<< HEAD
             const blob = await apiFetch(`/api/reports/generate`, {
                 method: 'POST',
                 token: accessToken,
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const response = await fetch(`${apiBase}/api/reports/generate`, {
+                method: 'POST',
+                headers: {
+                    'x-appwrite-session': token || '',
+                    'Content-Type': 'application/json'
+                },
+>>>>>>> 98f3544 (ui updates)
                 body: JSON.stringify({
                     scope,
                     id: scopeId,
@@ -305,7 +338,7 @@ function StatCard({ label, value, trend, icon }: { label: string, value: any, tr
     return (
         <div className="premium-card p-8 group hover:border-blue-600/30 transition-all duration-500">
             <div className="flex justify-between items-start mb-6">
-                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 dark:border-slate-800 text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-all duration-500">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-all duration-500">
                     {icon}
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-200 dark:text-slate-800 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
@@ -319,6 +352,3 @@ function StatCard({ label, value, trend, icon }: { label: string, value: any, tr
         </div>
     );
 }
-
-
-

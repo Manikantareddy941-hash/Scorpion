@@ -1,14 +1,19 @@
-﻿import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { account, databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
+<<<<<<< HEAD
 import { supabase } from '../lib/supabase';
 import { apiFetch } from '../lib/apiClient';
+=======
+>>>>>>> 98f3544 (ui updates)
 import {
-    ArrowLeft, Settings as SettingsIcon, Bell, ScanSearch, Save,
-    Plus, AlertCircle, Loader2, User, Globe, Github, Slack, Key, CheckCircle2,
-    Terminal, Zap, Cpu, Copy, Trash2, Code, Info
+    User, Mail, Shield, Bell, Key,
+    Save, Loader2, LogOut, Moon, Sun,
+    Terminal, Globe, Github
 } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
+<<<<<<< HEAD
 interface NotificationPreferences {
     sns_topic_arn: string;
     email_notifications: boolean;
@@ -34,16 +39,30 @@ export default function SettingsPage() {
         sns_topic_arn: '',
         email_notifications: true,
         slack_webhook: '',
+=======
+export default function Settings() {
+    const { user, signOut, updatePassword, getJWT } = useAuth();
+    const { theme, toggleTheme } = useTheme();
+    const [loading, setLoading] = useState(true);
+    const [updating, setUpdating] = useState(false);
+    const [profile, setProfile] = useState<any>({
+        name: user?.name || '',
+        email: user?.email || '',
+        company: '',
+        role: ''
+>>>>>>> 98f3544 (ui updates)
     });
-    const [saving, setSaving] = useState(false);
 
-    // API Keys state
+    const [prefEmail, setPrefEmail] = useState(true);
+    const [prefSlack, setPrefSlack] = useState(false);
+    const [prefWebhook, setPrefWebhook] = useState('');
+
     const [apiKeys, setApiKeys] = useState<any[]>([]);
-    const [generatingKey, setGeneratingKey] = useState(false);
     const [newKeyName, setNewKeyName] = useState('');
-    const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+    const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
     useEffect(() => {
+<<<<<<< HEAD
         fetchNotificationPrefs();
         fetchApiKeys();
     }, []);
@@ -54,14 +73,17 @@ export default function SettingsPage() {
             setApiKeys(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Error fetching API keys:', err);
+=======
+        if (user) {
+            fetchSettings();
+>>>>>>> 98f3544 (ui updates)
         }
-    };
+    }, [user]);
 
-    const handleGenerateKey = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newKeyName.trim()) return;
-        setGeneratingKey(true);
+    const fetchSettings = async () => {
+        setLoading(true);
         try {
+<<<<<<< HEAD
             const data = await apiFetch(`/api/keys`, {
                 method: 'POST',
                 body: JSON.stringify({ name: newKeyName }),
@@ -71,10 +93,38 @@ export default function SettingsPage() {
                 setNewlyCreatedKey(data.api_key);
                 setApiKeys([data, ...apiKeys]);
                 setNewKeyName('');
+=======
+            // Fetch profile extras from databases if exists
+            // For now, we'll just use the account info
+            
+            // Fetch notification preferences
+            const prefResponse = await databases.listDocuments(
+                DB_ID,
+                'notification_preferences',
+                [Query.equal('user_id', user?.$id || '')]
+            );
+            
+            if (prefResponse.total > 0) {
+                // Simplified preference handling
+                const prefs = prefResponse.documents;
+                setPrefEmail(prefs.some(p => p.channel === 'email' && p.enabled));
+                setPrefSlack(prefs.some(p => p.channel === 'slack' && p.enabled));
+                setPrefWebhook(prefs.find(p => p.channel === 'webhook')?.target || '');
+>>>>>>> 98f3544 (ui updates)
             }
-        } catch (err) {
-            console.error('Error generating key:', err);
+
+            // Fetch API Keys
+            const keysResponse = await databases.listDocuments(
+                DB_ID,
+                'api_keys',
+                [Query.equal('user_id', user?.$id || '')]
+            );
+            setApiKeys(keysResponse.documents);
+
+        } catch (error) {
+            console.error('Error fetching settings:', error);
         } finally {
+<<<<<<< HEAD
             setGeneratingKey(false);
         }
     };
@@ -109,13 +159,17 @@ export default function SettingsPage() {
             }
         } catch (err) {
             // No prefs yet
+=======
+            setLoading(false);
+>>>>>>> 98f3544 (ui updates)
         }
     };
 
     const handleUpdateProfile = async (e: React.FormEvent) => {
         e.preventDefault();
-        setUpdatingProfile(true);
+        setUpdating(true);
         try {
+<<<<<<< HEAD
             await apiFetch(`/api/user/profile`, {
                 method: 'PATCH',
                 body: JSON.stringify({ displayName }),
@@ -124,18 +178,54 @@ export default function SettingsPage() {
             alert('Profile updated successfully!');
         } catch (err) {
             console.error(err);
+=======
+            await account.updateName(profile.name);
+            // In Appwrite, email update requires verification flow, so we'll skip for now or use account.updateEmail
+            
+            alert('Profile updated successfully');
+        } catch (error) {
+            console.error('Update profile error:', error);
         } finally {
-            setUpdatingProfile(false);
+            setUpdating(false);
         }
     };
 
-    const handleScanCode = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setScanMessage('');
-        setScanError('');
-        if (!repoUrl.trim()) return;
-        setScanning(true);
+    const handleSaveNotifications = async () => {
+        setUpdating(true);
         try {
+            // This would ideally use a backend API or batch updates
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            
+            await fetch(`${apiBase}/api/notifications/preferences`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-appwrite-session': token || ''
+                },
+                body: JSON.stringify({
+                    preferences: [
+                        { channel: 'email', enabled: prefEmail, event_type: 'scan_completed' },
+                        { channel: 'slack', enabled: prefSlack, event_type: 'scan_completed' },
+                        { channel: 'webhook', target: prefWebhook, enabled: !!prefWebhook, event_type: 'scan_completed' }
+                    ]
+                })
+            });
+
+            alert('Preferences saved');
+        } catch (error) {
+            console.error('Error saving notifications:', error);
+>>>>>>> 98f3544 (ui updates)
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const generateApiKey = async () => {
+        if (!newKeyName) return;
+        setUpdating(true);
+        try {
+<<<<<<< HEAD
             const { data: repo, error: repoError } = await supabase
                 .from('repositories')
                 .upsert(
@@ -148,357 +238,220 @@ export default function SettingsPage() {
             await apiFetch(`/api/repos/${repo.id}/scan`, {
                 method: 'POST',
                 token: accessToken
+=======
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            
+            const response = await fetch(`${apiBase}/api/auth/api-key`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-appwrite-session': token || ''
+                },
+                body: JSON.stringify({ name: newKeyName })
+>>>>>>> 98f3544 (ui updates)
             });
 
-            setScanMessage(`Scan triggered for ${repoUrl}! Check Control Center for results.`);
-            setRepoUrl('');
-        } catch (err: any) {
-            setScanError(err.message);
+            const data = await response.json();
+            if (data.key) {
+                setGeneratedKey(data.key);
+                setApiKeys([{ $id: ID.unique(), name: newKeyName, masked_key: 'sk_....' + data.key.slice(-4), created_at: new Date().toISOString() }, ...apiKeys]);
+                setNewKeyName('');
+            }
+        } catch (error) {
+            console.error('Error generating API key:', error);
         } finally {
-            setScanning(false);
+            setUpdating(false);
         }
     };
 
-    const handleSavePrefs = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
-        try {
-            await supabase.from('notification_preferences').upsert({
-                user_id: user?.id,
-                sns_topic_arn: prefs.sns_topic_arn,
-                email_notifications: prefs.email_notifications,
-                slack_webhook: prefs.slack_webhook,
-                updated_at: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
-            alert('Preferences saved!');
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const tabs = [
-        { id: 'profile' as const, label: 'Identity', icon: <User className="w-4 h-4" /> },
-        { id: 'scan' as const, label: 'Ingestion', icon: <ScanSearch className="w-4 h-4" /> },
-        { id: 'notifications' as const, label: 'Alert Core', icon: <Bell className="w-4 h-4" /> },
-        { id: 'integrations' as const, label: 'Protocols', icon: <Globe className="w-4 h-4" /> },
-        { id: 'developer' as const, label: 'Dev Tools', icon: <Code className="w-4 h-4" /> },
-    ];
+    if (loading) return (
+        <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50 p-8 text-slate-900 dark:text-white">
-            <div className="max-w-5xl mx-auto">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-slate-900 p-3 rounded-2xl shadow-lg">
-                            <SettingsIcon className="w-8 h-8 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">Intelligence Config</h1>
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Platform Orchestration</p>
-                        </div>
+        <div className="min-h-screen bg-[var(--bg-primary)] py-12">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex items-center gap-4 mb-12">
+                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                        <Terminal className="w-6 h-6" />
                     </div>
-                    <Link to="/" className="inline-flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-2xl hover:bg-slate-50 dark:bg-slate-800/50 transition font-black uppercase tracking-widest text-xs border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <ArrowLeft className="w-4 h-4" />
-                        Dashboard
-                    </Link>
+                    <div>
+                        <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">System Configuration</h1>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic mt-1 font-mono">Neural Interface & Access Protocols</p>
+                    </div>
                 </div>
 
-                {/* Tab Navigation */}
-                <div className="flex bg-slate-200/50 p-1.5 rounded-[2rem] mb-12 max-w-2xl mx-auto">
-                    {tabs.map((tab) => (
+                <div className="space-y-12">
+                    {/* Dark Mode Toggle */}
+                    <div className="premium-card p-8 flex items-center justify-between">
+                        <div className="flex items-center gap-5">
+                            <div className="w-12 h-12 bg-slate-50 dark:bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-100 dark:border-slate-800">
+                                {theme === 'dark' ? <Moon className="w-5 h-5 text-indigo-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Visual Interface Mode</h3>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase italic mt-0.5">Toggle between Light/Dark luminance levels</p>
+                            </div>
+                        </div>
                         <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex-1 flex items-center justify-center gap-2.5 py-4 px-6 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id
-                                ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-sm'
-                                : 'text-slate-400 hover:text-slate-600 dark:text-slate-300'
-                                }`}
+                            onClick={toggleTheme}
+                            className={`w-14 h-8 rounded-full p-1 transition-all duration-500 ease-in-out ${theme === 'dark' ? 'bg-indigo-600' : 'bg-slate-200'}`}
                         >
-                            {tab.icon} {tab.label}
+                            <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all duration-500 ${theme === 'dark' ? 'translate-x-6' : 'translate-x-0'}`} />
                         </button>
-                    ))}
-                </div>
-
-                {/* Profile View */}
-                {activeTab === 'profile' && (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                        <div className="md:col-span-1">
-                            <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 text-center relative overflow-hidden group">
-                                <div className="relative z-10">
-                                    <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl mx-auto mb-6 flex items-center justify-center text-white text-3xl font-black shadow-2xl shadow-blue-100 group-hover:scale-110 transition-transform">
-                                        {displayName.charAt(0) || user?.email?.charAt(0) || 'U'}
-                                    </div>
-                                    <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">{displayName || 'Architect'}</h3>
-                                    <p className="text-[10px] text-slate-400 font-bold mb-6 tracking-tight italic">{user?.email}</p>
-                                    <div className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-xl text-[9px] font-black uppercase tracking-widest border border-blue-100">Senior DevOps Lead</div>
-                                </div>
-                                <Zap className="absolute -right-6 -bottom-6 w-24 h-24 text-slate-50 opacity-50" />
-                            </div>
-                        </div>
-                        <div className="md:col-span-3 bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 p-10">
-                            <h2 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest italic border-b border-slate-100 dark:border-slate-800 pb-4">Personal Metadata</h2>
-                            <form onSubmit={handleUpdateProfile} className="space-y-8">
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Display Name</label>
-                                    <input
-                                        type="text"
-                                        value={displayName}
-                                        onChange={(e) => setDisplayName(e.target.value)}
-                                        className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl focus:ring-4 focus:ring-blue-50 focus:bg-white dark:bg-slate-900 transition-all font-black text-slate-900 dark:text-white tracking-tight"
-                                        placeholder="Enter Identity..."
-                                    />
-                                </div>
-                                <button type="submit" disabled={updatingProfile} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl transition shadow-xl shadow-slate-200 flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
-                                    {updatingProfile ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                                    Synchronize Profile
-                                </button>
-                            </form>
-                        </div>
                     </div>
-                )}
 
-                {/* Ingestion View */}
-                {activeTab === 'scan' && (
-                    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 p-10 max-w-2xl mx-auto">
-                        <div className="flex items-center gap-4 mb-8">
-                            <div className="bg-blue-50 p-2.5 rounded-xl">
-                                <ScanSearch className="w-6 h-6 text-blue-600" />
-                            </div>
-                            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Manual Code Ingestion</h2>
-                        </div>
-                        <form onSubmit={handleScanCode} className="space-y-8">
-                            {scanError && (
-                                <div className="bg-red-50 border border-red-100 rounded-2xl p-5 flex items-start gap-3">
-                                    <AlertCircle className="w-5 h-5 text-red-600" />
-                                    <p className="text-[10px] text-red-800 font-black uppercase tracking-tight">{scanError}</p>
-                                </div>
-                            )}
-                            {scanMessage && (
-                                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 flex items-start gap-3">
-                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                                    <p className="text-[10px] text-emerald-800 font-black uppercase tracking-tight">{scanMessage}</p>
-                                </div>
-                            )}
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Source Code Origin (Git)</label>
-                                <input
-                                    type="url"
-                                    value={repoUrl}
-                                    onChange={(e) => setRepoUrl(e.target.value)}
-                                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl focus:ring-4 focus:ring-blue-50 focus:bg-white dark:bg-slate-900 transition-all font-mono text-sm font-bold text-slate-900 dark:text-white"
-                                    placeholder="https://github.com/..."
-                                />
-                            </div>
-                            <button type="submit" disabled={scanning} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition shadow-xl shadow-blue-100 flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
-                                {scanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                                Begin Security Audit
-                            </button>
-                        </form>
-                    </div>
-                )}
-
-                {/* Notifications View */}
-                {activeTab === 'notifications' && (
-                    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 p-10 max-w-2xl mx-auto">
-                        <h2 className="text-sm font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest italic border-b border-slate-100 dark:border-slate-800 pb-4">Alert Core Protocols</h2>
-                        <form onSubmit={handleSavePrefs} className="space-y-8">
-                            <div className="flex items-center justify-between p-8 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 group">
-                                <div>
-                                    <p className="font-black text-slate-900 dark:text-white text-sm uppercase tracking-tight">Realtime Email Sync</p>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Status: {prefs.email_notifications ? 'Active' : 'Standby'}</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setPrefs({ ...prefs, email_notifications: !prefs.email_notifications })}
-                                    className={`relative w-16 h-8 rounded-full transition-all duration-300 ${prefs.email_notifications ? 'bg-blue-600 shadow-lg shadow-blue-100' : 'bg-slate-300'}`}
-                                >
-                                    <div className={`absolute top-1 left-1 w-6 h-6 bg-white dark:bg-slate-900 rounded-full shadow-sm transition-transform duration-300 ${prefs.email_notifications ? 'translate-x-8' : 'translate-x-0'}`} />
-                                </button>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">AWS SNS Pub/Sub Signature</label>
+                    {/* Profile Section */}
+                    <section className="premium-card p-10">
+                        <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                            <User className="w-4 h-4 text-blue-600" /> Operator Credentials
+                        </h3>
+                        <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Designation Name</label>
                                 <input
                                     type="text"
-                                    value={prefs.sns_topic_arn}
-                                    onChange={(e) => setPrefs({ ...prefs, sns_topic_arn: e.target.value })}
-                                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl focus:ring-4 focus:ring-blue-50 font-mono text-xs font-bold text-slate-900 dark:text-white"
-                                    placeholder="arn:aws:sns:..."
+                                    value={profile.name}
+                                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl font-black italic text-xs outline-none focus:ring-4 focus:ring-blue-600/10 text-slate-900 dark:text-white"
                                 />
                             </div>
-                            <button type="submit" disabled={saving} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl transition shadow-xl shadow-slate-200 flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
-                                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                                Commit Alert Logic
-                            </button>
-                        </form>
-                    </div>
-                )}
-
-                {/* Integrations View */}
-                {activeTab === 'integrations' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {[
-                            { name: 'GitHub Enterprise', icon: <Github className="w-8 h-8" />, desc: 'Primary Source Bridge', status: 'Connected', color: 'text-slate-900 dark:text-white' },
-                            { name: 'Slack Protocols', icon: <Slack className="w-8 h-8" />, desc: 'Intelligence Webhooks', status: 'Standby', color: 'text-slate-400' },
-                            { name: 'AWS Infrastructure', icon: <Cpu className="w-8 h-8" />, desc: 'Telemetry Sink', status: 'Awaiting ARN', color: 'text-slate-400' },
-                            { name: 'HashiCorp Custodian', icon: <Key className="w-8 h-8" />, desc: 'Secret Management', status: 'Encrypted', color: 'text-slate-900 dark:text-white' }
-                        ].map((item) => (
-                            <div key={item.name} className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 group hover:border-blue-500 transition-all cursor-not-allowed relative overflow-hidden">
-                                <div className="flex items-start justify-between mb-6 relative z-10">
-                                    <div className={`p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl ${item.color} group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors`}>
-                                        {item.icon}
-                                    </div>
-                                    <span className="px-3 py-1 bg-slate-50 dark:bg-slate-800/50 text-slate-400 rounded-lg text-[8px] font-black uppercase tracking-widest group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                                        {item.status}
-                                    </span>
-                                </div>
-                                <h3 className="font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tighter italic">{item.name}</h3>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.desc}</p>
-                                <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                    {item.icon}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Developer Tools View */}
-                {activeTab === 'developer' && (
-                    <div className="space-y-8 max-w-4xl mx-auto">
-                        {/* API Keys Management */}
-                        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 p-10">
-                            <div className="flex items-center justify-between mb-8 border-b border-slate-100 dark:border-slate-800 pb-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-slate-900 p-3 rounded-2xl">
-                                        <Key className="w-6 h-6 text-white" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Signal Tokens (API Keys)</h2>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Authenticate external audit pipelines</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {newlyCreatedKey && (
-                                <div className="mb-8 bg-blue-600 p-8 rounded-3xl text-white relative overflow-hidden group">
-                                    <div className="relative z-10">
-                                        <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-80">New Key Generated (Save it safely now!)</p>
-                                        <div className="flex items-center justify-between bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/20">
-                                            <code className="font-mono text-sm font-bold tracking-wider">{newlyCreatedKey}</code>
-                                            <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(newlyCreatedKey);
-                                                    alert('Key copied to clipboard!');
-                                                }}
-                                                className="p-2 hover:bg-white/20 rounded-xl transition-all"
-                                            >
-                                                <Copy className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        <button
-                                            onClick={() => setNewlyCreatedKey(null)}
-                                            className="mt-4 text-[9px] font-black uppercase tracking-widest bg-white dark:bg-slate-900 text-blue-600 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors"
-                                        >
-                                            I've saved it securely
-                                        </button>
-                                    </div>
-                                    <Zap className="absolute -right-8 -bottom-8 w-32 h-32 opacity-10 rotate-12" />
-                                </div>
-                            )}
-
-                            <form onSubmit={handleGenerateKey} className="flex gap-4 mb-10">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Communications ID</label>
                                 <input
-                                    type="text"
-                                    value={newKeyName}
-                                    onChange={(e) => setNewKeyName(e.target.value)}
-                                    placeholder="Enter identifier (e.g. GitHub Action)..."
-                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl focus:ring-4 focus:ring-blue-50 focus:bg-white dark:bg-slate-900 transition-all font-black text-slate-900 dark:text-white text-xs tracking-tight uppercase"
+                                    type="email"
+                                    disabled
+                                    value={profile.email}
+                                    className="w-full px-6 py-4 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-2xl font-black italic text-xs text-slate-400"
                                 />
+                            </div>
+                            <div className="md:col-span-2 flex justify-end">
                                 <button
                                     type="submit"
-                                    disabled={generatingKey || !newKeyName}
-                                    className="px-8 bg-slate-900 text-white rounded-2xl hover:bg-black transition font-black uppercase tracking-widest text-[10px] shadow-lg disabled:opacity-50"
+                                    disabled={updating}
+                                    className="btn-premium flex items-center gap-3"
                                 >
-                                    {generatingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Generate Token'}
+                                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    Sync Profile Info
                                 </button>
-                            </form>
-
-                            <div className="space-y-4">
-                                {apiKeys.map((key) => (
-                                    <div key={key.id} className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-800/50 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                                                <Terminal className="w-5 h-5 text-slate-400" />
-                                            </div>
-                                            <div>
-                                                <p className="font-black text-slate-900 dark:text-white text-xs uppercase tracking-tight">{key.name}</p>
-                                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Created on {new Date(key.created_at).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleRevokeKey(key.id)}
-                                            className="p-3 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ))}
-                                {apiKeys.length === 0 && (
-                                    <div className="text-center py-10">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">No active tokens detected</p>
-                                    </div>
-                                )}
                             </div>
-                        </div>
+                        </form>
+                    </section>
 
-                        {/* GitHub Action Template */}
-                        <div className="bg-slate-900 rounded-[2.5rem] shadow-xl border border-slate-800 p-10 text-white relative overflow-hidden">
-                            <div className="relative z-10">
-                                <div className="flex items-center gap-4 mb-8">
-                                    <div className="bg-blue-600 p-3 rounded-2xl">
-                                        <Github className="w-6 h-6 text-white" />
+                    {/* Notifications */}
+                    <section className="premium-card p-10">
+                        <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                            <Bell className="w-4 h-4 text-indigo-600" /> Neural Alert Feeds
+                        </h3>
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center text-blue-600">
+                                        <Mail className="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <h2 className="text-sm font-black uppercase tracking-widest italic">Pipeline Automation</h2>
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Integrate StackPilot into GitHub Actions</p>
+                                        <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase italic">Direct Dispatch (Email)</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase italic">Receive critical vectors to {profile.email}</p>
                                     </div>
                                 </div>
+                                <button
+                                    onClick={() => setPrefEmail(!prefEmail)}
+                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${prefEmail ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                >
+                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${prefEmail ? 'translate-x-6' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
 
-                                <div className="space-y-6">
-                                    <div className="bg-black/50 p-6 rounded-3xl border border-slate-800 font-mono text-[11px] leading-relaxed text-slate-300">
-                                        <div className="mb-4 text-emerald-500 font-bold italic"># .github/workflows/security.yml</div>
-                                        <p><span className="text-blue-400">name:</span> StackPilot Security Audit</p>
-                                        <p><span className="text-blue-400">on:</span> [push]</p>
-                                        <p><span className="text-blue-400">jobs:</span></p>
-                                        <p className="ml-4"><span className="text-blue-400">audit:</span></p>
-                                        <p className="ml-8"><span className="text-blue-400">runs-on:</span> ubuntu-latest</p>
-                                        <p className="ml-8"><span className="text-blue-400">steps:</span></p>
-                                        <p className="ml-12">- <span className="text-blue-400">name:</span> Trigger Scan</p>
-                                        <p className="ml-16"><span className="text-blue-400">run:</span> |</p>
-                                        <p className="ml-20">curl -X POST "{import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/webhooks/scan-trigger" \</p>
-                                        <p className="ml-20">-H "X-API-KEY: ${'{'}{'{'} secrets.STACKPILOT_TOKEN {'}'}{'}'}" \</p>
-                                        <p className="ml-20">-H "Content-Type: application/json" \</p>
-                                        <p className="ml-20">-d '{'{'}"repo_url": "${'{'}{'{'} github.repositoryUrl {'}'}{'}'}"{'}'}'</p>
+                            <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl flex items-center justify-center text-indigo-600">
+                                        <Github className="w-5 h-5" />
                                     </div>
-
-                                    <div className="flex items-start gap-4 bg-blue-600/10 p-6 rounded-3xl border border-blue-600/20">
-                                        <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-1" />
-                                        <p className="text-[10px] font-bold text-slate-300 leading-relaxed uppercase tracking-tight">
-                                            Make sure to add your generated Signal Token to your GitHub repository secrets as <span className="text-white font-black italic">STACKPILOT_TOKEN</span>.
-                                        </p>
+                                    <div>
+                                        <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase italic">PR Interceptor (Slack)</p>
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase italic">Trigger alerts on security posture regression</p>
                                     </div>
                                 </div>
+                                <button
+                                    onClick={() => setPrefSlack(!prefSlack)}
+                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${prefSlack ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                >
+                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${prefSlack ? 'translate-x-6' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
+
+                            <div className="flex justify-end pt-4">
+                                <button onClick={handleSaveNotifications} className="btn-premium">Commit Preferences</button>
                             </div>
                         </div>
-                    </div>
-                )}
+                    </section>
+
+                    {/* API Keys */}
+                    <section className="premium-card p-10">
+                        <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                            <Key className="w-4 h-4 text-emerald-600" /> Automated Access Keys (CI/CD)
+                        </h3>
+                        
+                        {generatedKey && (
+                            <div className="mb-8 p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3 animate-pulse">New Neural Key Linked - COPY NOW</p>
+                                <code className="block bg-slate-900 text-emerald-400 p-4 rounded-xl font-mono text-sm break-all border border-emerald-500/30">
+                                    {generatedKey}
+                                </code>
+                                <p className="text-[9px] text-slate-400 mt-3 italic">* This key will not be displayed again. Store it in a secure vault.</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-4 mb-10">
+                            <input
+                                type="text"
+                                placeholder="Key Designation (e.g. JENKINS-MASTER)"
+                                value={newKeyName}
+                                onChange={(e) => setNewKeyName(e.target.value)}
+                                className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl font-black italic text-xs outline-none"
+                            />
+                            <button onClick={generateApiKey} className="btn-premium whitespace-nowrap">Generate Neural Key</button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {apiKeys.map((key) => (
+                                <div key={key.$id} className="flex justify-between items-center p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                    <div>
+                                        <p className="text-[11px] font-black text-slate-900 dark:text-white uppercase italic">{key.name}</p>
+                                        <p className="text-[10px] font-mono text-slate-400 mt-1">{key.masked_key || 'sk_••••••••••••'}</p>
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest italic">Active Vector</span>
+                                        <button className="p-2 text-slate-300 hover:text-rose-600 transition-colors">
+                                            <LogOut className="w-4 h-4 rotate-90" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Danger Zone */}
+                    <section className="premium-card p-10 border-rose-500/20">
+                        <h3 className="text-xs font-black text-rose-600 mb-8 uppercase tracking-[0.2em] italic">Decommissioning Zone</h3>
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+                            <div>
+                                <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase italic tracking-tight">System Termination</h4>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase italic mt-1">Disconnect current telemetry session</p>
+                            </div>
+                            <button
+                                onClick={signOut}
+                                className="px-10 py-4 bg-rose-600/10 text-rose-600 border border-rose-600/20 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all shadow-xl shadow-rose-500/5"
+                            >
+                                Deactivate Session
+                            </button>
+                        </div>
+                    </section>
+                </div>
             </div>
         </div>
     );
 }
-
-
-
-
