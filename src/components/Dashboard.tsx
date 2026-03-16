@@ -428,9 +428,6 @@ export default function Dashboard() {
                   </a>
                 ))}
               </div>
-              <p className="text-sm text-text-secondaryLight dark:text-text-secondaryDark">
-                MANIKANT REDDY FROM MANIK
-              </p>
             </div>
           </div>
         </div>

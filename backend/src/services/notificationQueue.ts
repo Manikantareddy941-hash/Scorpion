@@ -1,15 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
 import { sendScanCompletionEmail, sendCriticalAlertEmail } from './emailService';
 import { sendSlackWebhook, sendDiscordWebhook } from './webhookService';
+import { supabase } from '../lib/supabase';
 
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
-
-export const enqueueNotification = async (payload: any) => {
-    const supabase = getSupabase();
+export const enqueueNotification = async (payload: {
+    user_id: string;
+    repo_id: string;
+    event_type: string;
+    channel: string;
+    data: any;
+}) => {
     const { data, error } = await supabase
         .from('notifications')
         .insert({
@@ -33,7 +32,6 @@ export const enqueueNotification = async (payload: any) => {
 };
 
 export const processNotification = async (id: string) => {
-    const supabase = getSupabase();
     const { data: notification, error } = await supabase
         .from('notifications')
         .select('*')
