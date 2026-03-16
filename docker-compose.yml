@@ -6,10 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "5173:5173"
     environment:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
       - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      - VITE_API_URL=http://localhost:3001
     depends_on:
       - backend
 
@@ -23,6 +24,10 @@ services:
       - PORT=3001
       - SUPABASE_URL=${VITE_SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FRONTEND_URL=http://localhost:5173
     restart: always
 
 # Note: Supabase is hosted externally, so we don't containerize it here.

@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
+import crypto from 'crypto';
+import { supabase } from '../lib/supabase';
 
 export interface GitMetadata {
     commit_hash: string;
@@ -16,7 +11,6 @@ export interface GitMetadata {
  * Links a scan execution to specific Git metadata.
  */
 export const linkCommitToScan = async (scanId: string, repoId: string, metadata: GitMetadata) => {
-    const supabase = getSupabase();
 
     const { error } = await supabase
         .from('scan_commits')
@@ -40,7 +34,6 @@ export const linkCommitToScan = async (scanId: string, repoId: string, metadata:
  * Fetches the historical lifecycle of a finding.
  */
 export const getFindingHistory = async (findingId: string) => {
-    const supabase = getSupabase();
 
     const { data, error } = await supabase
         .from('finding_resolutions')

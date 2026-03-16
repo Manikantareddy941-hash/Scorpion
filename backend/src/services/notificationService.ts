@@ -1,15 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
 import { enqueueNotification } from './notificationQueue';
 import { formatSlackScanResult } from './webhookService';
-
-const getSupabase = () => {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    return createClient(supabaseUrl, supabaseKey);
-};
+import { supabase } from '../lib/supabase';
 
 export const dispatchNotification = async (repoId: string, eventType: string, metadata: any) => {
-    const supabase = getSupabase();
 
     // 1. Get repo and user info
     const { data: repo, error } = await supabase
@@ -64,7 +57,6 @@ export const dispatchNotification = async (repoId: string, eventType: string, me
 };
 
 export const notifyScanCompletion = async (scanId: string) => {
-    const supabase = getSupabase();
     const { data: scan, error } = await supabase
         .from('scan_results')
         .select('*, repositories(id, name, user_id)')
