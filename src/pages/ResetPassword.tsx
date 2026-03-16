@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -48,7 +48,7 @@ export default function ResetPassword() {
 
         const runDiagnostics = async () => {
             const healthResult = await authHealthCheck();
-            if (!healthResult.backendReachable || !healthResult.supabaseReachable) {
+            if (!healthResult.backendReachable || !healthResult.appwriteReachable) {
                 setHealth(healthResult);
             }
         };

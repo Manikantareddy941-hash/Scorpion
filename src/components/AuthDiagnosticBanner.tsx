@@ -6,7 +6,7 @@ interface AuthDiagnosticBannerProps {
 }
 
 const AuthDiagnosticBanner = ({ health }: AuthDiagnosticBannerProps) => {
-  if (health.backendReachable && health.supabaseReachable) {
+  if (health.backendReachable && health.appwriteReachable) {
     return null;
   }
 
@@ -16,7 +16,7 @@ const AuthDiagnosticBanner = ({ health }: AuthDiagnosticBannerProps) => {
         return {
           icon: <AlertCircle className="w-5 h-5 text-red-500" />,
           title: 'CORS Misconfiguration',
-          message: 'The frontend cannot reach the backend. Check that the FRONTEND_URL environment variable on the backend matches your browser\'s URL. The browser console may have more details.'
+          message: 'The frontend cannot reach the backend. Check that the FRONTEND_URL environment variable on the backend matches your browser\'s URL.'
         };
       case 'NETWORK':
         return {
@@ -27,15 +27,15 @@ const AuthDiagnosticBanner = ({ health }: AuthDiagnosticBannerProps) => {
       case 'DNS_BLOCK':
         return {
           icon: <ShieldOff className="w-5 h-5 text-blue-500" />,
-          title: 'Supabase Unreachable',
-          message: 'The Supabase domain may be blocked by your ISP. Try changing your DNS to 1.1.1.1 or 8.8.8.8, or use a VPN.'
+          title: 'Appwrite Unreachable',
+          message: 'The Appwrite domain may be blocked by your ISP. Try changing your DNS to 1.1.1.1 or 8.8.8.8.'
         };
       case 'UNKNOWN':
       default:
         return {
           icon: <AlertCircle className="w-5 h-5 text-gray-500" />,
           title: 'Unexpected Network Error',
-          message: 'Authentication failed due to an unexpected network error. Please check your internet connection and try again.'
+          message: 'Authentication failed due to an unexpected network error. Please check your internet connection.'
         };
     }
   };
