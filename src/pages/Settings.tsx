@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { account, databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
-<<<<<<< HEAD
-import { supabase } from '../lib/supabase';
-import { apiFetch } from '../lib/apiClient';
-=======
->>>>>>> 98f3544 (ui updates)
 import {
     User, Mail, Shield, Bell, Key,
     Save, Loader2, LogOut, Moon, Sun,
@@ -13,44 +8,6 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
-<<<<<<< HEAD
-interface NotificationPreferences {
-    sns_topic_arn: string;
-    email_notifications: boolean;
-    slack_webhook: string;
-}
-
-export default function SettingsPage() {
-    const { user, accessToken } = useAuth();
-    const [activeTab, setActiveTab] = useState<'profile' | 'scan' | 'notifications' | 'integrations' | 'developer'>('profile');
-
-    // Profile state
-    const [displayName, setDisplayName] = useState(user?.user_metadata?.display_name || '');
-    const [updatingProfile, setUpdatingProfile] = useState(false);
-
-    // Scan state
-    const [repoUrl, setRepoUrl] = useState('');
-    const [scanning, setScanning] = useState(false);
-    const [scanMessage, setScanMessage] = useState('');
-    const [scanError, setScanError] = useState('');
-
-    // Notification prefs state
-    const [prefs, setPrefs] = useState<NotificationPreferences>({
-        sns_topic_arn: '',
-        email_notifications: true,
-        slack_webhook: '',
-=======
-export default function Settings() {
-    const { user, signOut, updatePassword, getJWT } = useAuth();
-    const { theme, toggleTheme } = useTheme();
-    const [loading, setLoading] = useState(true);
-    const [updating, setUpdating] = useState(false);
-    const [profile, setProfile] = useState<any>({
-        name: user?.name || '',
-        email: user?.email || '',
-        company: '',
-        role: ''
->>>>>>> 98f3544 (ui updates)
     });
 
     const [prefEmail, setPrefEmail] = useState(true);
@@ -62,55 +19,12 @@ export default function Settings() {
     const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
     useEffect(() => {
-<<<<<<< HEAD
-        fetchNotificationPrefs();
-        fetchApiKeys();
-    }, []);
-
-    const fetchApiKeys = async () => {
-        try {
-            const data = await apiFetch(`/api/keys`, { token: accessToken });
-            setApiKeys(Array.isArray(data) ? data : []);
-        } catch (err) {
-            console.error('Error fetching API keys:', err);
-=======
-        if (user) {
-            fetchSettings();
->>>>>>> 98f3544 (ui updates)
         }
     }, [user]);
 
     const fetchSettings = async () => {
         setLoading(true);
         try {
-<<<<<<< HEAD
-            const data = await apiFetch(`/api/keys`, {
-                method: 'POST',
-                body: JSON.stringify({ name: newKeyName }),
-                token: accessToken
-            });
-            if (data?.api_key) {
-                setNewlyCreatedKey(data.api_key);
-                setApiKeys([data, ...apiKeys]);
-                setNewKeyName('');
-=======
-            // Fetch profile extras from databases if exists
-            // For now, we'll just use the account info
-            
-            // Fetch notification preferences
-            const prefResponse = await databases.listDocuments(
-                DB_ID,
-                'notification_preferences',
-                [Query.equal('user_id', user?.$id || '')]
-            );
-            
-            if (prefResponse.total > 0) {
-                // Simplified preference handling
-                const prefs = prefResponse.documents;
-                setPrefEmail(prefs.some(p => p.channel === 'email' && p.enabled));
-                setPrefSlack(prefs.some(p => p.channel === 'slack' && p.enabled));
-                setPrefWebhook(prefs.find(p => p.channel === 'webhook')?.target || '');
->>>>>>> 98f3544 (ui updates)
             }
 
             // Fetch API Keys
@@ -124,44 +38,6 @@ export default function Settings() {
         } catch (error) {
             console.error('Error fetching settings:', error);
         } finally {
-<<<<<<< HEAD
-            setGeneratingKey(false);
-        }
-    };
-
-    const handleRevokeKey = async (id: string) => {
-        if (!confirm('Are you sure you want to revoke this API key? Pipelines using it will fail.')) return;
-        try {
-            await apiFetch(`/api/keys/${id}`, {
-                method: 'DELETE',
-                token: accessToken
-            });
-            setApiKeys(apiKeys.filter(k => k.id !== id));
-        } catch (err) {
-            console.error('Error revoking key:', err);
-        }
-    };
-
-    const fetchNotificationPrefs = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('notification_preferences')
-                .select('*')
-                .eq('user_id', user?.id)
-                .single();
-
-            if (data && !error) {
-                setPrefs({
-                    sns_topic_arn: data.sns_topic_arn || '',
-                    email_notifications: data.email_notifications ?? true,
-                    slack_webhook: data.slack_webhook || '',
-                });
-            }
-        } catch (err) {
-            // No prefs yet
-=======
-            setLoading(false);
->>>>>>> 98f3544 (ui updates)
         }
     };
 
@@ -169,53 +45,6 @@ export default function Settings() {
         e.preventDefault();
         setUpdating(true);
         try {
-<<<<<<< HEAD
-            await apiFetch(`/api/user/profile`, {
-                method: 'PATCH',
-                body: JSON.stringify({ displayName }),
-                token: accessToken
-            });
-            alert('Profile updated successfully!');
-        } catch (err) {
-            console.error(err);
-=======
-            await account.updateName(profile.name);
-            // In Appwrite, email update requires verification flow, so we'll skip for now or use account.updateEmail
-            
-            alert('Profile updated successfully');
-        } catch (error) {
-            console.error('Update profile error:', error);
-        } finally {
-            setUpdating(false);
-        }
-    };
-
-    const handleSaveNotifications = async () => {
-        setUpdating(true);
-        try {
-            // This would ideally use a backend API or batch updates
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            
-            await fetch(`${apiBase}/api/notifications/preferences`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-appwrite-session': token || ''
-                },
-                body: JSON.stringify({
-                    preferences: [
-                        { channel: 'email', enabled: prefEmail, event_type: 'scan_completed' },
-                        { channel: 'slack', enabled: prefSlack, event_type: 'scan_completed' },
-                        { channel: 'webhook', target: prefWebhook, enabled: !!prefWebhook, event_type: 'scan_completed' }
-                    ]
-                })
-            });
-
-            alert('Preferences saved');
-        } catch (error) {
-            console.error('Error saving notifications:', error);
->>>>>>> 98f3544 (ui updates)
         } finally {
             setUpdating(false);
         }
@@ -225,31 +54,6 @@ export default function Settings() {
         if (!newKeyName) return;
         setUpdating(true);
         try {
-<<<<<<< HEAD
-            const { data: repo, error: repoError } = await supabase
-                .from('repositories')
-                .upsert(
-                    { user_id: user?.id, url: repoUrl, name: repoUrl.split('/').pop() },
-                    { onConflict: 'user_id,url' }
-                )
-                .select().single();
-            if (repoError) throw repoError;
-
-            await apiFetch(`/api/repos/${repo.id}/scan`, {
-                method: 'POST',
-                token: accessToken
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            
-            const response = await fetch(`${apiBase}/api/auth/api-key`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-appwrite-session': token || ''
-                },
-                body: JSON.stringify({ name: newKeyName })
->>>>>>> 98f3544 (ui updates)
             });
 
             const data = await response.json();

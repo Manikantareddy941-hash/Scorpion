@@ -7,10 +7,6 @@ import {
     BarChart3, Clock, Database, Mail, RefreshCw, Zap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-<<<<<<< HEAD
-import { apiFetch } from '../lib/apiClient';
-=======
->>>>>>> 98f3544 (ui updates)
 
 interface DashboardStats {
     avgRiskScore: number;
@@ -37,11 +33,6 @@ interface ActivityItem {
 }
 
 export default function DevOpsDashboard() {
-<<<<<<< HEAD
-    const { accessToken } = useAuth();
-=======
-    const { getJWT } = useAuth();
->>>>>>> 98f3544 (ui updates)
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [health, setHealth] = useState<HealthStatus | null>(null);
     const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -55,22 +46,6 @@ export default function DevOpsDashboard() {
 
     const fetchAllData = async () => {
         try {
-<<<<<<< HEAD
-            const [statsData, healthData, activitiesData] = await Promise.all([
-                apiFetch(`/api/dashboard/stats`, { token: accessToken }),
-                apiFetch(`/health`),
-                apiFetch(`/api/dashboard/activities`, { token: accessToken })
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const headers = { 'x-appwrite-session': token || '' };
-
-            const [statsRes, healthRes, activitiesRes] = await Promise.all([
-                fetch(`${apiBase}/api/dashboard/stats`, { headers }),
-                fetch(`${apiBase}/health`),
-                fetch(`${apiBase}/api/dashboard/activities`, { headers })
->>>>>>> 98f3544 (ui updates)
             ]);
 
             setStats(statsData);

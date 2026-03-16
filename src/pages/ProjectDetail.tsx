@@ -74,34 +74,6 @@ export default function ProjectDetail() {
             ]);
             setVulnerabilities(vulnerabilitiesData.documents as any[]);
 
-<<<<<<< HEAD
-            // Fetch Policy
-            try {
-                const policyData = await apiFetch(`/api/repos/${id}/policy`, { token: accessToken });
-                setPolicy(policyData);
-            } catch (e) {
-                // ignore
-            }
-
-            // Fetch Access
-            try {
-                const accessData = await apiFetch(`/api/repos/${id}/access`, { token: accessToken });
-                setProjectAccess(accessData);
-            } catch (e) {
-                // ignore
-            }
-=======
-            // Fetch Policy - Placeholder for now as it's a backend call that used to be Supabase-token based
-            // We'll need to update the backend logic separately, but for now we'll maintain the call
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            // In a real migration, we'd get the JWT from Appwrite account.createJWT()
-            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`);
-            if (policyRes.ok) setPolicy(await policyRes.json());
-
-            // Fetch Access
-            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`);
-            if (accessRes.ok) setProjectAccess(await accessRes.json());
->>>>>>> 98f3544 (ui updates)
 
         } catch (err: any) {
             console.error('Error fetching project data:', err);
@@ -114,27 +86,6 @@ export default function ProjectDetail() {
         if (!id) return;
         setTriggering(true);
         try {
-<<<<<<< HEAD
-            await apiFetch(`/api/repos/${id}/scan`, {
-                method: 'POST',
-                token: accessToken
-            });
-            fetchProjectData();
-        } catch (err: any) {
-=======
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
-                method: 'POST'
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                alert(data.error || 'Failed to trigger scan');
-            } else {
-                fetchData();
-            }
-        } catch (err) {
->>>>>>> 98f3544 (ui updates)
             console.error('Error triggering scan:', err);
             alert(err.message || 'Failed to trigger scan');
         } finally {
@@ -145,26 +96,6 @@ export default function ProjectDetail() {
     const handleConvertToIssue = async (vulnId: string) => {
         setConverting(vulnId);
         try {
-<<<<<<< HEAD
-            await apiFetch(`/api/vulnerabilities/${vulnId}/convert`, {
-                method: 'POST',
-                token: accessToken
-            });
-            alert('Finding converted to Task successfully!');
-            fetchProjectData();
-        } catch (err: any) {
-=======
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
-                method: 'POST'
-            });
-
-            if (response.ok) {
-                alert('Finding converted to Task successfully!');
-                fetchData();
-            }
-        } catch (err) {
->>>>>>> 98f3544 (ui updates)
             console.error('Error converting vulnerability:', err);
             alert(err.message || 'Failed to convert finding');
         } finally {
@@ -261,24 +192,6 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
     const updatePolicy = async (profile: string) => {
         setUpdating(true);
         try {
-<<<<<<< HEAD
-            await apiFetch(`/api/repos/${repoId}/policy`, {
-                method: 'PUT',
-                body: JSON.stringify({ policy_name: profile }),
-                token: accessToken
-            });
-            onUpdate();
-        } catch (err: any) {
-=======
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ policy_name: profile })
-            });
-            if (response.ok) onUpdate();
-        } catch (err) {
->>>>>>> 98f3544 (ui updates)
             console.error('Error updating policy:', err);
             alert(err.message || 'Failed to update policy');
         } finally {
@@ -305,59 +218,6 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
 }
 
 function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: string, onUpdate: () => void }) {
-<<<<<<< HEAD
-    const { accessToken } = useAuth();
-    const [granting, setGranting] = useState(false);
-    const [teams, setTeams] = useState<any[]>([]);
-    const [selectedTeamId, setSelectedTeamId] = useState('');
-
-    useEffect(() => {
-        fetchTeams();
-    }, []);
-
-    const fetchTeams = async () => {
-        const { data } = await supabase.from('teams').select('id, name');
-        setTeams(data || []);
-    };
-
-    const grantAccess = async () => {
-        if (!selectedTeamId) return;
-        setGranting(true);
-        try {
-            await apiFetch(`/api/repos/${repoId}/access`, {
-                method: 'PUT',
-                body: JSON.stringify({ team_id: selectedTeamId, action: 'grant' }),
-                token: accessToken
-            });
-            onUpdate();
-            setSelectedTeamId('');
-        } catch (err) {
-            console.error('Error granting access:', err);
-        } finally {
-            setGranting(false);
-        }
-    };
-
-    const revokeAccess = async (teamId: string) => {
-        try {
-            await apiFetch(`/api/repos/${repoId}/access`, {
-                method: 'PUT',
-                body: JSON.stringify({ team_id: teamId, action: 'revoke' }),
-                token: accessToken
-            });
-            onUpdate();
-=======
-
-    const revokeAccess = async (teamId: string) => {
-        try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ team_id: teamId, action: 'revoke' })
-            });
-            if (response.ok) onUpdate();
->>>>>>> 98f3544 (ui updates)
         } catch (err) {
             console.error('Error revoking access:', err);
         }

@@ -1,10 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-<<<<<<< HEAD
-import { apiFetch } from '../lib/apiClient';
-=======
->>>>>>> 98f3544 (ui updates)
 
 interface RemediationPanelProps {
     vulnerabilityId: string;
@@ -12,11 +8,6 @@ interface RemediationPanelProps {
 }
 
 export default function RemediationPanel({ vulnerabilityId, onClose }: RemediationPanelProps) {
-<<<<<<< HEAD
-    const { accessToken } = useAuth();
-=======
-    const { getJWT } = useAuth();
->>>>>>> 98f3544 (ui updates)
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [fix, setFix] = useState<any>(null);
@@ -30,20 +21,6 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
-<<<<<<< HEAD
-            await apiFetch(`/api/ai/metrics/event`, {
-                method: 'POST',
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            await fetch(`${apiBase}/api/ai/metrics/event`, {
-                method: 'POST',
-                headers: {
-                    'x-appwrite-session': token || '',
-                    'Content-Type': 'application/json'
-                },
->>>>>>> 98f3544 (ui updates)
                 body: JSON.stringify({
                     finding_id: vulnerabilityId,
                     suggestion_id: suggestionId,
@@ -61,18 +38,6 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         setLoading(true);
         setError('');
         try {
-<<<<<<< HEAD
-            const data = await apiFetch(`/api/vulns/${vulnerabilityId}/remediate`, {
-                method: 'POST',
-                token: accessToken
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
-                method: 'POST',
-                headers: { 'x-appwrite-session': token || '' }
->>>>>>> 98f3544 (ui updates)
             });
 
             if (data) {
@@ -97,23 +62,6 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
     const handleFeedback = async (type: 'helpful' | 'ignore') => {
         try {
-<<<<<<< HEAD
-            await apiFetch(`/api/vulns/${vulnerabilityId}/feedback`, {
-                method: 'POST',
-                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } }),
-                token: accessToken
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/feedback`, {
-                method: 'POST',
-                headers: {
-                    'x-appwrite-session': token || '',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } })
->>>>>>> 98f3544 (ui updates)
             });
 
             // Track Interaction
@@ -129,18 +77,6 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         if (!fix?.id) return;
         setPrLoading(true);
         try {
-<<<<<<< HEAD
-            const data = await apiFetch(`/api/fixes/${fix.id}/pr`, {
-                method: 'POST',
-                token: accessToken
-=======
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/fixes/${fix.id}/pr`, {
-                method: 'POST',
-                headers: { 'x-appwrite-session': token || '' }
->>>>>>> 98f3544 (ui updates)
             });
 
             if (data) {
