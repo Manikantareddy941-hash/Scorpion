@@ -9,6 +9,10 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+
+export default function Reports() {
+    const { theme } = useTheme();
+    const { getJWT } = useAuth();
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [stats, setStats] = useState<any>(null);
@@ -23,9 +27,21 @@ import { useAuth } from '../contexts/AuthContext';
     const fetchStats = async () => {
         setLoading(true);
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const url = new URL(`${apiBase}/api/reports/stats`);
+            url.searchParams.append('scope', scope);
+            if (scopeId) url.searchParams.append('id', scopeId);
+
+            const response = await fetch(url.toString(), {
+                headers: { 
+                    'x-appwrite-session': token || ''
+                }
             });
 
-            if (data) {
+            if (response.ok) {
+                const data = await response.json();
                 setStats(data.stats);
                 setTrend(data.trend);
             }
@@ -39,6 +55,15 @@ import { useAuth } from '../contexts/AuthContext';
     const handleExport = async () => {
         setGenerating(true);
         try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const response = await fetch(`${apiBase}/api/reports/generate`, {
+                method: 'POST',
+                headers: {
+                    'x-appwrite-session': token || '',
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
                     scope,
                     id: scopeId,
@@ -46,7 +71,8 @@ import { useAuth } from '../contexts/AuthContext';
                 })
             });
 
-            if (blob) {
+            if (response.ok) {
+                const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
