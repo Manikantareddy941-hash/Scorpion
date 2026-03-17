@@ -1,37 +1,20 @@
 import 'dotenv/config';
-import { supabase } from './lib/supabase';
+import { databases, DB_ID, COLLECTIONS } from './lib/appwrite';
 
-async function checkConstraints() {
-    console.log('Checking constraints for table: repositories');
+async function checkAppwriteDB() {
+    console.log(`Checking Appwrite Database: ${DB_ID}`);
 
-    const { data, error } = await supabase.rpc('get_constraints', { table_name: 'repositories' });
+    try {
+        const collections = await databases.listCollections(DB_ID);
+        console.log('Collections status: Success');
+        console.log('Available collections:', collections.collections.map(c => c.name));
 
-    if (error) {
-        console.error('RPC failed, trying raw query via information_schema...');
-        const { data: qData, error: qError } = await supabase
-            .from('pg_constraint')
-            .select(`
-                conname,
-                pg_get_constraintdef(oid)
-            `)
-            .eq('conrelid', "'repositories'::regclass");
-
-        if (qError) {
-            console.error('Direct query failed:', qError.message);
-            // Fallback: try to just insert a duplicate and see what happens? No.
-        } else {
-            console.log('Constraints:', qData);
-        }
-    } else {
-        console.log('Constraints:', data);
+        // Try a simple select from repositories
+        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, []);
+        console.log('Repositories check: Success', `(${repos.total} documents)`);
+    } catch (error: any) {
+        console.error('Appwrite DB check failed:', error.message);
     }
 }
 
-// Since I might not have the RPC, I'll try a different approach:
-async function trySelect() {
-    const { data, error } = await supabase.from('repositories').select('*').limit(1);
-    console.log('Select test:', error ? error.message : 'Success');
-}
-
-trySelect();
-// checkConstraints(); // This might fail without RPC
+checkAppwriteDB();

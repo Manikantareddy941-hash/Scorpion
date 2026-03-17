@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { account, databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import {
-    User, Mail, Shield, Bell, Key,
+    User, Mail, Bell, Key,
     Save, Loader2, LogOut, Moon, Sun,
-    Terminal, Globe, Github
+    Terminal, Github
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function Settings() {
-    const { user, signOut, updatePassword, getJWT } = useAuth();
+    const { user, signOut, getJWT } = useAuth();
     const { theme, toggleTheme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
@@ -96,7 +96,7 @@ export default function Settings() {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-appwrite-session': token || ''
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     preferences: [
@@ -126,7 +126,7 @@ export default function Settings() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-appwrite-session': token || ''
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ name: newKeyName })
             });
@@ -146,7 +146,7 @@ export default function Settings() {
 
     if (loading) return (
         <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
         </div>
     );
 
@@ -154,7 +154,7 @@ export default function Settings() {
         <div className="min-h-screen bg-[var(--bg-primary)] py-12">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center gap-4 mb-12">
-                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                    <div className="w-12 h-12 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-lg">
                         <Terminal className="w-6 h-6" />
                     </div>
                     <div>
@@ -186,7 +186,7 @@ export default function Settings() {
                     {/* Profile Section */}
                     <section className="premium-card p-10">
                         <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                            <User className="w-4 h-4 text-blue-600" /> Operator Credentials
+                            <User className="w-4 h-4 text-orange-500" /> Operator Credentials
                         </h3>
                         <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-2">
@@ -195,7 +195,7 @@ export default function Settings() {
                                     type="text"
                                     value={profile.name}
                                     onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl font-black italic text-xs outline-none focus:ring-4 focus:ring-blue-600/10 text-slate-900 dark:text-white"
+                                    className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl font-black italic text-xs outline-none focus:ring-4 focus:ring-orange-500/10 text-slate-900 dark:text-white"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -228,7 +228,7 @@ export default function Settings() {
                         <div className="space-y-6">
                             <div className="flex items-center justify-between p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center text-blue-600">
+                                    <div className="w-10 h-10 bg-orange-500/10 dark:bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-500">
                                         <Mail className="w-5 h-5" />
                                     </div>
                                     <div>

@@ -14,12 +14,12 @@ async function runDiagnostics() {
     }
 
     // 2. Auth Health Check (Diagnostics)
-    console.log('\n[2] Checking Auth Health (Supabase & Tools)...');
+    console.log('\n[2] Checking Auth Health (Appwrite & Tools)...');
     try {
         const authHealth = await axios.get('http://localhost:3001/api/health/auth');
         console.log('✅ /api/health/auth returned status');
         console.log('   - Backend:', authHealth.data.backend);
-        console.log('   - Supabase:', authHealth.data.supabase);
+        console.log('   - Appwrite:', authHealth.data.appwrite);
         console.log('   - Tools Metadata:', authHealth.data.tools || 'not reported');
     } catch (err: any) {
         console.log('❌ /api/health/auth failed:', err.message);

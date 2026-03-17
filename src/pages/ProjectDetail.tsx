@@ -74,12 +74,17 @@ export default function ProjectDetail() {
             // Fetch Policy - Placeholder for now as it's a backend call that used to be Supabase-token based
             // We'll need to update the backend logic separately, but for now we'll maintain the call
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            // In a real migration, we'd get the JWT from Appwrite account.createJWT()
-            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`);
+            const token = localStorage.getItem('appwrite_jwt');
+            // Fetch Policy
+            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (policyRes.ok) setPolicy(await policyRes.json());
 
             // Fetch Access
-            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`);
+            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (accessRes.ok) setProjectAccess(await accessRes.json());
 
         } catch (err: any) {
@@ -94,8 +99,10 @@ export default function ProjectDetail() {
         setTriggering(true);
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (!response.ok) {
@@ -115,8 +122,10 @@ export default function ProjectDetail() {
         setConverting(vulnId);
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
-                method: 'POST'
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
@@ -133,7 +142,7 @@ export default function ProjectDetail() {
     if (loading) return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center p-8">
             <div className="text-center">
-                <Terminal className="w-12 h-12 text-blue-600 animate-pulse mx-auto mb-4" />
+                <Terminal className="w-12 h-12 text-orange-500 animate-pulse mx-auto mb-4" />
                 <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Decrypting Repository...</h2>
             </div>
         </div>
@@ -143,7 +152,7 @@ export default function ProjectDetail() {
         <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50 p-8 text-slate-900 dark:text-white">
             <div className="max-w-6xl mx-auto">
                 <div className="flex items-center justify-between mb-8">
-                    <Link to="/security" className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-blue-600 transition uppercase tracking-widest italic">
+                    <Link to="/security" className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-orange-500 transition uppercase tracking-widest italic">
                         <ArrowLeft className="w-4 h-4" />
                         Back to Fleet
                     </Link>
@@ -156,7 +165,7 @@ export default function ProjectDetail() {
                             {triggering ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
                             Run New Audit
                         </button>
-                        <a href={repo?.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-black text-blue-600 hover:text-blue-700 transition uppercase tracking-widest italic border-b border-transparent hover:border-blue-600">
+                        <a href={repo?.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-black text-orange-500 hover:text-orange-600 transition uppercase tracking-widest italic border-b border-transparent hover:border-orange-500">
                             <Github className="w-4 h-4" />
                             Source Code
                         </a>
@@ -167,7 +176,7 @@ export default function ProjectDetail() {
                     <div className="flex flex-col md:flex-row md:items-center justify-between relative z-10 gap-8">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="bg-blue-600 p-2 rounded-xl">
+                                <div className="bg-orange-500 p-2 rounded-xl">
                                     <Shield className="w-5 h-5 text-white" />
                                 </div>
                                 <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter italic uppercase">{repo?.name}</h1>
@@ -187,9 +196,9 @@ export default function ProjectDetail() {
                 </div>
 
                 <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-700 mb-8">
-                    <button onClick={() => setActiveTab('findings')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 dark:text-slate-300'}`}>Findings</button>
-                    <button onClick={() => setActiveTab('governance')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'governance' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 dark:text-slate-300'}`}>Governance</button>
-                    <button onClick={() => setActiveTab('access')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'access' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 dark:text-slate-300'}`}>Access Control</button>
+                    <button onClick={() => setActiveTab('findings')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-slate-400 dark:text-slate-300'}`}>Findings</button>
+                    <button onClick={() => setActiveTab('governance')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'governance' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-slate-400 dark:text-slate-300'}`}>Governance</button>
+                    <button onClick={() => setActiveTab('access')} className={`pb-4 text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'access' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-slate-400 dark:text-slate-300'}`}>Access Control</button>
                 </div>
 
                 {activeTab === 'findings' && (
@@ -219,9 +228,13 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
         setUpdating(true);
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ policy_name: profile })
             });
             if (response.ok) onUpdate();
@@ -239,7 +252,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic mb-6">Security Profile</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         {['Strict', 'Balanced', 'Relaxed'].map((p) => (
-                            <button key={p} onClick={() => updatePolicy(p.toLowerCase())} className={`p-6 rounded-2xl border-2 transition-all ${policy?.policy_name?.toLowerCase() === p.toLowerCase() ? 'border-blue-600 bg-blue-50' : 'border-slate-100 dark:border-slate-800'}`}>
+                            <button key={p} onClick={() => updatePolicy(p.toLowerCase())} className={`p-6 rounded-2xl border-2 transition-all ${policy?.policy_name?.toLowerCase() === p.toLowerCase() ? 'border-orange-500 bg-orange-50' : 'border-slate-100 dark:border-slate-800'}`}>
                                 <h4 className="font-black text-xs uppercase tracking-widest mb-2">{p}</h4>
                             </button>
                         ))}
@@ -255,9 +268,13 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
     const revokeAccess = async (teamId: string) => {
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ team_id: teamId, action: 'revoke' })
             });
             if (response.ok) onUpdate();
