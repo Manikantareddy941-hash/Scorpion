@@ -33,7 +33,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
     return (
         <div className="space-y-6">
             {findings.map(vuln => (
-                <div key={vuln.$id} className="premium-card p-8 group hover:border-blue-600/50">
+                <div key={vuln.$id} className="premium-card p-8 group hover:border-orange-500/50">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-4 mb-4">
@@ -43,7 +43,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
                                     <Bug className="w-3.5 h-3.5" /> {vuln.tool}
                                 </span>
                             </div>
-                            <h3 className="text-slate-900 dark:text-white font-black text-xl tracking-tight mb-3 group-hover:text-blue-600 transition-colors uppercase italic leading-tight">{vuln.message}</h3>
+                            <h3 className="text-slate-900 dark:text-white font-black text-xl tracking-tight mb-3 group-hover:text-orange-500 transition-colors uppercase italic leading-tight">{vuln.message}</h3>
                             <div className="flex flex-wrap items-center gap-8 text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">
                                 <span className="flex items-center gap-2"><Terminal className="w-4 h-4 text-slate-300 dark:text-slate-600" /> {vuln.file_path}{vuln.line_number ? `:${vuln.line_number}` : ''}</span>
                                 <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-slate-300 dark:text-slate-600" /> {new Date(vuln.$createdAt).toLocaleDateString()}</span>
@@ -53,9 +53,9 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
                             {vuln.status !== 'resolved' && onRemediate && (
                                 <button
                                     onClick={() => onRemediate(vuln.$id)}
-                                    className="px-8 py-3.5 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl hover:bg-blue-600 dark:hover:bg-blue-600 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200 dark:shadow-none flex items-center gap-2.5"
+                                    className="px-8 py-3.5 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl hover:bg-orange-500 dark:hover:bg-orange-600 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200 dark:shadow-none flex items-center gap-2.5"
                                 >
-                                    <Sparkles className="w-4 h-4 text-blue-400" />
+                                    <Sparkles className="w-4 h-4 text-orange-400" />
                                     Suggest Fix
                                 </button>
                             )}
@@ -63,13 +63,13 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
                                 <button
                                     onClick={() => onConvert(vuln.$id)}
                                     disabled={convertingId === vuln.$id}
-                                    className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl hover:bg-black transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/20 disabled:bg-slate-200 dark:disabled:bg-slate-800 flex items-center gap-2.5"
+                                    className="px-8 py-3.5 bg-orange-500 text-white rounded-2xl hover:bg-black transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-orange-500/20 disabled:bg-slate-200 dark:disabled:bg-slate-800 flex items-center gap-2.5"
                                 >
                                     {convertingId === vuln.$id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                                     Convert to Task
                                 </button>
                             )}
-                            <button className="bg-[var(--bg-primary)] text-slate-400 p-3.5 rounded-2xl border border-[var(--border-subtle)] hover:border-blue-600/50 hover:text-blue-600 transition-all flex items-center justify-center">
+                            <button className="bg-[var(--bg-primary)] text-slate-400 p-3.5 rounded-2xl border border-[var(--border-subtle)] hover:border-orange-500/50 hover:text-orange-500 transition-all flex items-center justify-center">
                                 <ExternalLink className="w-5 h-5" />
                             </button>
                         </div>

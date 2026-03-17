@@ -28,7 +28,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             await fetch(`${apiBase}/api/ai/metrics/event`, {
                 method: 'POST',
                 headers: {
-                    'x-appwrite-session': token || '',
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -52,7 +52,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
             const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
                 method: 'POST',
-                headers: { 'x-appwrite-session': token || '' }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
@@ -84,7 +84,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/feedback`, {
                 method: 'POST',
                 headers: {
-                    'x-appwrite-session': token || '',
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } })
@@ -108,7 +108,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
             const response = await fetch(`${apiBase}/api/fixes/${fix.id}/pr`, {
                 method: 'POST',
-                headers: { 'x-appwrite-session': token || '' }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (response.ok) {
@@ -129,7 +129,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] shadow-2xl w-full max-w-2xl overflow-hidden border border-[var(--border-subtle)] transition-all">
                 <div className="flex items-center justify-between p-8 border-b border-[var(--border-subtle)] bg-[var(--bg-accent)]/30">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                        <div className="w-12 h-12 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20">
                             <Sparkles className="w-6 h-6" />
                         </div>
                         <div>
@@ -147,7 +147,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                 <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="py-20 flex flex-col items-center justify-center gap-4">
-                            <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+                            <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic animate-pulse">Deep scanning resolution vectors...</p>
                         </div>
                     ) : error ? (
@@ -168,7 +168,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                         <div className="space-y-10">
                             <section>
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-600">
+                                    <div className="p-1.5 bg-orange-500/10 rounded-lg text-orange-500">
                                         <Info className="w-4 h-4" />
                                     </div>
                                     <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Technical Analysis</h3>
@@ -184,21 +184,21 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
 
                             <section>
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-600">
+                                    <div className="p-1.5 bg-orange-500/10 rounded-lg text-orange-500">
                                         <Code className="w-4 h-4" />
                                     </div>
                                     <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Remediation Patch</h3>
                                 </div>
                                 <div className="bg-slate-950 rounded-3xl p-6 overflow-x-auto shadow-2xl border border-slate-800">
-                                    <pre className="text-[11px] text-blue-300 font-mono leading-relaxed">
+                                    <pre className="text-[11px] text-orange-300 font-mono leading-relaxed">
                                         <code>{fix.code_diff}</code>
                                     </pre>
                                 </div>
                             </section>
 
-                            <div className="bg-blue-600/5 dark:bg-blue-600/10 rounded-[2rem] p-8 border border-blue-500/10 flex flex-col md:flex-row items-center justify-between gap-8">
+                            <div className="bg-orange-500/5 dark:bg-orange-500/10 rounded-[2rem] p-8 border border-orange-500/10 flex flex-col md:flex-row items-center justify-between gap-8">
                                 <div className="flex items-center gap-5">
-                                    <div className="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-blue-100 dark:border-slate-800 flex items-center justify-center text-blue-600 shrink-0">
+                                    <div className="w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-orange-100 dark:border-slate-800 flex items-center justify-center text-orange-500 shrink-0">
                                         <GitPullRequest className="w-6 h-6" />
                                     </div>
                                     <div>
@@ -219,7 +219,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                                     <button
                                         onClick={handleCreatePR}
                                         disabled={prLoading}
-                                        className="flex items-center gap-3 px-10 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/40 italic"
+                                        className="flex items-center gap-3 px-10 py-4 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 disabled:bg-slate-300 dark:disabled:bg-slate-800 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-orange-500/40 italic"
                                     >
                                         {prLoading ? (
                                             <>

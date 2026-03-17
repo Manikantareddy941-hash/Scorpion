@@ -19,4 +19,8 @@ export const COLLECTIONS = {
   POLICY_EVALUATIONS:       'policy_evaluations',
   NOTIFICATIONS:            'notifications',
 };
+
+export const OAUTH_SUCCESS_URL = 'https://localhost:5173/auth/callback';
+export const OAUTH_FAILURE_URL = 'https://localhost:5173/login';
+
 console.log('Appwrite init:', import.meta.env.VITE_APPWRITE_ENDPOINT, import.meta.env.VITE_APPWRITE_PROJECT_ID);

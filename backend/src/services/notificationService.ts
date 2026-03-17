@@ -1,78 +1,80 @@
 import { enqueueNotification } from './notificationQueue';
 import { formatSlackScanResult } from './webhookService';
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
 export const dispatchNotification = async (repoId: string, eventType: string, metadata: any) => {
+    try {
+        // 1. Get repo info
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+        if (!repo) return;
 
-    // 1. Get repo and user info
-    const { data: repo, error } = await supabase
-        .from('repositories')
-        .select('*, users(id, email)') // Note: adjusted to join users if possible or get user_id
-        .eq('id', repoId)
-        .single();
+        const userId = repo.user_id;
 
-    if (error || !repo) return;
+        // 2. Fetch notification preferences
+        // Find enabled preferences for this event type that are either repository-specific or global (repo_id is null)
+        const prefsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATION_PREFERENCES, [
+            Query.equal('user_id', userId),
+            Query.equal('event_type', eventType),
+            Query.equal('enabled', true),
+            Query.or([
+                Query.equal('repo_id', repoId),
+                Query.equal('repo_id', 'global'), // Or Query.isNull('repo_id') if supported/used
+            ])
+        ]);
 
-    const userId = repo.user_id;
+        const prefs = prefsResponse.documents;
 
-    // 2. Fetch notification preferences
-    const { data: prefs } = await supabase
-        .from('notification_preferences')
-        .select('*')
-        .eq('user_id', userId)
-        .or(`repo_id.eq.${repoId},repo_id.is.null`)
-        .eq('event_type', eventType)
-        .eq('enabled', true);
-
-    if (!prefs || prefs.length === 0) {
-        // Default behavior if no preferences set?
-        // Let's assume email is default for now for scan completions
-        if (eventType === 'scan_completed') {
-            // logic to enqueue default email
-        }
-        return;
-    }
-
-    // 3. Enqueue for each enabled channel
-    for (const pref of prefs) {
-        let payload = {};
-
-        if (pref.channel === 'slack' || pref.channel === 'discord') {
-            payload = {
-                webhook_url: pref.target_value,
-                message: formatSlackScanResult(repo.name, metadata.score, metadata.vulns, `${process.env.FRONTEND_URL}/project/${repoId}`)
-            };
-        } else if (pref.channel === 'email') {
-            // payload for email
+        if (prefs.length === 0) {
+            // Default behavior if no preferences set?
+            if (eventType === 'scan_completed') {
+                // assume default logic here if needed
+            }
+            return;
         }
 
-        await enqueueNotification({
-            user_id: userId,
-            repo_id: repoId,
-            event_type: eventType,
-            channel: pref.channel,
-            data: payload
-        });
+        // 3. Enqueue for each enabled channel
+        for (const pref of prefs) {
+            let payload = {};
+
+            if (pref.channel === 'slack' || pref.channel === 'discord') {
+                payload = {
+                    webhook_url: pref.target_value,
+                    message: formatSlackScanResult(repo.name, metadata.score, metadata.vulns, `${process.env.FRONTEND_URL}/project/${repoId}`)
+                };
+            } else if (pref.channel === 'email') {
+                // payload for email
+            }
+
+            await enqueueNotification({
+                user_id: userId,
+                repo_id: repoId,
+                event_type: eventType,
+                channel: pref.channel,
+                data: payload
+            });
+        }
+    } catch (err) {
+        console.error('[NotificationService] Error dispatching notification:', err);
     }
 };
 
 export const notifyScanCompletion = async (scanId: string) => {
-    const { data: scan, error } = await supabase
-        .from('scan_results')
-        .select('*, repositories(id, name, user_id)')
-        .eq('id', scanId)
-        .single();
+    try {
+        const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        if (!scan) return;
 
-    if (error || !scan) return;
+        const details = typeof scan.details === 'string' ? JSON.parse(scan.details) : scan.details;
+        const score = details?.security_score || 0;
+        const vulns = details?.total_vulnerabilities || 0;
 
-    const score = scan.details?.security_score || 0;
-    const vulns = scan.details?.total_vulnerabilities || 0;
+        await dispatchNotification(scan.repo_id, 'scan_completed', { score, vulns });
 
-    await dispatchNotification(scan.repo_id, 'scan_completed', { score, vulns });
-
-    // Additional event if critical
-    if (scan.details?.critical_count > 0) {
-        await dispatchNotification(scan.repo_id, 'critical_detected', { score, vulns, critical: scan.details.critical_count });
+        // Additional event if critical
+        if (details?.critical_count > 0) {
+            await dispatchNotification(scan.repo_id, 'critical_detected', { score, vulns, critical: details.critical_count });
+        }
+    } catch (err) {
+        console.error('[NotificationService] Error in notifyScanCompletion:', err);
     }
 };
 

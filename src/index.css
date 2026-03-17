@@ -50,13 +50,13 @@ body {
   }
 
   .btn-premium {
-    @apply px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold uppercase tracking-widest transition-all duration-200 shadow-lg;
+    @apply px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold uppercase tracking-widest transition-all duration-200 shadow-lg;
     font-size: 10px;
-    box-shadow: 0 4px 6px -1px rgb(59 130 246 / 0.2);
+    box-shadow: 0 4px 6px -1px rgb(249 115 22 / 0.2);
   }
 
   .btn-premium:hover {
-    @apply bg-blue-700;
+    @apply bg-orange-600;
     transform: translateY(-1px);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   }

@@ -23,14 +23,14 @@ export default function SecurityPulseCard({
     const offset = circumference - (healthScore / 100) * circumference;
 
     return (
-        <div className="bg-[#141414] rounded-2xl p-8 shadow-sm border border-[#1E1E1E] relative overflow-hidden group">
+        <div className="bg-[var(--bg-card)] rounded-2xl p-8 shadow-sm border border-[var(--border-subtle)] relative overflow-hidden group">
             {/* Header */}
             <div className="flex items-center justify-between mb-12">
                 <div className="flex items-center gap-4">
                     <div className="bg-[#E8440A]/10 p-3 rounded-2xl border border-[#E8440A]/20">
                         <Shield className="w-6 h-6 text-[#E8440A]" />
                     </div>
-                    <h2 className="text-xl font-black text-white uppercase tracking-tighter italic">
+                    <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-tighter italic">
                         Security Intelligence Pulse
                     </h2>
                 </div>
@@ -52,7 +52,7 @@ export default function SecurityPulseCard({
                             stroke="currentColor"
                             strokeWidth="24"
                             fill="transparent"
-                            className="text-[#1E1E1E]"
+                            className="text-[var(--border-subtle)]"
                         />
                         {/* Progress Circle */}
                         <circle
@@ -69,7 +69,7 @@ export default function SecurityPulseCard({
                         />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <span className="text-7xl font-black text-white tracking-tighter italic leading-none">
+                        <span className="text-7xl font-black text-[var(--text-primary)] tracking-tighter italic leading-none">
                             {healthScore}
                         </span>
                         <span className="text-[10px] font-black text-[#666666] uppercase tracking-widest mt-2 italic shadow-sm">
@@ -80,30 +80,30 @@ export default function SecurityPulseCard({
 
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-2 gap-6">
-                    <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-[#1E1E1E] hover:border-red-500/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-[var(--border-subtle)] hover:border-red-500/30 transition-all group/card">
                         <p className="text-[10px] font-black text-[#666666] uppercase tracking-widest mb-3 italic">Critical Risks</p>
                         <p className="text-4xl font-black text-red-500 tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
                             {criticalRisks.toString().padStart(2, '0')}
                         </p>
                     </div>
 
-                    <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-[#1E1E1E] hover:border-emerald-500/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-[var(--border-subtle)] hover:border-emerald-500/30 transition-all group/card">
                         <p className="text-[10px] font-black text-[#666666] uppercase tracking-widest mb-3 italic">Patch Rate</p>
                         <p className="text-4xl font-black text-emerald-500 tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
                             {patchRate}%
                         </p>
                     </div>
 
-                    <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-[#1E1E1E] hover:border-blue-500/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-[var(--border-subtle)] hover:border-orange-500/30 transition-all group/card">
                         <p className="text-[10px] font-black text-[#666666] uppercase tracking-widest mb-3 italic">Avg Fix Time</p>
-                        <p className="text-4xl font-black text-blue-500 tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
+                        <p className="text-4xl font-black text-orange-500 tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
                             {avgFixTime}h
                         </p>
                     </div>
 
-                    <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-[#1E1E1E] hover:border-[#E8440A]/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-6 rounded-2xl border border-[var(--border-subtle)] hover:border-[#E8440A]/30 transition-all group/card">
                         <p className="text-[10px] font-black text-[#666666] uppercase tracking-widest mb-3 italic">Managed Repos</p>
-                        <p className="text-4xl font-black text-white tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
+                        <p className="text-4xl font-black text-[var(--text-primary)] tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
                             {managedRepos}
                         </p>
                     </div>

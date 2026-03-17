@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, ID, Query, users } from '../lib/appwrite';
 
 export interface GitMetadata {
     commit_hash: string;
@@ -11,38 +11,54 @@ export interface GitMetadata {
  * Links a scan execution to specific Git metadata.
  */
 export const linkCommitToScan = async (scanId: string, repoId: string, metadata: GitMetadata) => {
-
-    const { error } = await supabase
-        .from('scan_commits')
-        .insert({
+    try {
+        await databases.createDocument(DB_ID, COLLECTIONS.SCAN_COMMITS, ID.unique(), {
             scan_id: scanId,
             repo_id: repoId,
             commit_hash: metadata.commit_hash,
             branch: metadata.branch,
-            pr_number: metadata.pr_number
+            pr_number: metadata.pr_number,
+            created_at: new Date().toISOString()
         });
-
-    if (error) {
-        console.error(`[GitTraceability] Failed to link commit to scan ${scanId}:`, error);
-        throw error;
+        console.log(`[GitTraceability] Scan ${scanId} linked to commit ${metadata.commit_hash.substring(0, 7)}`);
+    } catch (err) {
+        console.error(`[GitTraceability] Failed to link commit to scan ${scanId}:`, err);
+        throw err;
     }
-
-    console.log(`[GitTraceability] Scan ${scanId} linked to commit ${metadata.commit_hash.substring(0, 7)}`);
 };
 
 /**
  * Fetches the historical lifecycle of a finding.
  */
 export const getFindingHistory = async (findingId: string) => {
+    try {
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.FINDING_RESOLUTIONS, [
+            Query.equal('finding_id', findingId),
+            Query.orderDesc('$createdAt')
+        ]);
 
-    const { data, error } = await supabase
-        .from('finding_resolutions')
-        .select('*, auth.users(email)')
-        .eq('finding_id', findingId)
-        .order('created_at', { ascending: false });
+        // Enrich with user email if possible (Appwrite doesn't support joins like Supabase)
+        const resolutions = await Promise.all(response.documents.map(async (doc: any) => {
+            let email = 'unknown';
+            try {
+                if (doc.user_id) {
+                    const user = await users.get(doc.user_id);
+                    email = user.email;
+                }
+            } catch (userErr) {
+                console.warn(`[GitTraceability] Could not fetch user ${doc.user_id} for finding history:`, userErr);
+            }
+            return {
+                ...doc,
+                user_email: email
+            };
+        }));
 
-    if (error) throw error;
-    return data;
+        return resolutions;
+    } catch (err) {
+        console.error(`[GitTraceability] Error fetching finding history for ${findingId}:`, err);
+        throw err;
+    }
 };
 
 /**

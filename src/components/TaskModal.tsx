@@ -99,7 +99,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
               placeholder="Enter task title"
             />
           </div>
@@ -113,7 +113,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition resize-none"
               placeholder="Enter task description"
             />
           </div>
@@ -127,7 +127,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 id="status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
               >
                 <option value="todo">To Do</option>
                 <option value="in_progress">In Progress</option>
@@ -143,7 +143,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 id="priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -175,7 +175,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 type="url"
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
                 placeholder="https://github.com/..."
               />
             </div>
@@ -189,7 +189,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 type="url"
                 value={issueUrl}
                 onChange={(e) => setIssueUrl(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
                 placeholder="https://github.com/.../issues/1"
               />
             </div>
@@ -206,7 +206,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition font-medium"
+              className="flex-1 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition font-medium"
             >
               {loading ? 'Saving...' : task ? 'Update Task' : 'Create Task'}
             </button>

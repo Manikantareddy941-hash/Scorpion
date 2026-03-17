@@ -1,20 +1,23 @@
 import 'dotenv/config';
-import { supabase } from './lib/supabase';
+import { databases, DB_ID, COLLECTIONS } from './lib/appwrite';
 
 async function findUser() {
-    // Note: auth.users is special, but sometimes we can list via rpc or just check a linked table
-    const { data, error } = await supabase.from('repositories').select('user_id').limit(1);
+    try {
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, []);
 
-    if (error || !data || data.length === 0) {
-        console.log('No users found in repositories table. Checking tasks...');
-        const { data: tasks } = await supabase.from('tasks').select('user_id').limit(1);
-        if (tasks && tasks.length > 0) {
-            console.log('USER_ID:', tasks[0].user_id);
+        if (response.total === 0) {
+            console.log('No users found in repositories collection. Checking tasks...');
+            const tasksRes = await databases.listDocuments(DB_ID, COLLECTIONS.TASKS, []);
+            if (tasksRes.total > 0) {
+                console.log('USER_ID:', tasksRes.documents[0].user_id);
+            } else {
+                console.log('No user IDs found. Please provide a valid ID from your Appwrite users dashboard.');
+            }
         } else {
-            console.log('No user IDs found. Please provide a valid UUID from your auth.users table.');
+            console.log('USER_ID:', response.documents[0].user_id);
         }
-    } else {
-        console.log('USER_ID:', data[0].user_id);
+    } catch (err: any) {
+        console.error('Error finding user:', err.message);
     }
 }
 

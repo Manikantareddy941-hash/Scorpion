@@ -1,5 +1,5 @@
 import { Router, Response, Request } from 'express';
-import { User } from '@supabase/supabase-js';
+import { Models } from 'node-appwrite';
 
 import {
     createProject,
@@ -10,7 +10,7 @@ import {
 } from '../services/projectService';
 
 interface AuthenticatedRequest extends Request {
-    user?: User;
+    user?: Models.User<Models.Preferences>;
 }
 
 const router = Router();
@@ -23,9 +23,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         const { name, description } = req.body;
         if (!name) return res.status(400).json({ error: 'Project name is required' });
 
-        const { data, error } = await createProject(req.user!.id, name, description);
+        const { data, error } = await createProject(req.user!.$id, name, description);
 
-        if (error) return res.status(500).json({ error: error.message });
+        if (error) return res.status(500).json({ error: (error as any).message });
 
         res.json(data);
     } catch (err: any) {
@@ -38,8 +38,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 /* -------------------------------------------------------------------------- */
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { data, error } = await getProjects(req.user!.id);
-        if (error) return res.status(500).json({ error: error.message });
+        const { data, error } = await getProjects(req.user!.$id);
+        if (error) return res.status(500).json({ error: (error as any).message });
 
         res.json(data);
     } catch (err: any) {
@@ -52,7 +52,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 /* -------------------------------------------------------------------------- */
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { data, error } = await getProjectDashboard(req.params.id, req.user!.id);
+        const { data, error } = await getProjectDashboard(req.params.id, req.user!.$id);
 
         if (error) {
             return res
@@ -74,7 +74,7 @@ router.post('/:id/repos', async (req: AuthenticatedRequest, res: Response) => {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'Repo URL is required' });
 
-        const { data, error } = await importRepoToProject(req.params.id, req.user!.id, url);
+        const { data, error } = await importRepoToProject(req.params.id, req.user!.$id, url);
 
         if (error)
             return res.status(500).json({
@@ -92,9 +92,9 @@ router.post('/:id/repos', async (req: AuthenticatedRequest, res: Response) => {
 /* -------------------------------------------------------------------------- */
 router.get('/:id/scans', async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { data, error } = await getProjectScanHistory(req.params.id, req.user!.id);
+        const { data, error } = await getProjectScanHistory(req.params.id, req.user!.$id);
 
-        if (error) return res.status(500).json({ error: error.message });
+        if (error) return res.status(500).json({ error: (error as any).message });
 
         res.json(data);
     } catch (err: any) {

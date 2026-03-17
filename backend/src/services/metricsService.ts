@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 
 export interface AIEvent {
     finding_id: string;
@@ -9,78 +9,102 @@ export interface AIEvent {
 }
 
 export const recordAIEvent = async (event: AIEvent) => {
+    try {
+        // If accepted, we might want to calculate time to resolution
+        let time_to_resolution = null;
+        if (event.action === 'accepted') {
+            const finding = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, event.finding_id);
 
-    // If accepted, we might want to calculate time to resolution
-    let time_to_resolution = null;
-    if (event.action === 'accepted') {
-        const { data: finding } = await supabase
-            .from('vulnerabilities')
-            .select('created_at')
-            .eq('id', event.finding_id)
-            .single();
-
-        if (finding) {
-            const start = new Date(finding.created_at).getTime();
-            const end = new Date().getTime();
-            const diffMs = end - start;
-            // Convert to Postgres interval string format: 'HH:MM:SS' or similar
-            time_to_resolution = `${Math.floor(diffMs / (1000 * 60 * 60))}:${Math.floor((diffMs / (1000 * 60)) % 60)}:${Math.floor((diffMs / 1000) % 60)}`;
+            if (finding) {
+                const start = new Date(finding.created_at || finding.$createdAt).getTime();
+                const end = new Date().getTime();
+                const diffMs = end - start;
+                // Format as HH:MM:SS
+                const hours = Math.floor(diffMs / (1000 * 60 * 60));
+                const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+                const seconds = Math.floor((diffMs / 1000) % 60);
+                time_to_resolution = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
         }
-    }
 
-    const { error } = await supabase
-        .from('ai_metrics')
-        .insert([{
+        await databases.createDocument(DB_ID, COLLECTIONS.AI_METRICS, ID.unique(), {
             ...event,
-            time_to_resolution
-        }]);
-
-    if (error) throw error;
+            metadata: event.metadata ? JSON.stringify(event.metadata) : null,
+            time_to_resolution,
+            created_at: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('[MetricsService] Failed to record AI event:', err);
+        throw err;
+    }
 };
 
-export const getAIAggregates = async (userId: string) => { // Added userId even if not used to match signature if needed
+export const getAIAggregates = async (userId: string) => {
+    try {
+        // Fetch all metrics for current user (this might need filtering by repository owned by user in the future)
+        // For now, listing all as per previous implementation logic
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.AI_METRICS, [
+            Query.limit(5000) // Large limit for manual aggregation
+        ]);
 
-    // 1. Total suggestions & breakdowns
-    const { data: counts } = await supabase
-        .rpc('get_ai_action_counts'); // We'll need a small SQL function or just multiple queries
+        const allMetrics = response.documents;
+        const total = allMetrics.length;
+        const viewed = allMetrics.filter((m: any) => m.action === 'viewed').length;
+        const accepted = allMetrics.filter((m: any) => m.action === 'accepted').length;
+        const ignored = allMetrics.filter((m: any) => m.action === 'ignored').length;
 
-    // Fallback to manual aggregation if RPC doesn't exist yet
-    const { data: allMetrics } = await supabase
-        .from('ai_metrics')
-        .select('action, confidence_score, time_to_resolution');
+        const acceptanceRate = viewed > 0 ? (accepted / viewed) * 100 : 0;
 
-    const total = allMetrics?.length || 0;
-    const viewed = allMetrics?.filter(m => m.action === 'viewed').length || 0;
-    const accepted = allMetrics?.filter(m => m.action === 'accepted').length || 0;
-    const ignored = allMetrics?.filter(m => m.action === 'ignored').length || 0;
+        const acceptedWithConfidence = allMetrics.filter((m: any) => m.action === 'accepted' && m.confidence_score !== null);
+        const avgConfidenceAccepted = acceptedWithConfidence.length > 0
+            ? acceptedWithConfidence.reduce((acc, curr: any) => acc + (curr.confidence_score || 0), 0) / acceptedWithConfidence.length
+            : 0;
 
-    const acceptanceRate = viewed > 0 ? (accepted / viewed) * 100 : 0;
-
-    // Average confidence of accepted vs ignored
-    const avgConfidenceAccepted = allMetrics?.filter(m => m.action === 'accepted' && m.confidence_score !== null)
-        .reduce((acc, curr, _, arr) => acc + (curr.confidence_score || 0) / arr.length, 0) || 0;
-
-    return {
-        total_events: total,
-        viewed,
-        accepted,
-        ignored,
-        acceptance_rate: acceptanceRate,
-        avg_confidence_accepted: avgConfidenceAccepted
-    };
+        return {
+            total_events: total,
+            viewed,
+            accepted,
+            ignored,
+            acceptance_rate: acceptanceRate,
+            avg_confidence_accepted: avgConfidenceAccepted
+        };
+    } catch (err) {
+        console.error('[MetricsService] Failed to get aggregates:', err);
+        return {
+            total_events: 0,
+            viewed: 0,
+            accepted: 0,
+            ignored: 0,
+            acceptance_rate: 0,
+            avg_confidence_accepted: 0
+        };
+    }
 };
 
 export const getAITrends = async () => {
+    try {
+        // Since we don't have RPC, we'll fetch recent metrics and aggregate by day in JS
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.AI_METRICS, [
+            Query.orderDesc('$createdAt'),
+            Query.limit(1000)
+        ]);
 
-    // Group by day
-    const { data: trends, error } = await supabase
-        .rpc('get_ai_trends_by_day');
+        const metrics = response.documents;
+        const trendsMap: Record<string, { date: string, viewed: number, accepted: number, ignored: number }> = {};
 
-    if (error) {
-        // Fallback or handle error
-        console.error('[MetricsService] Trend RPC failed:', error);
+        metrics.forEach((m: any) => {
+            const date = new Date(m.$createdAt).toISOString().split('T')[0];
+            if (!trendsMap[date]) {
+                trendsMap[date] = { date, viewed: 0, accepted: 0, ignored: 0 };
+            }
+            if (m.action === 'viewed') trendsMap[date].viewed++;
+            if (m.action === 'accepted') trendsMap[date].accepted++;
+            if (m.action === 'ignored') trendsMap[date].ignored++;
+        });
+
+        return Object.values(trendsMap).sort((a, b) => a.date.localeCompare(b.date));
+    } catch (err) {
+        console.error('[MetricsService] Failed to get trends:', err);
         return [];
     }
-
-    return trends;
 };

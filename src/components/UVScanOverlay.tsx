@@ -1,38 +1,65 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
   onComplete: () => void;
   scanTarget: string;
+  scanId: string | null;
 }
 
-export default function UVScanOverlay({ onComplete, scanTarget }: Props) {
+export default function UVScanOverlay({ onComplete, scanTarget, scanId }: Props) {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('INITIALIZING SCAN...');
-
-  const steps = [
-    'INITIALIZING SCAN...',
-    'CLONING REPOSITORY...',
-    'ANALYZING CODE STRUCTURE...',
-    'SCANNING FOR VULNERABILITIES...',
-    'DETECTING CODE SMELLS...',
-    'CHECKING DUPLICATES...',
-    'RUNNING SECURITY AUDIT...',
-    'GENERATING REPORT...',
-  ];
+  const { getJWT } = useAuth();
 
   useEffect(() => {
-    let step = 0;
-    const interval = setInterval(() => {
-      step++;
-      setProgress(Math.min((step / steps.length) * 100, 100));
-      setStatus(steps[Math.min(step, steps.length - 1)]);
-      if (step >= steps.length) {
-        clearInterval(interval);
-        setTimeout(onComplete, 800);
+    if (!scanId) {
+      // If no scanId yet, just show initializing
+      const initInterval = setInterval(() => {
+        setProgress(p => Math.min(p + 2, 20));
+      }, 500);
+      return () => clearInterval(initInterval);
+    }
+
+    const pollStatus = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const token = await getJWT();
+        const res = await fetch(`${apiBase}/api/repos/scans/${scanId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        if (data.status === 'completed') {
+          setProgress(100);
+          setStatus('SCAN COMPLETE!');
+          setTimeout(onComplete, 1000);
+          return true;
+        } else if (data.status === 'failed') {
+          setStatus('SCAN FAILED');
+          setTimeout(onComplete, 2000);
+          return true;
+        } else if (data.status === 'in_progress') {
+          setStatus('SCANNING FOR VULNERABILITIES...');
+          setProgress(p => Math.min(p + 10, 90));
+        } else if (data.status === 'queued') {
+          setStatus('QUEUED IN PIPELINE...');
+          setProgress(p => Math.min(p + 5, 30));
+        }
+        return false;
+      } catch (err) {
+        console.error('Status poll failed:', err);
+        return false;
       }
-    }, 600);
+    };
+
+    const interval = setInterval(async () => {
+      const finished = await pollStatus();
+      if (finished) clearInterval(interval);
+    }, 3000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [scanId, getJWT, onComplete]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0D0D0D', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -47,7 +74,7 @@ export default function UVScanOverlay({ onComplete, scanTarget }: Props) {
       </div>
 
       {/* Logo */}
-      <img src="/src/assets/scorpio-logo.jpg" style={{ width: '80px', height: '80px', objectFit: 'contain', marginBottom: '32px', filter: 'drop-shadow(0 0 20px #E8440A)' }} />
+      <img src="/src/assets/final_logo_png.png" style={{ width: '80px', height: '80px', objectFit: 'contain', marginBottom: '32px', filter: 'drop-shadow(0 0 20px #E8440A)' }} />
 
       {/* Status */}
       <div style={{ color: '#E8440A', fontWeight: 800, fontSize: '1rem', letterSpacing: '0.2em', marginBottom: '8px' }}>
