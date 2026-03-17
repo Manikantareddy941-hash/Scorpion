@@ -25,7 +25,7 @@ export default function AIAnalytics() {
         try {
             const token = await getJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const headers = { 'x-appwrite-session': token || '' };
+            const headers = { 'Authorization': `Bearer ${token}` };
 
             const [summaryRes, trendsRes] = await Promise.all([
                 fetch(`${apiBase}/api/ai/metrics/summary`, { headers }),
@@ -44,20 +44,20 @@ export default function AIAnalytics() {
     if (loading) return (
         <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
-                <Brain className="w-12 h-12 text-blue-600 animate-pulse" />
+                <Brain className="w-12 h-12 text-orange-500 animate-pulse" />
                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Synthesizing Intelligence...</h2>
             </div>
         </div>
     );
 
-    const COLORS = ['#10b981', '#3b82f6', '#f43f5e'];
+    const COLORS = ['#10b981', '#f97316', '#f43f5e'];
 
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                        <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20">
                             <Brain className="w-7 h-7" />
                         </div>
                         <div>
@@ -115,8 +115,8 @@ export default function AIAnalytics() {
                                 <AreaChart data={trends}>
                                     <defs>
                                         <linearGradient id="colorViewed" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                                         </linearGradient>
                                         <linearGradient id="colorAccepted" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
@@ -135,7 +135,7 @@ export default function AIAnalytics() {
                                     <Tooltip
                                         contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '1.5rem', border: '1px solid var(--border-subtle)', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
                                     />
-                                    <Area type="monotone" dataKey="viewed" stroke="#3b82f6" fillOpacity={1} fill="url(#colorViewed)" strokeWidth={4} />
+                                    <Area type="monotone" dataKey="viewed" stroke="#f97316" fillOpacity={1} fill="url(#colorViewed)" strokeWidth={4} />
                                     <Area type="monotone" dataKey="accepted" stroke="#10b981" fillOpacity={1} fill="url(#colorAccepted)" strokeWidth={4} />
                                 </AreaChart>
                             </ResponsiveContainer>
@@ -169,7 +169,7 @@ export default function AIAnalytics() {
                         </div>
                         <div className="space-y-4 flex-grow">
                             <LegendItem label="Accepted" value={summary?.accepted || 0} color="bg-emerald-500" />
-                            <LegendItem label="Ignored" value={summary?.ignored || 0} color="bg-blue-500" />
+                            <LegendItem label="Ignored" value={summary?.ignored || 0} color="bg-orange-500" />
                             <LegendItem label="Pending" value={Math.max(0, (summary?.viewed || 0) - (summary?.accepted || 0) - (summary?.ignored || 0))} color="bg-rose-500" />
                         </div>
                         <div className="mt-8 pt-8 border-t border-[var(--border-subtle)] text-center text-[9px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest italic">
@@ -184,9 +184,9 @@ export default function AIAnalytics() {
 
 function KPICard({ title, value, icon, subtitle, trend, positive = true }: any) {
     return (
-        <div className="premium-card p-8 group hover:border-blue-600/30 transition-all duration-500 overflow-hidden relative">
+        <div className="premium-card p-8 group hover:border-orange-500/30 transition-all duration-500 overflow-hidden relative">
             <div className="flex items-start justify-between relative z-10 mb-6">
-                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 dark:border-slate-800 text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-all duration-500">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 dark:border-slate-800 text-slate-400 group-hover:text-orange-500 group-hover:bg-orange-50 transition-all duration-500">
                     {icon}
                 </div>
                 <div className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest italic ${positive ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -198,10 +198,10 @@ function KPICard({ title, value, icon, subtitle, trend, positive = true }: any) 
                 <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-2 italic">{title}</div>
                 <div className="mt-6 flex items-center justify-between">
                     <span className="text-[9px] font-black text-slate-300 dark:text-slate-700 uppercase tracking-widest italic">{subtitle}</span>
-                    <ChevronRight className="w-4 h-4 text-slate-100 dark:text-slate-900 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-4 h-4 text-slate-100 dark:text-slate-900 group-hover:text-orange-500 transition-colors" />
                 </div>
             </div>
-            <Sparkles className="absolute -right-4 -bottom-4 w-16 h-16 text-blue-600 opacity-[0.03] group-hover:opacity-10 transition-opacity" />
+            <Sparkles className="absolute -right-4 -bottom-4 w-16 h-16 text-orange-500 opacity-[0.03] group-hover:opacity-10 transition-opacity" />
         </div>
     );
 }

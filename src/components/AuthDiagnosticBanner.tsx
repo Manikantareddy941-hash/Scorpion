@@ -26,7 +26,7 @@ const AuthDiagnosticBanner = ({ health }: AuthDiagnosticBannerProps) => {
         };
       case 'DNS_BLOCK':
         return {
-          icon: <ShieldOff className="w-5 h-5 text-blue-500" />,
+          icon: <ShieldOff className="w-5 h-5 text-orange-500" />,
           title: 'Appwrite Unreachable',
           message: 'The Appwrite domain may be blocked by your ISP. Try changing your DNS to 1.1.1.1 or 8.8.8.8.'
         };

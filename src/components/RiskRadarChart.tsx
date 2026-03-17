@@ -4,12 +4,12 @@ import {
 } from 'recharts';
 
 const data = [
-  { subject: 'CODE', A: 120, fullMark: 150 },
-  { subject: 'NETWORK', A: 98, fullMark: 150 },
-  { subject: 'ACCESS', A: 86, fullMark: 150 },
-  { subject: 'DEPLOY', A: 99, fullMark: 150 },
-  { subject: 'SECRETS', A: 85, fullMark: 150 },
-  { subject: 'DAST', A: 65, fullMark: 150 },
+  { subject: 'Authentication', A: 85, fullMark: 100 },
+  { subject: 'Network Access', A: 72, fullMark: 100 },
+  { subject: 'Defense Evasion', A: 90, fullMark: 100 },
+  { subject: 'Data Exfiltration', A: 65, fullMark: 100 },
+  { subject: 'Asset Exposure', A: 45, fullMark: 100 },
+  { subject: 'Privilege Use', A: 80, fullMark: 100 },
 ];
 
 export default function RadarChart() {

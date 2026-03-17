@@ -118,7 +118,7 @@ export default function Teams() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-appwrite-session': token || ''
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({ email: inviteEmail, role: inviteRole })
             });
@@ -140,7 +140,7 @@ export default function Teams() {
     const getRoleBadgeColor = (role: string) => {
         switch (role) {
             case 'owner': return 'text-purple-600 bg-purple-50 dark:bg-purple-500/10 border-purple-100 dark:border-purple-500/20';
-            case 'admin': return 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20';
+            case 'admin': return 'text-orange-600 bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20';
             case 'developer': return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20';
             default: return 'text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800';
         }
@@ -150,7 +150,7 @@ export default function Teams() {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <Users className="w-12 h-12 text-blue-600 animate-pulse" />
+                    <Users className="w-12 h-12 text-orange-500 animate-pulse" />
                     <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Synchronizing Fleet...</h2>
                 </div>
             </div>
@@ -162,7 +162,7 @@ export default function Teams() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                        <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20">
                             <Users className="w-7 h-7" />
                         </div>
                         <div>
@@ -189,7 +189,7 @@ export default function Teams() {
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="px-10 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/40"
+                            className="px-10 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/40"
                         >
                             Deploy New Team
                         </button>
@@ -208,14 +208,14 @@ export default function Teams() {
                                             fetchMembers(t.$id);
                                         }}
                                         className={`w-full text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.$id === t.$id
-                                            ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30'
+                                            ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/30'
                                             : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 border border-transparent'
                                             }`}
                                     >
                                         <span className="font-black text-xs uppercase tracking-tight italic z-10">{t.name}</span>
                                         <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.$id === t.$id ? 'translate-x-1' : 'opacity-0'}`} />
                                         {selectedTeam?.$id === t.$id && (
-                                            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-100" />
+                                            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-orange-600 opacity-100" />
                                         )}
                                     </button>
                                 ))}
@@ -231,7 +231,7 @@ export default function Teams() {
                                             <div>
                                                 <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">{selectedTeam.name}</h2>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="px-2 py-0.5 bg-blue-600/10 text-blue-600 rounded text-[9px] font-black uppercase tracking-widest italic border border-blue-500/10">
+                                                    <span className="px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded text-[9px] font-black uppercase tracking-widest italic border border-orange-500/10">
                                                         Cluster ID: {selectedTeam.$id.slice(0, 8)}
                                                     </span>
                                                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">
@@ -241,9 +241,9 @@ export default function Teams() {
                                             </div>
                                             <button
                                                 onClick={() => setShowInviteModal(true)}
-                                                className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 text-blue-600 border border-blue-200 dark:border-slate-700 rounded-2xl hover:bg-blue-50 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/5"
+                                                className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 text-orange-500 border border-orange-200 dark:border-slate-700 rounded-2xl hover:bg-orange-50 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/5"
                                             >
-                                                <UserPlus className="w-4 h-4 text-blue-500" />
+                                                <UserPlus className="w-4 h-4 text-orange-500" />
                                                 Add Operator
                                             </button>
                                         </div>
@@ -253,7 +253,7 @@ export default function Teams() {
                                         <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest italic">Operations Personnel</h3>
                                         <div className="space-y-4">
                                             {members.map((member) => (
-                                                <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-blue-500/30 transition-all group">
+                                                <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-orange-500/30 transition-all group">
                                                     <div className="flex items-center gap-5 w-full md:w-auto">
                                                         <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm font-black group-hover:scale-110 transition-transform">
                                                             <User className="w-6 h-6" />
@@ -308,14 +308,14 @@ export default function Teams() {
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-3 block">Designation Name</label>
                                     <div className="relative">
-                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600" />
+                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
                                         <input
                                             type="text"
                                             autoFocus
                                             value={newTeamName}
                                             onChange={(e) => setNewTeamName(e.target.value)}
                                             placeholder="e.g. CORE-OPS"
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black uppercase italic text-sm tracking-tight"
+                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-black uppercase italic text-sm tracking-tight"
                                         />
                                     </div>
                                     {error && <p className="mt-2 text-[10px] font-bold text-rose-500 uppercase tracking-widest italic">{error}</p>}
@@ -332,7 +332,7 @@ export default function Teams() {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 px-6 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {submitting ? 'Initializing...' : 'Activate Cluster'}
                                 </button>
@@ -360,25 +360,25 @@ export default function Teams() {
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-3 block">Communications ID (Email)</label>
                                     <div className="relative">
-                                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600" />
+                                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
                                         <input
                                             type="email"
                                             required
                                             value={inviteEmail}
                                             onChange={(e) => setInviteEmail(e.target.value)}
                                             placeholder="operator@sector.com"
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black italic text-sm tracking-tight"
+                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-black italic text-sm tracking-tight"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-3 block">Authority Level (Role)</label>
+                                    <label className="text-[10px] font-black text-orange-500 uppercase tracking-widest italic mb-3 block">Authority Level (Role)</label>
                                     <div className="relative">
-                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-600 pointer-events-none" />
+                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500 pointer-events-none" />
                                         <select
                                             value={inviteRole}
                                             onChange={(e) => setInviteRole(e.target.value as any)}
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-blue-600/10 focus:border-blue-600 outline-none transition-all font-black italic text-sm tracking-tight appearance-none"
+                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-black italic text-sm tracking-tight appearance-none"
                                         >
                                             <option value="viewer">Viewer Protocol (Read-Only)</option>
                                             <option value="developer">Developer Protocol (Scan & Resolve)</option>
@@ -397,7 +397,7 @@ export default function Teams() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/40"
+                                    className="flex-1 px-6 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/40"
                                 >
                                     Deploy Invitation
                                 </button>

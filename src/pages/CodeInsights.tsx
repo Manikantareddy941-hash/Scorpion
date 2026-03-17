@@ -53,7 +53,7 @@ export default function CodeInsights() {
         try {
             const token = await getJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const headers = { 'x-appwrite-session': token || '' };
+            const headers = { 'Authorization': `Bearer ${token}` };
 
             const [summaryRes, trendsRes] = await Promise.all([
                 fetch(`${apiBase}/api/insights/summary`, { headers }),
@@ -79,7 +79,7 @@ export default function CodeInsights() {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center p-8">
                 <div className="text-center">
-                    <Zap className="w-12 h-12 text-blue-600 animate-pulse mx-auto mb-4" />
+                    <Zap className="w-12 h-12 text-orange-500 animate-pulse mx-auto mb-4" />
                     <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Aggregating Intelligence...</h2>
                 </div>
             </div>
@@ -92,7 +92,7 @@ export default function CodeInsights() {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
                     <div className="flex items-center gap-4">
-                        <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
+                        <div className="bg-orange-500 p-3 rounded-2xl shadow-lg shadow-orange-200">
                             <Zap className="w-8 h-8 text-white" />
                         </div>
                         <div>
@@ -101,7 +101,7 @@ export default function CodeInsights() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button onClick={fetchData} className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-50 dark:bg-slate-800/50 transition-all text-slate-400 hover:text-blue-600">
+                        <button onClick={fetchData} className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-50 dark:bg-slate-800/50 transition-all text-slate-400 hover:text-orange-500">
                             <RefreshCw className="w-5 h-5" />
                         </button>
                         <Link
@@ -126,7 +126,7 @@ export default function CodeInsights() {
                     <div className="lg:col-span-3 space-y-8">
                         {/* Top Metrics Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center group hover:border-blue-200 transition-all">
+                            <div className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col items-center text-center group hover:border-orange-200 transition-all">
                                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Security Efficiency</h3>
                                 <div className="text-6xl font-black tracking-tighter italic text-slate-900 dark:text-white mb-4 group-hover:scale-110 transition-transform">{overallScore}%</div>
                                 <div className={`text-[10px] font-black px-4 py-1.5 rounded-xl uppercase tracking-widest shadow-sm ${overallScore >= 80 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
@@ -135,7 +135,7 @@ export default function CodeInsights() {
                                 </div>
                             </div>
 
-                            <div className="md:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 group hover:border-blue-100 transition-all">
+                            <div className="md:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-slate-700 group hover:border-orange-100 transition-all">
                                 <div className="flex items-baseline justify-between mb-6">
                                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic leading-none">Intelligence Trajectory</h3>
                                     <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full">
@@ -148,11 +148,11 @@ export default function CodeInsights() {
                                         <AreaChart data={trends}>
                                             <defs>
                                                 <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                                                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                                                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.1} />
+                                                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                                                 </linearGradient>
                                             </defs>
-                                            <Area type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={4} fill="url(#colorScore)" />
+                                            <Area type="monotone" dataKey="score" stroke="#f97316" strokeWidth={4} fill="url(#colorScore)" />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -248,9 +248,9 @@ function ToolStatCard({ metric }: { metric: CodeMetric }) {
     };
 
     return (
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 group hover:border-blue-400 transition-all cursor-crosshair">
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 group hover:border-orange-400 transition-all cursor-crosshair">
             <div className="flex items-center justify-between mb-4">
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-2xl text-slate-300 group-hover:bg-orange-500 group-hover:text-white transition-all">
                     {getIcon()}
                 </div>
                 <span className="text-2xl font-black text-slate-900 dark:text-white italic tracking-tighter">{metric.score}%</span>
@@ -293,9 +293,9 @@ function AnalysisInsights({ scan }: { scan: Scan | undefined }) {
                 {insights.map((insight) => (
                     <div key={insight.id} className="flex gap-4 group">
                         <div className={`mt-1.5 flex-shrink-0 w-2 h-2 rounded-full ring-4 ring-white shadow-sm ${insight.type === 'security' ? 'bg-red-500' :
-                            insight.type === 'performance' ? 'bg-blue-600' : 'bg-emerald-500'
+                            insight.type === 'performance' ? 'bg-orange-500' : 'bg-emerald-500'
                             }`} />
-                        <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 leading-relaxed uppercase tracking-tight italic group-hover:text-blue-600 transition-colors">{insight.text}</p>
+                        <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 leading-relaxed uppercase tracking-tight italic group-hover:text-orange-500 transition-colors">{insight.text}</p>
                     </div>
                 ))}
             </div>
@@ -308,9 +308,9 @@ function OpsProtocol() {
         <div className="bg-gradient-to-br from-slate-900 to-black p-8 rounded-[2.5rem] shadow-xl shadow-slate-200 text-white group cursor-pointer overflow-hidden relative">
             <div className="relative z-10">
                 <Shield className="w-8 h-8 opacity-20 mb-6" />
-                <h3 className="text-2xl font-black uppercase tracking-tighter italic leading-none mb-3 group-hover:text-blue-400 transition-colors">Tactical Ops</h3>
+                <h3 className="text-2xl font-black uppercase tracking-tighter italic leading-none mb-3 group-hover:text-orange-400 transition-colors">Tactical Ops</h3>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-6">Incident Response & Manual Trace</p>
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-500">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-orange-500">
                     <RefreshCw className="w-4 h-4" />
                     <span>Synchronize</span>
                 </div>

@@ -6,20 +6,28 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
   LogOut, Plus, CheckCircle2, Clock, AlertCircle, Edit2, Trash2,
   Github, Shield, Settings, ChevronDown, Activity, Users,
-  BarChart3, Sparkles, Sun, Moon, ArrowUpRight
+  BarChart3, Sparkles, Sun, Moon
 } from 'lucide-react';
 
 import TaskModal from './TaskModal';
-import ScorpionIcon from './ScorpionIcon';
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend } from 'recharts';
+import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
+
+const defaultThreatData = [
+  { axis: 'Vulnerabilities', Observed: 60, Expected: 90 },
+  { axis: 'Bugs', Observed: 45, Expected: 80 },
+  { axis: 'Security Issues', Observed: 70, Expected: 85 },
+  { axis: 'Code Smells', Observed: 55, Expected: 75 },
+  { axis: 'Coverage', Observed: 80, Expected: 90 },
+  { axis: 'Duplications', Observed: 40, Expected: 70 },
+];
 
 const threatData = [
-  { axis: 'Authentication', Observed: 85, Expected: 90, Residual: 40 },
-  { axis: 'Network Access', Observed: 60, Expected: 80, Residual: 55 },
-  { axis: 'Defense Evasion', Observed: 70, Expected: 75, Residual: 45 },
-  { axis: 'Data Exfiltration', Observed: 50, Expected: 85, Residual: 60 },
-  { axis: 'Asset Exposure', Observed: 75, Expected: 80, Residual: 35 },
-  { axis: 'Privilege Use', Observed: 65, Expected: 70, Residual: 50 },
+  { axis: 'Vulnerabilities', Observed: 85, Expected: 90 },
+  { axis: 'Bugs', Observed: 60, Expected: 80 },
+  { axis: 'Security', Observed: 70, Expected: 85 },
+  { axis: 'Code Smells', Observed: 50, Expected: 85 },
+  { axis: 'Coverage', Observed: 75, Expected: 80 },
+  { axis: 'Duplications', Observed: 65, Expected: 70 },
 ];
 
 export default function Dashboard() {
@@ -111,9 +119,9 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <ScorpionIcon size={64} color="#E8440A" />
+          <img src="/src/assets/final_logo_png.png" alt="Logo" className="w-16 h-16 object-contain animate-pulse" />
           <h2 className="text-xs font-black text-[#666666] uppercase tracking-widest animate-pulse italic">Initializing Scorpion Protocols...</h2>
         </div>
       </div>
@@ -121,12 +129,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex flex-col transition-colors duration-300">
-      <nav className="bg-[#0D0D0D] backdrop-blur-md shadow-sm border-b border-[var(--border-subtle)] sticky top-0 z-40 text-white">
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col transition-colors duration-300">
+      <nav className="bg-[var(--bg-primary)] backdrop-blur-md shadow-sm border-b border-[var(--border-subtle)] sticky top-0 z-40 text-[var(--text-primary)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
-              {/* Branding removed from top navbar as it is in Sidebar */}
+              <img src="/src/assets/final_logo_png.png" alt="Logo" className="w-8 h-8 object-contain" />
             </div>
 
             <div className="flex items-center gap-4">
@@ -204,69 +212,85 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow">
-        {/* Hero Security Pulse Section */}
-        <div className="grid grid-cols-1 gap-8 mb-12">
-          <div className="p-10 relative overflow-hidden group" style={{ background: '#141414', border: '1px solid #1E1E1E', borderRadius: '12px' }}>
-            <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-600/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-10">
-                <div className="p-2.5 bg-[#E8440A]/10 rounded-xl text-[#E8440A]">
+      <main className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow overflow-x-hidden">
+        {/* Security Intelligence Pulse Section - Horizontal Rectangular Design */}
+        <div className="mb-12 w-full">
+          <div className="p-6 relative overflow-hidden group w-full min-h-[400px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '24px' }}>
+            <div className="absolute -right-20 -top-20 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
+            
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2.5 bg-[#f97316]/10 rounded-xl text-[#f97316]">
                   <Activity className="w-5 h-5" />
                 </div>
-                <h2 className="text-sm font-black uppercase tracking-widest italic text-white dark:text-white">Security Intelligence Pulse</h2>
-                <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-black uppercase tracking-widest italic">+12.5% Optimal</span>
+                <div>
+                  <h2 className="text-xs font-black uppercase tracking-widest italic text-[var(--text-primary)]">Security Pulse</h2>
+                  <p className="text-[9px] font-bold text-[#666666] uppercase tracking-widest italic mt-0.5">Real-time Vector Analysis</p>
+                </div>
+                <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">
+                  <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-[9px] font-black uppercase tracking-widest italic">+12%</span>
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row items-center gap-16">
-                <div className="relative w-full h-[350px] flex items-center justify-center">
+              <div className="flex flex-col lg:flex-row gap-6 w-full min-h-[350px]">
+                {/* LEFT: Radar Chart */}
+                <div className="w-full lg:w-5/12 min-h-[350px] bg-black/5 dark:bg-white/5 rounded-2xl border border-[var(--border-subtle)] overflow-hidden shadow-inner flex items-center justify-center relative z-20">
                   <ResponsiveContainer width="100%" height={350}>
-                    <RadarChart data={threatData}>
-                      <PolarGrid stroke="#1E1E1E" />
-                      <PolarAngleAxis dataKey="axis" tick={{ fill: '#666666', fontSize: 11 }} />
-                      <PolarRadiusAxis stroke="#1E1E1E" tick={{ fill: '#444' }} />
-                      <Radar name="Observed" dataKey="Observed" stroke="#E8440A" fill="#E8440A" fillOpacity={0.2} />
-                      <Radar name="Expected" dataKey="Expected" stroke="#666666" fill="#666666" fillOpacity={0.1} />
-                      <Radar name="Residual Risk" dataKey="Residual" stroke="#ff2200" fill="#ff2200" fillOpacity={0.15} />
-                      <Legend wrapperStyle={{ color: '#666' }} />
+                    <RadarChart data={(!threatData || threatData.length === 0 || threatData.every(d => d.Observed === 0)) ? defaultThreatData : threatData} margin={{ top: 10, right: 35, bottom: 10, left: 35 }}>
+                      <PolarGrid stroke="var(--border-subtle)" />
+                      <PolarAngleAxis 
+                        dataKey="axis" 
+                        tick={{ fill: theme === 'dark' ? '#E2E8F0' : '#334155', fontSize: 11, fontWeight: 700 }} 
+                      />
+                      <PolarRadiusAxis 
+                        stroke="#aaaaaa" 
+                        tick={{ fill: '#666666', fontSize: 9 }} 
+                        domain={[0, 100]} 
+                      />
+                      <Tooltip 
+                        contentStyle={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', color: '#fff', fontSize: '9px', textTransform: 'uppercase', fontWeight: 'bold' }}
+                        itemStyle={{ color: '#f97316' }}
+                      />
+                      <Radar name="Observed" dataKey="Observed" stroke="#f97316" fill="#f97316" fillOpacity={0.6} />
+                      <Radar name="Expected" dataKey="Expected" stroke="#888888" fill="#555555" fillOpacity={0.2} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
 
-                <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-6 w-full">
-                  {[
-                    { label: 'Critical Risks', value: '03', color: 'text-[#E8440A]' },
-                    { label: 'Patch Rate', value: '94%', color: 'text-[#E8440A]' },
-                    { label: 'Avg Fix Time', value: '12h', color: 'text-[#E8440A]' },
-                    { label: 'Managed Repos', value: '42', color: 'text-white' },
-                  ].map((item) => (
-                    <div key={item.label} className="p-5" style={{ background: '#141414', border: '1px solid #1E1E1E', borderRadius: '12px' }}>
-                      <div className="text-[10px] font-black text-[#666666] uppercase tracking-widest italic mb-2">{item.label}</div>
-                      <div className={`text-3xl font-black italic tracking-tighter ${item.color}`}>{item.value}</div>
+                {/* RIGHT: Metric Grid */}
+                <div className="w-full lg:w-7/12 grid grid-cols-2 lg:grid-cols-3 gap-4 min-h-[350px]">
+                {[
+                  { label: 'Bugs', value: '14', status: 'REQUIRES REVIEW', color: 'text-orange-500' },
+                  { label: 'Code Smells', value: '08', status: 'WITHIN LIMITS', color: 'text-emerald-500' },
+                  { label: 'Vulnerabilities', value: '03', status: 'CRITICAL', color: 'text-rose-500' },
+                  { label: 'Security Issues', value: '02', status: 'CRITICAL', color: 'text-rose-600' },
+                  { label: 'Coverage', value: '78%', status: 'OPTIMAL PATH', color: 'text-blue-500' },
+                  { label: 'Duplications', value: '1.2%', status: 'WITHIN LIMITS', color: 'text-indigo-400' },
+                ].map((item) => (
+                  <div 
+                    key={item.label} 
+                    className="p-4 relative group/card border border-[var(--border-subtle)] hover:border-[#f97316]/30 transition-all duration-300 h-[100px] overflow-hidden" 
+                    style={{ background: 'var(--bg-card)', borderRadius: '16px' }}
+                  >
+                    <div className="text-[11px] font-black text-[#666666] uppercase tracking-wider italic mb-1 whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</div>
+                    <div className="flex items-end gap-2 mb-2">
+                      <div className="text-2xl font-black italic tracking-tighter text-[var(--text-primary)] leading-none">{item.value}</div>
+                      <div className={`text-[9px] font-black uppercase tracking-widest italic whitespace-nowrap overflow-hidden text-ellipsis ${item.color}`}>{item.status}</div>
                     </div>
-                  ))}
-                </div>
+                    <div className="w-full h-1 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden mt-auto">
+                      <div 
+                        className={`h-full bg-[#f97316]`} 
+                        style={{ width: `${Math.random() * 60 + 20}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-
-          <div className="p-10 relative overflow-hidden group flex flex-col justify-between" style={{ background: '#141414', border: '1px solid #1E1E1E', borderRadius: '12px' }}>
-            <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-[#E8440A]/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
-            <div className="relative z-10">
-              <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10 mb-8">
-                <Sparkles className="w-8 h-8 text-[#E8440A]" />
-              </div>
-              <h3 className="text-3xl font-black tracking-tighter uppercase italic leading-[0.9] text-white">AI Agent Intelligence</h3>
-              <p className="text-[#E8440A] text-xs font-bold mt-4 uppercase tracking-widest italic opacity-80 decoration-[#E8440A] underline underline-offset-4">08 New remediation patches</p>
-            </div>
-            <Link to="/ai-insights" className="relative z-10 mt-10 px-6 py-4 bg-[#E8440A] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest text-center hover:opacity-90 transition-all shadow-xl shadow-black/40 border-b-4 border-[#ae3207] active:border-b-0 active:translate-y-1">
-              Review Fleet Health
-            </Link>
           </div>
         </div>
+      </div>
 
         {/* Action Center Section */}
         <div className="mb-12">
@@ -282,9 +306,9 @@ export default function Dashboard() {
               { label: 'In Progress', value: stats.inProgress, color: 'text-[#E8440A]' },
               { label: 'Resolved', value: stats.completed, color: 'text-[#E8440A]' },
             ].map((stat) => (
-              <div key={stat.label} className="p-6 flex items-center justify-between group hover:border-[#E8440A] transition-colors" style={{ background: '#141414', border: '1px solid #1E1E1E', borderRadius: '12px' }}>
+              <div key={stat.label} className="p-6 flex items-center justify-between group hover:border-[#E8440A] transition-colors" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px' }}>
                 <div>
-                  <p className="text-[10px] font-black text-white uppercase tracking-widest italic mb-2">{stat.label}</p>
+                  <p className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-widest italic mb-2">{stat.label}</p>
                   <p className={`text-4xl font-black tracking-tighter italic ${stat.color}`}>{stat.value}</p>
                 </div>
               </div>
@@ -293,18 +317,18 @@ export default function Dashboard() {
         </div>
 
         {/* Task Management Section */}
-        <div className="overflow-hidden" style={{ background: '#141414', border: '1px solid #1E1E1E', borderRadius: '12px' }}>
+        <div className="overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px' }}>
           <div className="px-10 py-8 border-b border-[var(--border-subtle)] bg-white/5 dark:bg-white/10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
               <div>
-                <h2 className="text-xl font-black text-white uppercase italic tracking-tight">Security Tasks</h2>
+                <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">Security Tasks</h2>
                 <p className="text-[10px] font-bold text-[#666666] uppercase tracking-widest mt-1 italic">Operations & Remediation</p>
               </div>
               <div className="flex gap-4 w-full md:w-auto">
                 <select
                   value={filter}
                   onChange={(e) => setFilter(e.target.value as any)}
-                  className="px-6 py-3 bg-[#141414] border border-[#1E1E1E] rounded-xl text-[10px] font-black text-white uppercase italic tracking-widest outline-none focus:ring-2 focus:ring-[#E8440A] transition-all appearance-none pr-10 relative bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
+                  className="px-6 py-3 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black text-[var(--text-primary)] uppercase italic tracking-widest outline-none focus:ring-2 focus:ring-[#E8440A] transition-all appearance-none pr-10 relative bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
                 >
                   <option value="all">Global Fleet</option>
                   <option value="todo">Pending Stage</option>
@@ -327,7 +351,7 @@ export default function Dashboard() {
                 <div className="w-20 h-20 bg-rose-50 dark:bg-rose-900/20 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-rose-100 dark:border-rose-800">
                   <AlertCircle className="w-10 h-10 text-rose-500" />
                 </div>
-                <p className="text-sm font-black text-white dark:text-white uppercase italic tracking-tight">Connection Error</p>
+                <p className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">Connection Error</p>
                 <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mt-2 italic">{error}</p>
                 <button
                   onClick={fetchTasks}
@@ -341,20 +365,20 @@ export default function Dashboard() {
                 <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800/50 dark:bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 border border-[#1E1E1E] dark:border-slate-800 dark:border-slate-800">
                   <AlertCircle className="w-10 h-10 text-slate-300" />
                 </div>
-                <p className="text-sm font-black text-white dark:text-white uppercase italic tracking-tight">Clear Radar</p>
+                <p className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">Clear Radar</p>
                 <p className="text-[10px] font-bold text-[#666666] uppercase tracking-widest mt-2 italic">No active security tasks detected in current vector</p>
               </div>
             ) : (
               filteredTasks.map((task) => (
-                <div key={task.$id} className="p-8 bg-[#141414] hover:bg-white/5 transition-all group border-b border-[#1E1E1E]">
+                <div key={task.$id} className="p-8 bg-[var(--bg-card)] hover:bg-white/5 transition-all group border-b border-[var(--border-subtle)]">
                   <div className="flex flex-col md:flex-row items-start justify-between gap-8">
                     <div className="flex items-start gap-6 flex-1">
-                      <div className="mt-1.5 p-2 bg-[#0D0D0D] rounded-lg shadow-sm border border-[#1E1E1E]">
+                      <div className="mt-1.5 p-2 bg-[var(--bg-primary)] rounded-lg shadow-sm border border-[var(--border-subtle)]">
                         {getStatusIcon(task.status)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-3 mb-3">
-                          <h3 className="text-lg font-black text-white leading-tight italic uppercase tracking-tight">{task.title}</h3>
+                          <h3 className="text-lg font-black text-[var(--text-primary)] leading-tight italic uppercase tracking-tight">{task.title}</h3>
                           <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.15em] italic border ${getPriorityColor(task.priority)}`}>
                             {task.priority} Priority
                           </span>
@@ -368,7 +392,7 @@ export default function Dashboard() {
                           <select
                             value={task.status}
                             onChange={(e) => updateTaskStatus(task.$id, e.target.value)}
-                            className="px-4 py-1.5 bg-[#0D0D0D] border border-[#1E1E1E] rounded-lg text-[9px] font-black text-white uppercase tracking-widest italic outline-none focus:ring-2 focus:ring-[#E8440A] transition-all"
+                            className="px-4 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-[9px] font-black text-[var(--text-primary)] uppercase tracking-widest italic outline-none focus:ring-2 focus:ring-[#E8440A] transition-all"
                           >
                             <option value="todo">Pending</option>
                             <option value="in_progress">Executing</option>
@@ -396,7 +420,7 @@ export default function Dashboard() {
                     <div className="flex md:flex-col items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => { setEditingTask(task); setIsModalOpen(true); }}
-                        className="p-3 text-[#666666] hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-xl transition-all border border-transparent hover:border-blue-100"
+                        className="p-3 text-[#666666] hover:text-orange-500 hover:bg-orange-500/10 rounded-xl transition-all border border-transparent hover:border-orange-100"
                       >
                         <Edit2 className="w-5 h-5" />
                       </button>
@@ -420,8 +444,8 @@ export default function Dashboard() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-10">
             <div className="flex flex-col items-center md:items-start gap-4">
               <div className="flex items-center gap-2">
-                <ScorpionIcon size={24} color="#E8440A" />
-                <span className="text-xl font-black text-white tracking-widest uppercase italic">SCORPION</span>
+                <img src="/src/assets/final_logo_png.png" alt="Logo" className="w-6 h-6 object-contain" />
+                <span className="text-xl font-black text-[var(--text-primary)] tracking-widest uppercase italic">SCORPION</span>
               </div>
               <p className="text-[10px] text-[#666666] font-black uppercase tracking-[0.2em] italic">
                 Advanced Security Orchestration &bull; v1.4.2 PREMIUM

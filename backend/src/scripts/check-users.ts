@@ -1,15 +1,15 @@
-import { supabase } from '../lib/supabase';
+import { users } from '../lib/appwrite';
 
 async function checkUsers() {
-    const { data: { users }, error } = await supabase.auth.admin.listUsers();
-    if (error) {
-        console.error('Error listing users:', error);
-        return;
+    try {
+        const userList = await users.list();
+        console.log('Total users:', userList.total);
+        userList.users.forEach(u => {
+            console.log(`- ${u.email} (${u.$id})`);
+        });
+    } catch (err: any) {
+        console.error('Error listing users:', err.message);
     }
-    console.log('Total users:', users.length);
-    users.forEach(u => {
-        console.log(`- ${u.email} (${u.id})`);
-    });
 }
 
 checkUsers();

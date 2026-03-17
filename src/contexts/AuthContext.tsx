@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { account, ID } from "../lib/appwrite";
+import { useLocation } from "react-router-dom";
+import { account, ID, OAUTH_SUCCESS_URL, OAUTH_FAILURE_URL } from "../lib/appwrite";
 import { Models, OAuthProvider } from "appwrite";
 
 type AppUser = Models.User<Models.Preferences>;
@@ -20,6 +21,7 @@ interface AuthContextType {
 
   updatePassword: (newPassword: string) => Promise<{ error?: any }>;
   getJWT: () => Promise<string | null>;
+  refreshUser: () => Promise<AppUser | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,19 +32,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
+  const location = useLocation();
+
   useEffect(() => {
+    // Only check for user if we are not on a public auth page
+    // This stops the 401 loop on the login page as requested
+    const publicPaths = ['/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password', '/verify-otp', '/auth'];
+
+    // Normalize path by removing trailing slashes
+    const currentPath = location.pathname.replace(/\/$/, '') || '/';
+
+    console.log('[AuthContext] Current normalized path:', currentPath);
+
+    if (publicPaths.includes(currentPath)) {
+      console.log('[AuthContext] Skipping account.get() for public path:', currentPath);
+      setLoading(false);
+      return;
+    }
+
     const checkUser = async () => {
       try {
+        console.log('[AuthContext] Executing account.get() for path:', currentPath);
         const currentUser = await account.get();
         setUser(currentUser);
-      } catch {
-        setUser(null);
+      } catch (error: any) {
+        // 401 is expected for guest users, handle it silently
+        if (error?.code === 401) {
+          console.log('[AuthContext] No session (401)');
+          setUser(null);
+        } else {
+          console.error("[AuthContext] Auth check failed:", error);
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }
     };
     checkUser();
-  }, []);
+  }, [location.pathname]);
 
   const signUp = async (email: string, password: string, name: string = "") => {
     try {
@@ -69,14 +96,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithOAuth = async (provider: "google" | "github") => {
     try {
-      await account.createOAuth2Session(
+      await account.createOAuth2Token(
         provider === "google" ? OAuthProvider.Google : OAuthProvider.Github,
-        `${window.location.origin}/auth/callback`,
-        `${window.location.origin}/login`
+        OAUTH_SUCCESS_URL,
+        OAUTH_FAILURE_URL
       );
       return { error: null };
     } catch (error: any) {
       return { error };
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const currentUser = await account.get();
+      setUser(currentUser);
+      return currentUser;
+    } catch {
+      setUser(null);
+      return null;
     }
   };
 
@@ -168,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         completeReset,
         updatePassword,
         getJWT,
+        refreshUser,
       }}
     >
       {children}

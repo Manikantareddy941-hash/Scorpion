@@ -1,6 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { Finding } from './scan/parsers';
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
 // Heuristic mapping of tool results to OWASP Top 10 categories
 const MAP_OWASP = (finding: any) => {
@@ -27,67 +26,104 @@ const MAP_OWASP = (finding: any) => {
 };
 
 export const getSecurityPostureStats = async (userId: string, scope: 'global' | 'team' | 'project', id?: string) => {
+    try {
+        let repoIds: string[] = [];
 
-    let repoQuery = supabase.from('repositories').select('id, name, risk_score, vulnerability_count');
+        if (scope === 'project' && id) {
+            repoIds = [id];
+        } else if (scope === 'team' && id) {
+            const accessDocs = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
+                Query.equal('team_id', id)
+            ]);
+            repoIds = accessDocs.documents.map(a => a.repo_id);
+        } else {
+            // Global scope - Owned + Team Accessed
+            const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+                Query.equal('user_id', userId)
+            ]);
+            
+            repoIds = ownedRepos.documents.map(r => r.$id);
 
-    if (scope === 'project' && id) {
-        repoQuery = repoQuery.eq('id', id);
-    } else if (scope === 'team' && id) {
-        repoQuery = repoQuery.eq('project_access.team_id', id);
-    } else {
-        // Global scope - reuse accessible repos logic
-        repoQuery = repoQuery.or(`user_id.eq.${userId},project_access.teams.team_members.user_id.eq.${userId}`);
+            // Fetch team repos
+            const memberships = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
+                Query.equal('user_id', userId)
+            ]);
+
+            if (memberships.total > 0) {
+                const teamIds = memberships.documents.map(m => m.team_id);
+                const teamAccess = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
+                    Query.equal('team_id', teamIds)
+                ]);
+                const teamRepoIds = teamAccess.documents.map(a => a.repo_id);
+                repoIds = Array.from(new Set([...repoIds, ...teamRepoIds]));
+            }
+        }
+
+        if (repoIds.length === 0) return null;
+
+        // Fetch Repo details for risk scores
+        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+            Query.equal('$id', repoIds)
+        ]);
+
+        // Aggregate Vulnerabilities
+        const vulnsDocs = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('repo_id', repoIds),
+            Query.equal('resolution_status', 'open'),
+            Query.limit(100) // Adjust limit as needed
+        ]);
+
+        const vulns = vulnsDocs.documents;
+
+        const stats = {
+            total_repos: repos.total,
+            avg_risk_score: Math.round(repos.documents.reduce((acc, r: any) => acc + (r.risk_score || 0), 0) / (repos.total || 1)),
+            total_findings: vulnsDocs.total,
+            severity_breakdown: {
+                critical: vulns.filter((v: any) => v.severity === 'critical').length,
+                high: vulns.filter((v: any) => v.severity === 'high').length,
+                medium: vulns.filter((v: any) => v.severity === 'medium').length,
+                low: vulns.filter((v: any) => v.severity === 'low').length,
+            },
+            owasp_breakdown: {} as Record<string, number>,
+            tool_breakdown: {} as Record<string, number>,
+        };
+
+        vulns.forEach((v: any) => {
+            const cat = MAP_OWASP(v);
+            stats.owasp_breakdown[cat] = (stats.owasp_breakdown[cat] || 0) + 1;
+            stats.tool_breakdown[v.tool] = (stats.tool_breakdown[v.tool] || 0) + 1;
+        });
+
+        return stats;
+    } catch (err) {
+        console.error('[Reporting] Error generating stats:', err);
+        return null;
     }
-
-    const { data: repos, error: repoErr } = await repoQuery;
-    if (repoErr || !repos || repos.length === 0) return null;
-
-    const repoIds = repos.map(r => r.id);
-
-    // Aggregate Vulnerabilities
-    const { data: vulns } = await supabase
-        .from('vulnerabilities')
-        .select('*')
-        .in('repo_id', repoIds)
-        .eq('resolution_status', 'open');
-
-    const stats = {
-        total_repos: repos.length,
-        avg_risk_score: Math.round(repos.reduce((acc, r) => acc + (r.risk_score || 0), 0) / repos.length),
-        total_findings: vulns?.length || 0,
-        severity_breakdown: {
-            critical: vulns?.filter(v => v.severity === 'critical').length || 0,
-            high: vulns?.filter(v => v.severity === 'high').length || 0,
-            medium: vulns?.filter(v => v.severity === 'medium').length || 0,
-            low: vulns?.filter(v => v.severity === 'low').length || 0,
-        },
-        owasp_breakdown: {} as Record<string, number>,
-        tool_breakdown: {} as Record<string, number>,
-    };
-
-    vulns?.forEach(v => {
-        const cat = MAP_OWASP(v);
-        stats.owasp_breakdown[cat] = (stats.owasp_breakdown[cat] || 0) + 1;
-        stats.tool_breakdown[v.tool] = (stats.tool_breakdown[v.tool] || 0) + 1;
-    });
-
-    return stats;
 };
 
 export const getTrendData = async (userId: string, repoIds: string[]) => {
+    try {
+        if (repoIds.length === 0) return [];
 
-    const { data: scans } = await supabase
-        .from('scan_results')
-        .select('created_at, details')
-        .in('repo_id', repoIds)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: true })
-        .limit(50);
+        const scansDocs = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('repo_id', repoIds),
+            Query.equal('status', 'completed'),
+            Query.orderAsc('$createdAt'),
+            Query.limit(50)
+        ]);
 
-    return scans?.map(s => ({
-        date: s.created_at,
-        score: s.details?.security_score || 0
-    })) || [];
+        return scansDocs.documents.map(s => {
+            const details = typeof s.details === 'string' ? JSON.parse(s.details) : s.details;
+            return {
+                date: s.$createdAt,
+                score: details?.security_score || 0
+            };
+        });
+    } catch (err) {
+        console.error('[Reporting] Error getting trend data:', err);
+        return [];
+    }
 };
 
 export const generatePDFReportBuffer = async (reportData: { title: string, stats: any, trend: any[] }): Promise<Buffer> => {

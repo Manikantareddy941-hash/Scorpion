@@ -1,5 +1,5 @@
 import { notifyPolicyFailure } from './notificationService';
-import { supabase } from '../lib/supabase';
+import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 
 export interface PolicyEvaluation {
     result: 'PASS' | 'WARN' | 'FAIL';
@@ -16,52 +16,51 @@ export interface PolicyEvaluation {
  * Retrieves the effective policy for a given repository.
  */
 export const getEffectivePolicy = async (repoId: string) => {
-    const { data, error } = await supabase
-        .from('effective_project_policies')
-        .select('*')
-        .eq('repo_id', repoId)
-        .single();
+    try {
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_POLICIES, [
+            Query.equal('repo_id', repoId),
+            Query.limit(1)
+        ]);
 
-    if (error || !data) {
-        console.warn(`[PolicyService] Could not find policy for repo ${repoId}, defaulting to balanced.`);
-        return {
-            policy_name: 'balanced',
-            max_critical: 0,
-            max_high: 5,
-            min_risk_score: 80
-        };
+        if (response.total > 0) {
+            return response.documents[0];
+        }
+    } catch (err) {
+        console.warn(`[PolicyService] Error fetching policy for repo ${repoId}:`, err);
     }
-    return data;
+
+    // Default policy
+    return {
+        policy_name: 'balanced',
+        max_critical: 0,
+        max_high: 5,
+        min_risk_score: 80
+    };
 };
 
 /**
  * Evaluates a completed scan result against the project's policy.
  */
 export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> => {
-
     // 1. Get scan metadata
-    const { data: scan, error: scanErr } = await supabase
-        .from('scan_results')
-        .select('*, repositories(id, name)')
-        .eq('id', scanId)
-        .single();
+    const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
 
-    if (scanErr || !scan || scan.status !== 'completed') {
+    if (!scan || scan.status !== 'completed') {
         throw new Error('Scan result not available for evaluation');
     }
 
-    const repoId = (scan.repositories as any).id;
+    const repoId = scan.repo_id;
     const policy = await getEffectivePolicy(repoId);
 
-    const findings = scan.details || {};
-    const criticalFound = findings.critical_count || 0;
-    const highFound = findings.high_count || 0;
-    const riskScoreFound = 100 - (findings.security_score || 0); // Logic consistent with Dashboard
+    const detailsRaw = typeof scan.details === 'string' ? JSON.parse(scan.details) : scan.details;
+    const criticalFound = detailsRaw.critical_count || 0;
+    const highFound = detailsRaw.high_count || 0;
+    const securityScore = detailsRaw.security_score || 0;
 
     const details = {
         critical: { found: criticalFound, allowed: policy.max_critical },
         high: { found: highFound, allowed: policy.max_high },
-        risk_score: { found: findings.security_score || 0, min: policy.min_risk_score }
+        risk_score: { found: securityScore, min: policy.min_risk_score }
     };
 
     let result: 'PASS' | 'WARN' | 'FAIL' = 'PASS';
@@ -73,18 +72,19 @@ export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> =>
     } else if (highFound > policy.max_high) {
         result = 'FAIL';
         reason = `High vulnerabilities (${highFound}) exceed policy limit (${policy.max_high}).`;
-    } else if ((findings.security_score || 0) < policy.min_risk_score) {
+    } else if (securityScore < policy.min_risk_score) {
         result = 'WARN';
-        reason = `Security score (${findings.security_score}) is below minimum threshold (${policy.min_risk_score}).`;
+        reason = `Security score (${securityScore}) is below minimum threshold (${policy.min_risk_score}).`;
     }
 
     // Persist evaluation
-    await supabase.from('policy_evaluations').insert({
+    await databases.createDocument(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, ID.unique(), {
         scan_id: scanId,
         repo_id: repoId,
         policy_name: policy.policy_name,
         result,
-        details: { ...details, reason }
+        details: JSON.stringify({ ...details, reason }),
+        created_at: new Date().toISOString()
     });
 
     console.log(`[PolicyEngine] Evaluation for ${scanId}: ${result}. Reason: ${reason}`);

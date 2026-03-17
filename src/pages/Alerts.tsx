@@ -61,13 +61,13 @@ export default function Alerts() {
     const getEventIcon = (type: string) => {
         if (type.includes('critical')) return <ShieldAlert className="w-5 h-5 text-rose-500" />;
         if (type.includes('completed')) return <CheckCircle className="w-5 h-5 text-emerald-500" />;
-        return <Info className="w-5 h-5 text-blue-500" />;
+        return <Info className="w-5 h-5 text-orange-500" />;
     };
 
     const getEventTagColor = (type: string) => {
         if (type.includes('critical')) return 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 border-rose-100 dark:border-rose-500/20';
         if (type.includes('completed')) return 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border-emerald-100 dark:border-emerald-500/20';
-        return 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 border-blue-100 dark:border-blue-500/20';
+        return 'bg-orange-50 dark:bg-orange-500/10 text-orange-600 border-orange-100 dark:border-orange-500/20';
     };
 
     const filteredAlerts = notifications.filter(n => {
@@ -81,7 +81,7 @@ export default function Alerts() {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <Bell className="w-12 h-12 text-blue-600 animate-pulse" />
+                    <Bell className="w-12 h-12 text-orange-500 animate-pulse" />
                     <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Interrogating Logs...</h2>
                 </div>
             </div>
@@ -93,7 +93,7 @@ export default function Alerts() {
             <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                        <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20">
                             <Bell className="w-7 h-7" />
                         </div>
                         <div>
@@ -108,7 +108,7 @@ export default function Alerts() {
                             <select
                                 value={filter}
                                 onChange={(e) => setFilter(e.target.value as any)}
-                                className="pl-12 pr-10 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-blue-600/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none"
+                                className="pl-12 pr-10 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-orange-500/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none"
                             >
                                 <option value="all">Global Matrix</option>
                                 <option value="critical">Critical Vectors</option>
@@ -117,7 +117,7 @@ export default function Alerts() {
                         </div>
                         <button
                             onClick={fetchNotifications}
-                            className="p-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--bg-primary)] transition-all text-slate-400 hover:text-blue-600"
+                            className="p-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--bg-primary)] transition-all text-slate-400 hover:text-orange-500"
                         >
                             <Activity className="w-5 h-5" />
                         </button>
@@ -137,7 +137,7 @@ export default function Alerts() {
                         {filteredAlerts.map((n) => (
                             <div
                                 key={n.$id}
-                                className="premium-card p-8 group hover:border-blue-600/50 transition-all animate-in slide-in-from-bottom-2 duration-300"
+                                className="premium-card p-8 group hover:border-orange-500/50 transition-all animate-in slide-in-from-bottom-2 duration-300"
                             >
                                 <div className="flex flex-col md:flex-row items-start gap-8">
                                     <div className={`p-4 rounded-2xl border transition-transform group-hover:scale-110 shadow-sm ${getEventTagColor(n.event_type)}`}>
@@ -153,7 +153,7 @@ export default function Alerts() {
                                                 <Activity className="w-3 h-3" /> {n.repo_name}
                                             </span>
                                         </div>
-                                        <h3 className="text-slate-900 dark:text-white font-black text-xl mb-4 leading-tight uppercase italic tracking-tight group-hover:text-blue-600 transition-colors">
+                                        <h3 className="text-slate-900 dark:text-white font-black text-xl mb-4 leading-tight uppercase italic tracking-tight group-hover:text-orange-500 transition-colors">
                                             {(n.details as any)?.message || `Tactical security update for repo: ${n.repo_name}`}
                                         </h3>
                                         <div className="flex flex-wrap items-center gap-8 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">
@@ -168,10 +168,10 @@ export default function Alerts() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-                                        <button className="flex-1 md:flex-none px-6 py-3 bg-[var(--bg-secondary)] text-blue-600 border border-blue-200 dark:border-slate-800 rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-lg shadow-blue-500/5 group/btn flex items-center justify-center gap-2">
+                                        <button className="flex-1 md:flex-none px-6 py-3 bg-[var(--bg-secondary)] text-orange-500 border border-orange-200 dark:border-slate-800 rounded-2xl font-black text-[9px] uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all shadow-lg shadow-orange-500/5 group/btn flex items-center justify-center gap-2">
                                             Telemetry <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
                                         </button>
-                                        <button className="p-3 bg-[var(--bg-secondary)] text-slate-400 hover:text-blue-600 border border-[var(--border-subtle)] rounded-2xl hover:bg-white dark:bg-slate-900 dark:hover:bg-slate-800 transition-all">
+                                        <button className="p-3 bg-[var(--bg-secondary)] text-slate-400 hover:text-orange-500 border border-[var(--border-subtle)] rounded-2xl hover:bg-white dark:bg-slate-900 dark:hover:bg-slate-800 transition-all">
                                             <Share2 className="w-4 h-4" />
                                         </button>
                                     </div>

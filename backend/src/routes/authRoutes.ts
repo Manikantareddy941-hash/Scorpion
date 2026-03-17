@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from '../services/emailService';
-import { supabase } from '../lib/supabase';
+import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 
 const router = express.Router();
 
@@ -14,32 +14,28 @@ router.post('/request-reset', async (req: Request, res: Response) => {
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
     try {
-        let userExists = true;
+        let userExists = false;
+        let userId = '';
 
-        // Try to check if user exists using Supabase Admin API
+        // Try to check if user exists in Appwrite
         try {
-            const { data: { users }, error: userError } = await supabase.auth.admin.listUsers();
+            const userList = await users.list([
+                Query.equal('email', email)
+            ]);
 
-            if (userError) throw userError;
-
-            const user = users.find(u => u.email === email);
-
-            // To prevent email enumeration, we always return success even if user not found
-            if (!user) {
-                console.log(`[Auth] Reset requested for non-existent email: ${email}`);
-                userExists = false;
+            if (userList.total > 0) {
+                userExists = true;
+                userId = userList.users[0].$id;
             }
-        } catch (supabaseError: any) {
-            // If Supabase is unreachable, allow in dev mode
-            if (process.env.NODE_ENV === 'production') {
-                throw supabaseError;
-            }
-            console.warn('[Auth] Supabase unreachable, proceeding in dev mode:', supabaseError.message);
+        } catch (err: any) {
+            console.warn('[Auth] Appwrite error checking user existence:', err.message);
             // In dev mode, assume user exists to allow testing
-            userExists = true;
+            if (process.env.NODE_ENV !== 'production') {
+                userExists = true;
+            }
         }
 
-        // In dev mode, always continue even for non-existent users
+        // To prevent email enumeration, we always return success message even if user not found (unless in dev mode for clarity)
         if (!userExists && process.env.NODE_ENV === 'production') {
             return res.json({ message: 'If an account exists, an OTP has been sent.' });
         }
@@ -49,37 +45,39 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         const otpHash = await bcrypt.hash(otp, 10);
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
 
-        // Save to database with error handling for dev mode
+        // Check for existing reset record
         try {
-            const { error: resetError } = await supabase
-                .from('password_resets')
-                .upsert({
+            const existingResets = await databases.listDocuments(DB_ID, COLLECTIONS.PASSWORD_RESETS, [
+                Query.equal('email', email)
+            ]);
+
+            if (existingResets.total > 0) {
+                await databases.updateDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, existingResets.documents[0].$id, {
+                    otp_hash: otpHash,
+                    expires_at: expiresAt,
+                    attempts: 0,
+                    updated_at: new Date().toISOString()
+                });
+            } else {
+                await databases.createDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, ID.unique(), {
                     email,
                     otp_hash: otpHash,
                     expires_at: expiresAt,
                     attempts: 0,
                     created_at: new Date().toISOString()
-                }, { onConflict: 'email' });
-
-            if (resetError) throw resetError;
-        } catch (dbError: any) {
-            console.warn('[Auth] Database save failed:', dbError.message);
-            // In dev mode, continue without saving to DB
-            if (process.env.NODE_ENV === 'production') {
-                throw dbError;
+                });
             }
-            console.log('[DEV] Skipping DB save, continuing with OTP send for testing');
+        } catch (dbError: any) {
+            console.warn('[Auth] Database operation failed:', dbError.message);
+            if (process.env.NODE_ENV === 'production') throw dbError;
         }
 
-        // Send email with fallback for dev mode
+        // Send email
         try {
             await sendOtpEmail(email, otp);
         } catch (emailError: any) {
-            console.error('[Auth] Email sending failed, but continuing:', emailError.message);
-            // In development, we still allow the reset to proceed
-            if (process.env.NODE_ENV === 'production') {
-                throw emailError;
-            }
+            console.error('[Auth] Email sending failed:', emailError.message);
+            if (process.env.NODE_ENV === 'production') throw emailError;
             console.log(`[DEV-OTP] Password reset OTP for ${email}: ${otp}`);
         }
 
@@ -96,15 +94,15 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     if (!email || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
 
     try {
-        const { data: reset, error: resetError } = await supabase
-            .from('password_resets')
-            .select('*')
-            .eq('email', email)
-            .single();
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.PASSWORD_RESETS, [
+            Query.equal('email', email)
+        ]);
 
-        if (resetError || !reset) {
+        if (response.total === 0) {
             return res.status(400).json({ error: 'Invalid or expired OTP' });
         }
+
+        const reset = response.documents[0];
 
         // Check expiry
         if (new Date() > new Date(reset.expires_at)) {
@@ -120,11 +118,9 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         const isValid = await bcrypt.compare(otp, reset.otp_hash);
         if (!isValid) {
             // Increment attempts
-            await supabase
-                .from('password_resets')
-                .update({ attempts: reset.attempts + 1 })
-                .eq('email', email);
-
+            await databases.updateDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, reset.$id, {
+                attempts: reset.attempts + 1
+            });
             return res.status(400).json({ error: 'Invalid OTP' });
         }
 
@@ -148,22 +144,24 @@ router.post('/reset-password', async (req: Request, res: Response) => {
         const decoded = jwt.verify(resetToken, RESET_TOKEN_SECRET) as { email: string };
         const email = decoded.email;
 
-        // Update user password in Supabase Auth
-        // We need to fetch user ID first if we're using admin API
-        const { data: { users }, error: fetchError } = await supabase.auth.admin.listUsers();
-        if (fetchError) throw fetchError;
+        // Fetch user from Appwrite
+        const userList = await users.list([
+            Query.equal('email', email)
+        ]);
 
-        const user = users.find(u => u.email === email);
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        if (userList.total === 0) return res.status(404).json({ error: 'User not found' });
+        const user = userList.users[0];
 
-        const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
-            password: newPassword
-        });
-
-        if (updateError) throw updateError;
+        // Update password in Appwrite
+        await users.updatePassword(user.$id, newPassword);
 
         // Delete reset record
-        await supabase.from('password_resets').delete().eq('email', email);
+        const response = await databases.listDocuments(DB_ID, COLLECTIONS.PASSWORD_RESETS, [
+            Query.equal('email', email)
+        ]);
+        if (response.total > 0) {
+            await databases.deleteDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, response.documents[0].$id);
+        }
 
         res.json({ message: 'Password updated successfully' });
     } catch (error: any) {
