@@ -24,6 +24,14 @@ export const COLLECTIONS = {
   TEAM_MEMBERS: 'team_members',
   RBAC_AUDIT_LOG: 'rbac_audit_log',
   NOTIFICATIONS: 'notifications',
+  SECURITY_REPORTS: 'security_reports',
+  VULNERABILITY_FIXES: 'vulnerability_fixes',
+  API_KEYS: 'api_keys',
+  AI_METRICS: 'ai_metrics',
+  SCAN_COMMITS: 'scan_commits',
+  FINDING_RESOLUTIONS: 'finding_resolutions',
+  PROJECTS: 'projects',
+  PASSWORD_RESETS: 'password_resets',
 };
 
 export { ID, Query };

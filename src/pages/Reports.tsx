@@ -36,7 +36,7 @@ export default function Reports() {
 
             const response = await fetch(url.toString(), {
                 headers: { 
-                    'x-appwrite-session': token || ''
+                    'Authorization': `Bearer ${token}`
                 }
             });
 
@@ -61,7 +61,7 @@ export default function Reports() {
             const response = await fetch(`${apiBase}/api/reports/generate`, {
                 method: 'POST',
                 headers: {
-                    'x-appwrite-session': token || '',
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -111,7 +111,7 @@ export default function Reports() {
     if (loading && !stats) return (
         <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
-                <TrendingUp className="w-12 h-12 text-blue-600 animate-pulse" />
+                <TrendingUp className="w-12 h-12 text-orange-500 animate-pulse" />
                 <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Synthesizing Posture Data...</h2>
             </div>
         </div>
@@ -122,7 +122,7 @@ export default function Reports() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+                        <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20">
                             <TrendingUp className="w-7 h-7" />
                         </div>
                         <div>
@@ -137,7 +137,7 @@ export default function Reports() {
                             <select
                                 value={scope}
                                 onChange={(e) => setScope(e.target.value as any)}
-                                className="pl-12 pr-10 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-blue-600/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none"
+                                className="pl-12 pr-10 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-orange-500/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none"
                             >
                                 <option value="global">Organization Matrix</option>
                                 <option value="team">Cluster Isolation</option>
@@ -161,8 +161,8 @@ export default function Reports() {
                         label="Avg Risk Score"
                         value={`${stats?.avg_risk_score}%`}
                         trend="SECURE-PROTOCOL"
-                        icon={<Shield className="w-6 h-6 text-blue-600" />}
-                        color="blue"
+                        icon={<Shield className="w-6 h-6 text-orange-500" />}
+                        color="orange"
                     />
                     <StatCard
                         label="Active Threats"
@@ -190,7 +190,7 @@ export default function Reports() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12">
                     <div className="premium-card p-10">
                         <h3 className="text-xs font-black text-slate-900 dark:text-white mb-10 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                            <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse" />
+                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
                             Severity Spectrum Distribution
                         </h3>
                         <div className="h-80">
@@ -238,9 +238,9 @@ export default function Reports() {
                                     <Line
                                         type="monotone"
                                         dataKey="score"
-                                        stroke="#3b82f6"
+                                        stroke="#f97316"
                                         strokeWidth={4}
-                                        dot={{ r: 5, fill: '#3b82f6', strokeWidth: 3, stroke: theme === 'dark' ? '#1e293b' : '#fff' }}
+                                        dot={{ r: 5, fill: '#f97316', strokeWidth: 3, stroke: theme === 'dark' ? '#1e293b' : '#fff' }}
                                         activeDot={{ r: 8, strokeWidth: 0 }}
                                     />
                                 </LineChart>
@@ -301,7 +301,7 @@ export default function Reports() {
                                 <button className="px-10 py-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest border border-white/10 backdrop-blur-md">
                                     Review Patch Vector
                                 </button>
-                                <button className="px-10 py-4 bg-blue-600 hover:bg-blue-700 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-500/20">
+                                <button className="px-10 py-4 bg-orange-500 hover:bg-orange-600 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-orange-500/20">
                                     Configure Neural Alerts
                                 </button>
                             </div>

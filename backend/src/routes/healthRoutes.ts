@@ -1,27 +1,41 @@
 import express, { Request, Response } from 'express';
+import { databases, DB_ID } from '../lib/appwrite';
+import { checkTool } from '../utils/toolCheck';
 
 const router = express.Router();
 
-import { checkSupabaseConnection } from '../lib/supabase';
-import { checkTool } from '../utils/toolCheck';
-
 router.get('/health', async (req: Request, res: Response) => {
   try {
-    const { ok, error } = await checkSupabaseConnection();
+    // Simple check to see if we can reach Appwrite
+    await databases.listCollections(DB_ID);
+    
     res.status(200).json({
       status: 'ok',
       service: 'stackpilot-backend',
       timestamp: new Date().toISOString(),
-      database: ok ? 'healthy' : `disconnected: ${error}`
+      database: 'healthy'
     });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: 'Health check failed' });
+  } catch (err: any) {
+    res.status(500).json({ 
+        status: 'error', 
+        message: 'Health check failed',
+        error: err.message
+    });
   }
 });
 
 router.get('/health/auth', async (req: Request, res: Response) => {
   try {
-    const { ok, error } = await checkSupabaseConnection();
+    let appwriteStatus = 'ok';
+    let appwriteError = null;
+    
+    try {
+        await databases.listCollections(DB_ID);
+    } catch (err: any) {
+        appwriteStatus = 'fail';
+        appwriteError = err.message;
+    }
+
     const tools = {
       gitleaks: checkTool('gitleaks'),
       trivy: checkTool('trivy'),
@@ -30,11 +44,13 @@ router.get('/health/auth', async (req: Request, res: Response) => {
 
     res.json({
       backend: 'ok',
-      supabase: ok ? 'ok' : 'fail',
-      supabaseError: error || null,
+      appwrite: appwriteStatus,
+      appwriteError,
       env: {
-        SUPABASE_URL: !!process.env.SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        APPWRITE_ENDPOINT: !!process.env.APPWRITE_ENDPOINT,
+        APPWRITE_PROJECT_ID: !!process.env.APPWRITE_PROJECT_ID,
+        APPWRITE_API_KEY: !!process.env.APPWRITE_API_KEY,
+        APPWRITE_DATABASE_ID: !!process.env.APPWRITE_DATABASE_ID,
         FRONTEND_URL: !!process.env.FRONTEND_URL
       },
       cors: process.env.FRONTEND_URL ? 'ok' : 'fail',

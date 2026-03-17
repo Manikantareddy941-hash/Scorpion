@@ -2,12 +2,12 @@ import { Router, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { User } from '@supabase/supabase-js';
+import { Models } from 'node-appwrite';
 import { Request } from 'express';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
 
 interface AuthenticatedRequest extends Request {
-    user?: User;
+    user?: Models.User<Models.Preferences>;
 }
 
 const router = Router();
@@ -54,7 +54,7 @@ router.post('/zip', upload.single('project_zip'), async (req: AuthenticatedReque
     }
 
     try {
-        const result = await ingestZip(req.file.path, projectId, req.user!.id);
+        const result = await ingestZip(req.file.path, projectId, req.user!.$id);
 
         // Final cleanup of the uploaded ZIP file itself (not the extraction path yet if it's being used)
         // In a real app, we might move the extraction path to a persistent storage or trigger a scan immediately.

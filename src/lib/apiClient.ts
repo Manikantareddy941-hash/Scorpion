@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { account } from './appwrite';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -13,8 +13,12 @@ export async function apiFetch(endpoint: string, options: ApiFetchOptions = {}) 
     let token = options.token;
 
     if (!token) {
-        const { data } = await supabase.auth.getSession();
-        token = data?.session?.access_token;
+        try {
+            const data = await account.createJWT();
+            token = data.jwt;
+        } catch (e) {
+            token = null;
+        }
     }
 
     const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
@@ -88,7 +92,7 @@ export async function apiFetch(endpoint: string, options: ApiFetchOptions = {}) 
 
     if (lastResponse && !lastResponse.ok) {
         if (lastResponse.status === 401) {
-            await supabase.auth.signOut();
+            await account.deleteSession('current');
         }
 
         let message = 'Request failed';

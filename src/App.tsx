@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import Auth from './components/Auth';
+// import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import SecurityDashboard from './pages/SecurityDashboard';
 import ResetPassword from './pages/ResetPassword';
@@ -9,12 +9,10 @@ import VerifyOtp from './pages/VerifyOtp';
 import ChangePassword from './pages/ChangePassword';
 import SettingsPage from './pages/Settings';
 import CodeInsights from './pages/CodeInsights';
-import DevOpsDashboard from './pages/DevOpsDashboard';
 import ProjectDetail from './pages/ProjectDetail';
 import Teams from './pages/Teams';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
-import AIAnalytics from './pages/AIAnalytics';
 import Profile from './pages/Profile';
 import ScanResults from './pages/ScanResults';
 import AIChat from './components/AIChat';
@@ -57,15 +55,14 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    checkAppwrite();
-  }, []);
+  // We rely on AuthProvider to do the initial session check.
+  // The checkAppwrite function is kept for manual retry on the NetworkErrorPanel.
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Shield className="w-12 h-12 text-blue-600 animate-pulse" />
+          <Shield className="w-12 h-12 text-orange-500 animate-pulse" />
           <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Checking security protocols…</h2>
         </div>
       </div>
@@ -73,13 +70,13 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#0D0D0D', minHeight: '100vh' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary)', minHeight: '100vh' }}>
       {networkError && (
         <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
           <NetworkErrorPanel onRetry={checkAppwrite} />
         </div>
       )}
-      <div style={{ display: 'flex', minHeight: '100vh', background: '#0D0D0D' }}>
+      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         {showSidebar && <Sidebar />}
         <div style={{ flex: 1, overflow: 'auto' }}>
           <Routes>
@@ -90,7 +87,6 @@ function App() {
             <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
             <Route path="/verify-otp" element={<PublicRoute><VerifyOtp /></PublicRoute>} />
             <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
-            <Route path="/devops" element={<ProtectedRoute><DevOpsDashboard /></ProtectedRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/security" element={<ProtectedRoute><SecurityDashboard /></ProtectedRoute>} />
@@ -100,7 +96,6 @@ function App() {
             <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
-            <Route path="/ai-insights" element={<ProtectedRoute><AIAnalytics /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />

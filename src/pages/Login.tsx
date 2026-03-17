@@ -23,22 +23,21 @@ export default function Login() {
 
   return (
     <ModernAuthLayout
-      heading="Get access your personal hub for clarity and productivity"
       subtext="Clarity. Security. Productivity."
     >
-      <div className="w-full max-w-sm mx-auto">
-        <h1 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">
-          Create an account
+      <div className="w-full">
+        <h1 className="text-xl font-black mb-1 text-white uppercase italic tracking-tight">
+          Operator Login
         </h1>
 
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          Access your dashboard securely and manage everything in one place.
+        <p className="text-[10px] font-bold text-[#666666] uppercase tracking-[0.15em] mb-8 italic">
+          Authorized personnel only. Data stream encrypted.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Email */}
-          <div>
-            <label htmlFor="email" className="block text-sm mb-1 font-medium text-gray-700 dark:text-gray-300">Email</label>
+          <div className="space-y-2">
+            <label htmlFor="email" className="block text-[10px] font-black text-[#666666] uppercase tracking-widest italic ml-1">Vector ID (Email)</label>
             <input
               id="email"
               type="email"
@@ -46,14 +45,14 @@ export default function Login() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="w-full rounded-xl border border-gray-300 dark:border-neutral-700 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-neutral-800 text-gray-900 dark:text-white"
-              placeholder="you@example.com"
+              className="w-full rounded-2xl border border-[#2a2a2a] bg-[#0D0D0D] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#f97316]/50 focus:border-[#f97316] text-white placeholder-[#333] transition-all"
+              placeholder="operator@scorpion.secure"
             />
           </div>
 
           {/* Password */}
-          <div>
-            <label htmlFor="password" className="block text-sm mb-1 font-medium text-gray-700 dark:text-gray-300">Password</label>
+          <div className="space-y-2">
+            <label htmlFor="password" className="block text-[10px] font-black text-[#666666] uppercase tracking-widest italic ml-1">Access Key</label>
             <div className="relative">
               <input
                 id="password"
@@ -62,13 +61,13 @@ export default function Login() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
-                className="w-full rounded-xl border border-gray-300 dark:border-neutral-700 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-neutral-800 text-gray-900 dark:text-white"
+                className="w-full rounded-2xl border border-[#2a2a2a] bg-[#0D0D0D] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#f97316]/50 focus:border-[#f97316] text-white placeholder-[#333] transition-all"
                 placeholder="••••••••"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#666] hover:text-[#f97316] transition-colors"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -76,41 +75,39 @@ export default function Login() {
             </div>
           </div>
 
-          {error && <div className="text-red-500 text-xs mt-1">{error}</div>}
+          {error && <div className="text-red-500 text-[10px] font-black uppercase tracking-widest italic animate-pulse">{error}</div>}
 
           {/* Primary Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-medium bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 hover:opacity-90 transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl text-white font-black text-[10px] uppercase tracking-[0.2em] bg-[#f97316] hover:opacity-90 transition-all shadow-xl shadow-[#f97316]/20 border-b-4 border-[#ae3207] active:border-b-0 active:translate-y-1 disabled:opacity-50 italic"
           >
             {loading ? (
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
+                Initialize Session
                 <LogIn className="w-4 h-4" />
-                Get Started
               </>
             )}
           </button>
         </form>
 
         {/* Divider */}
-        <div className="my-6 flex items-center">
-          <div className="flex-grow h-px bg-gray-300 dark:bg-neutral-700" />
-          <span className="mx-3 text-xs text-gray-400">or continue with</span>
-          <div className="flex-grow h-px bg-gray-300 dark:bg-neutral-700" />
+        <div className="my-8 flex items-center px-4">
+          <div className="flex-grow h-px bg-[#2a2a2a]" />
+          <span className="mx-4 text-[9px] font-black text-[#666] uppercase tracking-[0.3em] italic">Secondary Auth</span>
+          <div className="flex-grow h-px bg-[#2a2a2a]" />
         </div>
 
         {/* Social Buttons */}
-        <div className="mt-4">
-          <SocialLoginButtons />
-        </div>
+        <SocialLoginButtons />
 
-        <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
-          Don't have an account?{' '}
-          <a href="/signup" className="text-purple-600 hover:text-purple-500 font-semibold transition-colors">
-            Sign up
+        <p className="mt-10 text-center text-[10px] font-black uppercase tracking-widest italic text-[#666]">
+          New operative?{' '}
+          <a href="/signup" className="text-[#f97316] hover:underline decoration-2 underline-offset-4 decoration-[#f97316]/30 transition-all">
+            Request Access
           </a>
         </p>
       </div>
