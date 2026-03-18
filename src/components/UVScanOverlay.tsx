@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import logoImg from '../assets/scorpionlegs-removebg-preview.png';
 
 interface Props {
   onComplete: () => void;
@@ -11,10 +13,10 @@ export default function UVScanOverlay({ onComplete, scanTarget, scanId }: Props)
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('INITIALIZING SCAN...');
   const { getJWT } = useAuth();
+  const { getLogoFilter, getLogoBlendMode } = useTheme();
 
   useEffect(() => {
     if (!scanId) {
-      // If no scanId yet, just show initializing
       const initInterval = setInterval(() => {
         setProgress(p => Math.min(p + 2, 20));
       }, 500);
@@ -62,33 +64,68 @@ export default function UVScanOverlay({ onComplete, scanTarget, scanId }: Props)
   }, [scanId, getJWT, onComplete]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0D0D0D', zIndex: 2000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="fixed inset-0 bg-[var(--bg-primary)] z-[2000] flex flex-col items-center justify-center transition-colors duration-500">
       {/* Sweeping beam animation */}
-      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-        <div style={{
-          position: 'absolute', left: 0, right: 0, height: '2px',
-          background: 'linear-gradient(90deg, transparent, #E8440A, transparent)',
-          boxShadow: '0 0 20px 8px rgba(232,68,10,0.3)',
-          animation: 'scan-beam 1.5s linear infinite',
-        }} />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div 
+          className="absolute left-0 right-0 h-0.5 opacity-50"
+          style={{
+            background: 'linear-gradient(90deg, transparent, var(--accent-primary), transparent)',
+            boxShadow: '0 0 25px 12px var(--accent-primary)',
+            animation: 'scan-beam 1.5s linear infinite',
+          }} 
+        />
       </div>
 
-      {/* Logo */}
-      <img src="/src/assets/final_logo_png.png" style={{ width: '80px', height: '80px', objectFit: 'contain', marginBottom: '32px', filter: 'drop-shadow(0 0 20px #E8440A)' }} />
+      {/* Logo Container */}
+      <div className="relative mb-12">
+        <img 
+          src={logoImg} 
+          alt="Scorpion Logo" 
+          className="w-32 h-32 object-contain transition-all duration-700"
+          style={{ 
+            filter: `${getLogoFilter()} drop-shadow(0 0 30px var(--accent-primary))`,
+            mixBlendMode: getLogoBlendMode()
+          }} 
+        />
+        <div className="absolute -inset-8 bg-[var(--accent-primary)]/5 rounded-full blur-3xl animate-pulse" />
+      </div>
 
-      {/* Status */}
-      <div style={{ color: '#E8440A', fontWeight: 800, fontSize: '1rem', letterSpacing: '0.2em', marginBottom: '8px' }}>
-        {status}<span style={{ animation: 'blink 1s infinite' }}>_</span>
-      </div>
-      <div style={{ color: '#444', fontSize: '0.75rem', letterSpacing: '0.1em', marginBottom: '32px' }}>
-        TARGET: {scanTarget}
+      {/* Status Info */}
+      <div className="text-center relative z-10">
+        <div className="text-[var(--accent-primary)] font-black text-xs uppercase tracking-[0.4em] mb-3 italic flex items-center justify-center gap-2">
+          {status}
+          <span className="w-1.5 h-4 bg-[var(--accent-primary)] animate-pulse" />
+        </div>
+        <div className="text-[var(--text-secondary)] text-[10px] font-black uppercase tracking-[0.2em] mb-12 italic font-mono opacity-60">
+          UPLINK TARGET: {scanTarget}
+        </div>
+
+        {/* Progress System */}
+        <div className="relative items-center flex flex-col">
+          <div className="w-72 h-1 bg-[var(--bg-secondary)] rounded-full overflow-hidden border border-[var(--border-subtle)] shadow-inner">
+            <div 
+              className="h-full bg-[var(--accent-primary)] transition-all duration-700 ease-out relative"
+              style={{ 
+                width: `${progress}%`,
+                boxShadow: '0 0 15px var(--accent-primary)'
+              }} 
+            />
+          </div>
+          <div className="text-[var(--text-secondary)] font-mono text-[9px] mt-4 font-black tracking-widest opacity-80 uppercase">
+            {Math.round(progress)}% Integrity Verified
+          </div>
+        </div>
       </div>
 
-      {/* Progress bar */}
-      <div style={{ width: '400px', maxWidth: '80vw', height: '4px', background: '#1E1E1E', borderRadius: '2px', overflow: 'hidden' }}>
-        <div style={{ height: '100%', background: '#E8440A', width: `${progress}%`, transition: 'width 0.5s ease', boxShadow: '0 0 10px #E8440A' }} />
-      </div>
-      <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '12px' }}>{Math.round(progress)}%</div>
+      {/* Background Decorative Grid */}
+      <div 
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(var(--accent-primary) 0.5px, transparent 0.5px)`,
+          backgroundSize: '24px 24px'
+        }}
+      />
     </div>
   );
 }

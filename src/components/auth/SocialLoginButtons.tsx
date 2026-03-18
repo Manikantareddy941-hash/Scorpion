@@ -53,7 +53,7 @@ export default function SocialLoginButtons() {
   return (
     <div className="w-full">
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-2 text-red-700 text-sm text-center">
+        <div className="bg-[var(--status-error)]/10 border border-[var(--status-error)]/20 rounded-lg p-2 mb-2 text-[var(--status-error)] text-sm text-center font-bold">
           {error}
         </div>
       )}
@@ -65,7 +65,7 @@ export default function SocialLoginButtons() {
             aria-label={p.aria}
             onClick={() => handleOAuth(p.provider)}
             disabled={!!loadingProvider}
-            className={`w-11 h-11 flex items-center justify-center rounded-full border border-gray-300 dark:border-white/10 bg-white dark:bg-white/10 shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:shadow-lg hover:border-indigo-400 dark:hover:border-indigo-300 hover:bg-gradient-to-br hover:from-indigo-100 hover:to-purple-100 dark:hover:bg-white/20 ${loadingProvider === p.provider ? 'opacity-60 cursor-not-allowed' : ''}`}
+            className={`w-11 h-11 flex items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 hover:shadow-lg hover:border-[var(--accent-primary)]/50 hover:bg-[var(--accent-primary)]/5 ${loadingProvider === p.provider ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
             {loadingProvider === p.provider ? (
               <span className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />

@@ -138,8 +138,8 @@ export default function SecurityDashboard() {
     if (loading) return (
         <div className="min-h-screen bg-[var(--bg-primary)] p-8 flex items-center justify-center">
             <div className="text-center">
-                <Shield className="w-12 h-12 text-orange-500 animate-pulse mx-auto mb-4" />
-                <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-widest animate-pulse">Scanning Perimeter...</h2>
+                <Shield className="w-12 h-12 text-[var(--accent-primary)] animate-pulse mx-auto mb-4" />
+                <h2 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-widest animate-pulse">Scanning Perimeter...</h2>
             </div>
         </div>
     );
@@ -149,12 +149,12 @@ export default function SecurityDashboard() {
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
                     <div className="flex items-center gap-4">
-                        <div className="bg-orange-500 p-3 rounded-2xl shadow-lg shadow-orange-200">
+                        <div className="bg-[var(--accent-primary)] p-3 rounded-2xl shadow-lg shadow-[var(--accent-primary)]/20">
                             <Shield className="w-8 h-8 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black tracking-tighter italic uppercase text-slate-900 dark:text-white leading-none">Fleet Security</h1>
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Real-time Perimeter Defense</p>
+                            <h1 className="text-3xl font-black tracking-tighter italic uppercase text-[var(--text-primary)] leading-none">Fleet Security</h1>
+                            <p className="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-widest mt-1">Real-time Perimeter Defense</p>
                         </div>
                     </div>
                 </div>
@@ -170,25 +170,25 @@ export default function SecurityDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <MetricCard label="Active Findings" value={stats.totalVulns} icon={<Bug className="text-red-500" />} />
-                    <MetricCard label="High Risk Targets" value={repos.filter(r => r.risk_score > 70).length} icon={<AlertTriangle className="text-amber-500" />} />
-                    <MetricCard label="Audit Logs" value={results.length} icon={<Terminal className="text-orange-500" />} />
+                    <MetricCard label="Active Findings" value={stats.totalVulns} icon={<Bug className="text-[var(--status-error)]" />} />
+                    <MetricCard label="High Risk Targets" value={repos.filter(r => r.risk_score > 70).length} icon={<AlertTriangle className="text-[var(--status-warning)]" />} />
+                    <MetricCard label="Audit Logs" value={results.length} icon={<Terminal className="text-[var(--accent-primary)]" />} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     <div className="lg:col-span-3 space-y-6">
                         <div className="bg-[var(--bg-card)] rounded-3xl shadow-sm border border-[var(--border-subtle)] overflow-hidden">
-                            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white/50 backdrop-blur-sm">
+                            <div className="p-6 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--text-primary)]/5 backdrop-blur-sm">
                                 <div className="flex items-center gap-3">
-                                    <Clock className="w-5 h-5 text-slate-400" />
-                                    <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest italic">Live Audit Trail</h2>
+                                    <Clock className="w-5 h-5 text-[var(--text-secondary)]" />
+                                    <h2 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-widest italic">Live Audit Trail</h2>
                                 </div>
-                                <button onClick={fetchDashboardData} className="p-2 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all"><RefreshCw className="w-5 h-5" /></button>
+                                <button onClick={fetchDashboardData} className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/5 rounded-xl transition-all"><RefreshCw className="w-5 h-5" /></button>
                             </div>
 
-                            <div className="divide-y divide-slate-100">
+                            <div className="divide-y divide-[var(--border-subtle)]">
                                 {results.length === 0 ? (
-                                    <div className="p-20 text-center flex flex-col items-center text-slate-400 uppercase tracking-widest text-sm font-bold">No Audit Logs Found</div>
+                                    <div className="p-20 text-center flex flex-col items-center text-[var(--text-secondary)] uppercase tracking-widest text-sm font-bold">No Audit Logs Found</div>
                                 ) : (
                                     results.map((scan: any) => (
                                         <ScanItem key={scan.$id} scan={scan} onRescan={handleRunScan} isTriggering={triggering === scan.repo_id} />
@@ -210,38 +210,38 @@ export default function SecurityDashboard() {
 
 function MetricCard({ label, value, icon }: { label: string, value: any, icon: any }) {
     return (
-        <div className="bg-[var(--bg-card)] p-6 rounded-3xl shadow-sm border border-[var(--border-subtle)] flex items-center justify-between group hover:border-orange-200 transition-all">
+        <div className="bg-[var(--bg-card)] p-6 rounded-3xl shadow-sm border border-[var(--border-subtle)] flex items-center justify-between group hover:border-[var(--accent-primary)]/30 transition-all">
             <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">{label}</p>
-                <p className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter italic">{value}</p>
+                <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1 italic">{label}</p>
+                <p className="text-3xl font-black text-[var(--text-primary)] tracking-tighter italic">{value}</p>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl group-hover:bg-orange-50 transition-colors">{icon}</div>
+            <div className="bg-[var(--bg-secondary)] p-3 rounded-2xl group-hover:bg-[var(--accent-primary)]/10 transition-colors">{icon}</div>
         </div>
     );
 }
 
 function ScanItem({ scan, onRescan, isTriggering }: { scan: ScanResult, onRescan: (id: string) => void, isTriggering: boolean }) {
     return (
-        <div className="p-6 hover:bg-white/5 transition-all group">
+        <div className="p-6 hover:bg-[var(--text-primary)]/5 transition-all group">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-2xl ${scan.status === 'completed' ? 'bg-green-50' : scan.status === 'failed' ? 'bg-red-50' : 'bg-orange-50 animate-pulse'}`}>
-                        {scan.status === 'completed' ? <CheckCircle className="w-6 h-6 text-green-600" /> : scan.status === 'failed' ? <XCircle className="w-6 h-6 text-red-600" /> : <RefreshCw className="w-6 h-6 text-orange-500 animate-spin" />}
+                    <div className={`p-3 rounded-2xl ${scan.status === 'completed' ? 'bg-[var(--status-success)]/10' : scan.status === 'failed' ? 'bg-[var(--status-error)]/10' : 'bg-[var(--accent-primary)]/10 animate-pulse'}`}>
+                        {scan.status === 'completed' ? <CheckCircle className="w-6 h-6 text-[var(--status-success)]" /> : scan.status === 'failed' ? <XCircle className="w-6 h-6 text-[var(--status-error)]" /> : <RefreshCw className="w-6 h-6 text-[var(--accent-primary)] animate-spin" />}
                     </div>
                     <div>
                         <div className="flex items-center gap-3 mb-1">
-                            <span className="font-black text-lg text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-orange-500 transition-colors uppercase italic">{scan.repo_name}</span>
-                            <span className="text-[10px] font-mono text-slate-300 uppercase tracking-widest">#{scan.$id.slice(0, 8)}</span>
+                            <span className="font-black text-lg text-[var(--text-primary)] tracking-tight leading-none group-hover:text-[var(--accent-primary)] transition-colors uppercase italic">{scan.repo_name}</span>
+                            <span className="text-[10px] font-mono text-[var(--text-secondary)] opacity-60 uppercase tracking-widest">#{scan.$id.slice(0, 8)}</span>
                         </div>
-                        <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 font-black uppercase tracking-widest italic">
+                        <div className="flex items-center gap-4 text-[10px] font-bold text-[var(--text-secondary)] font-black uppercase tracking-widest italic">
                             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(scan.$createdAt).toLocaleTimeString()}</span>
-                            <span className={scan.status === 'completed' ? 'text-green-500' : scan.status === 'failed' ? 'text-red-500' : 'text-orange-500'}>{scan.status}</span>
+                            <span className={scan.status === 'completed' ? 'text-[var(--status-success)]' : scan.status === 'failed' ? 'text-[var(--status-error)]' : 'text-[var(--accent-primary)]'}>{scan.status}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button onClick={() => onRescan(scan.repo_id)} disabled={isTriggering || scan.status === 'in_progress'} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-black transition-all shadow-lg">
+                    <button onClick={() => onRescan(scan.repo_id)} disabled={isTriggering || scan.status === 'in_progress'} className="bg-[var(--accent-primary)] text-white p-3 rounded-xl hover:brightness-110 transition-all shadow-lg">
                         {isTriggering ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
                     </button>
                     <Link to={`/projects/${scan.repo_id}`} className="bg-[var(--bg-card)] p-3 rounded-xl border border-[var(--border-subtle)] hover:bg-white/5 transition-all">
@@ -260,11 +260,11 @@ function RiskDistribution({ repos }: { repos: RepoMetric[] }) {
 
     return (
         <div className="bg-[var(--bg-card)] p-6 rounded-3xl shadow-sm border border-[var(--border-subtle)]">
-            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 italic">Health Distribution</h2>
+            <h2 className="text-sm font-black text-[var(--text-secondary)] uppercase tracking-widest mb-6 italic">Health Distribution</h2>
             <div className="space-y-4">
-                <DistributionBar label="CRITICAL RISK" count={critical} total={repos.length} color="bg-red-500" />
-                <DistributionBar label="ELEVATED RISK" count={medium} total={repos.length} color="bg-amber-500" />
-                <DistributionBar label="SECURE BASELINE" count={low} total={repos.length} color="bg-emerald-500" />
+                <DistributionBar label="CRITICAL RISK" count={critical} total={repos.length} color="bg-[var(--status-error)]" />
+                <DistributionBar label="ELEVATED RISK" count={medium} total={repos.length} color="bg-[var(--status-warning)]" />
+                <DistributionBar label="SECURE BASELINE" count={low} total={repos.length} color="bg-[var(--status-success)]" />
             </div>
         </div>
     );
@@ -278,7 +278,7 @@ function DistributionBar({ label, count, total, color }: { label: string, count:
                 <span>{label}</span>
                 <span>{count} REPOS</span>
             </div>
-            <div className="h-2 bg-slate-50 dark:bg-slate-800/50 rounded-full overflow-hidden">
+            <div className="h-2 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
                 <div className={`h-full ${color} transition-all duration-1000`} style={{ width: `${percentage}%` }} />
             </div>
         </div>
@@ -287,9 +287,9 @@ function DistributionBar({ label, count, total, color }: { label: string, count:
 
 function DocumentationCard() {
     return (
-        <div className="bg-gradient-to-br from-orange-500 to-orange-700 p-6 rounded-3xl text-white relative overflow-hidden group">
+        <div className="bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] p-6 rounded-3xl text-white relative overflow-hidden group">
             <h3 className="text-lg font-black uppercase italic leading-none mb-2">Audit Compliance</h3>
-            <p className="text-[10px] font-bold uppercase text-orange-50 mb-4">View security policy docs</p>
+            <p className="text-[10px] font-bold uppercase text-white/80 mb-4">View security policy docs</p>
             <Shield className="absolute -right-8 -bottom-8 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
         </div>
     );

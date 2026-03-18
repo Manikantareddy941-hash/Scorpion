@@ -3,7 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Shield, Bell, Settings, Users, BarChart2 } from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import UVScanOverlay from './UVScanOverlay';
+import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import logoImg from '../assets/scorpionlegs-removebg-preview.png';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -11,8 +13,9 @@ const navItems = [
   { icon: BarChart2, label: 'Reports', path: '/reports' },
   { icon: Users, label: 'Teams', path: '/teams' },
   { icon: Bell, label: 'Alerts', path: '/alerts' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
 ];
+
+const settingsItem = { icon: Settings, label: 'Settings', path: '/settings' };
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -21,6 +24,7 @@ export default function Sidebar() {
   const [scanning, setScanning] = useState(false);
   const [scanTarget, setScanTarget] = useState('');
   const { getJWT } = useAuth();
+  const { getLogoFilter, getLogoBlendMode } = useTheme();
   const [scanId, setScanId] = useState<string | null>(null);
 
   const handleScan = async (data: any) => {
@@ -67,16 +71,26 @@ export default function Sidebar() {
   };
 
   return (
-    <div style={{ width: '220px', minHeight: '100vh', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0' }}>
+    <div style={{ width: '220px', minHeight: 'auto', height: '90vh', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
       {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0 20px 24px' }}>
-        <img src="/src/assets/final_logo_png.png" alt="Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
-        <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.15em' }}>SCORPION</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 20px 24px' }}>
+        <img 
+            src={logoImg} 
+            alt="Scorpion Logo" 
+            style={{ 
+                width: 36, 
+                height: 36, 
+                objectFit: 'contain', 
+                filter: getLogoFilter(), 
+                mixBlendMode: getLogoBlendMode() 
+            }} 
+        />
+        <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.15em', fontStyle: 'italic' }}>SCORPION</span>
       </div>
 
       {/* New Scan Button */}
       <div style={{ padding: '0 16px 24px' }}>
-        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: '#E8440A', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer' }}>
+        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer' }}>
           + NEW SCAN
         </button>
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
@@ -94,22 +108,46 @@ export default function Sidebar() {
       )}
 
       {/* Nav Items */}
-      <nav style={{ flex: 1 }}>
-        {navItems.map(({ icon: Icon, label, path }) => {
-          const active = location.pathname === path;
-          return (
-            <div key={path} onClick={() => navigate(path)}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', cursor: 'pointer', borderLeft: active ? '3px solid #E8440A' : '3px solid transparent', background: active ? 'var(--bg-card)' : 'transparent', color: active ? '#E8440A' : '#666666', fontSize: '0.85rem', fontWeight: active ? 700 : 400, letterSpacing: '0.05em', transition: 'all 0.15s' }}>
-              <Icon size={16} />
-              {label}
-            </div>
-          );
-        })}
+      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1 }}>
+            {navItems.map(({ icon: Icon, label, path }) => {
+            const active = location.pathname === path;
+            return (
+                <div key={path} onClick={() => navigate(path)}
+                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', cursor: 'pointer', borderLeft: active ? '3px solid var(--accent-primary)' : '3px solid transparent', background: active ? 'var(--bg-card)' : 'transparent', color: active ? 'var(--accent-primary)' : 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: active ? 700 : 400, letterSpacing: '0.05em', transition: 'all 0.15s' }}>
+                <Icon size={16} />
+                {label}
+                </div>
+            );
+            })}
+        </div>
       </nav>
 
-      {/* Bottom */}
-      <div style={{ padding: '20px', borderTop: '1px solid var(--border-subtle)', color: '#444', fontSize: '0.75rem' }}>
-        SCORPION v2.0
+      {/* Bottom Section: Settings + Version */}
+      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
+        <div 
+            onClick={() => navigate(settingsItem.path)}
+            style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px', 
+                padding: '16px 20px', 
+                cursor: 'pointer', 
+                borderLeft: location.pathname === settingsItem.path ? '3px solid var(--accent-primary)' : '3px solid transparent', 
+                background: location.pathname === settingsItem.path ? 'var(--bg-card)' : 'transparent', 
+                color: location.pathname === settingsItem.path ? 'var(--accent-primary)' : 'var(--text-secondary)', 
+                fontSize: '0.85rem', 
+                fontWeight: location.pathname === settingsItem.path ? 700 : 400, 
+                letterSpacing: '0.05em', 
+                transition: 'all 0.15s' 
+            }}
+        >
+            <settingsItem.icon size={16} />
+            {settingsItem.label}
+        </div>
+        <div style={{ padding: '12px 20px', color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.5 }}>
+          SCORPION V1.0
+        </div>
       </div>
     </div>
   );
