@@ -17,7 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <div className="flex flex-1">
+      <div className="flex flex-1 items-stretch">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-16 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] flex items-center justify-between px-8 sticky top-0 z-40">
