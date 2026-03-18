@@ -45,7 +45,10 @@ export default function Sidebar() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ url: data.type === 'github' ? data.value : `upload://${Date.now()}` })
+        body: JSON.stringify({ 
+          url: data.type === 'github' ? data.value : `upload://${Date.now()}`,
+          visibility: 'private'
+        })
       });
       const repo = await repoRes.json();
       
@@ -71,21 +74,20 @@ export default function Sidebar() {
   };
 
   return (
-    <div style={{ width: '220px', minHeight: 'auto', height: '90vh', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-      {/* Logo */}
+    <div className="shrink-0" style={{ width: '220px', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 20px 24px' }}>
         <img 
             src={logoImg} 
             alt="Scorpion Logo" 
             style={{ 
-                width: 36, 
-                height: 36, 
+                width: 44, 
+                height: 44, 
                 objectFit: 'contain', 
                 filter: getLogoFilter(), 
                 mixBlendMode: getLogoBlendMode() 
             }} 
         />
-        <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.15em', fontStyle: 'italic' }}>SCORPION</span>
+        <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.4rem', letterSpacing: '0.15em', fontStyle: 'italic' }}>SCORPION</span>
       </div>
 
       {/* New Scan Button */}

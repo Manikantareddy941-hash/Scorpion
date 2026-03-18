@@ -7,8 +7,9 @@ export default function Footer() {
   
   return (
     <footer className="w-full bg-transparent pt-32 pb-10 overflow-hidden">
-      <div className="max-w-full mx-auto px-8 lg:px-16">
-        {/* Top Section: Asymmetric Heading and Links */}
+      <div className="w-full px-8 lg:px-16">
+        
+        {/* Top Section */}
         <div className="flex flex-col lg:flex-row justify-between items-start gap-12 lg:gap-20 mb-32">
           <div className="max-w-md">
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-[var(--text-primary)] leading-[0.9] uppercase italic">
@@ -35,37 +36,42 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mb-20 flex justify-center lg:justify-start w-full overflow-hidden">
-          <h1 className="font-black tracking-tighter leading-none text-[#0A0E1A] dark:text-[#0A0E1A] select-none uppercase italic" 
-              style={{ 
-                fontSize: 'clamp(80px, 15vw, 200px)',
-                letterSpacing: '-0.05em',
-                width: '100%',
-                textAlign: 'center'
-              }}>
+        {/* SCORPION watermark — fits exactly within padding */}
+        <div className="mb-20 flex items-center justify-center overflow-hidden">
+          <h1
+            className="font-black leading-none select-none uppercase italic"
+            style={{
+              fontSize: 'clamp(80px, 15vw, 200px)',
+              letterSpacing: '-0.03em',
+              color: 'var(--text-primary)',
+              opacity: 0.08,
+              textAlign: 'center',
+            }}
+          >
             SCORPION
           </h1>
         </div>
 
-        {/* Bottom Bar: Clean Stripe */}
-        <div className="flex flex-col md:flex-row justify-between items-end gap-8 pt-6 border-t border-[var(--border-subtle)]">
+        {/* Bottom Bar */}
+        <div className="flex flex-row justify-between items-center pt-6 border-t border-[var(--border-subtle)] w-full">
           <div className="flex items-center gap-3">
-             <img 
-               src={logoImg} 
-               alt="Scorpion Logo" 
-               className="w-5 h-5 object-contain"
-               style={{ filter: getLogoFilter(), mixBlendMode: getLogoBlendMode() }} 
-             />
-             <span className="text-[10px] font-black tracking-[0.2em] text-[var(--text-primary)] uppercase italic">SCORPION CORE</span>
+            <img 
+              src={logoImg} 
+              alt="Scorpion Logo" 
+              className="w-5 h-5 object-contain"
+              style={{ filter: getLogoFilter(), mixBlendMode: getLogoBlendMode() }} 
+            />
+            <span className="text-[10px] font-black tracking-[0.2em] text-[var(--text-primary)] uppercase italic">SCORPION CORE</span>
           </div>
           
-          <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-4 text-right">
+          <div className="flex items-center gap-x-8">
             <Link to="#" className="text-[9px] font-black text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors uppercase tracking-[0.2em] italic">ABOUT</Link>
             <Link to="#" className="text-[9px] font-black text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors uppercase tracking-[0.2em] italic">PRIVACY SUITE</Link>
             <Link to="#" className="text-[9px] font-black text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors uppercase tracking-[0.2em] italic">TERMS OF SERVICE</Link>
             <span className="text-[9px] font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic">V1.0</span>
           </div>
         </div>
+
       </div>
     </footer>
   );
