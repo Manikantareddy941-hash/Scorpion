@@ -1,7 +1,8 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { KeyRound, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 
 export default function VerifyOtp() {
     const [otp, setOtp] = useState('');
@@ -27,7 +28,6 @@ export default function VerifyOtp() {
             if (error) {
                 setError(error);
             } else {
-                // Success: Redirect to actual reset page with token
                 navigate('/reset-password', { state: { email, resetToken } });
             }
         } catch (err) {
@@ -38,28 +38,25 @@ export default function VerifyOtp() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8">
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-                        <KeyRound className="w-8 h-8 text-white" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Enter Code</h1>
-                    <p className="text-gray-600 dark:text-gray-300">We've sent a 6-digit code to <span className="font-semibold text-gray-900 dark:text-white">{email}</span></p>
-                </div>
+        <ModernAuthLayout subtext="Identity Verification">
+            <div className="w-full">
+                <h1 className="text-xl font-black mb-1 text-[var(--text-primary)] uppercase italic tracking-tight">
+                    Verify Vector
+                </h1>
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] mb-8 italic">
+                    Transmission sent to <span className="text-[var(--accent-primary)]">{email}</span>.
+                </p>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-800">{error}</p>
+                        <div className="bg-[var(--status-error)]/10 border border-[var(--status-error)]/20 rounded-xl p-4 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-[var(--status-error)] flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-[var(--status-error)] font-bold uppercase tracking-tight italic">{error}</p>
                         </div>
                     )}
 
-                    <div>
-                        <label htmlFor="otp" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Verification Code
-                        </label>
+                    <div className="space-y-2">
+                        <label htmlFor="otp" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Transmission Code</label>
                         <input
                             id="otp"
                             type="text"
@@ -67,7 +64,7 @@ export default function VerifyOtp() {
                             value={otp}
                             onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
                             required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-center text-2xl tracking-[10px] font-bold"
+                            className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-4 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] text-center text-3xl tracking-[12px] font-black transition-all placeholder-[var(--text-secondary)]/20"
                             placeholder="000000"
                         />
                     </div>
@@ -75,24 +72,27 @@ export default function VerifyOtp() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                        className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[var(--accent-primary)] hover:opacity-90 transition-all shadow-xl shadow-[var(--accent-primary)]/20 border-b-4 border-[var(--accent-secondary)] active:border-b-0 active:translate-y-1 disabled:opacity-50 italic text-white"
                     >
                         {loading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                            'Verify Code'
+                            <>
+                                Authenticate Vector
+                                <KeyRound className="w-4 h-4" />
+                            </>
                         )}
                     </button>
                 </form>
 
-                <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-                    <Link to="/forgot-password" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium transition text-sm">
+                <div className="mt-8 pt-6 border-t border-[var(--border-subtle)] text-center">
+                    <Link to="/forgot-password" className="inline-flex items-center gap-2 text-[var(--accent-primary)] hover:underline font-black text-[10px] uppercase tracking-widest italic transition">
                         <ArrowLeft className="w-4 h-4" />
-                        Resend Code
+                        Resend Transmission
                     </Link>
                 </div>
             </div>
-        </div>
+        </ModernAuthLayout>
     );
 }
 
