@@ -76,7 +76,7 @@ function App() {
           <NetworkErrorPanel onRetry={checkAppwrite} />
         </div>
       )}
-      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         {showSidebar && <Sidebar />}
         <div style={{ flex: 1, overflow: 'auto' }}>
           <Routes>
@@ -101,9 +101,9 @@ function App() {
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          <Footer />
         </div>
       </div>
+      <Footer />
       <AIChat />
     </div>
   );
