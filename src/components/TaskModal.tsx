@@ -17,7 +17,6 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
   const [priority, setPriority] = useState<string>('medium');
   const [dueDate, setDueDate] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
-  const [issueUrl, setIssueUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,7 +28,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       setPriority(task.priority);
       setDueDate(task.due_date ? task.due_date.split('T')[0] : '');
       setRepoUrl(task.repo_url || '');
-      setIssueUrl(task.issue_url || '');
+      setRepoUrl(task.repo_url || '');
     }
   }, [task]);
 
@@ -46,7 +45,6 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
         priority,
         due_date: dueDate || null,
         repo_url: repoUrl || null,
-        issue_url: issueUrl || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -69,10 +67,10 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl dark:shadow-black/50 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {task ? 'Edit Task' : 'Create New Task'}
+      <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-[var(--border-subtle)]">
+          <h2 className="text-2xl font-black italic tracking-tighter text-[var(--text-primary)]">
+            {task ? 'REDEFINE PROTOCOL' : 'INITIATE NEW TASK'}
           </h2>
           <button
             onClick={onClose}
@@ -84,14 +82,14 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="bg-[var(--status-error)]/10 border border-[var(--status-error)]/20 rounded-lg p-4">
+              <p className="text-sm text-[var(--status-error)] font-bold italic uppercase tracking-widest">{error}</p>
             </div>
           )}
 
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Task Title <span className="text-red-500">*</span>
+            <label htmlFor="title" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
+              Task Title <span className="text-[var(--status-error)]">*</span>
             </label>
             <input
               id="title"
@@ -99,13 +97,13 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+              className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50"
               placeholder="Enter task title"
             />
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="description" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
               Description
             </label>
             <textarea
@@ -113,41 +111,41 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition resize-none"
+              className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition resize-none text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50"
               placeholder="Enter task description"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="status" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
                 Status
               </label>
               <select
                 id="status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)]"
               >
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
+                <option value="todo" className="bg-[var(--bg-card)]">To Do</option>
+                <option value="in_progress" className="bg-[var(--bg-card)]">In Progress</option>
+                <option value="completed" className="bg-[var(--bg-card)]">Completed</option>
               </select>
             </div>
  
             <div>
-              <label htmlFor="priority" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="priority" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
                 Priority
               </label>
               <select
                 id="priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)]"
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low" className="bg-[var(--bg-card)]">Low</option>
+                <option value="medium" className="bg-[var(--bg-card)]">Medium</option>
+                <option value="high" className="bg-[var(--bg-card)]">High</option>
               </select>
             </div>
           </div>
@@ -161,11 +159,10 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+              className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)]"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Repository URL
@@ -175,40 +172,25 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 type="url"
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50"
                 placeholder="https://github.com/..."
               />
             </div>
-
-            <div>
-              <label htmlFor="issueUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Issue URL
-              </label>
-              <input
-                id="issueUrl"
-                type="url"
-                value={issueUrl}
-                onChange={(e) => setIssueUrl(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition"
-                placeholder="https://github.com/.../issues/1"
-              />
-            </div>
-          </div>
 
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 transition font-medium"
+              className="flex-1 px-6 py-3 border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] transition font-black uppercase tracking-widest italic text-xs"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg transition font-medium"
+              className="flex-1 px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-50 text-white rounded-lg transition font-black uppercase tracking-widest italic text-xs shadow-xl shadow-[var(--accent-primary)]/20"
             >
-              {loading ? 'Saving...' : task ? 'Update Task' : 'Create Task'}
+              {loading ? 'Processing...' : task ? 'Confirm Override' : 'Deploy Task'}
             </button>
           </div>
         </form>

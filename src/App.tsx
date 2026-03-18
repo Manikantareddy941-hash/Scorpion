@@ -60,10 +60,10 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Shield className="w-12 h-12 text-orange-500 animate-pulse" />
-          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Checking security protocols…</h2>
+      <div className="flex items-center justify-center min-h-screen" style={{ background: 'var(--bg-primary)' }}>
+        <div className="flex flex-col items-center space-y-4">
+          <Shield size={48} className="text-[var(--accent-primary)] animate-pulse" />
+          <p className="text-lg text-[var(--text-secondary)]">Loading application...</p>
         </div>
       </div>
     );
