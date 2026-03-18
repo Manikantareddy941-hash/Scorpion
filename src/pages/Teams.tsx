@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { databases, DB_ID, account, ID, Query } from '../lib/appwrite';
+import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, Plus, Shield, UserPlus, Trash2, Mail, ChevronRight, X, User } from 'lucide-react';
 
@@ -139,10 +139,10 @@ export default function Teams() {
 
     const getRoleBadgeColor = (role: string) => {
         switch (role) {
-            case 'owner': return 'text-purple-600 bg-purple-50 dark:bg-purple-500/10 border-purple-100 dark:border-purple-500/20';
-            case 'admin': return 'text-orange-600 bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20';
-            case 'developer': return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20';
-            default: return 'text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800';
+            case 'owner': return 'text-[var(--accent-secondary)] bg-[var(--accent-secondary)]/10 border-[var(--accent-secondary)]/20';
+            case 'admin': return 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/20';
+            case 'developer': return 'text-[var(--status-success)] bg-[var(--status-success)]/10 border-[var(--status-success)]/20';
+            default: return 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] border-[var(--border-subtle)]';
         }
     };
 
@@ -150,8 +150,8 @@ export default function Teams() {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
-                    <Users className="w-12 h-12 text-orange-500 animate-pulse" />
-                    <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse italic">Synchronizing Fleet...</h2>
+                    <Users className="w-12 h-12 text-[var(--accent-primary)] animate-pulse" />
+                    <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">Synchronizing Fleet...</h2>
                 </div>
             </div>
         );
@@ -162,12 +162,12 @@ export default function Teams() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-orange-500 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-orange-500/20">
+                        <div className="w-14 h-14 bg-[var(--accent-primary)] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-[var(--accent-primary)]/20">
                             <Users className="w-7 h-7" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase italic">Collaborators</h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1 italic">Fleet Command & Access Control</p>
+                            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">Collaborators</h1>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic">Fleet Command & Access Control</p>
                         </div>
                     </div>
                     <button
@@ -180,16 +180,16 @@ export default function Teams() {
 
                 {teams.length === 0 ? (
                     <div className="premium-card p-24 text-center flex flex-col items-center">
-                        <div className="w-24 h-24 bg-slate-50 dark:bg-slate-800/50 rounded-[2rem] flex items-center justify-center mb-8 border border-slate-100 dark:border-slate-800">
-                            <Users className="w-10 h-10 text-slate-200" />
+                        <div className="w-24 h-24 bg-[var(--bg-secondary)] rounded-[2rem] flex items-center justify-center mb-8 border border-[var(--border-subtle)]">
+                            <Users className="w-10 h-10 text-[var(--text-secondary)]/10" />
                         </div>
-                        <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight mb-2">Lone Pilot Detected</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10 italic max-w-xs mx-auto">
+                        <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">Lone Pilot Detected</h2>
+                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-10 italic max-w-xs mx-auto">
                             No active clusters found. Deploy your first team to start multi-vector collaboration.
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="px-10 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/40"
+                            className="px-10 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40"
                         >
                             Deploy New Team
                         </button>
@@ -198,7 +198,7 @@ export default function Teams() {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
                         {/* Team List Sidebar */}
                         <div className="lg:col-span-1 border-r border-[var(--border-subtle)] pr-12">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] italic mb-8">Active Clusters</h3>
+                            <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mb-8">Active Clusters</h3>
                             <div className="space-y-4">
                                 {teams.map((t) => (
                                     <button
@@ -208,14 +208,14 @@ export default function Teams() {
                                             fetchMembers(t.$id);
                                         }}
                                         className={`w-full text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.$id === t.$id
-                                            ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/30'
-                                            : 'hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400 border border-transparent'
+                                            ? 'bg-[var(--accent-primary)] text-white shadow-xl shadow-[var(--accent-primary)]/30'
+                                            : 'hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
                                             }`}
                                     >
                                         <span className="font-black text-xs uppercase tracking-tight italic z-10">{t.name}</span>
                                         <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.$id === t.$id ? 'translate-x-1' : 'opacity-0'}`} />
                                         {selectedTeam?.$id === t.$id && (
-                                            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-orange-600 opacity-100" />
+                                            <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-primary)]/80 opacity-100" />
                                         )}
                                     </button>
                                 ))}
@@ -229,43 +229,43 @@ export default function Teams() {
                                     <div className="p-10 border-b border-[var(--border-subtle)] bg-[var(--bg-accent)]/30">
                                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
                                             <div>
-                                                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">{selectedTeam.name}</h2>
+                                                <h2 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-2">{selectedTeam.name}</h2>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded text-[9px] font-black uppercase tracking-widest italic border border-orange-500/10">
+                                                    <span className="px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] rounded text-[9px] font-black uppercase tracking-widest italic border border-[var(--accent-primary)]/10">
                                                         Cluster ID: {selectedTeam.$id.slice(0, 8)}
                                                     </span>
-                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic">
+                                                    <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">
                                                         &bull; DEPLOYED {new Date(selectedTeam.$createdAt).toLocaleDateString()}
                                                     </span>
                                                 </div>
                                             </div>
                                             <button
                                                 onClick={() => setShowInviteModal(true)}
-                                                className="flex items-center gap-3 px-6 py-3 bg-white dark:bg-slate-900 text-orange-500 border border-orange-200 dark:border-slate-700 rounded-2xl hover:bg-orange-50 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-orange-500/5"
+                                                className="flex items-center gap-3 px-6 py-3 bg-[var(--bg-card)] text-[var(--accent-primary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--accent-primary)]/5 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[var(--accent-primary)]/5"
                                             >
-                                                <UserPlus className="w-4 h-4 text-orange-500" />
+                                                <UserPlus className="w-4 h-4 text-[var(--accent-primary)]" />
                                                 Add Operator
                                             </button>
                                         </div>
                                     </div>
 
                                     <div className="p-10">
-                                        <h3 className="text-xs font-black text-slate-900 dark:text-white mb-8 uppercase tracking-widest italic">Operations Personnel</h3>
+                                        <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-widest italic">Operations Personnel</h3>
                                         <div className="space-y-4">
                                             {members.map((member) => (
-                                                <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-orange-500/30 transition-all group">
+                                                <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 transition-all group">
                                                     <div className="flex items-center gap-5 w-full md:w-auto">
-                                                        <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 shadow-sm font-black group-hover:scale-110 transition-transform">
+                                                        <div className="w-12 h-12 bg-[var(--bg-card)] rounded-2xl flex items-center justify-center text-[var(--text-secondary)] border border-[var(--border-subtle)] shadow-sm font-black group-hover:scale-110 transition-transform">
                                                             <User className="w-6 h-6" />
                                                         </div>
                                                         <div>
-                                                            <p className="font-black text-slate-900 dark:text-white italic uppercase tracking-tight text-sm mb-1">{member.user_email}</p>
+                                                            <p className="font-black text-[var(--text-primary)] italic uppercase tracking-tight text-sm mb-1">{member.user_email}</p>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest italic">
+                                                                <span className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-widest italic">
                                                                     {member.user_id === user?.$id ? 'Primary Controller' : 'Sub-Operator'}
                                                                 </span>
-                                                                <span className="w-1 h-1 bg-slate-200 rounded-full" />
-                                                                <span className="text-[9px] text-emerald-500 font-black uppercase tracking-widest italic">Online-Ready</span>
+                                                                <span className="w-1 h-1 bg-[var(--border-subtle)] rounded-full" />
+                                                                <span className="text-[9px] text-[var(--status-success)] font-black uppercase tracking-widest italic">Online-Ready</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -274,7 +274,7 @@ export default function Teams() {
                                                             {member.role}
                                                         </span>
                                                         {member.user_id !== user?.$id && (
-                                                            <button className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-all border border-transparent hover:border-rose-100">
+                                                            <button className="p-2.5 text-[var(--text-secondary)] hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded-xl transition-all border border-transparent hover:border-[var(--status-error)]/20">
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
                                                         )}
@@ -296,43 +296,43 @@ export default function Teams() {
                     <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] w-full max-w-md p-10 shadow-2xl border border-[var(--border-subtle)] animate-in zoom-in duration-300 pointer-events-auto">
                         <div className="flex items-center justify-between mb-8">
                             <div>
-                                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">New Fleet Cluster</h3>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic mt-1">Initialize organizational vector</p>
+                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">New Fleet Cluster</h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Initialize organizational vector</p>
                             </div>
-                            <button onClick={() => setShowCreateModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:text-white transition-colors">
+                            <button onClick={() => setShowCreateModal(false)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
                         <form onSubmit={handleCreateTeam}>
                             <div className="space-y-8">
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-3 block">Designation Name</label>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">Designation Name</label>
                                     <div className="relative">
-                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
+                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)]" />
                                         <input
                                             type="text"
                                             autoFocus
                                             value={newTeamName}
                                             onChange={(e) => setNewTeamName(e.target.value)}
                                             placeholder="e.g. CORE-OPS"
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-black uppercase italic text-sm tracking-tight"
+                                            className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black uppercase italic text-sm tracking-tight text-[var(--text-primary)]"
                                         />
                                     </div>
-                                    {error && <p className="mt-2 text-[10px] font-bold text-rose-500 uppercase tracking-widest italic">{error}</p>}
+                                    {error && <p className="mt-2 text-[10px] font-bold text-[var(--status-error)] uppercase tracking-widest italic">{error}</p>}
                                 </div>
                             </div>
                             <div className="flex gap-4 mt-12">
                                 <button
                                     type="button"
                                     onClick={() => setShowCreateModal(false)}
-                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-800"
+                                    className="flex-1 px-6 py-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--bg-secondary)] transition-all border border-[var(--border-subtle)]"
                                 >
                                     Abort
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="flex-1 px-6 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 px-6 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {submitting ? 'Initializing...' : 'Activate Cluster'}
                                 </button>
@@ -348,37 +348,37 @@ export default function Teams() {
                     <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] w-full max-w-md p-10 shadow-2xl border border-[var(--border-subtle)] animate-in zoom-in duration-300">
                         <div className="flex items-center justify-between mb-8">
                             <div>
-                                <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Add Personnel</h3>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic mt-1">Onboard new security operator</p>
+                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Add Personnel</h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Onboard new security operator</p>
                             </div>
-                            <button onClick={() => setShowInviteModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:text-white transition-colors">
+                            <button onClick={() => setShowInviteModal(false)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
                         <form onSubmit={handleInviteMember}>
                             <div className="space-y-8">
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic mb-3 block">Communications ID (Email)</label>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">Communications ID (Email)</label>
                                     <div className="relative">
-                                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
+                                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)]" />
                                         <input
                                             type="email"
                                             required
                                             value={inviteEmail}
                                             onChange={(e) => setInviteEmail(e.target.value)}
                                             placeholder="operator@sector.com"
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-black italic text-sm tracking-tight"
+                                            className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black italic text-sm tracking-tight text-[var(--text-primary)]"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-orange-500 uppercase tracking-widest italic mb-3 block">Authority Level (Role)</label>
+                                    <label className="text-[10px] font-black text-[var(--accent-primary)] uppercase tracking-widest italic mb-3 block">Authority Level (Role)</label>
                                     <div className="relative">
-                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500 pointer-events-none" />
+                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)] pointer-events-none" />
                                         <select
                                             value={inviteRole}
                                             onChange={(e) => setInviteRole(e.target.value as any)}
-                                            className="w-full pl-14 pr-6 py-5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all font-black italic text-sm tracking-tight appearance-none"
+                                            className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black italic text-sm tracking-tight appearance-none text-[var(--text-primary)]"
                                         >
                                             <option value="viewer">Viewer Protocol (Read-Only)</option>
                                             <option value="developer">Developer Protocol (Scan & Resolve)</option>
@@ -391,13 +391,13 @@ export default function Teams() {
                                 <button
                                     type="button"
                                     onClick={() => setShowInviteModal(false)}
-                                    className="flex-1 px-6 py-4 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-800"
+                                    className="flex-1 px-6 py-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--bg-secondary)] transition-all border border-[var(--border-subtle)]"
                                 >
                                     Abort
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 px-6 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-xl shadow-orange-500/40"
+                                    className="flex-1 px-6 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40"
                                 >
                                     Deploy Invitation
                                 </button>

@@ -1,4 +1,4 @@
-import { Client, Account, Databases, ID, Query } from 'appwrite';
+import { Client, Account, Databases, Storage, ID, Query } from 'appwrite';
 
 const client = new Client()
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
@@ -6,6 +6,7 @@ const client = new Client()
 
 export const account = new Account(client);
 export const databases = new Databases(client);
+export const storage = new Storage(client);
 export { ID, Query };
 
 export const DB_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
@@ -18,6 +19,7 @@ export const COLLECTIONS = {
   NOTIFICATION_PREFERENCES: 'notification_preferences',
   POLICY_EVALUATIONS:       'policy_evaluations',
   NOTIFICATIONS:            'notifications',
+  AVATARS_BUCKET_ID:        '69ba01e5000964e8c2c0',
 };
 
 export const OAUTH_SUCCESS_URL = 'https://localhost:5173/auth/callback';

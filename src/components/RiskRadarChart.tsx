@@ -17,16 +17,16 @@ export default function RadarChart() {
     <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ReRadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
-          <PolarGrid stroke="#1E1E1E" />
+          <PolarGrid stroke="var(--border-subtle)" />
           <PolarAngleAxis 
             dataKey="subject" 
-            tick={{ fill: '#666', fontSize: 9, fontWeight: 900 }}
+            tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontWeight: 900 }}
           />
           <Radar
             name="Risk Score"
             dataKey="A"
-            stroke="#E8440A"
-            fill="#E8440A"
+            stroke="var(--accent-primary)"
+            fill="var(--accent-primary)"
             fillOpacity={0.15}
           />
         </ReRadarChart>

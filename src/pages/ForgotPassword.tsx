@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
-import AuthDiagnosticBanner from '../components/AuthDiagnosticBanner';
+import { ArrowLeft, Loader2, AlertCircle, Mail } from 'lucide-react';
+import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState('');
@@ -14,92 +14,81 @@ export default function ForgotPassword() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setHealth(null);
         setLoading(true);
 
         try {
             const { error } = await requestReset(email);
             if (error) {
-                // Suppress network errors and show simple message
                 if (error.toLowerCase().includes('fetch') || error.toLowerCase().includes('network')) {
                     setError('Working on it... Please wait.');
-                    // Don't run diagnostics for network errors
                 } else {
                     setError(error);
                 }
             } else {
-                // Success: Redirect to OTP verification page
                 navigate('/verify-otp', { state: { email } });
             }
         } catch (err: any) {
-            // Suppress fetch errors
-            if (err.message?.toLowerCase().includes('fetch')) {
-                setError('Sending reset code... Please wait or refresh if stuck.');
-            } else {
-                setError('An unexpected error occurred.');
-            }
+            setError('An unexpected error occurred.');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8">
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-                        <Mail className="w-8 h-8 text-white" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Forgot Password</h1>
-                    <p className="text-gray-600 dark:text-gray-300">Enter your email and we'll send you a 6-digit code to reset your password.</p>
-                </div>
+        <ModernAuthLayout subtext="Secure Identity Recovery">
+            <div className="w-full">
+                <h1 className="text-xl font-black mb-1 text-[var(--text-primary)] uppercase italic tracking-tight">
+                    Reset Access
+                </h1>
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] mb-8 italic">
+                    Enter vector ID to initiate recovery sequence.
+                </p>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     {error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-800">{error}</p>
+                        <div className="bg-[var(--status-error)]/10 border border-[var(--status-error)]/20 rounded-xl p-4 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-[var(--status-error)] flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-[var(--status-error)] font-bold uppercase tracking-tight italic">{error}</p>
                         </div>
                     )}
 
-                    {health && <AuthDiagnosticBanner health={health} />}
-
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Email Address
-                        </label>
+                    <div className="space-y-2">
+                        <label htmlFor="email" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Vector ID (Email)</label>
                         <input
                             id="email"
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                            placeholder="you@example.com"
+                            className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
+                            placeholder="operator@scorpion.secure"
                         />
                     </div>
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                        className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[var(--accent-primary)] hover:opacity-90 transition-all shadow-xl shadow-[var(--accent-primary)]/20 border-b-4 border-[var(--accent-secondary)] active:border-b-0 active:translate-y-1 disabled:opacity-50 italic text-white"
                     >
                         {loading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                            'Send Reset Code'
+                            <>
+                                Send Recovery Code
+                                <Mail className="w-4 h-4" />
+                            </>
                         )}
                     </button>
                 </form>
 
-                <div className="mt-8 pt-6 border-t border-gray-100 text-center">
-                    <Link to="/auth" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium transition">
+                <div className="mt-8 pt-6 border-t border-[var(--border-subtle)] text-center">
+                    <Link to="/login" className="inline-flex items-center gap-2 text-[var(--accent-primary)] hover:underline font-black text-[10px] uppercase tracking-widest italic transition">
                         <ArrowLeft className="w-4 h-4" />
-                        Back to Login
+                        Return to Uplink
                     </Link>
                 </div>
             </div>
-        </div>
+        </ModernAuthLayout>
     );
 }
 

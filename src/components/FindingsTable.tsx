@@ -22,10 +22,10 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
     if (findings.length === 0) {
         return (
             <div className="premium-card p-20 text-center flex flex-col items-center justify-center">
-                <div className="bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-900 w-20 h-20 rounded-3xl flex items-center justify-center mb-6 border border-slate-100 dark:border-slate-800 dark:border-slate-800">
-                    <Zap className="w-10 h-10 text-slate-200 dark:text-slate-700" />
+                <div className="bg-[var(--bg-secondary)] w-20 h-20 rounded-3xl flex items-center justify-center mb-6 border border-[var(--border-subtle)]">
+                    <Zap className="w-10 h-10 text-[var(--text-secondary)] opacity-30" />
                 </div>
-                <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-xs italic">No active threats detected. Clean scan.</p>
+                <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">No active threats detected. Clean scan.</p>
             </div>
         );
     }
@@ -33,29 +33,29 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
     return (
         <div className="space-y-6">
             {findings.map(vuln => (
-                <div key={vuln.$id} className="premium-card p-8 group hover:border-orange-500/50">
+                <div key={vuln.$id} className="premium-card p-8 group hover:border-[var(--accent-primary)]/50">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-4 mb-4">
                                 <SeverityBadge severity={vuln.severity} />
-                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
-                                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic flex items-center gap-1.5">
+                                <div className="h-4 w-px bg-[var(--border-subtle)]" />
+                                <span className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic flex items-center gap-1.5">
                                     <Bug className="w-3.5 h-3.5" /> {vuln.tool}
                                 </span>
                             </div>
-                            <h3 className="text-slate-900 dark:text-white font-black text-xl tracking-tight mb-3 group-hover:text-orange-500 transition-colors uppercase italic leading-tight">{vuln.message}</h3>
-                            <div className="flex flex-wrap items-center gap-8 text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">
-                                <span className="flex items-center gap-2"><Terminal className="w-4 h-4 text-slate-300 dark:text-slate-600" /> {vuln.file_path}{vuln.line_number ? `:${vuln.line_number}` : ''}</span>
-                                <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-slate-300 dark:text-slate-600" /> {new Date(vuln.$createdAt).toLocaleDateString()}</span>
+                            <h3 className="text-[var(--text-primary)] font-black text-xl tracking-tight mb-3 group-hover:text-[var(--accent-primary)] transition-colors uppercase italic leading-tight">{vuln.message}</h3>
+                            <div className="flex flex-wrap items-center gap-8 text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
+                                <span className="flex items-center gap-2"><Terminal className="w-4 h-4 text-[var(--text-secondary)]/50" /> {vuln.file_path}{vuln.line_number ? `:${vuln.line_number}` : ''}</span>
+                                <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-[var(--text-secondary)]/50" /> {new Date(vuln.$createdAt).toLocaleDateString()}</span>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
                             {vuln.status !== 'resolved' && onRemediate && (
                                 <button
                                     onClick={() => onRemediate(vuln.$id)}
-                                    className="px-8 py-3.5 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl hover:bg-orange-500 dark:hover:bg-orange-600 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-slate-200 dark:shadow-none flex items-center gap-2.5"
+                                    className="px-8 py-3.5 bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--accent-primary)] hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2.5"
                                 >
-                                    <Sparkles className="w-4 h-4 text-orange-400" />
+                                    <Sparkles className="w-4 h-4 text-[var(--accent-primary)] group-hover:text-white" />
                                     Suggest Fix
                                 </button>
                             )}
@@ -63,13 +63,13 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
                                 <button
                                     onClick={() => onConvert(vuln.$id)}
                                     disabled={convertingId === vuln.$id}
-                                    className="px-8 py-3.5 bg-orange-500 text-white rounded-2xl hover:bg-black transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-orange-500/20 disabled:bg-slate-200 dark:disabled:bg-slate-800 flex items-center gap-2.5"
+                                    className="px-8 py-3.5 bg-[var(--accent-primary)] text-white rounded-2xl hover:bg-[var(--accent-secondary)] transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-[var(--accent-primary)]/20 disabled:bg-[var(--bg-secondary)] flex items-center gap-2.5"
                                 >
                                     {convertingId === vuln.$id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                                     Convert to Task
                                 </button>
                             )}
-                            <button className="bg-[var(--bg-primary)] text-slate-400 p-3.5 rounded-2xl border border-[var(--border-subtle)] hover:border-orange-500/50 hover:text-orange-500 transition-all flex items-center justify-center">
+                            <button className="bg-[var(--bg-primary)] text-[var(--text-secondary)] p-3.5 rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50 hover:text-[var(--accent-primary)] transition-all flex items-center justify-center">
                                 <ExternalLink className="w-5 h-5" />
                             </button>
                         </div>
@@ -82,15 +82,15 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConver
 
 function SeverityBadge({ severity }: { severity: string }) {
     const config = {
-        critical: { bg: 'bg-rose-600', text: 'text-white', shadow: 'shadow-rose-500/20' },
-        high: { bg: 'bg-rose-50 dark:bg-rose-500/10', text: 'text-rose-600', shadow: 'border-rose-100 dark:border-rose-500/20' },
-        medium: { bg: 'bg-amber-50 dark:bg-amber-500/10', text: 'text-amber-600', shadow: 'border-amber-100 dark:border-amber-500/20' },
-        low: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', text: 'text-emerald-600', shadow: 'border-emerald-100 dark:border-emerald-500/20' },
-        info: { bg: 'bg-blue-50 dark:bg-blue-500/10', text: 'text-blue-600', shadow: 'border-blue-100 dark:border-blue-500/20' }
-    }[severity] || { bg: 'bg-slate-50 dark:bg-slate-800/50 dark:bg-slate-500/10', text: 'text-slate-600 dark:text-slate-300', shadow: 'border-slate-100 dark:border-slate-800 dark:border-slate-500/20' };
+        critical: { bg: 'bg-[var(--severity-critical)]/10', text: 'text-[var(--severity-critical)]', border: 'border-[var(--severity-critical)]/20' },
+        high: { bg: 'bg-[var(--severity-high)]/10', text: 'text-[var(--severity-high)]', border: 'border-[var(--severity-high)]/20' },
+        medium: { bg: 'bg-[var(--severity-medium)]/10', text: 'text-[var(--severity-medium)]', border: 'border-[var(--severity-medium)]/20' },
+        low: { bg: 'bg-[var(--severity-low)]/10', text: 'text-[var(--severity-low)]', border: 'border-[var(--severity-low)]/20' },
+        info: { bg: 'bg-[var(--severity-info)]/10', text: 'text-[var(--severity-info)]', border: 'border-[var(--severity-info)]/20' }
+    }[severity] || { bg: 'bg-[var(--text-secondary)]/10', text: 'text-[var(--text-secondary)]', border: 'border-[var(--text-secondary)]/20' };
 
     return (
-        <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest italic border flex items-center gap-1.5 ${config.bg} ${config.text} ${config.shadow}`}>
+        <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest italic border flex items-center gap-1.5 ${config.bg} ${config.text} ${config.border}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${config.text.replace('text-', 'bg-')}`} />
             {severity}
         </span>

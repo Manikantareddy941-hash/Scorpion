@@ -1,7 +1,8 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { KeyRound, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { KeyRound, AlertCircle, CheckCircle2, ArrowLeft, Loader2 } from 'lucide-react';
+import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 
 export default function ChangePassword() {
     const [newPassword, setNewPassword] = useState('');
@@ -44,39 +45,32 @@ export default function ChangePassword() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md p-8">
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-                        <KeyRound className="w-8 h-8 text-white" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                        Change Password
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-300">
-                        Update your account password.
-                    </p>
-                </div>
+        <ModernAuthLayout subtext="Account Security">
+            <div className="w-full">
+                <h1 className="text-xl font-black mb-1 text-[var(--text-primary)] uppercase italic tracking-tight">
+                    Credential Update
+                </h1>
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] mb-8 italic">
+                    Configure new access tokens for your account.
+                </p>
 
                 {success ? (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                        <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
-                        <p className="text-green-800 font-semibold text-lg">Password Updated!</p>
-                        <p className="text-green-700 text-sm mt-1">Redirecting to dashboard...</p>
+                    <div className="bg-[var(--status-success)]/10 border border-[var(--status-success)]/20 rounded-2xl p-6 text-center">
+                        <CheckCircle2 className="w-12 h-12 text-[var(--status-success)] mx-auto mb-3" />
+                        <p className="text-[var(--status-success)] font-black uppercase italic text-sm tracking-widest">Update Applied</p>
+                        <p className="text-[var(--text-secondary)] text-[10px] font-bold uppercase mt-2 italic tracking-widest">Redirecting to home base...</p>
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {error && (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                                <p className="text-sm text-red-800">{error}</p>
+                            <div className="bg-[var(--status-error)]/10 border border-[var(--status-error)]/20 rounded-xl p-4 flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-[var(--status-error)] flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-[var(--status-error)] font-bold uppercase tracking-tight italic">{error}</p>
                             </div>
                         )}
 
-                        <div>
-                            <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                New Password
-                            </label>
+                        <div className="space-y-2">
+                            <label htmlFor="new-password" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">New Access Key</label>
                             <input
                                 id="new-password"
                                 type="password"
@@ -84,15 +78,13 @@ export default function ChangePassword() {
                                 onChange={(e) => setNewPassword(e.target.value)}
                                 required
                                 minLength={6}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
                                 placeholder="••••••••"
                             />
                         </div>
 
-                        <div>
-                            <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Confirm New Password
-                            </label>
+                        <div className="space-y-2">
+                            <label htmlFor="confirm-password" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Verify New Key</label>
                             <input
                                 id="confirm-password"
                                 type="password"
@@ -100,7 +92,7 @@ export default function ChangePassword() {
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 required
                                 minLength={6}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                                className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
                                 placeholder="••••••••"
                             />
                         </div>
@@ -108,31 +100,28 @@ export default function ChangePassword() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2"
+                            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[var(--accent-primary)] hover:opacity-90 transition-all shadow-xl shadow-[var(--accent-primary)]/20 border-b-4 border-[var(--accent-secondary)] active:border-b-0 active:translate-y-1 disabled:opacity-50 italic text-white"
                         >
                             {loading ? (
-                                <span>Loading...</span>
+                                <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
                                 <>
-                                    <KeyRound className="w-5 h-5" />
-                                    Update Password
+                                    Update Access Key
+                                    <KeyRound className="w-4 h-4" />
                                 </>
                             )}
                         </button>
                     </form>
                 )}
 
-                <div className="mt-6 text-center">
-                    <Link
-                        to="/"
-                        className="text-blue-600 hover:text-blue-700 font-medium text-sm inline-flex items-center gap-1"
-                    >
+                <div className="mt-8 pt-6 border-t border-[var(--border-subtle)] text-center">
+                    <Link to="/" className="inline-flex items-center gap-2 text-[var(--accent-primary)] hover:underline font-black text-[10px] uppercase tracking-widest italic transition">
                         <ArrowLeft className="w-4 h-4" />
-                        Back to Dashboard
+                        Back to Command Center
                     </Link>
                 </div>
             </div>
-        </div>
+        </ModernAuthLayout>
     );
 }
 
