@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-  LogOut, Plus, CheckCircle2, Clock, AlertCircle, Edit2, Trash2,
-  Github, Shield, Settings, ChevronDown, Activity, Users,
-  BarChart3, Sun, Moon, Bug, Wind, BarChart, Copy, Target, Flame, Eye, Snowflake
+  LogOut, Shield, Settings, ChevronDown, Activity, Users, ListTodo, AlertCircle,
+  BarChart3, Sun, Moon, Bug, Wind, Target, Eye, Snowflake
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 
-import TaskModal from './TaskModal';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import logoImg from '../assets/scorpionlegs-removebg-preview.png';
 
@@ -36,87 +34,32 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { theme, setTheme, getLogoFilter } = useTheme();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<any | null>(null);
-  const [filter, setFilter] = useState<'all' | 'todo' | 'in_progress' | 'completed'>('all');
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [latestScan, setLatestScan] = useState<any | null>(null);
 
   useEffect(() => {
-    fetchTasks();
+    const init = async () => {
+      await fetchLatestScan();
+      setLoading(false);
+    };
+    init();
   }, []);
 
-  const fetchTasks = async () => {
+  const fetchLatestScan = async () => {
     try {
-      if (!user?.$id) return;
-      setError('');
-      const response = await databases.listDocuments(DB_ID, COLLECTIONS.TASKS, [
-        Query.equal('user_id', user.$id),
-        Query.orderDesc('$createdAt'),
+      const response = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        Query.equal('status', 'completed'),
+        Query.orderDesc('timestamp'),
+        Query.limit(1)
       ]);
-
-      setTasks(response.documents || []);
-    } catch (error: any) {
-      console.error('Error fetching tasks:', error);
-      setError(error.message || 'Failed to load tasks');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteTask = async (id: string) => {
-    try {
-      await databases.deleteDocument(DB_ID, COLLECTIONS.TASKS, id);
-      setTasks(tasks.filter((task) => task.$id !== id));
+      
+      if (response.documents.length > 0) {
+        setLatestScan(response.documents[0]);
+      }
     } catch (error) {
-      console.error('Error deleting task:', error);
-    }
-  };
-
-  const updateTaskStatus = async (id: string, status: string) => {
-    try {
-      await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, id, {
-        status,
-      });
-
-      setTasks(tasks.map((task) => (task.$id === id ? { ...task, status } : task)));
-    } catch (error) {
-      console.error('Error updating task:', error);
-    }
-  };
-
-  const handleTaskSaved = () => {
-    fetchTasks();
-    setIsModalOpen(false);
-    setEditingTask(null);
-  };
-
-  const filteredTasks = filter === 'all' ? tasks : tasks.filter((task) => task.status === filter);
-
-  const stats = {
-    total: tasks.length,
-    todo: tasks.filter((t) => t.status === 'todo').length,
-    inProgress: tasks.filter((t) => t.status === 'in_progress').length,
-    completed: tasks.filter((t) => t.status === 'completed').length,
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'text-[var(--status-error)] bg-[var(--status-error)]/10 border-[var(--status-error)]/20';
-      case 'medium': return 'text-[var(--status-warning)] bg-[var(--status-warning)]/10 border-[var(--border-subtle)]';
-      case 'low': return 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] border-[var(--border-subtle)]';
-      default: return 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] border-[var(--border-subtle)]';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle2 className="w-5 h-5 text-[var(--status-success)]" />;
-      case 'in_progress': return <Clock className="w-5 h-5 text-[var(--text-primary)]" />;
-      default: return <AlertCircle className="w-5 h-5 text-[var(--text-secondary)]" />;
+      console.error('Error fetching latest scan:', error);
     }
   };
 
@@ -210,21 +153,19 @@ export default function Dashboard() {
 
                       <div className="space-y-1">
                         {[
-                          { to: '/security', icon: Shield, label: 'Security Dashboard' },
-
+                          { to: '/tasks', icon: ListTodo, label: 'Tasks' },
                           { to: '/reports', icon: BarChart3, label: 'Reports & Export' },
                           { to: '/teams', icon: Users, label: 'Team Members' },
                           { to: '/settings', icon: Settings, label: 'Global Settings' },
                         ].map((link) => (
-                          <Link
+                          <div
                             key={link.to}
-                            to={link.to}
-                            className="flex items-center gap-3 px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] transition italic uppercase tracking-tight"
-                            onClick={() => setIsNavOpen(false)}
+                            onClick={() => { navigate(link.to); setIsNavOpen(false); }}
+                            className="flex items-center gap-3 px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] transition italic uppercase tracking-tight cursor-pointer"
                           >
                             <link.icon className="w-4 h-4" />
                             {link.label}
-                          </Link>
+                          </div>
                         ))}
                       </div>
 
@@ -353,14 +294,55 @@ export default function Dashboard() {
                 {/* RIGHT: Metric Grid */}
                  <div className="w-full lg:w-8/12 grid grid-cols-2 lg:grid-cols-4 gap-4 min-h-[400px]">
                 {[
-                  { label: 'Bugs', value: '14', status: 'REQUIRES REVIEW', color: 'text-[var(--status-warning)]', icon: Bug },
-                  { label: 'Code Smells', value: '08', status: 'WITHIN LIMITS', color: 'text-[var(--status-success)]', icon: Wind },
-                  { label: 'Vulnerabilities', value: '03', status: 'CRITICAL', color: 'text-[var(--status-error)]', icon: Shield },
-                  { label: 'Security Issues', value: '02', status: 'CRITICAL', color: 'text-[var(--status-error)]', icon: AlertCircle },
-                  { label: 'Coverage', value: '78%', status: 'OPTIMAL PATH', color: 'text-[var(--accent-primary)]', icon: BarChart },
-                  { label: 'Duplications', value: '1.2%', status: 'WITHIN LIMITS', color: 'text-[var(--accent-secondary)]', icon: Copy },
-                  { label: 'Avg Risk Score', value: '24%', status: 'SECURE', color: 'text-[var(--status-warning)]', icon: Target },
-                  { label: 'Active Threats', value: '05', status: 'LIVE FEED', color: 'text-[var(--status-error)]', icon: Flame },
+                  { 
+                    label: 'Critical', 
+                    value: latestScan ? latestScan.criticalCount : '00', 
+                    status: (latestScan?.criticalCount > 0) ? 'THREAT DETECTED' : 'SECURE', 
+                    color: (latestScan?.criticalCount > 0) ? 'text-[var(--status-error)]' : 'text-[var(--text-secondary)]', 
+                    icon: Shield 
+                  },
+                  { 
+                    label: 'High Risk', 
+                    value: latestScan ? latestScan.highCount : '00', 
+                    status: (latestScan?.highCount > 0) ? 'REQUIRES REVIEW' : 'WITHIN LIMITS', 
+                    color: (latestScan?.highCount > 0) ? 'text-[var(--status-error)]' : 'text-[var(--status-success)]', 
+                    icon: AlertCircle 
+                  },
+                  { 
+                    label: 'Medium Risk', 
+                    value: latestScan ? latestScan.mediumCount : '00', 
+                    status: (latestScan?.mediumCount > 0) ? 'MONITORING' : 'SECURE', 
+                    color: 'text-[var(--status-warning)]', 
+                    icon: Bug 
+                  },
+                  { 
+                    label: 'Low Risk', 
+                    value: latestScan ? latestScan.lowCount : '00', 
+                    status: 'WITHIN LIMITS', 
+                    color: 'text-[var(--text-secondary)]', 
+                    icon: Wind 
+                  },
+                  { 
+                    label: 'Bugs', 
+                    value: latestScan?.bugCount ?? 0, 
+                    status: (latestScan?.bugCount > 0) ? 'RECOVERY NEEDED' : 'SECURE', 
+                    color: 'text-[var(--status-warning)]', 
+                    icon: Bug 
+                  },
+                  { 
+                    label: 'Vulnerabilities', 
+                    value: latestScan ? (latestScan.criticalCount + latestScan.highCount + latestScan.mediumCount + latestScan.lowCount) : 0, 
+                    status: (latestScan?.criticalCount + latestScan?.highCount > 0) ? 'THREAT VECTOR' : 'SECURE', 
+                    color: 'text-[var(--status-error)]', 
+                    icon: Shield 
+                  },
+                  { 
+                    label: 'Code Smells', 
+                    value: latestScan?.codeSmellCount ?? 0, 
+                    status: (latestScan?.codeSmellCount > 20) ? 'REVIEW ADVISE' : 'CLEAN', 
+                    color: 'text-[var(--accent-primary)]', 
+                    icon: Target 
+                  },
                 ].map((item) => (
                   <div 
                     key={item.label} 
@@ -387,163 +369,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-        {/* Action Center Section */}
-        <div className="mb-12">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-1.5 bg-[var(--accent-primary)] rounded-full" />
-            <h2 className="text-sm font-black uppercase tracking-[0.3em] italic text-[var(--text-primary)]">Security Action Center</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[
-              { label: 'Active Tasks', value: stats.total },
-              { label: 'Pending', value: stats.todo },
-              { label: 'In Progress', value: stats.inProgress },
-              { label: 'Resolved', value: stats.completed },
-            ].map((stat) => (
-              <div key={stat.label} className="p-6 flex items-center justify-between group hover:border-[var(--accent-primary)] transition-colors" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px' }}>
-                <div>
-                  <p className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-widest italic mb-2">{stat.label}</p>
-                  <p className={`text-4xl font-black tracking-tighter italic text-[var(--accent-primary)]`}>{stat.value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Task Management Section */}
-        <div className="overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px' }}>
-          <div className="px-10 py-8 border-b border-[var(--border-subtle)] bg-white/5 dark:bg-white/10">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-              <div>
-                <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">Security Tasks</h2>
-                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 italic">Operations & Remediation</p>
-              </div>
-              <div className="flex gap-4 w-full md:w-auto">
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value as any)}
-                  className="px-6 py-3 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black text-[var(--text-primary)] uppercase italic tracking-widest outline-none focus:ring-2 focus:ring-[var(--accent-primary)] transition-all appearance-none pr-10 relative bg-no-repeat bg-[right_1rem_center] bg-[length:1em_1em]"
-                >
-                  <option value="all">Global Fleet</option>
-                  <option value="todo">Pending Stage</option>
-                  <option value="in_progress">Active Remediation</option>
-                  <option value="completed">Production Ready</option>
-                </select>
-                <button
-                  onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
-                  className="btn-premium flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" /> Deploy Task
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="divide-y divide-[var(--border-subtle)]">
-            {error ? (
-              <div className="p-24 text-center">
-                <div className="w-20 h-20 bg-[var(--status-error)]/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-[var(--status-error)]/20">
-                  <AlertCircle className="w-10 h-10 text-[var(--status-error)]" />
-                </div>
-                <p className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">Connection Error</p>
-                <p className="text-[10px] font-bold text-[var(--status-error)] uppercase tracking-widest mt-2 italic">{error}</p>
-                <button
-                  onClick={fetchTasks}
-                  className="mt-6 px-6 py-2 bg-[var(--accent-primary)] text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity"
-                >
-                  Retry Connection
-                </button>
-              </div>
-            ) : filteredTasks.length === 0 ? (
-              <div className="p-24 text-center">
-                <div className="w-20 h-20 bg-[var(--bg-secondary)] rounded-3xl flex items-center justify-center mx-auto mb-6 border border-[var(--border-subtle)]">
-                  <AlertCircle className="w-10 h-10 text-[var(--text-secondary)]" />
-                </div>
-                <p className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">Clear Radar</p>
-                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-2 italic">No active security tasks detected in current vector</p>
-              </div>
-            ) : (
-              filteredTasks.map((task) => (
-                <div key={task.$id} className="p-8 bg-[var(--bg-card)] hover:bg-white/5 transition-all group border-b border-[var(--border-subtle)]">
-                  <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-                    <div className="flex items-start gap-6 flex-1">
-                      <div className="mt-1.5 p-2 bg-[var(--bg-primary)] rounded-lg shadow-sm border border-[var(--border-subtle)]">
-                        {getStatusIcon(task.status)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-3 mb-3">
-                          <h3 className="text-lg font-black text-[var(--text-primary)] leading-tight italic uppercase tracking-tight">{task.title}</h3>
-                          <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.15em] italic border ${getPriorityColor(task.priority)}`}>
-                            {task.priority} Priority
-                          </span>
-                        </div>
-                        {task.description && (
-                          <p className="text-[var(--text-secondary)] text-xs font-medium leading-relaxed mb-6 max-w-2xl">
-                            {task.description}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-4">
-                          <select
-                            value={task.status}
-                            onChange={(e) => updateTaskStatus(task.$id, e.target.value)}
-                            className="px-4 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-[9px] font-black text-[var(--text-primary)] uppercase tracking-widest italic outline-none focus:ring-2 focus:ring-[var(--accent-primary)] transition-all"
-                          >
-                            <option value="todo">Pending</option>
-                            <option value="in_progress">Executing</option>
-                            <option value="completed">Verified</option>
-                          </select>
-
-                          {(task.repo_url || task.issue_url) && (
-                            <div className="flex gap-2">
-                              {task.repo_url && (
-                                <a href={task.repo_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-white text-white rounded-lg hover:bg-slate-700 transition-colors shadow-sm">
-                                  <Github className="w-3.5 h-3.5" />
-                                </a>
-                              )}
-                              {task.issue_url && (
-                                <a href={task.issue_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-[var(--bg-secondary)] text-[var(--text-secondary)] rounded-lg hover:text-[var(--text-primary)] transition-colors shadow-sm border border-[var(--border-subtle)]">
-                                  <AlertCircle className="w-3.5 h-3.5" />
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex md:flex-col items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => { setEditingTask(task); setIsModalOpen(true); }}
-                        className="p-3 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 rounded-xl transition-all border border-transparent hover:border-[var(--border-subtle)]"
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => { if (confirm('Erase this task from logs?')) deleteTask(task.$id); }}
-                        className="p-3 text-[var(--text-secondary)] hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded-xl transition-all border border-transparent hover:border-[var(--border-subtle)]"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </main>
-
-
-
-      {isModalOpen && (
-        <TaskModal
-          task={editingTask}
-          onClose={() => { setIsModalOpen(false); setEditingTask(null); }}
-          onSave={handleTaskSaved}
-        />
-      )}
-    </div>
-  );
+    </main>
+  </div>
+);
 }

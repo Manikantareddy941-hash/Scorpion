@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Shield, Bell, Settings, Users, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo } from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import UVScanOverlay from './UVScanOverlay';
 import { useTheme } from '../contexts/ThemeContext';
@@ -9,7 +9,7 @@ import logoImg from '../assets/scorpionlegs-removebg-preview.png';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: Shield, label: 'Security', path: '/security' },
+  { icon: ListTodo, label: 'Tasks', path: '/tasks' },
   { icon: BarChart2, label: 'Reports', path: '/reports' },
   { icon: Users, label: 'Teams', path: '/teams' },
   { icon: Bell, label: 'Alerts', path: '/alerts' },
@@ -26,11 +26,14 @@ export default function Sidebar() {
   const { getJWT } = useAuth();
   const { getLogoFilter, getLogoBlendMode } = useTheme();
   const [scanId, setScanId] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const handleScan = async (data: any) => {
     setShowScan(false);
     setScanTarget(data.type === 'github' ? data.value : `${data.value.length} local files`);
     setScanning(true);
+
+    setScanError(null);
 
     try {
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -57,7 +60,11 @@ export default function Sidebar() {
       // 2. Trigger Scan
       const scanRes = await fetch(`${apiBase}/api/repos/${repo.$id}/scan`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ visibility: 'public' })
       });
       const scanResult = await scanRes.json();
       
@@ -68,7 +75,7 @@ export default function Sidebar() {
       }
     } catch (err: any) {
       console.error('Scan trigger failed:', err);
-      alert(`Scan failed to start: ${err.message}`);
+      setScanError(err.message || 'Failed to start scan');
       setScanning(false);
     }
   };
@@ -95,6 +102,11 @@ export default function Sidebar() {
         <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer' }}>
           + NEW SCAN
         </button>
+        {scanError && (
+          <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-[10px] text-red-500 italic font-medium animate-in fade-in slide-in-from-top-1">
+            ⚠️ {scanError}
+          </div>
+        )}
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
       </div>
 
