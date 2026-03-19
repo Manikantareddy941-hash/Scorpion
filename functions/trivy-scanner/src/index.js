@@ -121,15 +121,17 @@ export default async ({ req, res, log, error }) => {
     let scanDoc;
     try {
         scanDoc = await databases.createDocument(databaseId, scansCollectionId, ID.unique(), {
+            repo_id: repoUrl,
+            status: 'scanning',
+            scan_type: 'repository',
             repoUrl,
             visibility,
-            status: 'scanning',
+            timestamp: new Date().toISOString(),
+            scannerVersion: '0.69.3',
             criticalCount: 0,
             highCount: 0,
             mediumCount: 0,
-            lowCount: 0,
-            timestamp: new Date().toISOString(),
-            scannerVersion: 'latest'
+            lowCount: 0
         });
     } catch (dbErr) {
         error(`Failed to create scan document: ${dbErr.message}`);

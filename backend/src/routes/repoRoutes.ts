@@ -37,6 +37,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
             user_id: userId,
             url,
             name,
+            visibility: 'public',
+            created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         });
 
@@ -66,7 +68,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
 router.post('/:id/scan', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const repoId = req.params.id;
-        const { scanId, error } = await triggerScan(repoId);
+        const { visibility } = req.body;
+        const { scanId, error } = await triggerScan(repoId, visibility);
 
         if (error) return res.status(400).json({ error });
         res.json({ scanId, message: 'Scan triggered successfully' });
