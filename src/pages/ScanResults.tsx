@@ -32,6 +32,7 @@ export interface AppwriteFinding {
   installedVersion: string;
   fixedVersion: string;
   description: string;
+  type?: string;
 }
 
 const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };

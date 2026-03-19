@@ -92,18 +92,30 @@ export default function FindingsTable({ findings }: Props) {
                       </p>
                       {/* Package + version pill row */}
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+                        {finding.type === 'policy_violation' ? (
+                          <span style={{ fontSize: '0.7rem', color: '#c084fc', background: 'rgba(192,132,252,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(192,132,252,0.25)', fontWeight: 800, letterSpacing: '0.05em' }}>
+                            POLICY VIOLATION
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '0.7rem', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(96,165,250,0.25)', fontWeight: 800, letterSpacing: '0.05em' }}>
+                            VULNERABILITY
+                          </span>
+                        )}
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
                           <Package size={12} /> {finding.package}
                         </span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
-                          installed: {finding.installedVersion}
-                        </span>
-                        {finding.fixedVersion && (
+                        
+                        {finding.type !== 'policy_violation' && (
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                            installed: {finding.installedVersion}
+                          </span>
+                        )}
+                        {finding.type !== 'policy_violation' && finding.fixedVersion && (
                           <span style={{ fontSize: '0.7rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(74,222,128,0.2)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <Wrench size={10} /> fix: {finding.fixedVersion}
                           </span>
                         )}
-                        {!finding.fixedVersion && (
+                        {finding.type !== 'policy_violation' && !finding.fixedVersion && (
                           <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.2)' }}>
                             no fix available
                           </span>

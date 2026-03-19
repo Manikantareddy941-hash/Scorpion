@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Github, Upload, FolderOpen, Loader2 } from 'lucide-react';
 import { functions, FUNCTION_ID } from '../lib/appwrite';
 import { ExecutionMethod } from 'appwrite';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
   onClose: () => void;
@@ -16,6 +17,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   const handleScan = async () => {
     if (tab === 'upload' && files.length > 0) {
@@ -31,7 +33,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
     try {
       const execution = await functions.createExecution(
         FUNCTION_ID,
-        JSON.stringify({ repoUrl: repoUrl.trim(), visibility }),
+        JSON.stringify({ repoUrl: repoUrl.trim(), visibility, userId: user?.$id }),
         false,
         '/',
         ExecutionMethod.POST,
