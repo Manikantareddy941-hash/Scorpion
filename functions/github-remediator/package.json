@@ -1,0 +1,9 @@
+{
+  "name": "github-remediator",
+  "version": "1.0.0",
+  "description": "GitHub PR Remediator for Vulnerabilities",
+  "main": "src/index.js",
+  "dependencies": {
+    "@octokit/rest": "^21.0.0"
+  }
+}

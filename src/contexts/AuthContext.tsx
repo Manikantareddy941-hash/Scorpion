@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useLocation } from "react-router-dom";
-import { account, ID, OAUTH_SUCCESS_URL, OAUTH_FAILURE_URL } from "../lib/appwrite";
+import { account, ID } from "../lib/appwrite";
 import { Models, OAuthProvider } from "appwrite";
 
 type AppUser = Models.User<Models.Preferences>;
@@ -13,13 +13,14 @@ interface AuthContextType {
   signUp: (email: string, password: string, name?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  signInWithOAuth: (provider: "google" | "github") => Promise<{ error?: any }>;
+  signInWithOAuth: (provider: string) => void;
 
   requestReset: (email: string) => Promise<{ error?: string; message?: string }>;
   verifyResetOtp: (email: string, otp: string) => Promise<{ error?: string; resetToken?: string }>;
   completeReset: (resetToken: string, newPassword: string) => Promise<{ error?: string }>;
 
   updatePassword: (newPassword: string) => Promise<{ error?: any }>;
+  getGithubToken: () => Promise<string | null>;
   getJWT: () => Promise<string | null>;
   refreshUser: () => Promise<AppUser | null>;
 }
@@ -31,34 +32,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
-
   const location = useLocation();
 
   useEffect(() => {
-    // Only check for user if we are not on a public auth page
-    // This stops the 401 loop on the login page as requested
     const publicPaths = ['/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password', '/verify-otp', '/auth'];
-
-    // Normalize path by removing trailing slashes
     const currentPath = location.pathname.replace(/\/$/, '') || '/';
 
-    console.log('[AuthContext] Current normalized path:', currentPath);
-
     if (publicPaths.includes(currentPath)) {
-      console.log('[AuthContext] Skipping account.get() for public path:', currentPath);
       setLoading(false);
       return;
     }
 
     const checkUser = async () => {
       try {
-        console.log('[AuthContext] Executing account.get() for path:', currentPath);
         const currentUser = await account.get();
         setUser(currentUser);
       } catch (error: any) {
-        // 401 is expected for guest users, handle it silently
         if (error?.code === 401) {
-          console.log('[AuthContext] No session (401)');
           setUser(null);
         } else {
           console.error("[AuthContext] Auth check failed:", error);
@@ -94,17 +84,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithOAuth = async (provider: "google" | "github") => {
-    try {
-      await account.createOAuth2Token(
-        provider === "google" ? OAuthProvider.Google : OAuthProvider.Github,
-        OAUTH_SUCCESS_URL,
-        OAUTH_FAILURE_URL
-      );
-      return { error: null };
-    } catch (error: any) {
-      return { error };
-    }
+  const signInWithOAuth = (provider: string) => {
+    const baseUrl = window.location.origin;
+    const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
+    sessionStorage.setItem('oauth_return_to', returnTo);
+    
+    account.createOAuth2Session(
+      provider === 'google' ? OAuthProvider.Google : OAuthProvider.Github,
+      `${baseUrl}/auth/callback`,
+      `${baseUrl}/login`,
+      provider === 'github' ? ['repo', 'user:email'] : []
+    );
   };
 
   const refreshUser = async () => {
@@ -181,6 +171,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const getGithubToken = async () => {
+    try {
+      if (import.meta.env.DEV) {
+        return 'mock-github-token';
+      }
+      const session = await account.getSession('current');
+      if (session.provider === 'github') {
+        return session.providerAccessToken;
+      }
+      return null;
+    } catch (error) {
+      console.error("Provider token error:", error);
+      return null;
+    }
+  };
+
   const getJWT = async () => {
     try {
       const jwt = await account.createJWT();
@@ -190,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   };
+
 
   return (
     <AuthContext.Provider
@@ -207,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatePassword,
         getJWT,
         refreshUser,
+        getGithubToken,
       }}
     >
       {children}

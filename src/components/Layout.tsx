@@ -1,7 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Bell, Sun, Moon, ChevronDown, Eye, Snowflake } from 'lucide-react';
+import { Search, Bell, Sun, Moon, ChevronDown, Eye, Cloud, CloudSnow, Waves } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import Footer from './Footer';
@@ -17,7 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <div className="flex flex-1 items-stretch">
+      <div className="flex flex-1 items-start">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-16 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] flex items-center justify-between px-8 sticky top-0 z-40">
@@ -44,31 +44,36 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {theme === 'light' && <Sun className="w-5 h-5" />}
                   {theme === 'dark' && <Moon className="w-5 h-5" />}
                   {theme === 'eye-protection' && <Eye className="w-5 h-5" />}
-                  {(theme === 'snow-light' || theme === 'snow-dark') && <Snowflake className="w-5 h-5" />}
+                  {theme === 'snow-light' && <Cloud className="w-5 h-5" />}
+                  {theme === 'snow-dark' && <CloudSnow className="w-5 h-5" />}
+                  {theme === 'underwater' && <Waves className="w-5 h-5" />}
                   <ChevronDown className={`w-3 h-3 transition-transform ${isThemeOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isThemeOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsThemeOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-48 bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] py-2 z-50 animate-in fade-in zoom-in duration-200">
-                      {[
-                        { id: 'light', label: 'Light Mode', icon: Sun },
-                        { id: 'dark', label: 'Dark Mode', icon: Moon },
-                        { id: 'eye-protection', label: 'Eye Protection', icon: Eye },
-                        { id: 'snow-light', label: 'Snow Light', icon: Snowflake },
-                        { id: 'snow-dark', label: 'Snow Dark', icon: Snowflake },
-                      ].map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => { setTheme(t.id as any); setIsThemeOpen(false); }}
-                          className={`w-full flex items-center gap-3 px-4 py-2 text-[10px] font-black uppercase tracking-widest italic transition-colors
-                            ${theme === t.id ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/5' : 'text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/5 hover:text-[var(--text-primary)]'}`}
-                        >
-                          <t.icon className="w-4 h-4" />
-                          {t.label}
-                        </button>
-                      ))}
+                    <div className="absolute right-0 mt-2 p-2 bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] z-50 animate-in fade-in zoom-in duration-200">
+                      <div className="grid grid-cols-3 gap-1">
+                        {[
+                          { id: 'light', icon: Sun },
+                          { id: 'dark', icon: Moon },
+                          { id: 'eye-protection', icon: Eye },
+                          { id: 'snow-light', icon: Cloud },
+                          { id: 'snow-dark', icon: CloudSnow },
+                          { id: 'underwater', icon: Waves },
+                        ].map((t) => (
+                          <button
+                            key={t.id}
+                            title={t.id}
+                            onClick={() => { setTheme(t.id as any); setIsThemeOpen(false); }}
+                            className={`p-3 rounded-xl transition-colors flex items-center justify-center
+                              ${theme === t.id ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10' : 'text-[var(--text-secondary)] hover:bg-[var(--text-primary)]/5 hover:text-[var(--text-primary)]'}`}
+                          >
+                            <t.icon size={18} />
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </>
                 )}

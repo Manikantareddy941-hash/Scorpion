@@ -19,6 +19,24 @@
                 "node_modules",
                 ".github"
             ]
+        },
+        {
+            "$id": "github-remediator",
+            "name": "github-remediator",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "",
+            "timeout": 60,
+            "path": "functions/github-remediator",
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".github"
+            ]
         }
     ]
 }
