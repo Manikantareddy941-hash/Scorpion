@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     TrendingUp,
     Filter, Loader2, Download,
-    Database, Clock
+    Database, Clock, ChevronDown, ChevronUp, Package, Hash, Zap
 } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +16,9 @@ export default function Reports() {
     const [scans, setScans] = useState<any[]>([]);
     const [repos, setRepos] = useState<Record<string, any>>({});
     const [scope, setScope] = useState<'global' | 'team' | 'project'>('global');
+    const [expandedScans, setExpandedScans] = useState<Set<string>>(new Set());
+    const [findingsByScan, setFindingsByScan] = useState<Record<string, any[]>>({});
+    const [loadingFindings, setLoadingFindings] = useState<Set<string>>(new Set());
     const scopeId = '';
 
     useEffect(() => {
@@ -61,6 +64,37 @@ export default function Reports() {
             console.error('Error fetching reporting data:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const toggleScanExpansion = async (scanId: string) => {
+        const newExpanded = new Set(expandedScans);
+        if (newExpanded.has(scanId)) {
+            newExpanded.delete(scanId);
+            setExpandedScans(newExpanded);
+            return;
+        }
+
+        newExpanded.add(scanId);
+        setExpandedScans(newExpanded);
+
+        if (!findingsByScan[scanId]) {
+            setLoadingFindings(prev => new Set(prev).add(scanId));
+            try {
+                const response = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+                    Query.equal('scanId', scanId),
+                    Query.limit(100)
+                ]);
+                setFindingsByScan(prev => ({ ...prev, [scanId]: response.documents }));
+            } catch (err) {
+                console.error('Failed to fetch findings:', err);
+            } finally {
+                setLoadingFindings(prev => {
+                    const next = new Set(prev);
+                    next.delete(scanId);
+                    return next;
+                });
+            }
         }
     };
 
@@ -164,6 +198,7 @@ export default function Reports() {
                         <table className="w-full text-left">
                             <thead className="bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[9px] font-black uppercase tracking-widest border-b border-[var(--border-subtle)]">
                                 <tr>
+                                    <th className="px-8 py-5 w-10"></th>
                                     <th className="px-8 py-5">Repository</th>
                                     <th className="px-8 py-5 text-center">Language</th>
                                     <th className="px-8 py-5">Scan Date</th>
@@ -181,9 +216,20 @@ export default function Reports() {
                                     </tr>
                                 ) : scans.map((scan) => {
                                     const repo = repos[scan.repo_id] || {};
+                                    const isExpanded = expandedScans.has(scan.$id);
+                                    const findings = findingsByScan[scan.$id] || [];
+                                    const isLoading = loadingFindings.has(scan.$id);
+
                                     return (
-                                         <tr key={scan.$id} className="hover:bg-[var(--text-primary)]/5 transition-colors group">
-                                            <td className="px-8 py-6">
+                                        <React.Fragment key={scan.$id}>
+                                            <tr 
+                                                className={`hover:bg-[var(--text-primary)]/5 transition-colors group cursor-pointer ${isExpanded ? 'bg-[var(--text-primary)]/5' : ''}`}
+                                                onClick={() => toggleScanExpansion(scan.$id)}
+                                            >
+                                                <td className="px-8 py-6 text-center">
+                                                    {isExpanded ? <ChevronUp className="w-4 h-4 text-[var(--accent-primary)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]" />}
+                                                </td>
+                                                <td className="px-8 py-6">
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{repo.name || 'Unknown Unit'}</span>
                                                     <span className="text-[9px] text-[var(--text-secondary)] font-mono mt-0.5">{scan.repo_id}</span>
@@ -219,6 +265,94 @@ export default function Reports() {
                                                 </div>
                                             </td>
                                         </tr>
+                                        {isExpanded && (
+                                            <tr>
+                                                <td colSpan={7} className="px-8 py-0 bg-[var(--bg-secondary)]/30">
+                                                    <div className="py-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                        <div className="flex flex-wrap items-center gap-4 mb-6 pb-6 border-b border-[var(--border-subtle)]/50">
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
+                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Tool:</span>
+                                                                <span className="text-[10px] font-black text-[var(--accent-primary)] uppercase italic">Trivy v0.69.3</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
+                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Scanner Version:</span>
+                                                                <span className="text-[10px] font-black text-[var(--text-primary)] uppercase italic">{scan.scannerVersion || 'v0.69.3'}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
+                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Duration:</span>
+                                                                <span className="text-[10px] font-black text-[var(--status-warning)] uppercase italic">
+                                                                    {(() => {
+                                                                        const diff = new Date(scan.$updatedAt).getTime() - new Date(scan.$createdAt).getTime();
+                                                                        const seconds = Math.floor(diff / 1000);
+                                                                        if (seconds < 60) return `${seconds}s`;
+                                                                        return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
+                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Findings:</span>
+                                                                <span className="text-[10px] font-black text-[var(--status-error)] uppercase italic">{findings.length} Elements</span>
+                                                            </div>
+                                                        </div>
+                                                        {isLoading ? (
+                                                            <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                                                <Loader2 className="w-8 h-8 text-[var(--accent-primary)] animate-spin" />
+                                                                <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Decrypting scan findings...</span>
+                                                            </div>
+                                                        ) : findings.length === 0 ? (
+                                                            <div className="text-center py-12">
+                                                                <Zap className="w-10 h-10 text-[var(--status-success)] opacity-20 mx-auto mb-4" />
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">No critical anomalies detected in this cycle</p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="grid grid-cols-1 gap-4">
+                                                                {findings.map((finding) => (
+                                                                    <div key={finding.$id} className="p-6 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl group/finding hover:border-[var(--accent-primary)]/30 transition-all">
+                                                                        <div className="flex items-start justify-between gap-6">
+                                                                            <div className="flex-1">
+                                                                                <div className="flex items-center gap-3 mb-3">
+                                                                                    <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest italic border
+                                                                                        ${finding.severity.toLowerCase() === 'critical' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 
+                                                                                          finding.severity.toLowerCase() === 'high' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                                                                                          finding.severity.toLowerCase() === 'medium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
+                                                                                          'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
+                                                                                        {finding.severity}
+                                                                                    </span>
+                                                                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{finding.title}</h4>
+                                                                                </div>
+                                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Package className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
+                                                                                        <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">Package:</span>
+                                                                                        <span className="text-[10px] font-black text-[var(--text-primary)] font-mono">{finding.package}</span>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Hash className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
+                                                                                        <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">Version:</span>
+                                                                                        <span className="text-[10px] font-black text-[var(--text-primary)] font-mono">{finding.installedVersion}</span>
+                                                                                    </div>
+                                                                                    {finding.fixedVersion && (
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Zap className="w-3.5 h-3.5 text-[var(--status-success)]" />
+                                                                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">Fixed In:</span>
+                                                                                            <span className="text-[10px] font-black text-[var(--status-success)] font-mono">{finding.fixedVersion}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                                <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed bg-[var(--text-primary)]/5 p-4 rounded-xl border border-[var(--border-subtle)]/50 italic font-medium">
+                                                                                    {finding.description}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                        </React.Fragment>
                                     );
                                 })}
                             </tbody>

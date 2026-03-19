@@ -4,9 +4,12 @@ import { orchestrateScan } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, Finding } from './scan/parsers';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export const triggerScan = async (
-    repoId: string
+    repoId: string,
+    visibility: string = 'public'
 ): Promise<{ scanId: string | null; error: string | null }> => {
     try {
         // 1️⃣ Validate repo
@@ -41,6 +44,14 @@ export const triggerScan = async (
             repo_id: repoId,
             status: 'queued',
             scan_type: 'full',
+            repoUrl: repo.url,
+            visibility: visibility,
+            timestamp: new Date().toISOString(),
+            scannerVersion: '0.69.3',
+            criticalCount: 0,
+            highCount: 0,
+            mediumCount: 0,
+            lowCount: 0,
             details: JSON.stringify({
                 started_at: new Date().toISOString(),
                 target: targetPath

@@ -2,7 +2,6 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 // import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
-import SecurityDashboard from './pages/SecurityDashboard';
 import ResetPassword from './pages/ResetPassword';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyOtp from './pages/VerifyOtp';
@@ -10,6 +9,7 @@ import ChangePassword from './pages/ChangePassword';
 import SettingsPage from './pages/Settings';
 import CodeInsights from './pages/CodeInsights';
 import ProjectDetail from './pages/ProjectDetail';
+import TasksPage from './pages/TasksPage';
 import Teams from './pages/Teams';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
@@ -88,8 +88,8 @@ function App() {
             <Route path="/verify-otp" element={<PublicRoute><VerifyOtp /></PublicRoute>} />
             <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/security" element={<ProtectedRoute><SecurityDashboard /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
