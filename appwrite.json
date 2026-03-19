@@ -1,0 +1,24 @@
+{
+    "projectId": "69ae97b6000efeda3814",
+    "projectName": "Scorpion",
+    "functions": [
+        {
+            "$id": "trivy-scanner",
+            "name": "trivy-scanner",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "",
+            "timeout": 300,
+            "path": "functions/trivy-scanner",
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".github"
+            ]
+        }
+    ]
+}
