@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale } from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import UVScanOverlay from './UVScanOverlay';
 import { useTheme } from '../contexts/ThemeContext';
@@ -11,6 +11,7 @@ const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: ListTodo, label: 'Tasks', path: '/tasks' },
   { icon: BarChart2, label: 'Reports', path: '/reports' },
+  { icon: Scale, label: 'Governance', path: '/governance' },
   { icon: Users, label: 'Teams', path: '/teams' },
   { icon: Bell, label: 'Alerts', path: '/alerts' },
 ];
@@ -81,7 +82,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="shrink-0" style={{ width: '220px', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+    <div className="shrink-0" style={{ width: '220px', height: 'fit-content', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 20px 24px' }}>
         <img 
             src={logoImg} 

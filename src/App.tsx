@@ -13,6 +13,7 @@ import TasksPage from './pages/TasksPage';
 import Teams from './pages/Teams';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
+import Governance from './pages/Governance';
 import Profile from './pages/Profile';
 import ScanResults from './pages/ScanResults';
 import AIChat from './components/AIChat';
@@ -76,7 +77,7 @@ function App() {
           <NetworkErrorPanel onRetry={checkAppwrite} />
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      <div style={{ display: 'flex', alignItems: 'start', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         {showSidebar && <Sidebar />}
         <div style={{ flex: 1, overflow: 'auto' }}>
           <Routes>
@@ -95,6 +96,7 @@ function App() {
             <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
             <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/governance" element={<ProtectedRoute><Governance /></ProtectedRoute>} />
             <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />

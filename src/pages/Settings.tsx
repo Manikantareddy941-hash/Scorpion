@@ -4,18 +4,20 @@ import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
     Save, Loader2, LogOut, Moon, Sun,
-    Terminal, Github, Eye, Snowflake, Camera, Upload
+    Terminal, Github, Eye, Snowflake, Camera, Upload, Waves
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function Settings() {
-    const { user, signOut, getJWT, refreshUser } = useAuth();
+    const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT } = useAuth();
     const { theme, setTheme } = useTheme();
+    const [isGithubConnected, setIsGithubConnected] = useState(false);
+    const [preferences, setPreferences] = useState({});
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.prefs?.profilePic || null);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>((user?.prefs as any)?.profilePic || null);
     
     const [profile, setProfile] = useState<any>({
         name: user?.name || '',
@@ -33,10 +35,19 @@ export default function Settings() {
     const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
     useEffect(() => {
-        if (user) {
+        const checkGithubConnection = async () => {
+            const token = await getGithubToken();
+            setIsGithubConnected(!!token);
+        };
+        checkGithubConnection();
+    }, [getGithubToken]);
+
+    useEffect(() => {
+        if (user?.prefs) {
             fetchSettings();
-            setAvatarUrl(user.prefs?.profilePic || null);
-            setProfile(prev => ({ ...prev, name: user.name, email: user.email }));
+            setPreferences(prev => ({ ...prev, ...user.prefs }));
+            setAvatarUrl((user.prefs as any)?.profilePic || null);
+            setProfile((prev: any) => ({ ...prev, name: user.name, email: user.email }));
         }
     }, [user]);
 
@@ -211,6 +222,7 @@ export default function Settings() {
                                 { id: 'eye-protection', label: 'Eye Protection', icon: Eye, desc: 'Warm amber neural filter' },
                                 { id: 'snow-light', label: 'Snow Light', icon: Snowflake, desc: 'Arctic day with active precipitation' },
                                 { id: 'snow-dark', label: 'Snow Dark', icon: Snowflake, desc: 'Arctic night with active precipitation' },
+                                { id: 'underwater', label: 'Underwater', icon: Waves, desc: 'Deep sea stealth mode with caustic light' },
                             ].map((t) => (
                                 <button
                                     key={t.id}
@@ -276,6 +288,37 @@ export default function Settings() {
                                         <Upload size={14} /> Upload Binary Image
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* GitHub Connection Section */}
+                        <div className="mb-12 pb-12 border-b border-[var(--border-subtle)]">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <Github className="w-16 h-16" />
+                                </div>
+                                <div className="flex items-center gap-5 z-10">
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-colors
+                                        ${isGithubConnected ? 'bg-[var(--status-success)]/10 border-[var(--status-success)]/30 text-[var(--status-success)]' : 'bg-white/5 border-white/10 text-white'}`}>
+                                        <Github size={24} />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">GitHub Repository Access</h4>
+                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
+                                            {isGithubConnected ? 'Neural Link Active — Authorized for Scan Operations' : 'Neural Link Required for Repository Indexing'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        sessionStorage.setItem('oauth_return_to', '/settings');
+                                        (useAuth() as any).signInWithOAuth('github');
+                                    }}
+                                    className={`px-8 py-3 rounded-xl text-xs font-black uppercase italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl
+                                        ${isGithubConnected ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-[var(--accent-primary)] text-black shadow-[var(--accent-primary)]/20 hover:shadow-[var(--accent-primary)]/40'}`}
+                                >
+                                    {isGithubConnected ? 'Reconnect Neural Link' : 'Initialize Neural Link'}
+                                </button>
                             </div>
                         </div>
 
@@ -361,7 +404,7 @@ export default function Settings() {
 
                     {/* API Keys */}
                     <section className="premium-card p-10">
-                        <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                        <h3 className="text-xs font-black text-[var(--status-success)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
                             <Key className="w-4 h-4 text-[var(--status-success)]" /> Automated Access Keys (CI/CD)
                         </h3>
                         

@@ -6,14 +6,14 @@ export default function Footer() {
   const { getLogoFilter, getLogoBlendMode } = useTheme();
   
   return (
-    <footer className="w-full bg-transparent pt-32 pb-10 overflow-hidden">
+    <footer className="w-full bg-transparent pt-32 pb-10 overflow-hidden border-t border-[var(--accent-primary)]">
       <div className="w-full px-8 lg:px-16">
         
         {/* Top Section */}
         <div className="flex flex-col lg:flex-row justify-between items-start gap-12 lg:gap-20 mb-32">
           <div className="max-w-md">
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-[var(--text-primary)] leading-[0.9] uppercase italic">
-              PROTECT THE STACK.<br />EXPERIENCE LIFTOFF.
+              Automate everything…<br />except your job!
             </h2>
           </div>
           
@@ -44,7 +44,7 @@ export default function Footer() {
               fontSize: 'clamp(80px, 15vw, 200px)',
               letterSpacing: '-0.03em',
               color: 'var(--text-primary)',
-              opacity: 0.08,
+              opacity: 0.15,
               textAlign: 'center',
             }}
           >

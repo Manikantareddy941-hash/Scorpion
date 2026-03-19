@@ -5,39 +5,32 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setUser, refreshUser } = useAuth();
 
   useEffect(() => {
-    const handleCallback = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const userId = params.get('userId');
-      const secret = params.get('secret');
-
-      if (userId && secret) {
-        try {
-          await account.createSession(userId, secret);
-          const user = await account.get();
-          setUser(user);
-          navigate('/', { replace: true });
-        } catch (err) {
-          console.error('Failed to create session:', err);
+    account.getSession('current')
+      .then((session) => {
+        if (session) {
+          refreshUser().then(user => setUser(user));
+          const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
+          sessionStorage.removeItem('oauth_return_to');
+          navigate(returnTo, { replace: true });
+        } else {
           navigate('/login', { replace: true });
         }
-      } else {
+      })
+      .catch(() => {
         navigate('/login', { replace: true });
-      }
-    };
-
-    handleCallback();
-  }, [navigate, setUser]);
+      });
+  }, [navigate, setUser, refreshUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0D0D0D]">
       <div className="bg-[#141414] border border-[#2a2a2a] rounded-2xl p-10 text-center shadow-xl">
-        <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent 
+        <div className="w-10 h-10 border-4 border-[var(--accent-primary)] border-t-transparent 
                         rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-white font-medium">Completing secure login...</p>
-        <p className="text-gray-500 text-sm mt-2">Establishing session...</p>
+        <p className="text-white font-black uppercase italic tracking-tight">Synchronizing neural identity...</p>
+        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-2">Establishing secure session context</p>
       </div>
     </div>
   );

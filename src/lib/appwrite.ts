@@ -22,11 +22,13 @@ export const COLLECTIONS = {
   POLICY_EVALUATIONS:       'policy_evaluations',
   NOTIFICATIONS:            'notifications',
   AVATARS_BUCKET_ID:        '69ba01e5000964e8c2c0',
+  POLICIES:                 import.meta.env.VITE_APPWRITE_POLICIES_COLLECTION_ID || 'policies_collection_id',
+  INTEGRATIONS:             import.meta.env.VITE_APPWRITE_INTEGRATIONS_COLLECTION_ID || 'integrations'
 };
 
 export const FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_ID;
 
-export const OAUTH_SUCCESS_URL = 'https://localhost:5173/auth/callback';
-export const OAUTH_FAILURE_URL = 'https://localhost:5173/login';
+export const OAUTH_SUCCESS_URL = `${window.location.origin}/auth/callback`;
+export const OAUTH_FAILURE_URL = `${window.location.origin}/login`;
 
 console.log('Appwrite init:', import.meta.env.VITE_APPWRITE_ENDPOINT, import.meta.env.VITE_APPWRITE_PROJECT_ID);
