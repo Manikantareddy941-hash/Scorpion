@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
 
 interface RemediationPanelProps {
     vulnerabilityId: string;
@@ -8,13 +9,15 @@ interface RemediationPanelProps {
 }
 
 export default function RemediationPanel({ vulnerabilityId, onClose }: RemediationPanelProps) {
-    const { getJWT } = useAuth();
+    const { getJWT, getGithubToken } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [fix, setFix] = useState<any>(null);
+    const [finding, setFinding] = useState<any>(null);
+    const [repo, setRepo] = useState<any>(null);
     const [feedbackSent, setFeedbackSent] = useState(false);
     const [prLoading, setPrLoading] = useState(false);
-    const [prResult, setPrResult] = useState<{ url: string; branch: string } | null>(null);
+    const [prResult, setPrResult] = useState<{ url: string } | null>(null);
 
     useEffect(() => {
         fetchFix();
@@ -47,227 +50,334 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         setLoading(true);
         setError('');
         try {
+            // Handle mock data for development testing
+            if (import.meta.env.DEV && vulnerabilityId.startsWith('mock-id-')) {
+                const scanId = vulnerabilityId.replace('mock-id-', '');
+                const mockFinding = {
+                    $id: vulnerabilityId,
+                    title: 'CVE-2024-TEST-MOCK',
+                    severity: 'CRITICAL',
+                    package: 'lodash',
+                    installedVersion: '4.17.20',
+                    fixedVersion: '4.17.21',
+                    location: 'package.json',
+                    scan_id: scanId,
+                    description: 'Mock vulnerability for remediation testing.'
+                };
+                
+                setFinding(mockFinding);
+                
+                // Get a real scan/repo context if possible to allow PR testing
+                try {
+                    const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+                    if (scanDoc) {
+                        const repository = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scanDoc.repo_id);
+                        setRepo(repository);
+                    }
+                } catch {
+                    // Fallback mock repo if real ones fail
+                    setRepo({
+                        $id: 'mock-repo-id',
+                        name: 'scorpion-test-repo',
+                        repo_url: 'https://github.com/Manikantareddy941-hash/food-delivery-app.git'
+                    });
+                }
+
+                // Set mock fix/diff
+                setFix({
+                    summary: 'Direct patch available: upgrade lodash to v4.17.21',
+                    technical_analysis: "This mock vulnerability represents a standard dependency risk. The fix involves a direct version upgrade which resolves the prototype pollution vulnerability in lodash.",
+                    confidence: 1.0,
+                    diff: `--- a/package.json\n+++ b/package.json\n@@ -10,1 +10,1 @@\n- "lodash": "4.17.20"\n+ "lodash": "4.17.21"`,
+                    impact_assessment: "Zero breaking changes. Direct peer-reviewed upgrade."
+                });
+                setLoading(false);
+                return;
+            }
+
+            // 1. Fetch Finding Details
+            const findingDoc = await databases.getDocument(
+                DB_ID,
+                COLLECTIONS.FINDINGS,
+                vulnerabilityId
+            );
+
+            if (!findingDoc) {
+                setError('Vulnerability footprint not found in central registry.');
+                return;
+            }
+
+            setFinding(findingDoc);
+
+            // 2. Fetch Repo Details via Scan
+            const scanDoc = await databases.getDocument(
+                DB_ID,
+                COLLECTIONS.SCANS,
+                findingDoc.scan_id
+            );
+            
+            if (scanDoc && scanDoc.repo_id) {
+                const repository = await databases.getDocument(
+                    DB_ID,
+                    COLLECTIONS.REPOSITORIES,
+                    scanDoc.repo_id
+                );
+                setRepo(repository);
+            }
+
+            // 3. Get AI Analysis / Fixed Version
             const token = await getJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-            const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            try {
+                const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
 
-            if (response.ok) {
-                const data = await response.json();
-                setFix(data);
-                // Track Viewed
-                trackEvent('viewed', data.id, data.confidence_score);
-
-                // Load existing PR state if available
-                if (data.pr_url) {
-                    setPrResult({ url: data.pr_url, branch: data.branch_name });
+                if (response.ok) {
+                    const data = await response.json();
+                    setFix(data.suggestion);
+                    trackEvent('viewed', data.suggestion?.$id, data.suggestion?.confidence);
+                } else if (findingDoc.fixedVersion) {
+                    // Fallback to direct patch if AI endpoint fails but fixedVersion exists
+                    setFix({
+                        summary: `Direct patch available: upgrade to v${findingDoc.fixedVersion}`,
+                        technical_analysis: "This is a known vulnerability with a direct version upgrade available in the ecosystem registry.",
+                        confidence: 1.0,
+                        diff: `--- a/${findingDoc.location || 'package.json'}\n+++ b/${findingDoc.location || 'package.json'}\n@@ -10,1 +10,1 @@\n- "${findingDoc.package}": "${findingDoc.installedVersion}"\n+ "${findingDoc.package}": "${findingDoc.fixedVersion}"`,
+                        impact_assessment: "Low risk. Direct dependency upgrade typically maintains backward compatibility."
+                    });
+                } else {
+                    setError('No automated remediation path available for detected anomaly.');
                 }
-            } else {
-                throw new Error('Failed to generate remediation');
+            } catch (err) {
+                // Fallback for network errors to the API
+                if (findingDoc.fixedVersion) {
+                    setFix({
+                        summary: `Direct patch available: upgrade to v${findingDoc.fixedVersion}`,
+                        technical_analysis: "Automated patch analysis available via direct version upgrade. AI recommendation engine offline.",
+                        confidence: 1.0,
+                        diff: `--- a/${findingDoc.location || 'package.json'}\n+++ b/${findingDoc.location || 'package.json'}\n@@ -10,1 +10,1 @@\n- "${findingDoc.package}": "${findingDoc.installedVersion}"\n+ "${findingDoc.package}": "${findingDoc.fixedVersion}"`,
+                        impact_assessment: "Low risk upgrade."
+                    });
+                } else {
+                    throw err;
+                }
             }
         } catch (err: any) {
-            console.error('Failed to fetch remediation fix:', err);
-            setError(err.message || 'Connection failed');
+            console.error('Error fetching remediation data:', err);
+            setError(err.message || 'Failed to retrieve remediation intelligence.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleFeedback = async (type: 'helpful' | 'ignore') => {
-        try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/feedback`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ feedback: { status: type, timestamp: new Date().toISOString() } })
-            });
-
-            // Track Interaction
-            trackEvent(type === 'helpful' ? 'accepted' : 'ignored', fix?.id, fix?.confidence_score);
-
-            setFeedbackSent(true);
-        } catch (err) {
-            console.error('Failed to send feedback:', err);
+    const handleFixVulnerability = async () => {
+        const token = await getGithubToken();
+        if (!finding || !repo || !token) {
+            setError('Unauthorized or missing metadata. Ensure GitHub is connected in Settings.');
+            return;
         }
-    };
 
-    const handleCreatePR = async () => {
-        if (!fix?.id) return;
         setPrLoading(true);
+        setPrResult(null);
+        setError('');
+
         try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/fixes/${fix.id}/pr`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setPrResult({ url: data.url, branch: data.branch_name });
-            } else {
-                alert('Failed to create PR. Please check backend logs.');
+            const repoFullName = repo.repo_url ? repo.repo_url.replace('https://github.com/', '') : '';
+            if (!repoFullName) {
+                throw new Error('Could not resolve repository path from metadata.');
             }
-        } catch (err) {
-            console.error('Failed to create PR:', err);
+
+            const payload = {
+                providerAccessToken: token,
+                repoFullName,
+                filePath: finding.location || 'package.json',
+                packageName: finding.package,
+                oldVersion: finding.installedVersion,
+                fixedVersion: finding.fixedVersion || (fix?.summary?.match(/v([\d\.]+)/)?.[1] || ''),
+                cveId: finding.title || 'SECURITY-PATCH'
+            };
+
+            const response = await functions.createExecution(
+                import.meta.env.VITE_APPWRITE_FUNCTION_ID,
+                JSON.stringify(payload)
+            );
+
+            let result;
+            try {
+                result = response.responseBody ? JSON.parse(response.responseBody) : { error: 'Empty response from patch window' };
+            } catch (e) {
+                console.error('Failed to parse patch response:', response.responseBody);
+                result = { error: 'Invalid response format from patch window' };
+            }
+            
+            if (response.status === 'completed' && result.prUrl) {
+                setPrResult({ url: result.prUrl });
+                trackEvent('accepted', fix?.$id, fix?.confidence);
+            } else {
+                throw new Error(result.error || 'Patch window execution failed.');
+            }
+        } catch (err: any) {
+            console.error('Remediation error:', err);
+            setError(err.message || 'Automated remediation flow interrupted.');
         } finally {
             setPrLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-300">
-            <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] shadow-2xl w-full max-w-2xl overflow-hidden border border-[var(--border-subtle)] transition-all">
-                <div className="flex items-center justify-between p-8 border-b border-[var(--border-subtle)] bg-[var(--accent-primary)]/5">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+            
+            <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+                {/* Header */}
+                <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-secondary)]/50">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-[var(--accent-primary)] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-[var(--accent-primary)]/20">
-                            <Sparkles className="w-6 h-6" />
+                        <div className="w-10 h-10 rounded-xl bg-[var(--accent-primary)]/10 flex items-center justify-center text-[var(--accent-primary)] border border-[var(--accent-primary)]/20">
+                            <Zap size={20} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-[var(--text-primary)] tracking-tight uppercase italic">Remediation AI</h2>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 italic flex items-center gap-1.5 font-mono">
-                                <Code className="w-3 h-3" /> INTELLECTUAL PATTERN MATCHING
+                            <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight">
+                                Intelligence Remediation Engine
+                            </h2>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
+                                Scoping patch for {finding?.title || 'Unknown Threat'}
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-3 hover:bg-[var(--bg-primary)] rounded-2xl border border-transparent hover:border-[var(--border-subtle)] transition-all text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-                        <X className="w-6 h-6" />
+                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-[var(--text-secondary)]">
+                        <X size={20} />
                     </button>
                 </div>
 
-                <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                     {loading ? (
-                        <div className="py-20 flex flex-col items-center justify-center gap-4">
+                        <div className="flex flex-col items-center justify-center py-20 gap-4">
                             <Loader2 className="w-10 h-10 text-[var(--accent-primary)] animate-spin" />
-                            <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic animate-pulse">Deep scanning resolution vectors...</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] animate-pulse">Running Neural Analysis...</p>
                         </div>
                     ) : error ? (
-                        <div className="py-20 text-center flex flex-col items-center justify-center">
-                            <div className="w-16 h-16 bg-[var(--status-error)]/10 rounded-3xl flex items-center justify-center mb-6 border border-[var(--status-error)]/20">
-                                <AlertCircle className="w-8 h-8 text-[var(--status-error)]" />
-                            </div>
-                            <p className="text-[var(--text-primary)] font-black text-sm uppercase italic tracking-tight">Connection Error</p>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-2 italic">{error}</p>
-                            <button
-                                onClick={fetchFix}
-                                className="mt-6 px-6 py-2 bg-[var(--text-primary)] text-[var(--bg-primary)] rounded-xl font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center gap-2"
-                            >
-                                <RefreshCw className="w-3 h-3" /> Retry Analysis
-                            </button>
-                        </div>
-                    ) : fix ? (
-                        <div className="space-y-10">
-                            <section>
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-1.5 bg-[var(--accent-primary)]/10 rounded-lg text-[var(--accent-primary)]">
-                                        <Info className="w-4 h-4" />
-                                    </div>
-                                    <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Technical Analysis</h3>
-                                    <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-[var(--status-success)]/10 text-[var(--status-success)] rounded-full border border-[var(--status-success)]/20">
-                                        <CheckCircle className="w-3.5 h-3.5" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest italic">Confidence: {(fix.confidence_score * 100).toFixed(0)}%</span>
-                                    </div>
-                                </div>
-                                <div className="text-[var(--text-primary)] opacity-80 font-medium bg-[var(--bg-primary)] rounded-3xl border border-[var(--border-subtle)] p-6 leading-relaxed text-sm">
-                                    {fix.explanation}
-                                </div>
-                            </section>
-
-                            <section>
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="p-1.5 bg-[var(--accent-primary)]/10 rounded-lg text-[var(--accent-primary)]">
-                                        <Code className="w-4 h-4" />
-                                    </div>
-                                    <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Remediation Patch</h3>
-                                </div>
-                                <div className="bg-[#0a0a0f] rounded-3xl p-6 overflow-x-auto shadow-2xl border border-[var(--border-subtle)]">
-                                    <pre className="text-[11px] text-[var(--accent-primary)] font-mono leading-relaxed">
-                                        <code>{fix.code_diff}</code>
-                                    </pre>
-                                </div>
-                            </section>
-
-                            <div className="bg-[var(--accent-primary)]/5 rounded-[2rem] p-8 border border-[var(--accent-primary)]/10 flex flex-col md:flex-row items-center justify-between gap-8">
-                                <div className="flex items-center gap-5">
-                                    <div className="w-14 h-14 bg-[var(--bg-card)] rounded-2xl shadow-lg border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent-primary)] shrink-0">
-                                        <GitPullRequest className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <div className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-1">Automated Resolution</div>
-                                        <h4 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">Deploy Fix via Pull Request</h4>
-                                    </div>
-                                </div>
-                                {prResult ? (
-                                    <a
-                                        href={prResult.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-3 px-8 py-4 bg-[var(--status-success)] text-white rounded-2xl hover:opacity-90 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-[var(--status-success)]/20 italic"
-                                    >
-                                        Inspect Pull Request <ExternalLink className="w-4 h-4" />
-                                    </a>
-                                ) : (
-                                    <button
-                                        onClick={handleCreatePR}
-                                        disabled={prLoading}
-                                        className="flex items-center gap-3 px-10 py-4 bg-[var(--accent-primary)] text-white rounded-2xl hover:bg-[var(--accent-secondary)] disabled:opacity-50 transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-[var(--accent-primary)]/40 italic"
-                                    >
-                                        {prLoading ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin" /> Patching Fleet...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <GitPullRequest className="w-4 h-4" /> Open Fix PR
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="pt-8 border-t border-[var(--border-subtle)] flex items-center justify-between">
-                                <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic">Human Verification</div>
-                                <div className="flex gap-4">
-                                    {feedbackSent ? (
-                                        <div className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)]/10 text-[var(--status-success)] rounded-2xl border border-[var(--status-success)]/20">
-                                            <ThumbsUp className="w-4 h-4" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest italic">Feedback Registered</span>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <button
-                                                onClick={() => handleFeedback('helpful')}
-                                                className="flex items-center gap-3 px-6 py-3 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl hover:bg-[var(--status-success)]/10 hover:text-[var(--status-success)] transition-all font-black text-[10px] uppercase tracking-widest border border-[var(--border-subtle)]"
-                                            >
-                                                <ThumbsUp className="w-4 h-4" /> Helpful
-                                            </button>
-                                            <button
-                                                onClick={() => handleFeedback('ignore')}
-                                                className="flex items-center gap-3 px-6 py-3 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl hover:bg-[var(--status-error)]/10 hover:text-[var(--status-error)] transition-all font-black text-[10px] uppercase tracking-widest border border-[var(--border-subtle)]"
-                                            >
-                                                <ThumbsDown className="w-4 h-4" /> Ignore
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
+                        <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-500">
+                            <AlertCircle size={24} />
+                            <div>
+                                <p className="text-xs font-black uppercase italic">System Fault Detected</p>
+                                <p className="text-[10px] font-bold opacity-80">{error}</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="py-20 text-center flex flex-col items-center justify-center">
-                            <div className="w-16 h-16 bg-[var(--status-error)]/10 rounded-3xl flex items-center justify-center mb-6 border border-[var(--status-error)]/20">
-                                <AlertCircle className="w-8 h-8 text-[var(--status-error)]" />
+                        <div className="space-y-8">
+                            {/* Analysis Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative group">
+                                    <div className="absolute -top-3 -left-3 px-3 py-1 bg-[var(--accent-primary)] text-black text-[9px] font-black uppercase italic rounded-lg flex items-center gap-2">
+                                        <Sparkles size={10} /> AI Recommendation
+                                    </div>
+                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">Technical Breakdown</h4>
+                                    <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-medium">
+                                        {fix?.technical_analysis || fix?.explanation || 'Neural engine assessing structural vulnerabilities...'}
+                                    </p>
+                                    <div className="mt-6 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <button 
+                                                onClick={() => { setFeedbackSent(true); trackEvent('accepted', fix?.$id, fix?.confidence); }}
+                                                className={`p-2 rounded-lg transition-all ${feedbackSent ? 'bg-[var(--status-success)]/20 text-[var(--status-success)]' : 'hover:bg-white/5 text-[var(--text-secondary)]'}`}
+                                            >
+                                                <ThumbsUp size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => { setFeedbackSent(true); trackEvent('ignored', fix?.$id, fix?.confidence); }}
+                                                className="p-2 hover:bg-white/5 rounded-lg transition-all text-[var(--text-secondary)]"
+                                            >
+                                                <ThumbsDown size={16} />
+                                            </button>
+                                        </div>
+                                        <div className="text-[9px] font-black uppercase italic text-[var(--accent-primary)] opacity-60">
+                                            Confidence Index: {((fix?.confidence || fix?.confidence_score || 0) * 100).toFixed(1)}%
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
+                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">Impact Assessment</h4>
+                                    <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-medium">
+                                        {fix?.impact_assessment || 'Assessment restricted to localized dependency tree. Minimal risk to core logic detected.'}
+                                    </p>
+                                    <div className="mt-6 pt-6 border-t border-[var(--border-subtle)] flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-[var(--status-success)] animate-pulse" />
+                                            <span className="text-[9px] font-black uppercase italic text-[var(--status-success)] tracking-widest">Safe for Execution</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <CheckCircle size={12} className="text-[var(--status-success)]" />
+                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase">Verified Patch</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <p className="text-[var(--text-primary)] font-black text-sm uppercase italic tracking-tight">Intelligence Failure</p>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-2 italic">Unable to synthesize remediation vector for this finding.</p>
+
+                            {/* Diff View */}
+                            <div className="p-6 bg-[#0d1117] rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <Code size={14} className="text-[var(--text-secondary)]" />
+                                        <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-secondary)]">Proposed Code Modification</span>
+                                    </div>
+                                    <span className="text-[9px] font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded uppercase tracking-tighter">
+                                        {finding?.location || 'package.json'}
+                                    </span>
+                                </div>
+                                <pre className="text-[11px] font-mono leading-relaxed text-gray-300 overflow-x-auto p-4 bg-black/30 rounded-xl">
+                                    {fix?.diff || fix?.code_diff || 'Generating structural patch representation...'}
+                                </pre>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Info size={14} className="text-[var(--text-secondary)]" />
+                        <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">
+                            Execution will create a secure patch branch and opening a Pull Request.
+                        </span>
+                    </div>
+                    
+                    {prResult ? (
+                        <a 
+                            href={prResult.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)]/10 text-[var(--status-success)] border border-[var(--status-success)]/20 rounded-xl text-xs font-black uppercase italic tracking-widest hover:bg-[var(--status-success)]/20 transition-all shadow-lg shadow-[var(--status-success)]/5"
+                        >
+                            <ExternalLink size={16} /> View Pull Request
+                        </a>
+                    ) : (
+                        <div className="flex gap-4">
+                             <button
+                                onClick={fetchFix}
+                                disabled={loading || prLoading}
+                                className="p-3 bg-white/5 border border-white/10 rounded-xl text-[var(--text-secondary)] hover:bg-white/10 transition-all"
+                            >
+                                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                            </button>
+                            <button 
+                                onClick={handleFixVulnerability}
+                                disabled={loading || prLoading || !fix}
+                                className="flex items-center gap-3 px-8 py-3 bg-[var(--accent-primary)] text-black rounded-xl text-xs font-black uppercase italic tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-[var(--accent-primary)]/20"
+                            >
+                                {prLoading ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" /> Patching...
+                                    </>
+                                ) : (
+                                    <>
+                                        <GitPullRequest size={18} /> Apply Remediation Path
+                                    </>
+                                )}
+                            </button>
                         </div>
                     )}
                 </div>

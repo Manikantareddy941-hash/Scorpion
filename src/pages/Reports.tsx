@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     TrendingUp,
-    Filter, Loader2, Download,
-    Database, Clock, ChevronDown, ChevronUp, Package, Hash, Zap
+    Filter, Loader2, FileDown,
+    Database, Clock, ChevronDown, ChevronUp, Package, Hash, Zap, ExternalLink, ArrowLeft, X
 } from 'lucide-react';
 
 import { useAuth } from '../contexts/AuthContext';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, Query, functions } from '../lib/appwrite';
+import RemediationPanel from '../components/RemediationPanel';
+import logoImg from '../assets/scorpionlegs-removebg-preview.png';
 
 export default function Reports() {
+    const navigate = useNavigate();
     const { getJWT } = useAuth();
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -19,6 +23,12 @@ export default function Reports() {
     const [expandedScans, setExpandedScans] = useState<Set<string>>(new Set());
     const [findingsByScan, setFindingsByScan] = useState<Record<string, any[]>>({});
     const [loadingFindings, setLoadingFindings] = useState<Set<string>>(new Set());
+    const [fixingFindings, setFixingFindings] = useState<Record<string, { loading: boolean, prUrl?: string, error?: string }>>({});
+    const [selectedVulnId, setSelectedVulnId] = useState<string | null>(null);
+    const [printableFindings, setPrintableFindings] = useState<any[]>([]);
+    const [printableComplianceScore, setPrintableComplianceScore] = useState(100);
+    const [showAuditOverlay, setShowAuditOverlay] = useState(false);
+    const { getGithubToken } = useAuth();
     const scopeId = '';
 
     useEffect(() => {
@@ -101,36 +111,102 @@ export default function Reports() {
     const handleExport = async () => {
         setGenerating(true);
         try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-            const response = await fetch(`${apiBase}/api/reports/generate`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    scope,
-                    id: scopeId,
-                    title: `Executive Security Report - ${new Date().toLocaleDateString()}`
-                })
-            });
-
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Scorpion_Report_${scope}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
+            // First, fetch ALL findings for the current scans list so they are in the printed DOM
+            const scanIds = scans.map(s => s.$id);
+            if (scanIds.length > 0) {
+                const chunkSize = 100;
+                let allFindings: any[] = [];
+                for (let i = 0; i < scanIds.length; i += chunkSize) {
+                    const chunk = scanIds.slice(i, i + chunkSize);
+                    const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+                        Query.equal('scanId', chunk),
+                        Query.limit(500)
+                    ]);
+                    allFindings.push(...res.documents);
+                }
+                setPrintableFindings(allFindings);
+                // Also compute the gauge score
+                const failedScans = new Set(allFindings.filter(f => f.type === 'policy_violation').map(f => f.scanId));
+                setPrintableComplianceScore(Math.max(0, Math.round(((scanIds.length - failedScans.size) / scanIds.length) * 100)));
             }
-        } catch (err) {
-            console.error('Export failed:', err);
-        } finally {
+            
+            // Wait for React to render the hidden container with the specific details
+            await new Promise(r => setTimeout(r, 500));
+            
+            const element = document.getElementById('audit-report-container');
+            if (element) {
+                console.log("PDF Capture Started");
+                
+                // Trigger Visibility State
+                setShowAuditOverlay(true);
+
+                // Allow DOM to update and trigger native print layout
+                setTimeout(() => {
+                    window.print();
+                    setGenerating(false);
+                }, 500);
+            }
+        } catch (err: any) {
+            console.error('PDF Export failed:', err);
+            if (err.code === 403 || err.message?.toLowerCase().includes('permission') || err.message?.toLowerCase().includes('unauthorized')) {
+                alert('Permission Denied: You do not have the required access to generate this export.');
+            } else {
+                alert(`Export Failed: ${err.message || 'An unexpected error occurred during generation.'}`);
+            }
             setGenerating(false);
+            setShowAuditOverlay(false);
+        }
+    };
+
+    const handleFixVulnerability = async (finding: any, scan: any) => {
+        const token = await getGithubToken();
+        if (!token) {
+            alert('GitHub connection required to automate remediation.');
+            return;
+        }
+
+        const repo = repos[scan.repo_id];
+        if (!repo) {
+            setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: 'Repository information missing' } }));
+            return;
+        }
+
+        setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: true } }));
+        
+        try {
+            // Extract repo full name from URL if not direct
+            let repoFullName = repo.fullName || repo.name;
+            if (repo.repo_url && repo.repo_url.includes('github.com')) {
+                const parts = repo.repo_url.split('github.com/')[1].split('/');
+                repoFullName = `${parts[0]}/${parts[1]}`.replace('.git', '');
+            }
+
+            const payload = {
+                providerAccessToken: token,
+                repoFullName,
+                filePath: finding.location || 'package.json',
+                packageName: finding.package,
+                oldVersion: finding.installedVersion,
+                fixedVersion: finding.fixedVersion,
+                cveId: finding.title
+            };
+
+            const execution = await functions.createExecution('github-remediator', JSON.stringify(payload));
+            let result;
+            try {
+                result = execution.responseBody ? JSON.parse(execution.responseBody) : { error: 'Empty response from remediation engine' };
+            } catch (e) {
+                console.error('Failed to parse remediation response:', execution.responseBody);
+                result = { error: 'Invalid response format from remediation engine' };
+            }
+
+            if (result.prUrl) {
+                setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, prUrl: result.prUrl } }));
+            } else {
+                setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: result.error || 'Remediation failed' } }));
+            }
+        } catch (err: any) {
+            setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: err.message } }));
         }
     };
 
@@ -146,6 +222,10 @@ export default function Reports() {
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <button onClick={() => navigate('/')} className="mb-6 px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50 transition-all flex items-center gap-2 group/btn w-fit">
+                    <ArrowLeft className="w-3.5 h-3.5 group-hover/btn:-translate-x-1 transition-transform" />
+                    Back to Dashboard
+                </button>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
                     <div className="flex items-center gap-5">
                         <div className="w-14 h-14 bg-[var(--accent-primary)] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-[var(--accent-primary)]/20">
@@ -174,10 +254,10 @@ export default function Reports() {
                         <button
                             onClick={handleExport}
                             disabled={generating}
-                            className="btn-premium flex items-center gap-3 disabled:opacity-50"
+                            className="px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white border-2 border-[var(--accent-primary)] hover:border-[var(--accent-secondary)] rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center gap-3 shadow-[0_0_20px_rgba(56,189,248,0.2)] disabled:opacity-80"
                         >
-                            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                            Export Intelligence
+                            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                            {generating ? 'Generating PDF...' : 'Export Compliance Audit'}
                         </button>
                     </div>
                 </div>
@@ -217,8 +297,26 @@ export default function Reports() {
                                 ) : scans.map((scan) => {
                                     const repo = repos[scan.repo_id] || {};
                                     const isExpanded = expandedScans.has(scan.$id);
-                                    const findings = findingsByScan[scan.$id] || [];
+                                    let findings = findingsByScan[scan.$id] || [];
                                     const isLoading = loadingFindings.has(scan.$id);
+
+                                    // DEV: Inject mock finding if none exist
+                                    if (import.meta.env.DEV && findings.length === 0 && !isLoading) {
+                                        findings = [{
+                                            $id: `mock-id-${scan.$id}`,
+                                            title: 'CVE-2024-TEST-MOCK',
+                                            severity: 'CRITICAL',
+                                            package: 'lodash',
+                                            installedVersion: '4.17.20',
+                                            fixedVersion: '4.17.21',
+                                            location: 'package.json',
+                                            description: 'Mock vulnerability for remediation testing.'
+                                        }];
+                                    }
+
+                                    if (isExpanded) {
+                                        console.log(`Scan details for ${scan.$id}:`, { findings, isLoading });
+                                    }
 
                                     return (
                                         <React.Fragment key={scan.$id}>
@@ -269,29 +367,61 @@ export default function Reports() {
                                             <tr>
                                                 <td colSpan={7} className="px-8 py-0 bg-[var(--bg-secondary)]/30">
                                                     <div className="py-8 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                        <div className="flex flex-wrap items-center gap-4 mb-6 pb-6 border-b border-[var(--border-subtle)]/50">
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Tool:</span>
-                                                                <span className="text-[10px] font-black text-[var(--accent-primary)] uppercase italic">Trivy v0.69.3</span>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 pb-8 border-b border-[var(--border-subtle)]/50">
+                                                            {/* Column 1: Identity & Status */}
+                                                            <div className="space-y-4">
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Unit Identity</span>
+                                                                    <span className="text-xs font-black text-[var(--accent-primary)] uppercase italic tracking-tighter">{repo.name || 'Unknown Unit'}</span>
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Resource Locator</span>
+                                                                    <span className="text-[10px] font-mono text-[var(--text-primary)] truncate block opacity-80">{repo.repo_url || repo.url || 'Internal Resource'}</span>
+                                                                </div>
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Active Status</span>
+                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                        <div className={`w-2 h-2 rounded-full ${scan.status === 'completed' ? 'bg-[var(--status-success)]' : 'bg-[var(--accent-primary)] animate-pulse'}`} />
+                                                                        <span className="text-[11px] font-black uppercase italic tracking-widest text-[var(--text-primary)]">{scan.status}</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Scanner Version:</span>
-                                                                <span className="text-[10px] font-black text-[var(--text-primary)] uppercase italic">{scan.scannerVersion || 'v0.69.3'}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Duration:</span>
-                                                                <span className="text-[10px] font-black text-[var(--status-warning)] uppercase italic">
-                                                                    {(() => {
-                                                                        const diff = new Date(scan.$updatedAt).getTime() - new Date(scan.$createdAt).getTime();
-                                                                        const seconds = Math.floor(diff / 1000);
-                                                                        if (seconds < 60) return `${seconds}s`;
-                                                                        return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-                                                                    })()}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Findings:</span>
-                                                                <span className="text-[10px] font-black text-[var(--status-error)] uppercase italic">{findings.length} Elements</span>
+
+                                                            {/* Column 2: Technical Breakdown */}
+                                                            <div className="space-y-4">
+                                                                <div className="flex flex-col gap-2">
+                                                                    <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Anomaly Distribution</span>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {[
+                                                                            { label: 'Crit', count: scan.criticalCount || 0, color: 'bg-red-500/10 text-red-500 border-red-500/20' },
+                                                                            { label: 'High', count: scan.highCount || 0, color: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
+                                                                            { label: 'Med', count: scan.mediumCount || 0, color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
+                                                                            { label: 'Low', count: scan.lowCount || 0, color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' }
+                                                                        ].map(sev => (
+                                                                            <div key={sev.label} className={`px-2 py-1 border rounded-lg flex items-center gap-2 ${sev.color}`}>
+                                                                                <span className="text-[8px] font-black uppercase tracking-widest">{sev.label}</span>
+                                                                                <span className="text-[10px] font-black">{sev.count}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-4">
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Analysis Core</span>
+                                                                        <span className="text-[10px] font-black text-[var(--accent-primary)] uppercase italic">Trivy v0.69.3</span>
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Cycle Duration</span>
+                                                                        <span className="text-[10px] font-black text-[var(--status-warning)] uppercase italic">
+                                                                            {(() => {
+                                                                                const diff = new Date(scan.$updatedAt).getTime() - new Date(scan.$createdAt).getTime();
+                                                                                const seconds = Math.floor(diff / 1000);
+                                                                                if (seconds < 60) return `${seconds}s`;
+                                                                                return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+                                                                            })()}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         {isLoading ? (
@@ -306,19 +436,59 @@ export default function Reports() {
                                                             </div>
                                                         ) : (
                                                             <div className="grid grid-cols-1 gap-4">
-                                                                {findings.map((finding) => (
-                                                                    <div key={finding.$id} className="p-6 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl group/finding hover:border-[var(--accent-primary)]/30 transition-all">
+                                                                {findings.map((finding: any) => (
+                                                                    <div 
+                                                                        key={finding.$id} 
+                                                                        onClick={() => {
+                                                                            setSelectedVulnId(finding.$id);
+                                                                            window.dispatchEvent(new CustomEvent('ai_prompt', { detail: `I need help fixing a ${finding.severity.toUpperCase()} finding in ${finding.package}. The title is: ${finding.title}` }));
+                                                                        }}
+                                                                        className="p-6 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl group/finding hover:border-[var(--accent-primary)]/30 transition-all cursor-pointer relative overflow-hidden"
+                                                                    >
                                                                         <div className="flex items-start justify-between gap-6">
                                                                             <div className="flex-1">
-                                                                                <div className="flex items-center gap-3 mb-3">
-                                                                                    <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest italic border
-                                                                                        ${finding.severity.toLowerCase() === 'critical' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 
-                                                                                          finding.severity.toLowerCase() === 'high' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
-                                                                                          finding.severity.toLowerCase() === 'medium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
-                                                                                          'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
-                                                                                        {finding.severity}
-                                                                                    </span>
-                                                                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{finding.title}</h4>
+                                                                                <div className="flex items-center justify-between mb-3">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <span className={`px-2.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest italic border
+                                                                                            ${finding.severity.toLowerCase() === 'critical' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 
+                                                                                            finding.severity.toLowerCase() === 'high' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                                                                                            finding.severity.toLowerCase() === 'medium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 
+                                                                                            'bg-blue-500/10 text-blue-500 border-blue-500/20'}`}>
+                                                                                            {finding.severity}
+                                                                                        </span>
+                                                                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{finding.title}</h4>
+                                                                                    </div>
+                                                                                    
+                                                                                    {finding.fixedVersion && (
+                                                                                        <div className="flex items-center gap-3">
+                                                                                            {fixingFindings[finding.$id]?.error && (
+                                                                                                <span className="text-[9px] font-bold text-[var(--status-error)] uppercase italic animate-in fade-in transition-all">
+                                                                                                    {fixingFindings[finding.$id].error}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {fixingFindings[finding.$id]?.prUrl ? (
+                                                                                                <a 
+                                                                                                    href={fixingFindings[finding.$id].prUrl}
+                                                                                                    target="_blank"
+                                                                                                    rel="noopener noreferrer"
+                                                                                                    className="flex items-center gap-2 px-4 py-2 bg-[var(--status-success)]/10 text-[var(--status-success)] border border-[var(--status-success)]/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[var(--status-success)] transition-all animate-in zoom-in duration-300 shadow-lg shadow-[var(--status-success)]/10"
+                                                                                                >
+                                                                                                    View PR <ExternalLink size={12} />
+                                                                                                </a>
+                                                                                            ) : (
+                                                                                                <button
+                                                                                                    onClick={(e) => { e.stopPropagation(); handleFixVulnerability(finding, scan); }}
+                                                                                                    disabled={fixingFindings[finding.$id]?.loading}
+                                                                                                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[var(--accent-primary)] hover:text-white transition-all disabled:opacity-50"
+                                                                                                >
+                                                                                                    {fixingFindings[finding.$id]?.loading ? (
+                                                                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                                                                    ) : <Zap size={12} />}
+                                                                                                    Fix This
+                                                                                                </button>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
                                                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                                                                     <div className="flex items-center gap-2">
@@ -364,6 +534,75 @@ export default function Reports() {
                     <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.4em] italic">
                         Scorpion Governance Intelligence Flow &bull; Real-time Verification Online
                     </p>
+                </div>
+            </div>
+
+            {selectedVulnId && (
+                <RemediationPanel 
+                    vulnerabilityId={selectedVulnId} 
+                    onClose={() => setSelectedVulnId(null)} 
+                />
+            )}
+
+            {/* Hidden Printable Container for PDF Export */}
+            <div 
+                id="audit-report-container" 
+                style={{ 
+                    position: showAuditOverlay ? 'fixed' : 'absolute', 
+                    left: showAuditOverlay ? 0 : '-9999px', 
+                    top: 0, 
+                    opacity: showAuditOverlay ? 1 : 0,
+                    zIndex: showAuditOverlay ? 9999 : -1,
+                    width: '210mm', 
+                    minHeight: '297mm', 
+                    background: '#0B1121', 
+                    color: '#38bdf8', 
+                    padding: '40px', 
+                    fontFamily: 'monospace',
+                    overflowY: showAuditOverlay ? 'auto' : 'hidden',
+                    height: showAuditOverlay ? '100vh' : 'auto'
+                }}
+            >
+                {showAuditOverlay && (
+                    <button 
+                        onClick={() => setShowAuditOverlay(false)} 
+                        title="Close Audit Report"
+                        style={{ position: 'fixed', top: '20px', right: '30px', zIndex: 10000, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid #f87171', borderRadius: '50%', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        className="hover:scale-110 hover:bg-red-500/20 transition-all shadow-[0_0_20px_rgba(248,113,113,0.3)]"
+                    >
+                        <X size={20} />
+                    </button>
+                )}
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '2px solid #38bdf8', paddingBottom: '20px', marginBottom: '20px' }}>
+                    <img src={logoImg} style={{ width: '40px', height: '40px' }} />
+                    <h1 style={{ margin: 0, textTransform: 'uppercase', fontStyle: 'italic', fontWeight: 900, fontSize: '24px', letterSpacing: '2px', color: '#fff' }}>SCORPION Security Audit</h1>
+                </div>
+                
+                <div style={{ marginBottom: '40px', padding: '20px', backgroundColor: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '10px' }}>
+                    <h2 style={{ color: '#fff', fontSize: '18px', textTransform: 'uppercase', marginTop: 0, borderBottom: '1px solid rgba(56,189,248,0.2)', paddingBottom: '10px' }}>Compliance Health</h2>
+                    <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '15px' }}>This environment is <strong style={{color: '#fff'}}>{printableComplianceScore}%</strong> compliant based on {printableFindings.filter(f => f.type === 'policy_violation').length || 0} active guardrails.</p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '120px', fontSize: '48px', fontWeight: 900, color: printableComplianceScore >= 90 ? '#4ade80' : printableComplianceScore >= 70 ? '#fbbf24' : '#f87171' }}>
+                        {printableComplianceScore}% PASS
+                    </div>
+                </div>
+                
+                <h2 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', fontSize: '16px', textTransform: 'uppercase', color: '#fff' }}>Vulnerability Matrix</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
+                    {printableFindings.length === 0 ? (
+                        <div style={{ color: '#4ade80', fontSize: '14px' }}>No findings detected in recent scan coverage. Environment is fully secure.</div>
+                    ) : printableFindings.map(f => (
+                        <div key={f.$id} style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '15px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                <strong style={{ color: f.severity === 'CRITICAL' ? '#f87171' : f.severity === 'HIGH' ? '#fb923c' : f.severity === 'MEDIUM' ? '#fbbf24' : '#60a5fa' }}>
+                                    [{f.severity}] {f.title}
+                                </strong>
+                                <span style={{ fontSize: '10px', color: '#94a3b8' }}>{f.package} ({f.installedVersion})</span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{f.description}</div>
+                            {f.fixedVersion && <div style={{ fontSize: '11px', color: '#4ade80', fontWeight: 'bold' }}>Remediation Action Available: Upgrade {f.package} to {f.fixedVersion}</div>}
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
