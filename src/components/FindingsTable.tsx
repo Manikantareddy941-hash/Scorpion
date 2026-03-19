@@ -1,98 +1,135 @@
-import { Bug, Terminal, Clock, MessageSquare, ExternalLink, Zap, Sparkles, Loader2 } from 'lucide-react';
+import { Package, Wrench, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { useState } from 'react';
+import type { AppwriteFinding } from '../pages/ScanResults';
 
-interface Finding {
-    $id: string;
-    tool: string;
-    severity: string;
-    message: string;
-    file_path: string;
-    line_number?: number;
-    status: 'open' | 'resolved' | 'false_positive';
-    $createdAt: string;
-}
-
-interface FindingsTableProps {
-    findings: Finding[];
-    onConvert?: (id: string) => void;
-    onRemediate?: (id: string) => void;
-    convertingId?: string | null;
-}
-
-export const FindingsTable: React.FC<FindingsTableProps> = ({ findings, onConvert, onRemediate, convertingId }) => {
-    if (findings.length === 0) {
-        return (
-            <div className="premium-card p-20 text-center flex flex-col items-center justify-center">
-                <div className="bg-[var(--bg-secondary)] w-20 h-20 rounded-3xl flex items-center justify-center mb-6 border border-[var(--border-subtle)]">
-                    <Zap className="w-10 h-10 text-[var(--text-secondary)] opacity-30" />
-                </div>
-                <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">No active threats detected. Clean scan.</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-6">
-            {findings.map(vuln => (
-                <div key={vuln.$id} className="premium-card p-8 group hover:border-[var(--accent-primary)]/50">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-4 mb-4">
-                                <SeverityBadge severity={vuln.severity} />
-                                <div className="h-4 w-px bg-[var(--border-subtle)]" />
-                                <span className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic flex items-center gap-1.5">
-                                    <Bug className="w-3.5 h-3.5" /> {vuln.tool}
-                                </span>
-                            </div>
-                            <h3 className="text-[var(--text-primary)] font-black text-xl tracking-tight mb-3 group-hover:text-[var(--accent-primary)] transition-colors uppercase italic leading-tight">{vuln.message}</h3>
-                            <div className="flex flex-wrap items-center gap-8 text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
-                                <span className="flex items-center gap-2"><Terminal className="w-4 h-4 text-[var(--text-secondary)]/50" /> {vuln.file_path}{vuln.line_number ? `:${vuln.line_number}` : ''}</span>
-                                <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-[var(--text-secondary)]/50" /> {new Date(vuln.$createdAt).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            {vuln.status !== 'resolved' && onRemediate && (
-                                <button
-                                    onClick={() => onRemediate(vuln.$id)}
-                                    className="px-8 py-3.5 bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--accent-primary)] hover:text-white transition-all font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2.5"
-                                >
-                                    <Sparkles className="w-4 h-4 text-[var(--accent-primary)] group-hover:text-white" />
-                                    Suggest Fix
-                                </button>
-                            )}
-                            {vuln.status !== 'resolved' && onConvert && (
-                                <button
-                                    onClick={() => onConvert(vuln.$id)}
-                                    disabled={convertingId === vuln.$id}
-                                    className="px-8 py-3.5 bg-[var(--accent-primary)] text-white rounded-2xl hover:bg-[var(--accent-secondary)] transition-all font-black text-[10px] uppercase tracking-widest shadow-xl shadow-[var(--accent-primary)]/20 disabled:bg-[var(--bg-secondary)] flex items-center gap-2.5"
-                                >
-                                    {convertingId === vuln.$id ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                                    Convert to Task
-                                </button>
-                            )}
-                            <button className="bg-[var(--bg-primary)] text-[var(--text-secondary)] p-3.5 rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50 hover:text-[var(--accent-primary)] transition-all flex items-center justify-center">
-                                <ExternalLink className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
+const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  CRITICAL: { bg: 'rgba(239,68,68,0.08)',   text: '#ef4444', border: 'rgba(239,68,68,0.25)' },
+  HIGH:     { bg: 'rgba(249,115,22,0.08)',  text: '#f97316', border: 'rgba(249,115,22,0.25)' },
+  MEDIUM:   { bg: 'rgba(234,179,8,0.08)',   text: '#eab308', border: 'rgba(234,179,8,0.25)'  },
+  LOW:      { bg: 'rgba(148,163,184,0.08)', text: '#94a3b8', border: 'rgba(148,163,184,0.25)' },
 };
 
-function SeverityBadge({ severity }: { severity: string }) {
-    const config = {
-        critical: { bg: 'bg-[var(--severity-critical)]/10', text: 'text-[var(--severity-critical)]', border: 'border-[var(--severity-critical)]/20' },
-        high: { bg: 'bg-[var(--severity-high)]/10', text: 'text-[var(--severity-high)]', border: 'border-[var(--severity-high)]/20' },
-        medium: { bg: 'bg-[var(--severity-medium)]/10', text: 'text-[var(--severity-medium)]', border: 'border-[var(--severity-medium)]/20' },
-        low: { bg: 'bg-[var(--severity-low)]/10', text: 'text-[var(--severity-low)]', border: 'border-[var(--severity-low)]/20' },
-        info: { bg: 'bg-[var(--severity-info)]/10', text: 'text-[var(--severity-info)]', border: 'border-[var(--severity-info)]/20' }
-    }[severity] || { bg: 'bg-[var(--text-secondary)]/10', text: 'text-[var(--text-secondary)]', border: 'border-[var(--text-secondary)]/20' };
+const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
+interface Props {
+  findings: AppwriteFinding[];
+}
+
+export default function FindingsTable({ findings }: Props) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(SEVERITY_ORDER));
+
+  if (findings.length === 0) {
     return (
-        <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest italic border flex items-center gap-1.5 ${config.bg} ${config.text} ${config.border}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${config.text.replace('text-', 'bg-')}`} />
-            {severity}
-        </span>
+      <div className="p-20 text-center flex flex-col items-center justify-center">
+        <div className="bg-[var(--bg-secondary)] w-20 h-20 rounded-3xl flex items-center justify-center mb-6 border border-[var(--border-subtle)]">
+          <Zap className="w-10 h-10 text-[var(--text-secondary)] opacity-30" />
+        </div>
+        <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">No active threats detected. Clean scan.</p>
+      </div>
     );
+  }
+
+  const toggleExpand = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleGroup = (sev: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      next.has(sev) ? next.delete(sev) : next.add(sev);
+      return next;
+    });
+  };
+
+  // Group by severity in the defined order
+  const grouped: Record<string, AppwriteFinding[]> = {};
+  for (const sev of SEVERITY_ORDER) {
+    const group = findings.filter(f => f.severity.toUpperCase() === sev);
+    if (group.length > 0) grouped[sev] = group;
+  }
+
+  return (
+    <div className="divide-y divide-[var(--border-subtle)]">
+      {Object.entries(grouped).map(([sev, items]) => {
+        const colors = SEVERITY_COLORS[sev] || SEVERITY_COLORS.LOW;
+        const isOpen = openGroups.has(sev);
+        return (
+          <div key={sev}>
+            {/* Severity group header */}
+            <button
+              onClick={() => toggleGroup(sev)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: colors.bg, borderLeft: `4px solid ${colors.text}`, cursor: 'pointer' }}
+            >
+              <span style={{ color: colors.text, fontWeight: 800, fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                {sev} &nbsp;·&nbsp; {items.length} {items.length === 1 ? 'finding' : 'findings'}
+              </span>
+              {isOpen ? <ChevronUp size={14} color={colors.text} /> : <ChevronDown size={14} color={colors.text} />}
+            </button>
+
+            {/* Findings in this group */}
+            {isOpen && items.map(finding => {
+              const isExpanded = expanded.has(finding.$id);
+              return (
+                <div
+                  key={finding.$id}
+                  style={{ borderLeft: `4px solid ${colors.border}`, padding: '0', transition: 'background 0.15s' }}
+                  className="hover:bg-[var(--text-primary)]/5"
+                >
+                  {/* Row */}
+                  <button
+                    onClick={() => toggleExpand(finding.$id)}
+                    style={{ width: '100%', textAlign: 'left', padding: '16px 24px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', background: 'none', border: 'none', cursor: 'pointer' }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Title */}
+                      <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.88rem', marginBottom: '6px', lineHeight: 1.4 }}>
+                        {finding.title}
+                      </p>
+                      {/* Package + version pill row */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                          <Package size={12} /> {finding.package}
+                        </span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                          installed: {finding.installedVersion}
+                        </span>
+                        {finding.fixedVersion && (
+                          <span style={{ fontSize: '0.7rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(74,222,128,0.2)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Wrench size={10} /> fix: {finding.fixedVersion}
+                          </span>
+                        )}
+                        {!finding.fixedVersion && (
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.2)' }}>
+                            no fix available
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isExpanded
+                      ? <ChevronUp size={16} color="var(--text-secondary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                      : <ChevronDown size={16} color="var(--text-secondary)" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    }
+                  </button>
+
+                  {/* Expanded description */}
+                  {isExpanded && finding.description && (
+                    <div style={{ padding: '0 24px 18px 24px' }}>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-primary)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', whiteSpace: 'pre-wrap' }}>
+                        {finding.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

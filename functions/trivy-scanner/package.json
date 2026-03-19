@@ -1,0 +1,10 @@
+{
+  "name": "trivy-scanner",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "node-appwrite": "^13.0.0",
+    "tar": "^6.2.1"
+  }
+}

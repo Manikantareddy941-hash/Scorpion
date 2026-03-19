@@ -36,6 +36,15 @@ export default function AuthSystemStatus() {
     fetchStatus();
   }, []);
 
+  return (
+    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+      {loading && <span>Checking server...</span>}
+      {error && <span style={{ color: '#f87171' }}>{error}</span>}
+      {status && !loading && (
+        <span style={{ color: '#4ade80' }}>
+          Server: {status.status ?? 'ok'}
+        </span>
+      )}
     </div>
   );
 }

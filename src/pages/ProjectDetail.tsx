@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { 
+import {
     Github, Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2
 } from 'lucide-react';
-import { FindingsTable } from '../components/FindingsTable';
+import FindingsTable from '../components/FindingsTable';
 import { ScanHistory } from '../components/ScanHistory';
 import RemediationPanel from '../components/RemediationPanel';
 
@@ -217,12 +217,7 @@ export default function ProjectDetail() {
                 {activeTab === 'findings' && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
-                            <FindingsTable 
-                                findings={vulnerabilities as any} 
-                                onConvert={handleConvertToIssue} 
-                                onRemediate={(id) => setRemediationId(id)} 
-                                convertingId={converting} 
-                            />
+                            <FindingsTable findings={vulnerabilities as any} />
                         </div>
                         <div className="lg:col-span-1 space-y-6">
                             <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest italic leading-none">Audit History</h2>
@@ -249,7 +244,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
             const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -298,7 +293,7 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
             const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
                 method: 'PUT',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -336,12 +331,12 @@ function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: strin
 }
 
 function Badge({ label, severity }: { label: string, severity: string }) {
-    const styles = severity === 'high' 
-        ? 'bg-[var(--status-error)]/10 text-[var(--status-error)] border-[var(--status-error)]/20 shadow-[0_0_12px_var(--status-error)]/10' 
+    const styles = severity === 'high'
+        ? 'bg-[var(--status-error)]/10 text-[var(--status-error)] border-[var(--status-error)]/20 shadow-[0_0_12px_var(--status-error)]/10'
         : severity === 'info'
             ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border-[var(--accent-primary)]/20'
             : 'bg-[var(--status-success)]/10 text-[var(--status-success)] border-[var(--status-success)]/20 shadow-[0_0_12px_var(--status-success)]/10';
-    
+
     return <span className={`px-5 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest italic border ${styles} leading-none transition-all hover:scale-105 cursor-default`}>{label}</span>;
 }
 
