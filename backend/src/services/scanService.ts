@@ -105,6 +105,9 @@ export const triggerScan = async (
                     '.cs': 'C#'
                 };
 
+                let totalLines = 0;
+                let totalFiles = 0;
+
                 const walkSync = (dir: string) => {
                     const files = fs.readdirSync(dir);
                     files.forEach(file => {
@@ -112,7 +115,17 @@ export const triggerScan = async (
                         if (fs.statSync(fullPath).isDirectory()) {
                             if (file !== '.git' && file !== 'node_modules') walkSync(fullPath);
                         } else {
+                            totalFiles++;
                             const ext = path.extname(file).toLowerCase();
+                            
+                            // Count lines for relevant code files
+                            try {
+                                const content = fs.readFileSync(fullPath, 'utf-8');
+                                totalLines += content.split('\n').length;
+                            } catch (e) {
+                                // Ignore binary or unreadable files for line counting
+                            }
+
                             if (extensionMap[ext]) {
                                 const lang = extensionMap[ext];
                                 languageCounts[lang] = (languageCounts[lang] || 0) + 1;
@@ -174,7 +187,9 @@ export const triggerScan = async (
                         critical_count: criticalCount,
                         high_count: highCount,
                         language: detectedLanguage,
-                        tools: ['semgrep', 'gitleaks', 'trivy']
+                        tools: ['semgrep', 'gitleaks', 'trivy'],
+                        total_files: totalFiles,
+                        total_lines: totalLines
                     })
                 });
 
