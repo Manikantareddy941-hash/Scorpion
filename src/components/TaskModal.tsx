@@ -45,7 +45,6 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
         priority,
         due_date: dueDate || null,
         repo_url: repoUrl || null,
-        updated_at: new Date().toISOString(),
       };
 
       if (task) {

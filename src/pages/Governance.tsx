@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Code, Loader2, Save, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import Editor from '@monaco-editor/react';
+import yaml from 'js-yaml';
 
 export default function Governance() {
     const navigate = useNavigate();
@@ -14,6 +15,8 @@ export default function Governance() {
     const [policyName, setPolicyName] = useState<string>('Custom Guardrails');
     const [savingPolicy, setSavingPolicy] = useState(false);
     const [policyDocId, setPolicyDocId] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const defaultPolicy = `check:\n  id: CKV_AWS_19\n  name: "Ensure all data stored in the S3 bucket is securely encrypted at rest"\n  supported_resources:\n    - aws_s3_bucket\n  categories:\n    - ENCRYPTION\n  type: Terraform\n  guideline: "It is a best practice to encrypt all data at rest in S3."\n`;
 
@@ -39,6 +42,24 @@ export default function Governance() {
     const handleSavePolicy = async () => {
         if (!user) return;
         setSavingPolicy(true);
+        setSuccessMessage(null);
+        setErrorMessage(null);
+
+        try {
+            const parsedYaml: any = yaml.load(policyCode);
+            if (!parsedYaml || typeof parsedYaml !== 'object' || !parsedYaml.check) {
+                setErrorMessage("Invalid policy: must be valid YAML with a 'check:' field");
+                setSavingPolicy(false);
+                setTimeout(() => setErrorMessage(null), 3000);
+                return;
+            }
+        } catch (e) {
+            setErrorMessage("Invalid policy: must be valid YAML with a 'check:' field");
+            setSavingPolicy(false);
+            setTimeout(() => setErrorMessage(null), 3000);
+            return;
+        }
+
         try {
             if (policyDocId) {
                 await databases.updateDocument(DB_ID, COLLECTIONS.POLICIES, policyDocId, {
@@ -55,10 +76,12 @@ export default function Governance() {
                 });
                 setPolicyDocId(res.$id);
             }
-            alert('Security Policy committed successfully');
+            setSuccessMessage('Security Policy committed successfully');
+            setTimeout(() => setSuccessMessage(null), 3000);
         } catch (error) {
             console.error('Failed to commit policy', error);
-            alert('Failed to commit policy');
+            setErrorMessage('Failed to commit policy');
+            setTimeout(() => setErrorMessage(null), 3000);
         } finally {
             setSavingPolicy(false);
         }
@@ -117,7 +140,17 @@ export default function Governance() {
                             }}
                         />
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end items-center gap-4">
+                        {successMessage && (
+                            <div className="px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                <Code className="w-4 h-4" /> {successMessage}
+                            </div>
+                        )}
+                        {errorMessage && (
+                            <div className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                                <Code className="w-4 h-4" /> {errorMessage}
+                            </div>
+                        )}
                         <button onClick={handleSavePolicy} className="btn-premium flex items-center gap-3">
                             {savingPolicy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             Commit Policy
