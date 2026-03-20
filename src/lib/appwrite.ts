@@ -22,7 +22,7 @@ export const COLLECTIONS = {
   POLICY_EVALUATIONS:       'policy_evaluations',
   NOTIFICATIONS:            'notifications',
   AVATARS_BUCKET_ID:        '69ba01e5000964e8c2c0',
-  POLICIES:                 import.meta.env.VITE_APPWRITE_POLICIES_COLLECTION_ID || 'policies_collection_id',
+  POLICIES:                 import.meta.env.VITE_APPWRITE_POLICIES_COLLECTION_ID || 'policies',
   INTEGRATIONS:             import.meta.env.VITE_APPWRITE_INTEGRATIONS_COLLECTION_ID || 'integrations'
 };
 
