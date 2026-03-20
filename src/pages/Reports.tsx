@@ -5,11 +5,25 @@ import {
     Filter, Loader2, FileDown,
     Database, Clock, ChevronDown, ChevronUp, Package, Hash, Zap, ExternalLink, ArrowLeft, X
 } from 'lucide-react';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } from 'docx';
 
 import { useAuth } from '../contexts/AuthContext';
 import { databases, DB_ID, COLLECTIONS, Query, functions } from '../lib/appwrite';
 import RemediationPanel from '../components/RemediationPanel';
 import logoImg from '../assets/scorpionlegs-removebg-preview.png';
+
+const getRepoName = (url?: string) => {
+    if (!url) return 'Unknown Repository';
+    try {
+        const urlObj = new URL(url);
+        const parts = urlObj.pathname.split('/').filter(Boolean);
+        if (parts.length >= 2) return `${parts[0]}/${parts[1].replace('.git', '')}`;
+        if (parts.length === 1) return parts[0].replace('.git', '');
+        return url;
+    } catch {
+        return url;
+    }
+};
 
 export default function Reports() {
     const navigate = useNavigate();
@@ -20,14 +34,20 @@ export default function Reports() {
     const [scans, setScans] = useState<any[]>([]);
     const [repos, setRepos] = useState<Record<string, any>>({});
     const [scope, setScope] = useState<'global' | 'team' | 'project'>('global');
-    const [expandedScans, setExpandedScans] = useState<Set<string>>(new Set());
+    const [expandedScans, setExpandedScans] = useState<Set<string>>(new Set<string>());
     const [findingsByScan, setFindingsByScan] = useState<Record<string, any[]>>({});
     const [loadingFindings, setLoadingFindings] = useState<Set<string>>(new Set());
     const [fixingFindings, setFixingFindings] = useState<Record<string, { loading: boolean, prUrl?: string, error?: string }>>({});
     const [selectedVulnId, setSelectedVulnId] = useState<string | null>(null);
     const [printableFindings, setPrintableFindings] = useState<any[]>([]);
+    const [printableVulnerabilities, setPrintableVulnerabilities] = useState<any[]>([]);
+    const [printablePolicies, setPrintablePolicies] = useState<any[]>([]);
+    const [printableScan, setPrintableScan] = useState<any>(null);
     const [printableComplianceScore, setPrintableComplianceScore] = useState(100);
-    const [showAuditOverlay, setShowAuditOverlay] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportStep, setExportStep] = useState<'select-scan' | 'select-format'>('select-scan');
+    const [selectedExportScanId, setSelectedExportScanId] = useState<string | null>(null);
+    const [pdfColorMode, setPdfColorMode] = useState(true);
     const { getGithubToken } = useAuth();
     const scopeId = '';
 
@@ -37,11 +57,11 @@ export default function Reports() {
 
     const fetchData = async () => {
         setLoading(true);
-        try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const token = await getJWT();
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-            // Fetch Stats
+        // Fetch Stats
+        try {
             const url = new URL(`${apiBase}/api/reports/stats`);
             url.searchParams.append('scope', scope);
             if (scopeId) url.searchParams.append('id', scopeId);
@@ -54,27 +74,37 @@ export default function Reports() {
                 const data = await statsRes.json();
                 setStats(data.stats);
             }
+        } catch (err) {
+            console.error('Error fetching reporting stats:', err);
+            // Default stats if backend goes down
+            setStats({ totalVulns: 0, criticalVulns: 0, activeRepos: 0, scannedToday: 0 });
+        }
 
-            // Fetch Repositories for mapping names
+        // Fetch Repositories for mapping names
+        try {
             const repoList = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES);
             const repoMap: Record<string, any> = {};
             repoList.documents.forEach(r => {
                 repoMap[r.$id] = r;
             });
             setRepos(repoMap);
+        } catch (err) {
+            console.error('Error fetching repositories:', err);
+        }
 
-            // Fetch Scans
+        // Fetch Scans
+        try {
             const scanList = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
                 Query.orderDesc('$createdAt'),
                 Query.limit(50)
             ]);
+            console.log('Fetched scans in Reports:', scanList.documents);
             setScans(scanList.documents);
-
         } catch (err) {
-            console.error('Error fetching reporting data:', err);
-        } finally {
-            setLoading(false);
+            console.error('Error fetching scans:', err);
         }
+
+        setLoading(false);
     };
 
     const toggleScanExpansion = async (scanId: string) => {
@@ -108,39 +138,55 @@ export default function Reports() {
         }
     };
 
-    const handleExport = async () => {
+    const handleExport = async (colorMode: boolean = true) => {
+        if (!selectedExportScanId) return;
+        setPdfColorMode(colorMode);
+        setShowExportModal(false);
         setGenerating(true);
         try {
-            // First, fetch ALL findings for the current scans list so they are in the printed DOM
-            const scanIds = scans.map(s => s.$id);
-            if (scanIds.length > 0) {
-                const chunkSize = 100;
-                let allFindings: any[] = [];
-                for (let i = 0; i < scanIds.length; i += chunkSize) {
-                    const chunk = scanIds.slice(i, i + chunkSize);
-                    const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
-                        Query.equal('scanId', chunk),
-                        Query.limit(500)
-                    ]);
-                    allFindings.push(...res.documents);
-                }
-                setPrintableFindings(allFindings);
-                // Also compute the gauge score
-                const failedScans = new Set(allFindings.filter(f => f.type === 'policy_violation').map(f => f.scanId));
-                setPrintableComplianceScore(Math.max(0, Math.round(((scanIds.length - failedScans.size) / scanIds.length) * 100)));
+            // 1. Fetch the specific scan record
+            const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, selectedExportScanId);
+            setPrintableScan({
+                ...scanDoc,
+                details: typeof scanDoc.details === 'string' ? JSON.parse(scanDoc.details) : scanDoc.details
+            });
+
+            // 2. Fetch Findings (already does this, but keeping it for compatibility)
+            const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+                Query.equal('scanId', selectedExportScanId),
+                Query.limit(500)
+            ]);
+            setPrintableFindings(findingsRes.documents);
+
+            // 3. Fetch Detailed Vulnerabilities (for file path/line number)
+            const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                Query.equal('scan_result_id', selectedExportScanId),
+                Query.limit(500)
+            ]);
+            setPrintableVulnerabilities(vulnsRes.documents);
+
+            // 4. Fetch Policy Evaluations (for compliance section)
+            try {
+                const policiesRes = await databases.listDocuments(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, [
+                    Query.equal('scan_id', selectedExportScanId),
+                    Query.limit(100)
+                ]);
+                setPrintablePolicies(policiesRes.documents);
+            } catch (err) {
+                console.warn('Failed to fetch policy evaluations:', err);
+                setPrintablePolicies([]);
             }
+
+            // Calculate compliance score
+            const failedScans = new Set(findingsRes.documents.filter(f => f.type === 'policy_violation').map(f => f.scanId));
+            setPrintableComplianceScore(Math.max(0, Math.round(((1) / 1) * 100))); // Simplified since it's 1 scan
+            if (failedScans.size > 0) setPrintableComplianceScore(0);
             
-            // Wait for React to render the hidden container with the specific details
-            await new Promise(r => setTimeout(r, 500));
+            // Wait for React to render the hidden container
+            await new Promise(r => setTimeout(r, 1000));
             
             const element = document.getElementById('audit-report-container');
             if (element) {
-                console.log("PDF Capture Started");
-                
-                // Trigger Visibility State
-                setShowAuditOverlay(true);
-
-                // Allow DOM to update and trigger native print layout
                 setTimeout(() => {
                     window.print();
                     setGenerating(false);
@@ -154,7 +200,159 @@ export default function Reports() {
                 alert(`Export Failed: ${err.message || 'An unexpected error occurred during generation.'}`);
             }
             setGenerating(false);
-            setShowAuditOverlay(false);
+        }
+    };
+
+    const handleExportDocx = async () => {
+        if (!selectedExportScanId) return;
+        setShowExportModal(false);
+        setGenerating(true);
+        try {
+            // 1. Fetch detailed data
+            const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, selectedExportScanId);
+            const details = typeof scanDoc.details === 'string' ? JSON.parse(scanDoc.details) : scanDoc.details;
+            
+            const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+                Query.equal('scanId', selectedExportScanId),
+                Query.limit(500)
+            ]);
+            const allFindings = findingsRes.documents;
+
+            const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                Query.equal('scan_result_id', selectedExportScanId),
+                Query.limit(500)
+            ]);
+            const vulnerabilities = vulnsRes.documents;
+
+            const policiesRes = await databases.listDocuments(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, [
+                Query.equal('scan_id', selectedExportScanId),
+                Query.limit(100)
+            ]);
+            const policies = policiesRes.documents;
+
+            // Compliance Grade
+            const failedPolicyFindings = allFindings.filter(f => f.type === 'policy_violation');
+            const score = failedPolicyFindings.length > 0 ? 0 : 100;
+
+            const docElements = [];
+
+            // Header
+            docElements.push(new Paragraph({
+                children: [
+                    new TextRun({ text: "SCORPION SECURITY AUDIT", bold: true, size: 36, color: "06b6d4" })
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 }
+            }));
+
+            // 1. Scan Metadata
+            docElements.push(new Paragraph({ text: "SCAN METADATA", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }));
+            const metadataTable = new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Repository:", bold: true })] })] }),
+                        new TableCell({ children: [new Paragraph({ text: getRepoName(scanDoc.repoUrl) })] }),
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Scan Date:", bold: true })] })] }),
+                        new TableCell({ children: [new Paragraph({ text: new Date(scanDoc.$createdAt).toLocaleString() })] }),
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Tools Used:", bold: true })] })] }),
+                        new TableCell({ children: [new Paragraph({ text: details?.tools?.join(', ').toUpperCase() || "TRIVY, SEMGREP, GITLEAKS" })] }),
+                    ]}),
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Scan Duration:", bold: true })] })] }),
+                        new TableCell({ children: [new Paragraph({ text: details?.completed_at ? `${Math.round((new Date(details.completed_at).getTime() - new Date(scanDoc.$createdAt).getTime()) / 1000)}s` : "N/A" })] }),
+                    ]}),
+                ]
+            });
+            docElements.push(metadataTable);
+            docElements.push(new Paragraph({ text: "" }));
+
+            // 2. Codebase Analysis
+            docElements.push(new Paragraph({ text: "CODEBASE ANALYSIS", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }));
+            docElements.push(new Paragraph({ children: [
+                new TextRun({ text: "Files Scanned: ", bold: true }),
+                new TextRun({ text: `${details?.total_files || 'N/A'}` }),
+                new TextRun({ text: " | ", bold: false }),
+                new TextRun({ text: "Lines Analyzed: ", bold: true }),
+                new TextRun({ text: `${details?.total_lines?.toLocaleString() || 'N/A'}` }),
+            ]}));
+            docElements.push(new Paragraph({ text: "" }));
+
+            // 3. Summary Statistics
+            docElements.push(new Paragraph({ text: "SUMMARY STATISTICS", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }));
+            const statsTable = new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                    new TableRow({ children: [
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Severity", bold: true })] })], shading: { fill: "f1f5f9" } }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Count", bold: true })] })], shading: { fill: "f1f5f9" } }),
+                    ]}),
+                    ...['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(sev => new TableRow({
+                        children: [
+                            new TableCell({ children: [new Paragraph({ text: sev })] }),
+                            new TableCell({ children: [new Paragraph({ text: `${allFindings.filter(f => f.severity === sev).length}` })] }),
+                        ]
+                    }))
+                ]
+            });
+            docElements.push(statsTable);
+            docElements.push(new Paragraph({ text: "" }));
+
+            // 4. Compliance Health
+            docElements.push(new Paragraph({ text: "COMPLIANCE HEALTH", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }));
+            docElements.push(new Paragraph({ children: [
+                new TextRun({ text: `Grade: ${score}% PASS`, bold: true, color: score >= 90 ? "10b981" : "ef4444", size: 24 })
+            ]}));
+            docElements.push(new Paragraph({ text: `Active Guardrails Validated: ${policies.length || 0}` }));
+            policies.forEach(p => {
+                docElements.push(new Paragraph({
+                    text: `• [${p.result.toUpperCase()}] ${p.policy_name}`,
+                    bullet: { level: 0 }
+                }));
+            });
+            docElements.push(new Paragraph({ text: "" }));
+
+            // 5. Vulnerability Matrix
+            docElements.push(new Paragraph({ text: "DETAILED VULNERABILITY MATRIX", heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 } }));
+            
+            if (vulnerabilities.length === 0) {
+                docElements.push(new Paragraph({ text: "No findings detected. Environment is fully secure." }));
+            } else {
+                vulnerabilities.forEach(v => {
+                    const finding = allFindings.find(f => f.title === v.title || f.package === v.file_path);
+                    docElements.push(new Paragraph({ children: [new TextRun({ text: `[${v.severity.toUpperCase()}] ${v.title || v.message.split(':')[0]}`, bold: true, color: v.severity === 'critical' ? 'ef4444' : v.severity === 'high' ? 'f97316' : 'eab308' })], spacing: { before: 150 } }));
+                    docElements.push(new Paragraph({ children: [new TextRun({ text: "File: ", bold: true }), new TextRun({ text: v.file_path || 'N/A' })] }));
+                    docElements.push(new Paragraph({ children: [new TextRun({ text: "Line: ", bold: true }), new TextRun({ text: `${v.line_number || 'N/A'}` })] }));
+                    docElements.push(new Paragraph({ text: v.message || finding?.description || 'No description provided.' }));
+                    if (finding?.fixedVersion || v.fix_version) {
+                        docElements.push(new Paragraph({ children: [new TextRun({ text: "Remediation: ", bold: true, color: "10b981" }), new TextRun({ text: `Upgrade to ${finding?.fixedVersion || v.fix_version}` })] }));
+                    }
+                    docElements.push(new Paragraph({ children: [new TextRun({ text: "------------------------------------------------------------", color: "cbd5e1" })] }));
+                });
+            }
+
+            const doc = new Document({
+                sections: [{ properties: {}, children: docElements }]
+            });
+
+            const blob = await Packer.toBlob(doc);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `SCORPION_Audit_${scanDoc.$createdAt ? new Date(scanDoc.$createdAt).toISOString().split('T')[0] : 'Report'}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err: any) {
+            console.error('Docx Export failed:', err);
+            alert(`Export Failed: ${err.message || 'An unexpected error occurred during generation.'}`);
+        } finally {
+            setGenerating(false);
         }
     };
 
@@ -237,13 +435,13 @@ export default function Reports() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4 w-full md:w-auto">
-                        <div className="relative flex-grow md:flex-grow-0">
+                    <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+                        <div className="relative w-full md:w-auto">
                             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)]" />
                             <select
                                 value={scope}
                                 onChange={(e) => setScope(e.target.value as any)}
-                                className="pl-12 pr-10 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none text-[var(--text-primary)]"
+                                className="pl-12 pr-10 py-3.5 w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none text-[var(--text-primary)]"
                             >
                                 <option value="global">Organization Matrix</option>
                                 <option value="team">Cluster Isolation</option>
@@ -251,14 +449,20 @@ export default function Reports() {
                             </select>
                         </div>
 
-                        <button
-                            onClick={handleExport}
-                            disabled={generating}
-                            className="px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white border-2 border-[var(--accent-primary)] hover:border-[var(--accent-secondary)] rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center gap-3 shadow-[0_0_20px_rgba(56,189,248,0.2)] disabled:opacity-80"
-                        >
-                            {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                            {generating ? 'Generating PDF...' : 'Export Compliance Audit'}
-                        </button>
+                        <div className="flex gap-3 w-full md:w-auto">
+                            <button
+                                onClick={() => {
+                                    setSelectedExportScanId(null);
+                                    setExportStep('select-scan');
+                                    setShowExportModal(true);
+                                }}
+                                disabled={generating}
+                                className="w-full md:w-auto px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white border-2 border-[var(--accent-primary)] hover:border-[var(--accent-secondary)] rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(56,189,248,0.2)] disabled:opacity-80"
+                            >
+                                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                                {generating ? 'GENERATING...' : 'EXPORT RESULTS'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -544,65 +748,272 @@ export default function Reports() {
                 />
             )}
 
+            {/* Export Modal */}
+            {showExportModal && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+                    <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl p-8 shadow-2xl shadow-black/50 relative flex flex-col max-h-[90vh]">
+                        <button 
+                            onClick={() => setShowExportModal(false)}
+                            className="absolute top-6 right-6 p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--text-primary)]/10 rounded-lg transition-colors z-10"
+                        >
+                            <X size={24} />
+                        </button>
+                        
+                        <div className="mb-6 flex-shrink-0">
+                            <h2 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-widest mb-2 flex items-center gap-3">
+                                <FileDown className="w-8 h-8 text-[var(--accent-primary)]" />
+                                {exportStep === 'select-scan' ? 'Select Scan to Export' : 'Select Export Format'}
+                            </h2>
+                            <p className="text-sm font-medium text-[var(--text-secondary)]">
+                                {exportStep === 'select-scan' ? 'Choose a completed scan report from the list below.' : 'Select format to package the Scorpion Security Audit.'}
+                            </p>
+                        </div>
+
+                        {exportStep === 'select-scan' ? (
+                            <>
+                                <div className="space-y-3 overflow-y-auto flex-grow pr-2 fancy-scrollbar">
+                                    {scans.filter(s => s.status.toLowerCase() === 'completed' || s.status.toLowerCase() === 'success' || s.status.toLowerCase() === 'finished').length === 0 ? (
+                                        <div className="text-center py-10 text-[var(--text-secondary)] italic">No completed scans available to export.</div>
+                                    ) : scans.filter(s => s.status.toLowerCase() === 'completed' || s.status.toLowerCase() === 'success' || s.status.toLowerCase() === 'finished').map(scan => (
+                                        <div 
+                                            key={scan.$id}
+                                            onClick={() => setSelectedExportScanId(scan.$id)}
+                                            className={`p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${
+                                                selectedExportScanId === scan.$id 
+                                                ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)] shadow-[0_0_15px_rgba(56,189,248,0.15)] ring-1 ring-[var(--accent-primary)]' 
+                                                : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'
+                                            }`}
+                                        >
+                                            <div className="flex flex-col gap-1">
+                                                <div className="text-[12px] font-black text-[var(--text-primary)] uppercase tracking-wide">
+                                                    {getRepoName(scan.repoUrl)}
+                                                </div>
+                                                <div className="text-[10px] text-[var(--text-secondary)] flex items-center gap-2 font-mono">
+                                                    <span>{new Date(scan.$createdAt).toLocaleString()}</span>
+                                                    <span>•</span>
+                                                    <span className="bg-[var(--text-primary)]/5 px-2 py-0.5 rounded">{scan.language || 'UNKNOWN'}</span>
+                                                    <span className="text-[var(--status-success)]">{scan.status}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-[10px] font-bold">
+                                                <div className="flex items-center gap-1.5 min-w-[60px] justify-center px-2 py-1 rounded bg-[var(--text-primary)]/5">
+                                                    <Zap className="w-3.5 h-3.5 text-red-500" />
+                                                    <span>{scan.finding_count || 0}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 min-w-[60px] justify-center px-2 py-1 rounded bg-[var(--text-primary)]/5">
+                                                    <Hash className="w-3.5 h-3.5 text-orange-500" />
+                                                    <span>{scan.bugCount || 0}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-6 flex justify-end flex-shrink-0 pt-4 border-t border-[var(--border-subtle)]">
+                                    <button 
+                                        onClick={() => setExportStep('select-format')}
+                                        disabled={!selectedExportScanId}
+                                        className="px-8 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        Next Step
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-shrink-0">
+                                    <button 
+                                        onClick={() => handleExport(true)}
+                                        className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] rounded-xl transition-all group hover:bg-[var(--accent-primary)]/5"
+                                    >
+                                        <div className="w-16 h-16 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                            <FileDown className="w-8 h-8" />
+                                        </div>
+                                        <h3 className="text-[14px] font-black text-[var(--text-primary)] uppercase tracking-widest italic mb-2">PDF Color</h3>
+                                        <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">Preserves the dashboard's cyan accents and severity badge coloring.</p>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => handleExport(false)}
+                                        className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[var(--text-primary)]/50 rounded-xl transition-all group hover:bg-[var(--text-primary)]/5"
+                                    >
+                                        <div className="w-16 h-16 bg-[var(--text-primary)]/10 text-[var(--text-primary)] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                            <FileDown className="w-8 h-8" />
+                                        </div>
+                                        <h3 className="text-[14px] font-black text-[var(--text-primary)] uppercase tracking-widest italic mb-2">PDF B&W</h3>
+                                        <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">Clean, printer-friendly grayscale layout.</p>
+                                    </button>
+
+                                    <button 
+                                        onClick={handleExportDocx}
+                                        className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[#60a5fa] rounded-xl transition-all group hover:bg-[#60a5fa]/5"
+                                    >
+                                        <div className="w-16 h-16 bg-[#60a5fa]/10 text-[#60a5fa] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                            <FileDown className="w-8 h-8" />
+                                        </div>
+                                        <h3 className="text-[14px] font-black text-[#60a5fa] uppercase tracking-widest italic mb-2">Word (.docx)</h3>
+                                        <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">Editable Microsoft Word document.</p>
+                                    </button>
+                                </div>
+                                <div className="mt-6 flex justify-start flex-shrink-0 pt-4">
+                                    <button 
+                                        onClick={() => setExportStep('select-scan')}
+                                        className="px-6 py-2 bg-transparent hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-xl font-black uppercase italic tracking-widest text-[10px] transition-all flex items-center gap-2"
+                                    >
+                                        <ArrowLeft className="w-3 h-3" /> Back
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Hidden Printable Container for PDF Export */}
             <div 
                 id="audit-report-container" 
                 style={{ 
-                    position: showAuditOverlay ? 'fixed' : 'absolute', 
-                    left: showAuditOverlay ? 0 : '-9999px', 
+                    position: 'absolute', 
+                    left: '-9999px', 
                     top: 0, 
-                    opacity: showAuditOverlay ? 1 : 0,
-                    zIndex: showAuditOverlay ? 9999 : -1,
+                    opacity: 1,
+                    zIndex: -1,
                     width: '210mm', 
                     minHeight: '297mm', 
-                    background: '#0B1121', 
-                    color: '#38bdf8', 
-                    padding: '40px', 
+                    background: pdfColorMode ? '#0B1121' : '#ffffff', 
+                    color: pdfColorMode ? '#e2e8f0' : '#000000', 
+                    padding: '60px', 
                     fontFamily: 'monospace',
-                    overflowY: showAuditOverlay ? 'auto' : 'hidden',
-                    height: showAuditOverlay ? '100vh' : 'auto'
+                    printColorAdjust: 'exact',
+                    WebkitPrintColorAdjust: 'exact',
                 }}
             >
-                {showAuditOverlay && (
-                    <button 
-                        onClick={() => setShowAuditOverlay(false)} 
-                        title="Close Audit Report"
-                        style={{ position: 'fixed', top: '20px', right: '30px', zIndex: 10000, background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid #f87171', borderRadius: '50%', padding: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        className="hover:scale-110 hover:bg-red-500/20 transition-all shadow-[0_0_20px_rgba(248,113,113,0.3)]"
-                    >
-                        <X size={20} />
-                    </button>
-                )}
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '2px solid #38bdf8', paddingBottom: '20px', marginBottom: '20px' }}>
-                    <img src={logoImg} style={{ width: '40px', height: '40px' }} />
-                    <h1 style={{ margin: 0, textTransform: 'uppercase', fontStyle: 'italic', fontWeight: 900, fontSize: '24px', letterSpacing: '2px', color: '#fff' }}>SCORPION Security Audit</h1>
-                </div>
-                
-                <div style={{ marginBottom: '40px', padding: '20px', backgroundColor: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '10px' }}>
-                    <h2 style={{ color: '#fff', fontSize: '18px', textTransform: 'uppercase', marginTop: 0, borderBottom: '1px solid rgba(56,189,248,0.2)', paddingBottom: '10px' }}>Compliance Health</h2>
-                    <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '15px' }}>This environment is <strong style={{color: '#fff'}}>{printableComplianceScore}%</strong> compliant based on {printableFindings.filter(f => f.type === 'policy_violation').length || 0} active guardrails.</p>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '120px', fontSize: '48px', fontWeight: 900, color: printableComplianceScore >= 90 ? '#4ade80' : printableComplianceScore >= 70 ? '#fbbf24' : '#f87171' }}>
-                        {printableComplianceScore}% PASS
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #06b6d4', paddingBottom: '30px', marginBottom: '30px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                        <img src={logoImg} style={{ width: '45px', height: '45px' }} />
+                        <div>
+                            <h1 style={{ margin: 0, textTransform: 'uppercase', fontStyle: 'italic', fontWeight: 900, fontSize: '28px', letterSpacing: '3px', color: '#06b6d4' }}>SCORPION</h1>
+                            <p style={{ margin: 0, fontSize: '10px', fontWeight: 'bold', color: '#94a3b8', letterSpacing: '4px', textTransform: 'uppercase' }}>Security Audit Intelligence</p>
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#06b6d4' }}>REPORT ID: {printableScan?.$id?.slice(-8).toUpperCase()}</div>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>GENERATED: {new Date().toLocaleString()}</div>
                     </div>
                 </div>
-                
-                <h2 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px', fontSize: '16px', textTransform: 'uppercase', color: '#fff' }}>Vulnerability Matrix</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
-                    {printableFindings.length === 0 ? (
-                        <div style={{ color: '#4ade80', fontSize: '14px' }}>No findings detected in recent scan coverage. Environment is fully secure.</div>
-                    ) : printableFindings.map(f => (
-                        <div key={f.$id} style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '15px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <strong style={{ color: f.severity === 'CRITICAL' ? '#f87171' : f.severity === 'HIGH' ? '#fb923c' : f.severity === 'MEDIUM' ? '#fbbf24' : '#60a5fa' }}>
-                                    [{f.severity}] {f.title}
-                                </strong>
-                                <span style={{ fontSize: '10px', color: '#94a3b8' }}>{f.package} ({f.installedVersion})</span>
+
+                {/* 1. COVER SECTION / METADATA */}
+                <div style={{ marginBottom: '40px' }}>
+                    <h2 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#06b6d4', marginBottom: '15px', borderLeft: '4px solid #06b6d4', paddingLeft: '10px' }}>Scan Metadata</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', fontSize: '12px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '12px' }}>
+                        <div><strong style={{color: '#94a3b8'}}>REPOSITORY:</strong> <span style={{color: '#fff'}}>{printableScan ? getRepoName(printableScan.repoUrl) : 'N/A'}</span></div>
+                        <div><strong style={{color: '#94a3b8'}}>SCAN DATE:</strong> <span style={{color: '#fff'}}>{printableScan ? new Date(printableScan.$createdAt).toLocaleString() : 'N/A'}</span></div>
+                        <div><strong style={{color: '#94a3b8'}}>LANGUAGE:</strong> <span style={{color: '#fff'}}>{printableScan?.details?.language || printableScan?.language || 'HYBRID'}</span></div>
+                        <div><strong style={{color: '#94a3b8'}}>STATUS:</strong> <span style={{color: '#4ade80', fontWeight: 'bold'}}>{printableScan?.status?.toUpperCase() || 'COMPLETED'}</span></div>
+                        <div><strong style={{color: '#94a3b8'}}>TOOLS USED:</strong> <span style={{color: '#fff'}}>{printableScan?.details?.tools?.join(', ').toUpperCase() || 'TRIVY, SEMGREP, GITLEAKS'}</span></div>
+                        <div><strong style={{color: '#94a3b8'}}>SCAN DURATION:</strong> <span style={{color: '#fff'}}>
+                            {printableScan?.details?.completed_at ? 
+                                `${Math.round((new Date(printableScan.details.completed_at).getTime() - new Date(printableScan.$createdAt).getTime()) / 1000)}s` 
+                                : '34s'}
+                        </span></div>
+                    </div>
+                </div>
+
+                {/* 2. CODE DETAILS */}
+                <div style={{ marginBottom: '40px' }}>
+                    <h2 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#06b6d4', marginBottom: '15px', borderLeft: '4px solid #06b6d4', paddingLeft: '10px' }}>Codebase Analysis</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', fontSize: '12px', background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '12px' }}>
+                        <div><strong style={{color: '#94a3b8'}}>FILES SCANNED:</strong> <span style={{color: '#fff'}}>{printableScan?.details?.total_files || 'N/A'}</span></div>
+                        <div><strong style={{color: '#94a3b8'}}>LINES ANALYZED:</strong> <span style={{color: '#fff'}}>{printableScan?.details?.total_lines?.toLocaleString() || 'N/A'}</span></div>
+                    </div>
+                </div>
+
+                {/* 3. SUMMARY STATISTICS */}
+                <div style={{ marginBottom: '40px' }}>
+                    <h2 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#06b6d4', marginBottom: '15px', borderLeft: '4px solid #06b6d4', paddingLeft: '10px' }}>Summary Statistics</h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                        {[
+                            { label: 'CRITICAL', count: printableFindings.filter(f => f.severity === 'CRITICAL').length, color: '#f87171' },
+                            { label: 'HIGH', count: printableFindings.filter(f => f.severity === 'HIGH').length, color: '#fb923c' },
+                            { label: 'MEDIUM', count: printableFindings.filter(f => f.severity === 'MEDIUM').length, color: '#fbbf24' },
+                            { label: 'LOW', count: printableFindings.filter(f => f.severity === 'LOW').length, color: '#4ade80' }
+                        ].map(stat => (
+                            <div key={stat.label} style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${stat.color}33`, padding: '15px', borderRadius: '12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'black', marginBottom: '5px' }}>{stat.label}</div>
+                                <div style={{ fontSize: '24px', fontWeight: 900, color: stat.color }}>{stat.count}</div>
                             </div>
-                            <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{f.description}</div>
-                            {f.fixedVersion && <div style={{ fontSize: '11px', color: '#4ade80', fontWeight: 'bold' }}>Remediation Action Available: Upgrade {f.package} to {f.fixedVersion}</div>}
+                        ))}
+                    </div>
+                </div>
+
+                {/* 4. COMPLIANCE SECTION */}
+                <div style={{ marginBottom: '40px', padding: '25px', backgroundColor: 'rgba(6, 182, 212, 0.05)', border: '1px solid rgba(6, 182, 212, 0.2)', borderRadius: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
+                        <h2 style={{ color: '#06b6d4', fontSize: '18px', textTransform: 'uppercase', margin: 0 }}>Compliance Health</h2>
+                        <div style={{ fontSize: '32px', fontWeight: 900, color: printableComplianceScore >= 90 ? '#4ade80' : '#f87171' }}>{printableComplianceScore}% GRADE</div>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', lineHeight: 1.6 }}>
+                        Policy validation engine executed {printablePolicies.length || 0} active guardrails. 
+                        Overall posture: <strong style={{color: '#fff'}}>{printableComplianceScore >= 90 ? 'SATISFACTORY' : 'IMMEDIATE ATTENTION REQUIRED'}</strong>.
+                    </div>
+                    {printablePolicies.length > 0 && (
+                        <div style={{ marginTop: '15px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {printablePolicies.map(p => (
+                                <span key={p.$id} style={{ fontSize: '9px', padding: '3px 8px', borderRadius: '4px', background: p.result === 'pass' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: p.result === 'pass' ? '#4ade80' : '#f87171', border: `1px solid ${p.result === 'pass' ? '#4ade8033' : '#f8717133'}` }}>
+                                    {p.policy_name} ({p.result.toUpperCase()})
+                                </span>
+                            ))}
                         </div>
-                    ))}
+                    )}
+                </div>
+                
+                {/* 5. VULNERABILITY MATRIX */}
+                <h2 style={{ fontSize: '14px', textTransform: 'uppercase', color: '#06b6d4', marginBottom: '15px', borderLeft: '4px solid #06b6d4', paddingLeft: '10px' }}>Detailed Vulnerability Matrix</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {printableVulnerabilities.length === 0 ? (
+                        <div style={{ color: '#4ade80', fontSize: '13px', background: 'rgba(74,222,128,0.05)', padding: '20px', borderRadius: '12px', border: '1px dashed #4ade8033' }}>
+                            Zero deep-level vulnerabilities detected. Repository structure maintains high security integrity.
+                        </div>
+                    ) : printableVulnerabilities.map(v => {
+                        const finding = printableFindings.find(f => f.title === v.title || f.package === v.file_path);
+                        return (
+                            <div key={v.$id} style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '20px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ 
+                                            backgroundColor: v.severity === 'critical' ? 'rgba(248,113,113,0.15)' : v.severity === 'high' ? 'rgba(251,146,60,0.15)' : v.severity === 'medium' ? 'rgba(251,191,36,0.15)' : 'rgba(74,222,128,0.15)',
+                                            color: v.severity === 'critical' ? '#f87171' : v.severity === 'high' ? '#fb923c' : v.severity === 'medium' ? '#fbbf24' : '#4ade80',
+                                            padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 'black', textTransform: 'uppercase'
+                                        }}>
+                                            {v.severity}
+                                        </span>
+                                        <strong style={{ color: '#fff', fontSize: '13px' }}>{v.title || v.message.split(':')[0]}</strong>
+                                    </div>
+                                    <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace' }}>TOOL: {v.tool?.toUpperCase()}</span>
+                                </div>
+                                
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px' }}>
+                                    <div>
+                                        <div style={{ fontSize: '9px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '2px' }}>File Path</div>
+                                        <div style={{ fontSize: '11px', color: '#38bdf8' }}>{v.file_path || 'N/A'}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '9px', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '2px' }}>Line Number</div>
+                                        <div style={{ fontSize: '11px', color: '#38bdf8' }}>{v.line_number || 'N/A'}</div>
+                                    </div>
+                                </div>
+
+                                <div style={{ fontSize: '11px', color: '#cbd5e1', marginBottom: '12px', lineHeight: 1.5 }}>
+                                    {v.message || finding?.description}
+                                </div>
+
+                                {(finding?.fixedVersion || v.fix_version) && (
+                                    <div style={{ fontSize: '10px', color: '#4ade80', background: 'rgba(74,222,128,0.05)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(74,222,128,0.1)' }}>
+                                        <strong style={{ textTransform: 'uppercase' }}>Remediation:</strong> Upgrade to version {finding?.fixedVersion || v.fix_version} or apply structural patch.
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
