@@ -137,6 +137,28 @@ export default function Teams() {
         }
     };
 
+    const handleDeleteTeam = async (teamId: string, teamName: string) => {
+        if (!window.confirm(`Are you sure you want to decommission Cluster: ${teamName}? This action is irreversible.`)) return;
+
+        try {
+            await databases.deleteDocument(DB_ID, 'teams', teamId);
+            setTeams(teams.filter(t => t.$id !== teamId));
+            if (selectedTeam?.$id === teamId) {
+                const remaining = teams.filter(t => t.$id !== teamId);
+                if (remaining.length > 0) {
+                    setSelectedTeam(remaining[0]);
+                    fetchMembers(remaining[0].$id);
+                } else {
+                    setSelectedTeam(null);
+                    setMembers([]);
+                }
+            }
+        } catch (error: any) {
+            console.error('Error deleting team:', error);
+            alert(error.message || 'Failed to delete team');
+        }
+    };
+
     const getRoleBadgeColor = (role: string) => {
         switch (role) {
             case 'owner': return 'text-[var(--accent-secondary)] bg-[var(--accent-secondary)]/10 border-[var(--accent-secondary)]/20';
@@ -201,23 +223,34 @@ export default function Teams() {
                             <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mb-8">Active Clusters</h3>
                             <div className="space-y-4">
                                 {teams.map((t) => (
-                                    <button
-                                        key={t.$id}
-                                        onClick={() => {
-                                            setSelectedTeam(t);
-                                            fetchMembers(t.$id);
-                                        }}
-                                        className={`w-full text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.$id === t.$id
-                                            ? 'bg-[var(--accent-primary)] text-white shadow-xl shadow-[var(--accent-primary)]/30'
-                                            : 'hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
-                                            }`}
-                                    >
-                                        <span className="font-black text-xs uppercase tracking-tight italic z-10">{t.name}</span>
-                                        <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.$id === t.$id ? 'translate-x-1' : 'opacity-0'}`} />
-                                        {selectedTeam?.$id === t.$id && (
-                                            <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-primary)]/80 opacity-100" />
-                                        )}
-                                    </button>
+                                    <div key={t.$id} className="flex items-center gap-3 w-full">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedTeam(t);
+                                                fetchMembers(t.$id);
+                                            }}
+                                            className={`flex-1 text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.$id === t.$id
+                                                ? 'bg-[var(--accent-primary)] text-white shadow-xl shadow-[var(--accent-primary)]/30'
+                                                : 'hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                                                }`}
+                                        >
+                                            <span className="font-black text-xs uppercase tracking-tight italic z-10">{t.name}</span>
+                                            <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.$id === t.$id ? 'translate-x-1' : 'opacity-0'}`} />
+                                            {selectedTeam?.$id === t.$id && (
+                                                <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-primary)]/80 opacity-100" />
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteTeam(t.$id, t.name);
+                                            }}
+                                            className="p-4 rounded-2xl border border-[var(--status-error)]/20 text-[var(--status-error)]/60 hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/5 transition-all"
+                                            title="Decommission Cluster"
+                                        >
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
