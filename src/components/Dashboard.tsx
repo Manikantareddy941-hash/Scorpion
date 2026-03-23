@@ -12,7 +12,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip,
   RadialBarChart, RadialBar, AreaChart, Area
 } from 'recharts';
-import logoImg from '../assets/scorpionlegs-removebg-preview.png';
+import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();

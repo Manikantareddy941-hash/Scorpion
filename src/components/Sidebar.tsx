@@ -5,7 +5,7 @@ import NewScanModal from './NewScanModal';
 import UVScanOverlay from './UVScanOverlay';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import logoImg from '../assets/scorpionlegs-removebg-preview.png';
+import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
