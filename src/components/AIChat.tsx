@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { X, Send, Minimize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useTheme } from '../contexts/ThemeContext';
-import robotMascot from '../assets/robot-mascot.png';
+import robotMascot from '../assets/tony-ai.png';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -11,6 +11,15 @@ interface Message {
 }
 
 const SYSTEM_PROMPT = `You are the SCORPION AI Architect. You are an expert in AWS, DevSecOps, and React. Your job is to: 1) Explain how to fix security vulnerabilities found in scans. 2) Provide code fixes for bugs. 3) Guide users on how to use SCORPION features like Governance, Reports, and The Sting.`;
+
+const GREETINGS = [
+  "Hey there!",
+  "Hi!",
+  "Hello!",
+  "Hey!",
+  "What’s up?",
+  "How’s it going?"
+];
 
 export default function AIChat() {
   const { theme } = useTheme();
@@ -32,7 +41,9 @@ export default function AIChat() {
   const [isDragging, setIsDragging] = useState(false);
   const [zIndex, setZIndex] = useState(999);
   const moveCounter = useRef(0);
-  const mascotSize = 80;
+  const [showHii, setShowHii] = useState(false);
+  const [currentGreeting, setCurrentGreeting] = useState(GREETINGS[0]);
+  const mascotSize = 60;
 
   // Context Awareness Interceptor
   useEffect(() => {
@@ -53,9 +64,9 @@ export default function AIChat() {
     if (isDragging || open) return;
 
     const intervalId = setInterval(() => {
-      // Pick new random positions every 3500ms
-      const newX = Math.random() * (window.innerWidth - 100);
-      const newY = Math.random() * (window.innerHeight - 100);
+      // Pick new random positions every 4500ms
+      const newX = Math.random() * (window.innerWidth - mascotSize);
+      const newY = Math.random() * (window.innerHeight - mascotSize);
       setPosition({ x: newX, y: newY });
 
       // Every 4th move set z-index to 1 (behind cards), otherwise 999
@@ -65,7 +76,15 @@ export default function AIChat() {
       } else {
         setZIndex(999);
       }
-    }, 3500);
+
+      // Periodically say "Hii!"
+      if (Math.random() > 0.4) {
+        const randomGreeting = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
+        setCurrentGreeting(randomGreeting);
+        setShowHii(true);
+        setTimeout(() => setShowHii(false), 2500);
+      }
+    }, 4500);
 
     return () => clearInterval(intervalId);
   }, [isDragging, open]);
@@ -140,72 +159,56 @@ export default function AIChat() {
     setLoading(true);
 
     try {
-      const apiKey = import.meta.env.VITE_HUGGINGFACE_API_KEY;
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey || apiKey === 'undefined') {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Missing API Key. Please add VITE_HUGGINGFACE_API_KEY to your .env file.' }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Missing API Key. Please add VITE_GEMINI_API_KEY to your .env file.' }]);
         setLoading(false);
         return;
       }
       
-      const hfEndpoint = `https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2`;
+      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
       const firstUserIndex = messages.findIndex(m => m.role === 'user');
       const validHistory = firstUserIndex === -1 ? [] : messages.slice(firstUserIndex);
 
-      let context = location.pathname.includes('/reports') 
+      const geminiHistory = validHistory.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }],
+      }));
+
+      const context = location.pathname.includes('/reports') 
         ? " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]" 
         : location.pathname.includes('/governance') 
         ? " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]" 
         : "";
 
-      let formattedPrompt = `<s>[INST] ${SYSTEM_PROMPT}${context}\n\n`;
-      validHistory.forEach(msg => {
-          if (msg.role === 'user') formattedPrompt += `User: ${msg.content} [/INST]`;
-          else formattedPrompt += `\nAssistant: ${msg.content} </s><s>[INST] `;
+      const response = await fetch(geminiEndpoint, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: SYSTEM_PROMPT + context }],
+          },
+          contents: [
+            ...geminiHistory,
+            { role: 'user', parts: [{ text: userMsg }] },
+          ],
+          generationConfig: {
+            maxOutputTokens: 1000,
+          },
+        }),
       });
-      formattedPrompt += `User: ${userMsg} [/INST]`;
 
-      let attempts = 0;
-      let reply = 'No response received.';
-
-      while (attempts < 2) {
-        try {
-          const response = await fetch(hfEndpoint, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-              inputs: formattedPrompt,
-              parameters: { max_new_tokens: 1000, return_full_text: false }
-            }),
-          });
-
-          if (!response.ok) {
-            const errBody = await response.text();
-            console.error(`HF API Error (${response.status}):`, errBody);
-            
-            // Handle 503 Model Loading Error explicitly
-            if (response.status === 503 && attempts === 0) {
-              console.log('Model is loading... retrying in 5 seconds.');
-              await new Promise(r => setTimeout(r, 5000));
-              attempts++;
-              continue;
-            }
-            throw new Error(`API error ${response.status}: ${errBody}`);
-          }
-          
-          const data = await response.json();
-          reply = data[0]?.generated_text || 'No response received.';
-          break; // success
-        } catch (fetchErr: any) {
-          if (attempts === 1) throw fetchErr;
-          console.error('Fetch error:', fetchErr);
-          await new Promise(r => setTimeout(r, 5000));
-          attempts++;
-        }
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error(`Gemini API Error (${response.status}):`, errBody);
+        throw new Error(`API error ${response.status}: ${errBody}`);
       }
+      
+      const data = await response.json();
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
 
       setMessages(prev => [...prev, { role: 'assistant', content: reply.trim() }]);
     } catch (err: any) {
@@ -226,7 +229,7 @@ export default function AIChat() {
     left: position.x,
     top: position.y,
     // Smooth transition
-    transition: isDragging ? 'none' : 'all 1.5s ease-in-out',
+    transition: isDragging ? 'none' : 'all 2s ease-in-out',
     // Peeking effect when hiding (every 4th move)
     transform: zIndex === 1 ? 'translateY(40%)' : 'none'
   };
@@ -234,24 +237,65 @@ export default function AIChat() {
   return (
     <>
       <style>{`
-        @keyframes spin3d {
-          from { transform: rotateY(0deg); }
-          to { transform: rotateY(360deg); }
+        @keyframes highQualityFloat {
+          0% { transform: translate(0, 0) rotate(0deg); }
+          25% { transform: translate(4px, -15px) rotate(1deg); }
+          50% { transform: translate(-4px, -25px) rotate(-1deg); }
+          75% { transform: translate(3px, -15px) rotate(1deg); }
+          100% { transform: translate(0, 0) rotate(0deg); }
         }
-        @keyframes float {
-          from { transform: translateY(0px); }
-          to { transform: translateY(-12px); }
+        @keyframes premiumGlow {
+          0% { filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.4)) drop-shadow(0 0 30px rgba(0, 255, 255, 0.2)); }
+          50% { filter: drop-shadow(0 0 25px rgba(0, 255, 255, 0.7)) drop-shadow(0 0 50px rgba(0, 255, 255, 0.4)); }
+          100% { filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.4)) drop-shadow(0 0 30px rgba(0, 255, 255, 0.2)); }
         }
-        @keyframes glowPulse {
-          from { filter: drop-shadow(0 0 8px cyan); }
-          to { filter: drop-shadow(0 0 20px cyan); }
+        @keyframes waveHand {
+          0%, 100% { transform: rotate(-20deg); }
+          50% { transform: rotate(20deg); }
         }
-        .mascot-effects {
-          animation: spin3d 3s linear infinite, float 2s ease-in-out infinite alternate;
+        @keyframes bubblePop {
+          0% { transform: scale(0) translateY(10px); opacity: 0; }
+          100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .zero-gravity {
+          animation: highQualityFloat 8s ease-in-out infinite;
           transform-style: preserve-3d;
+          will-change: transform;
         }
-        .glow-pulse {
-          animation: glowPulse 1.5s ease-in-out infinite alternate;
+        .aura-glow {
+          animation: premiumGlow 4s ease-in-out infinite;
+          will-change: filter;
+        }
+        .waving-arm {
+          animation: waveHand 0.5s ease-in-out infinite;
+          transform-origin: 30% 60%; /* Viewer's left shoulder */
+          clip-path: inset(50% 65% 0 0); /* Isolate left arm (viewer's left) */
+          position: absolute;
+          inset: 0;
+          z-index: 2;
+        }
+        .speech-bubble {
+          animation: bubblePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          background: var(--accent-primary);
+          color: var(--text-on-accent);
+          padding: 4px 10px;
+          border-radius: 8px 8px 8px 0;
+          font-size: 10px;
+          font-weight: 800;
+          position: absolute;
+          top: -25px;
+          left: 70%;
+          white-space: nowrap;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+          z-index: 1001;
+        }
+        .speech-bubble::after {
+          content: '';
+          position: absolute;
+          bottom: -4px;
+          left: 0;
+          border-left: 6px solid var(--accent-primary);
+          border-bottom: 6px solid transparent;
         }
       `}</style>
       
@@ -261,26 +305,43 @@ export default function AIChat() {
           onClick={() => !isDragging && setOpen(true)}
           style={mascotStyle}
         >
+          {showHii && <div className="speech-bubble">{currentGreeting} 👋</div>}
           <div 
-            className="mascot-effects" 
+            className="zero-gravity aura-glow" 
             style={{ 
               width: '100%', 
               height: '100%',
-              transform: 'perspective(200px)'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative'
             }}
           >
-            <div className="glow-pulse" style={{ width: '100%', height: '100%' }}>
+            {/* Main Static Body */}
+            <img
+              src={robotMascot}
+              alt="Scorpio AI Mascot"
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'contain',
+                filter: theme === 'dark' ? 'brightness(1.1)' : 'none'
+              }}
+            />
+            {/* Waving Arm Overlay */}
+            {showHii && (
               <img
                 src={robotMascot}
-                alt="Scorpio AI Mascot"
+                className="waving-arm"
+                alt=""
                 style={{ 
                   width: '100%', 
                   height: '100%', 
                   objectFit: 'contain',
-                  filter: theme === 'dark' ? 'brightness(0.9) hue-rotate(180deg)' : 'none'
+                  filter: theme === 'dark' ? 'brightness(1.1)' : 'none'
                 }}
               />
-            </div>
+            )}
           </div>
         </div>
       )}
