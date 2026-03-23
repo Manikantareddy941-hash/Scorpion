@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight } from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import UVScanOverlay from './UVScanOverlay';
 import { useTheme } from '../contexts/ThemeContext';
@@ -28,6 +28,7 @@ export default function Sidebar() {
   const { getLogoFilter, getLogoBlendMode } = useTheme();
   const [scanId, setScanId] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleScan = async (data: any) => {
     setShowScan(false);
@@ -42,7 +43,6 @@ export default function Sidebar() {
 
       if (!token) throw new Error('Not authenticated');
 
-      // 1. Sync/Create Repo
       const repoRes = await fetch(`${apiBase}/api/repos`, {
         method: 'POST',
         headers: { 
@@ -58,7 +58,6 @@ export default function Sidebar() {
       
       if (!repo.$id) throw new Error(repo.error || 'Failed to register repository');
 
-      // 2. Trigger Scan
       const scanRes = await fetch(`${apiBase}/api/repos/${repo.$id}/scan`, {
         method: 'POST',
         headers: { 
@@ -82,28 +81,87 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="shrink-0" style={{ width: '220px', height: 'fit-content', background: 'var(--bg-primary)', borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', padding: '24px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '0 20px 24px' }}>
-        <img 
-            src={logoImg} 
-            alt="Scorpion Logo" 
-            style={{ 
-                width: 44, 
-                height: 44, 
-                objectFit: 'contain', 
-                filter: getLogoFilter(), 
-                mixBlendMode: getLogoBlendMode() 
-            }} 
-        />
-        <span style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.4rem', letterSpacing: '0.15em', fontStyle: 'italic' }}>SCORPION</span>
+    <div className="shrink-0" style={{ 
+      width: isCollapsed ? '60px' : '220px', 
+      height: 'fit-content', 
+      background: 'var(--bg-primary)', 
+      borderRight: '1px solid var(--border-subtle)', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      padding: '24px 0', 
+      borderBottom: '1px solid var(--border-subtle)',
+      transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflowX: 'hidden',
+      position: 'relative'
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '4px', 
+        padding: isCollapsed ? '0 0 40px 0' : '0 45px 24px 8px', 
+        position: 'relative',
+        justifyContent: isCollapsed ? 'center' : 'flex-start',
+        minHeight: '40px'
+      }}>
+        {!isCollapsed && (
+          <>
+            <img 
+                src={logoImg} 
+                alt="Scorpion Logo" 
+                style={{ 
+                    width: 32, 
+                    height: 32, 
+                    objectFit: 'contain', 
+                    filter: getLogoFilter(), 
+                    mixBlendMode: getLogoBlendMode() 
+                }} 
+            />
+            <span style={{ 
+              color: 'var(--text-primary)', 
+              fontWeight: 800, 
+              fontSize: '1.25rem', 
+              letterSpacing: '0.05em', 
+              fontStyle: 'italic',
+              whiteSpace: 'nowrap'
+            }}>
+              SCORPION
+            </span>
+          </>
+        )}
+        
+        {/* Toggle Button */}
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsCollapsed(!isCollapsed);
+          }}
+          style={{
+            position: 'absolute',
+            top: '50%',
+            right: isCollapsed ? 'auto' : '8px',
+            left: isCollapsed ? '50%' : 'auto',
+            transform: isCollapsed ? 'translate(-50%, -100%)' : 'translateY(-100%)',
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8px'
+          }}
+        >
+          {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
       {/* New Scan Button */}
-      <div style={{ padding: '0 16px 24px' }}>
-        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer' }}>
-          + NEW SCAN
+      <div style={{ padding: isCollapsed ? '0 10px 24px' : '0 16px 24px' }}>
+        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
+          {isCollapsed ? '+' : '+ NEW SCAN'}
         </button>
-        {scanError && (
+        {scanError && !isCollapsed && (
           <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-[10px] text-red-500 italic font-medium animate-in fade-in slide-in-from-top-1">
             ⚠️ {scanError}
           </div>
@@ -129,9 +187,23 @@ export default function Sidebar() {
             const active = location.pathname === path;
             return (
                 <div key={path} onClick={() => navigate(path)}
-                style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', cursor: 'pointer', borderLeft: active ? '3px solid var(--accent-primary)' : '3px solid transparent', background: active ? 'var(--bg-card)' : 'transparent', color: active ? 'var(--accent-primary)' : 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: active ? 700 : 400, letterSpacing: '0.05em', transition: 'all 0.15s' }}>
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '12px', 
+                  padding: isCollapsed ? '12px 0' : '12px 20px', 
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  cursor: 'pointer', 
+                  borderLeft: active ? '3px solid var(--accent-primary)' : '3px solid transparent', 
+                  background: active ? 'var(--bg-card)' : 'transparent', 
+                  color: active ? 'var(--accent-primary)' : 'var(--text-secondary)', 
+                  fontSize: '0.85rem', 
+                  fontWeight: active ? 700 : 400, 
+                  letterSpacing: '0.05em', 
+                  transition: 'all 0.15s' 
+                }}>
                 <Icon size={16} />
-                {label}
+                {!isCollapsed && label}
                 </div>
             );
             })}
@@ -146,7 +218,8 @@ export default function Sidebar() {
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: '12px', 
-                padding: '16px 20px', 
+                padding: isCollapsed ? '16px 0' : '16px 20px', 
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
                 cursor: 'pointer', 
                 borderLeft: location.pathname === settingsItem.path ? '3px solid var(--accent-primary)' : '3px solid transparent', 
                 background: location.pathname === settingsItem.path ? 'var(--bg-card)' : 'transparent', 
@@ -158,11 +231,13 @@ export default function Sidebar() {
             }}
         >
             <settingsItem.icon size={16} />
-            {settingsItem.label}
+            {!isCollapsed && settingsItem.label}
         </div>
-        <div style={{ padding: '12px 20px', color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.5 }}>
-          SCORPION V1.0
-        </div>
+        {!isCollapsed && (
+          <div style={{ padding: '12px 20px', color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.5 }}>
+            SCORPION V1.0
+          </div>
+        )}
       </div>
     </div>
   );
