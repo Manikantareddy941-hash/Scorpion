@@ -4,9 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-  LogOut, Shield, Settings, ChevronDown, Activity, Users, ListTodo, AlertCircle,
-  BarChart3, Sun, Moon, Bug, Wind, Target, Eye, Snowflake, Cloud, CloudSnow, Waves,
-  ShieldAlert, ShieldCheck, ShieldX, Zap, ArrowRight, Gavel
+  LogOut, Shield, Settings, ChevronDown, Activity, ListTodo, AlertCircle,
+  ShieldAlert, ShieldCheck, ShieldX, Zap, ArrowRight, Gavel, Sun, Moon, Eye, Cloud, Waves, Bug, Wind
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip,
@@ -84,7 +83,7 @@ export default function Dashboard() {
       const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
         Query.greaterThanEqual('timestamp', thirtyDaysAgo.toISOString()),
         Query.orderDesc('timestamp'),
-        Query.limit(100) // Ensure we limit array bindings to Appwrite limit
+        Query.limit(100)
       ]);
 
       if (scansRes.total === 0) {
@@ -109,7 +108,6 @@ export default function Dashboard() {
       
       setComplianceScore(score);
 
-      // Trend visualization mock data - in a real app this would group by day/week historically
       setComplianceTrend([
         { day: '1', score: Math.min(100, score + 12) },
         { day: '2', score: Math.min(100, score + 4) },
@@ -153,15 +151,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col transition-colors duration-300">
       <nav className="bg-[var(--bg-primary)] backdrop-blur-md shadow-sm border-b border-[var(--border-subtle)] sticky top-0 z-40 text-[var(--text-primary)]">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-2">
-              <img src={logoImg} alt="Scorpion Logo" className="w-8 h-8 object-contain" style={{ filter: getLogoFilter(), mixBlendMode: 'multiply' }} />
-              <div className="hidden md:block">
-                <h1 className="text-xs font-black italic tracking-tighter uppercase leading-none">Scorpion</h1>
-                <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-0.5">Control Grid</p>
-              </div>
-            </div>
-
+          <div className="flex justify-end items-center h-16">
             <div className="flex items-center gap-6">
               <div style={{position:'relative'}}>
                 <button
@@ -172,7 +162,6 @@ export default function Dashboard() {
                   {theme === 'dark' && <Moon className="w-5 h-5 shadow-sm" />}
                   {theme === 'eye-protection' && <Eye className="w-5 h-5 shadow-sm" />}
                   {theme === 'snow-light' && <Cloud className="w-5 h-5 shadow-sm" />}
-                  {theme === 'snow-dark' && <CloudSnow className="w-5 h-5 shadow-sm" />}
                   {theme === 'underwater' && <Waves className="w-5 h-5 shadow-sm" />}
                   <ChevronDown className={`w-3 h-3 transition-transform ${showThemeMenu ? 'rotate-180' : ''} opacity-50`} />
                 </button>
@@ -183,7 +172,6 @@ export default function Dashboard() {
                     <button onClick={() => { setTheme('dark'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Moon size={18}/></button>
                     <button onClick={() => { setTheme('eye-protection'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Eye size={18}/></button>
                     <button onClick={() => { setTheme('snow-light'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Cloud size={18}/></button>
-                    <button onClick={() => { setTheme('snow-dark'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><CloudSnow size={18}/></button>
                     <button onClick={() => { setTheme('underwater'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Waves size={18}/></button>
                   </div>
                 )}

@@ -34,6 +34,8 @@ function App() {
   const [networkError, setNetworkError] = useState(false);
   const location = useLocation();
 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/verify-otp', '/reset-password', '/auth/callback', '/auth'].includes(location.pathname);
   const showSidebar = !isAuthPage && user;
 
@@ -71,7 +73,12 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary)', minHeight: '100vh' }}>
+    <div className="min-h-screen flex flex-col" style={{ 
+      background: 'var(--bg-primary)', 
+      minHeight: '100vh',
+      marginRight: isChatOpen ? '380px' : '0',
+      transition: 'margin-right 0.3s ease-in-out'
+    }}>
       {networkError && (
         <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
           <NetworkErrorPanel onRetry={checkAppwrite} />
@@ -106,7 +113,7 @@ function App() {
         </div>
       </div>
       <Footer />
-      <AIChat />
+      <AIChat open={isChatOpen} setOpen={setIsChatOpen} />
     </div>
   );
 }
