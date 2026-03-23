@@ -10,7 +10,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Tabl
 import { useAuth } from '../contexts/AuthContext';
 import { databases, DB_ID, COLLECTIONS, Query, functions } from '../lib/appwrite';
 import RemediationPanel from '../components/RemediationPanel';
-import logoImg from '../assets/scorpionlegs-removebg-preview.png';
+import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 
 const getRepoName = (url?: string) => {
     if (!url) return 'Unknown Repository';

@@ -6,7 +6,7 @@ interface ModernAuthLayoutProps {
 }
 
 import { useTheme } from '../../contexts/ThemeContext';
-import logoImg from '../../assets/scorpionlegs-removebg-preview.png';
+import logoImg from '../../assets/pre-final_logo-removebg-preview.png';
 
 export default function ModernAuthLayout({
     children,
