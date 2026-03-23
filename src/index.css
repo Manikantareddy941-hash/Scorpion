@@ -88,27 +88,6 @@ html.snow-light {
   --severity-info: #38bdf8;
 }
 
-/* Snow Dark Mode */
-html.snow-dark {
-  --bg-primary: #0a0a0f;
-  --bg-card: #12121e;
-  --bg-secondary: #0d0d14;
-  --border-subtle: #1e1e2d;
-  --border-color: #1e1e2d;
-  --text-primary: #e0e8ff;
-  --text-secondary: #94a3b8;
-  --text-on-accent: #0f172a;
-  --accent-primary: #38bdf8;
-  --accent-secondary: #0ea5e9;
-  --status-success: #4ade80;
-  --status-error: #fb7185;
-  --status-warning: #fbbf24;
-  --severity-critical: #fb7185;
-  --severity-high: #fca5a5;
-  --severity-medium: #fbbf24;
-  --severity-low: #4ade80;
-  --severity-info: #38bdf8;
-}
 
 /* Underwater Theme */
 html.underwater {
