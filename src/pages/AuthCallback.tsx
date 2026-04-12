@@ -9,8 +9,12 @@ export default function AuthCallback() {
 
   useEffect(() => {
     account.getSession('current')
-      .then((session) => {
+      .then(async (session) => {
         if (session) {
+          // If logged in via GitHub, store the GitHub ID in preferences for webhook matching
+          if (session.provider === 'github') {
+            await account.updatePrefs({ github_user_id: session.providerUid });
+          }
           refreshUser().then(user => setUser(user));
           const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
           sessionStorage.removeItem('oauth_return_to');
