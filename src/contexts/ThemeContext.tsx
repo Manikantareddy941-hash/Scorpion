@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export type Theme = 'light' | 'dark' | 'eye-protection' | 'snow-light' | 'underwater';
+export type Theme = 'light' | 'dark' | 'eye-protection' | 'snow-light' | 'snow-dark' | 'underwater';
 
 interface ThemeContextType {
     theme: Theme;
     setTheme: (theme: Theme) => void;
+    echoMovementEnabled: boolean;
+    setEchoMovementEnabled: (enabled: boolean) => void;
     getLogoFilter: () => string;
     getLogoBlendMode: () => 'screen' | 'multiply';
 }
@@ -26,6 +28,7 @@ export const getLogoFilter = (theme: Theme): string => {
         case 'snow-light':
             return 'brightness(0)'; // Dark gray/black
         case 'dark':
+        case 'snow-dark':
         case 'underwater':
             return 'brightness(0) invert(1)'; // White
         case 'eye-protection':
@@ -40,14 +43,24 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [theme, setThemeState] = useState<Theme>(() => {
         const saved = localStorage.getItem('theme') as Theme;
-        return (['light', 'dark', 'eye-protection', 'snow-light', 'underwater'].includes(saved)) ? saved : 'dark';
+        return (['light', 'dark', 'eye-protection', 'snow-light', 'snow-dark', 'underwater'].includes(saved)) ? saved : 'dark';
     });
+
+    const [echoMovementEnabled, setEchoMovementEnabledState] = useState<boolean>(() => {
+        const saved = localStorage.getItem('echoMovementEnabled');
+        return saved === null ? true : saved === 'true';
+    });
+
+    const setEchoMovementEnabled = (enabled: boolean) => {
+        localStorage.setItem('echoMovementEnabled', String(enabled));
+        setEchoMovementEnabledState(enabled);
+    };
 
     const setTheme = (newTheme: Theme) => {
         const root = document.documentElement;
         
         // Remove all theme classes
-        root.classList.remove('dark', 'eye-protection', 'snow-light', 'underwater');
+        root.classList.remove('dark', 'eye-protection', 'snow-light', 'snow-dark', 'underwater');
         
         // Add new theme class (except for light which is default)
         if (newTheme !== 'light') {
@@ -67,12 +80,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         <ThemeContext.Provider value={{ 
             theme, 
             setTheme, 
+            echoMovementEnabled,
+            setEchoMovementEnabled,
             getLogoFilter: () => getLogoFilter(theme),
             getLogoBlendMode: () => getLogoBlendMode(theme)
         }}>
             {children}
-            { (theme === 'snow-light') && <Snowfall /> }
-            { (theme === 'dark' || theme === 'snow-light') && <BackgroundParticles /> }
+            { (theme === 'snow-light' || theme === 'snow-dark') && <Snowfall /> }
+            { (theme === 'dark' || theme === 'snow-light' || theme === 'snow-dark') && <BackgroundParticles /> }
             { theme === 'underwater' && <UnderwaterBubbles /> }
         </ThemeContext.Provider>
     );

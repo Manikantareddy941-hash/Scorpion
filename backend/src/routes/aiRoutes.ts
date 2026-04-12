@@ -114,7 +114,7 @@ router.post('/chat', async (req: Request, res: Response, next: NextFunction) => 
             return res.status(500).json({ error: 'Gemini API key not configured on server' });
         }
 
-        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         const geminiResponse = await fetch(geminiEndpoint, {
             method: 'POST',
