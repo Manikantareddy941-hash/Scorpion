@@ -1,67 +1,71 @@
-
 export default function Footer() {
   return (
-    <footer className="w-full relative bg-[#010c0f] overflow-hidden" style={{ minHeight: '400px' }}>
-      {/* 1. BACKGROUND LAYER: Target Atmosphere */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_#0a2d34_0%,_#031d24_55%,_#000000_100%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_75%,_rgba(34,211,238,0.15)_0%,_transparent_60%)]" />
+    <footer 
+      className="w-full py-24 px-12 lg:px-24 flex flex-col font-sans transition-all duration-300 relative overflow-hidden"
+      style={{ 
+        background: 'var(--bg-primary)',
+        borderTop: '1px solid var(--border-subtle)'
+      }}
+    >
+      {/* Top Section: Tagline & Nav Grid */}
+      <div className="flex justify-between items-start mb-32 relative z-10">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-[var(--text-primary)] opacity-20">Global Security Core</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-60">Experience Liftoff</span>
+        </div>
 
-      <style>{`
-        .scorpion-text-base {
-          font-family: 'Inter', sans-serif;
-          font-weight: 900;
-          font-style: italic;
-          color: #000000; /* TARGET MATCH: PURE BLACK */
-          font-size: 8vw;
-          line-height: 1;
-          letter-spacing: -0.05em;
-          text-align: center;
-          width: 100%;
-          pointer-events: none;
-        }
-      `}</style>
-
-      {/* 2. TOP UI LAYER (Slogan & Nav) */}
-      <div className="relative z-50 flex justify-between p-12 lg:p-24 items-start">
-        <h2 className="text-white font-black text-7xl uppercase italic leading-[0.8] tracking-tighter">
-          Automate<br />everything…<br />except your job!
-        </h2>
-        <div className="flex gap-20 text-right text-white font-bold uppercase italic text-sm tracking-widest">
-          <div className="space-y-4">
-            <p className="text-white/20 text-[10px] tracking-[0.5em]">Interface</p>
-            <p className="cursor-pointer hover:text-cyan-400">Dashboard</p>
-            <p className="cursor-pointer hover:text-cyan-400">Security</p>
-            <p className="cursor-pointer hover:text-cyan-400">Reports</p>
+        <div className="grid grid-cols-2 gap-16 md:gap-24">
+          <div className="flex flex-col gap-4">
+            {['Download', 'Product', 'Docs', 'Changelog', 'Press', 'Releases'].map((link) => (
+              <span 
+                key={link} 
+                className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-50 cursor-pointer hover:text-[var(--accent-primary)] hover:opacity-100 transition-all whitespace-nowrap"
+              >
+                {link}
+              </span>
+            ))}
           </div>
-          <div className="space-y-4">
-            <p className="text-white/20 text-[10px] tracking-[0.5em]">Network</p>
-            <p className="cursor-pointer hover:text-cyan-400">Teams</p>
-            <p className="cursor-pointer hover:text-cyan-400">Alerts</p>
+          <div className="flex flex-col gap-4">
+            {['Blog', 'Pricing', 'Use Cases'].map((link) => (
+              <span 
+                key={link} 
+                className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 cursor-pointer hover:text-white hover:opacity-100 transition-all whitespace-nowrap"
+              >
+                {link}
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* 3. WATERMARK LAYER */}
-      <div className="absolute inset-0 flex items-center justify-center pt-20">
-        <div className="absolute top-[70%] -translate-y-1/2 z-20 scorpion-text-base">
+      {/* Main Feature: Giant Typography */}
+      <div className="w-full mb-20 flex justify-center relative z-10">
+        <h1 
+          className="leading-[0.85] tracking-[-0.05em] uppercase select-none m-0 p-0 text-center font-bold text-[var(--text-primary)] opacity-25"
+          style={{ fontSize: 'clamp(80px, 15vw, 200px)' }}
+        >
           SCORPION
-        </div>
+        </h1>
       </div>
 
-      {/* 4. FINAL QUALITY BOTTOM BAR */}
-      <div className="absolute bottom-0 w-full px-12 pb-12 z-50">
-        <div className="flex justify-between items-center pt-8 border-t border-white/10">
-          <span className="text-[11px] font-black tracking-[0.5em] text-white/40 uppercase italic">SCORPION CORE</span>
-          <div className="flex items-center gap-8">
-            <span className="text-[10px] font-black text-white/20 uppercase italic">Privacy Suite</span>
-            <span className="text-[10px] font-black text-white/20 uppercase italic">Terms</span>
-            <div className="flex items-center gap-2">
-              <span className="text-cyan-400 text-3xl drop-shadow-[0_0_10px_cyan]">✦</span>
-              <span className="text-white font-black italic">V1.0</span>
-            </div>
-          </div>
+      {/* Bottom Section: Brand & Legal */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 pt-12 border-t border-[var(--border-subtle)] relative z-10">
+        <div className="flex flex-col gap-1">
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-40">SCORPION V1.0</span>
+        </div>
+        
+        <div className="flex gap-12 text-[10px] font-bold uppercase tracking-[0.2em]">
+          {['About', 'Privacy', 'Terms'].map((link) => (
+            <span 
+              key={link} 
+              className="text-[var(--text-primary)] opacity-40 cursor-pointer hover:text-[var(--accent-primary)] hover:opacity-100 transition-all font-bold"
+            >
+              {link}
+            </span>
+          ))}
         </div>
       </div>
     </footer>
   );
 }
+

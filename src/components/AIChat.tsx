@@ -10,7 +10,14 @@ interface Message {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are the SCORPION AI Architect. You are an expert in AWS, DevSecOps, and React. Your job is to: 1) Explain how to fix security vulnerabilities found in scans. 2) Provide code fixes for bugs. 3) Guide users on how to use SCORPION features like Governance, Reports, and The Sting.`;
+const SYSTEM_PROMPT = `You are Echo, an expert in DevSecOps, cybersecurity, vulnerability scanning, Trivy, SCORPION platform features (scanning, reports, governance, remediation), cloud security (AWS, GCP, Azure), and general security best practices. Your answers must be confident, professional, and concise.
+
+CRITICAL INSTRUCTIONS:
+- When the user says hi, hello, hey or any greeting, respond with a time-appropriate greeting — use 'Good morning' if it's before 12pm, 'Good afternoon' if between 12pm-5pm, 'Good evening' if after 5pm — followed by a short friendly message. Do NOT repeat your introduction every time.
+- For greetings, respond with only 2-3 lines. Keep it friendly and brief.
+- Example greeting response: "Good morning! I'm Echo — what can I help you with today?"
+- Do NOT list features or capabilities unless the user explicitly asks.
+- Never use numbered bullet points in simple greetings.`;
 
 interface AIChatProps {
   open: boolean;
@@ -18,11 +25,11 @@ interface AIChatProps {
 }
 
 export default function AIChat({ open, setOpen }: AIChatProps) {
-  const { theme } = useTheme();
+  const { theme, echoMovementEnabled } = useTheme();
   const location = useLocation();
 
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hi! I\'m Echo, your AI assistant. How can I help you?' }
+    { role: 'assistant', content: "Hi! I'm Echo 👋 Your DevSecOps AI assistant. Ask me anything about security scanning, vulnerabilities, or how to use SCORPION." }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,7 +65,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
 
   // Movement Logic
   useEffect(() => {
-    if (isDragging || open) return;
+    if (isDragging || open || !echoMovementEnabled) return;
 
     const intervalId = setInterval(() => {
       const newX = Math.random() * (window.innerWidth - mascotSize);
@@ -172,7 +179,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
         },
         body: JSON.stringify({
           system_instruction: {
-            parts: [{ text: SYSTEM_PROMPT + context }],
+            parts: [{ text: `[CURRENT_TIME: ${new Date().toLocaleTimeString()}] ` + SYSTEM_PROMPT + context }],
           },
           contents: [
             ...geminiHistory,
@@ -210,22 +217,23 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
     cursor: isDragging ? 'grabbing' : 'pointer',
     left: position.x,
     top: position.y,
-    transition: isDragging ? 'none' : 'all 3.5s ease-in-out',
-    transform: zIndex === 1 ? 'translateY(40%)' : 'none'
+    transition: isDragging || !echoMovementEnabled ? 'none' : 'all 3.5s ease-in-out',
+    transform: zIndex === 1 ? 'translateY(40%)' : 'none',
+    animation: !echoMovementEnabled ? 'none !important' : undefined
   };
 
   const chatPanelStyle: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    right: open ? 0 : `-${panelWidth}px`,
-    width: `${panelWidth}px`,
+    position: 'relative',
+    width: open ? `${panelWidth}px` : '0px',
+    minWidth: open ? `${panelWidth}px` : '0px',
     height: '100vh',
     background: 'var(--bg-secondary)',
-    borderLeft: '1px solid var(--border-subtle)',
+    borderLeft: open ? '1px solid var(--border-subtle)' : 'none',
     zIndex: 1002,
     display: 'flex',
     flexDirection: 'column',
-    transition: isResizing ? 'none' : 'right 0.3s ease-in-out'
+    transition: isResizing ? 'none' : 'width 0.3s ease-in-out, min-width 0.3s ease-in-out',
+    overflow: 'hidden'
   };
 
   return (
@@ -260,8 +268,29 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
           onClick={() => !isDragging && setOpen(true)}
           style={mascotStyle}
         >
-          <div className="zero-gravity aura-glow" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-            <img src={robotMascot} alt="Echo Mascot" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: theme === 'dark' ? 'brightness(1.1)' : 'none' }} />
+          <div 
+            className={`${echoMovementEnabled ? 'zero-gravity aura-glow' : ''}`} 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              position: 'relative',
+              animation: !echoMovementEnabled ? 'none !important' : undefined
+            }}
+          >
+            <img 
+              src={robotMascot} 
+              alt="Echo Mascot" 
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'contain', 
+                filter: theme === 'dark' ? 'brightness(1.1)' : 'none',
+                animation: !echoMovementEnabled ? 'none !important' : undefined
+              }} 
+            />
           </div>
         </div>
       )}
