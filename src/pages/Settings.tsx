@@ -8,10 +8,12 @@ import {
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
+import robotMascot from '../assets/tony-ai.png';
+import { Bot } from 'lucide-react';
 
 export default function Settings() {
     const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT } = useAuth();
-    const { theme, setTheme } = useTheme();
+    const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled } = useTheme();
     const [isGithubConnected, setIsGithubConnected] = useState(false);
     const [preferences, setPreferences] = useState({});
     const [loading, setLoading] = useState(true);
@@ -322,6 +324,38 @@ export default function Settings() {
                             </div>
                         </div>
 
+                        {/* GitHub App Section */}
+                        <div className="mb-12 pb-12 border-b border-[var(--border-subtle)]">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <Bot className="w-16 h-16" />
+                                </div>
+                                <div className="flex items-center gap-5 z-10">
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center border transition-colors
+                                        ${(user?.prefs as any)?.github_installation_id ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-500' : 'bg-white/5 border-white/10 text-white'}`}>
+                                        <Bot size={24} />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">Institutional Access (GitHub App)</h4>
+                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
+                                            {(user?.prefs as any)?.github_installation_id 
+                                                ? `Neural Mesh Integrated (Installation ID: ${(user?.prefs as any)?.github_installation_id})` 
+                                                : 'Establish structural link for autonomous fleet orchestration'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        window.open(`https://github.com/apps/scorpion-security-orchestrator/installations/new`, '_blank');
+                                    }}
+                                    className={`px-8 py-3 rounded-xl text-xs font-black uppercase italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl
+                                        ${(user?.prefs as any)?.github_installation_id ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-cyan-500 text-black shadow-cyan-500/20 hover:shadow-cyan-500/40'}`}
+                                >
+                                    {(user?.prefs as any)?.github_installation_id ? 'Sync Neural Mesh' : 'Install ScorpApp'}
+                                </button>
+                            </div>
+                        </div>
+
                         <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">Designation Name</label>
@@ -444,6 +478,85 @@ export default function Settings() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </section>
+
+                    {/* Echo Neural Interface */}
+                    <section className="premium-card p-10">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-5">
+                                <div className="w-12 h-12 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/20">
+                                    <Bot className="w-6 h-6 text-cyan-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Echo Neural Interface</h3>
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">Control autonomous movement vectors for your AI assistant</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setEchoMovementEnabled(!echoMovementEnabled)}
+                                className={`w-14 h-7 rounded-full p-1 transition-all duration-300 ${echoMovementEnabled ? 'bg-cyan-500 shadow-lg shadow-cyan-500/20' : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)]'}`}
+                            >
+                                <div className={`w-5 h-5 rounded-full bg-white transition-transform duration-300 ${echoMovementEnabled ? 'translate-x-7' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+                            <div className="space-y-6">
+                                <div className={`p-6 rounded-2xl border transition-all ${echoMovementEnabled ? 'bg-cyan-500/5 border-cyan-500/20' : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] opacity-60'}`}>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className={`w-2 h-2 rounded-full ${echoMovementEnabled ? 'bg-cyan-400 animate-pulse' : 'bg-gray-500'}`} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)]">
+                                            Status: {echoMovementEnabled ? 'Echo is floating freely' : 'Movement paused'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed italic">
+                                        {echoMovementEnabled 
+                                            ? 'The Neural Link is active. Echo will automatically navigate across your command interface using zero-gravity propulsion.' 
+                                            : 'The Neural Link is on standby. Echo will remain anchored at its current coordinate vector until manual movement is initialized.'}
+                                    </p>
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <button 
+                                        onClick={() => setEchoMovementEnabled(true)}
+                                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${echoMovementEnabled ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 opacity-40 cursor-not-allowed' : 'bg-cyan-500 text-black hover:scale-[1.02] active:scale-[0.98]'}`}
+                                        disabled={echoMovementEnabled}
+                                    >
+                                        Initialize Movement
+                                    </button>
+                                    <button 
+                                        onClick={() => setEchoMovementEnabled(false)}
+                                        className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!echoMovementEnabled ? 'bg-white/5 border border-white/10 text-[var(--text-secondary)] opacity-40 cursor-not-allowed' : 'bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]'}`}
+                                        disabled={!echoMovementEnabled}
+                                    >
+                                        Halt Propulsion
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="relative aspect-video rounded-3xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] overflow-hidden flex items-center justify-center group">
+                                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_50%_50%,_var(--accent-primary)_0%,_transparent_70%)]" />
+                                
+                                <div className={`relative transition-all duration-1000 ${echoMovementEnabled ? 'animate-[floating_4s_ease-in-out_infinite]' : ''}`}>
+                                    <div className="w-20 h-20 relative">
+                                        <img src={robotMascot} alt="Echo Preview" className="w-full h-full object-contain relative z-10" />
+                                        <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-500 ${echoMovementEnabled ? 'bg-cyan-400/30 opacity-100' : 'bg-gray-400/10 opacity-0'}`} />
+                                    </div>
+                                </div>
+
+                                <style>{`
+                                    @keyframes floating {
+                                        0%, 100% { transform: translateY(0) rotate(0deg); }
+                                        50% { transform: translateY(-15px) rotate(2deg); }
+                                    }
+                                `}</style>
+
+                                <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center px-4">
+                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[var(--text-secondary)]">Neural Link Preview</span>
+                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-cyan-500 animate-pulse">{echoMovementEnabled ? 'LIVE' : 'IDLE'}</span>
+                                </div>
+                            </div>
                         </div>
                     </section>
 

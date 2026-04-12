@@ -18,7 +18,12 @@ const navItems = [
 
 const settingsItem = { icon: Settings, label: 'Settings', path: '/settings' };
 
-export default function Sidebar() {
+interface SidebarProps {
+  isCollapsed: boolean;
+  setIsCollapsed: (collapsed: boolean) => void;
+}
+
+export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [showScan, setShowScan] = useState(false);
@@ -28,7 +33,6 @@ export default function Sidebar() {
   const { getLogoFilter, getLogoBlendMode } = useTheme();
   const [scanId, setScanId] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleScan = async (data: any) => {
     setShowScan(false);

@@ -1,77 +1,87 @@
-# 🛡️ StackPilot: Unified Security Orchestration
+# 🛡️ SCORPION: Enterprise DevSecOps Orchestration Platform
 
-StackPilot is a modern **Security Orchestration, Automation, and Response (SOAR)** platform. It integrates multiple security scanning tools into a single, cohesive dashboard, providing developer-first organizations with a unified view of their security posture.
-
----
-
-## ✨ Key Features
-- **Centralized Orchestration**: Run **Semgrep**, **Gitleaks**, and **Trivy** in parallel.
-- **Governance-as-Code**: Define and enforce security policies across all repositories.
-- **RBAC & Project Management**: Manage teams, permissions (Admin/Developer/Viewer), and repository access.
-- **AI-Powered Insights**: Get automated remediation suggestions for detected vulnerabilities.
-- **Integrated Health Diagnostics**: Real-time monitoring of backend, database, and security tool availability.
+SCORPION is a premium, end-to-end security orchestration platform (SOAR) designed to streamline vulnerability management, automate remediation, and enforce governance across the software development lifecycle (SDLC).
 
 ---
 
-## 🏗️ Project Structure
+## 📊 System Architecture & Workflow
 
-```text
-Stackpilot/
-├── backend/                # Node.js + Express Backend
-│   ├── src/
-│   │   ├── lib/            # Centralized Supabase & Third-party clients
-│   │   ├── routes/         # Express API Routes (Auth, Projects, Health)
-│   │   ├── services/       # Business Logic (Scanning, Reporting, RBAC)
-│   │   ├── utils/          # Universal Utilities (Tool Check, Logging)
-│   │   └── index.ts        # Server Entry Point & Middleware
-│   ├── scripts/            # Database maintenance & migration scripts
-│   └── package.json        # Backend dependencies & scripts
-├── src/                    # Vite + React Frontend
-│   ├── components/         # Reusable UI Components (Auth, Dashboards, Tables)
-│   ├── pages/              # Main Application Pages (Security, Reports, Settings)
-│   ├── contexts/           # React Context Providers (AuthContext)
-│   ├── lib/                # Frontend Supabase client
-│   └── App.tsx             # Main Routing & Layout
-├── tools/                  # Portable security tool binaries
-│   ├── gitleaks/           # Gitleaks executable
-│   └── trivy/              # Trivy executable
-├── supabase/               # Database migrations & configuration
-├── package.json            # Frontend dependencies & scripts
-└── README.md               # You are here
+The following flowchart illustrates the lifecycle of a security finding in SCORPION, from initial detection to automated remediation.
+
+```mermaid
+graph TD
+    A[User / CI/CD Trigger] -->|Initiates Scan| B(Scanning Orchestrator)
+    B --> C{Scan Engines}
+    C -->|Static Analysis| D[Semgrep]
+    C -->|Secrets Detection| E[Gitleaks]
+    C -->|Vulnerability Scan| F[Trivy]
+    
+    D & E & F -->|Raw Results| G(Result Parsers)
+    G -->|Normalized Data| H[(Appwrite Database)]
+    
+    H -->|Real-time Updates| I[Security Dashboard]
+    I -->|User Identification| J{Decision Node}
+    
+    J -->|Request AI Help| K(Echo AI Assistant)
+    K -->|Generate Fix| L[Gemini 2.5 Flash]
+    L -->|Code Diff| M[Remediation Panel]
+    
+    M -->|Create PR| N[GitHub/GitLab API]
+    N -->|Fixed Code| O[Resolved Vulnerability]
 ```
 
 ---
 
-## 🛠️ Tech Stack
-- **Frontend**: React 18, Vite, Tailwind CSS, Recharts, Lucide Icons.
-- **Backend**: Node.js, Express, TypeScript, `ts-node-dev`.
-- **Database**: Supabase (PostgreSQL, Auth, Row Level Security).
-- **Security Scanners**: 
-  - **Gitleaks**: Secret detection and prevention.
-  - **Trivy**: Vulnerability and misconfiguration scanner.
-  - **Semgrep**: Lightweight static analysis (SAST) for 30+ languages.
+## 🚀 Core Features & Functionality
+
+### 1. Unified Security Dashboard
+*   **Centralized Metrics**: Aggregates data from `Scans` and `Findings` into high-fidelity visualizations using **Recharts**.
+*   **Risk Profiling**: Instant visibility into severity distributions (Critical, High, Medium, Low) and tool-specific performance.
+
+### 2. Multi-Engine Scanning Orchestrator
+*   **Parallel Execution**: Clones repositories and runs **Trivy**, **Semgrep**, and **Gitleaks** in parallel.
+*   **Normalized Data**: Automatically parses heterogeneous tool outputs into a consistent vulnerability schema.
+
+### 3. Echo: The AI DevSecOps Assistant
+*   **Intelligent Chat**: A context-aware chatbot powered by **Gemini 2.5 Flash** that understands the platform's features and your specific scan data.
+*   **Contextual Help**: Echo knows which page you're viewing (Reports, Governance, etc.) and provides tailored guidance.
+
+### 4. Automated AI Remediation
+*   **Self-Healing Code**: Generates precise code fixes for detected vulnerabilities with detailed explanations and confidence scores.
+*   **One-Click PRs**: Instantly create Pull Requests for approved fixes directly via backend Git integrations.
+
+### 5. Policy & Governance Management
+*   **Governance-as-Code**: Define and enforce security policies across all projects to ensure compliance with organizational standards.
+*   **Compliance Tracking**: Automated detection of non-compliant infrastructure and code.
+
+### 6. Security Pulse & Alerts
+*   **Discord Integration**: Real-time notifications for critical findings sent as rich embeds to your developer channels.
+*   **Health Diagnostics**: Built-in monitoring suite for backend services, database connectivity, and scanner operational status.
 
 ---
 
-## 🚀 Setup & Installation
+## 🛠️ Technical Stack
+
+| Component | Technology |
+| :--- | :--- |
+| **Frontend** | React 18, Vite, Tailwind CSS, Framer Motion |
+| **Backend** | Node.js, Express, TypeScript |
+| **Database & Auth** | Appwrite |
+| **AI Engine** | Google Gemini 2.5 Flash |
+| **Security Scanners** | Trivy, Semgrep, Gitleaks |
+
+---
+
+## 📜 Setup & Installation
 
 ### 1. Prerequisites
 - **Node.js**: v18 or higher.
-- **Python 3.12**: Required for Semgrep (Backend).
-- **Supabase**: Active project with URL and Service Role Key.
+- **Appwrite**: Active project with API Keys and Database ID.
+- **Gemini API Key**: For Echo AI features.
 
-### 2. Environment Configuration
-Create a `.env` file in the `backend/` directory:
-```env
-PORT=3001
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-FRONTEND_URL=http://localhost:5173
-```
-
-### 3. Installation
+### 2. Installation
 ```bash
-# Install root/frontend dependencies
+# Install frontend dependencies
 npm install
 
 # Install backend dependencies
@@ -79,36 +89,11 @@ cd backend
 npm install
 ```
 
-### 4. Running the Application
-**Frontend (Root):**
-```bash
-npm run dev
-```
-**Backend (backend/):**
-```bash
-npm run dev
-```
-
----
-
-## 🛡️ Security Toolchain Verification
-The backend includes a built-in diagnostic suite to ensure all security tools are operational.
-Root to: `GET /api/health/auth` returns the status of:
-- **Service Role** connectivity.
-- **Gitleaks** binary detection.
-- **Trivy** binary detection.
-- **Semgrep** Python package detection.
-
----
-
-## ⚠️ Troubleshooting (Known Issues)
-### DNS Redirection (ISP Specific)
-If you encounter a "Connection Timeout" or "404" specifically from Supabase domains (`supabase.co`), your ISP may be redirecting traffic. 
-**Solution**: Change your system DNS to:
-- **Google DNS**: 8.8.8.8 | 8.8.4.4
-- **Cloudflare DNS**: 1.1.1.1
+### 3. Running the App
+**Frontend:** `npm run dev` (from root)  
+**Backend:** `npm run dev` (from /backend)
 
 ---
 
 ## 📜 License
-Distribute under the MIT License.
+Distributed under the MIT License.

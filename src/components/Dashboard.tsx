@@ -13,7 +13,8 @@ import {
 } from 'recharts';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 
-export default function Dashboard() {
+export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: boolean }) {
+  console.log('CRITICAL: Dashboard component v2 loading...');
   const { user, signOut } = useAuth();
   const { theme, setTheme, getLogoFilter } = useTheme();
   const navigate = useNavigate();
@@ -25,7 +26,10 @@ export default function Dashboard() {
   // Compliance Widget State
   const [complianceScore, setComplianceScore] = useState<number>(100);
   const [complianceTrend, setComplianceTrend] = useState<any[]>([{ day: 'A', score: 100 }, { day: 'B', score: 100 }]);
-  const [loadingCompliance, setLoadingCompliance] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingCompliance, setLoadingCompliance] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const securityScore = Math.max(0, 100 - ((latestScan?.criticalCount ?? 0) * 10) - ((latestScan?.highCount ?? 0) * 5));
 
@@ -54,10 +58,18 @@ export default function Dashboard() {
   useEffect(() => {
     const init = async () => {
       await Promise.all([fetchLatestScan(), fetchCompliance()]);
+      setLastRefreshed(new Date());
       setLoading(false);
     };
     init();
   }, []);
+
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchLatestScan(), fetchCompliance()]);
+    setLastRefreshed(new Date());
+    setRefreshing(false);
+  };
 
   const fetchLatestScan = async () => {
     try {
@@ -74,6 +86,10 @@ export default function Dashboard() {
       console.error('Error fetching latest scan:', error);
     }
   };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchCompliance = async () => {
     try {
@@ -232,7 +248,7 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      <main className="flex-1 max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full overflow-y-auto">
+      <main className="flex-1 max-w-full mx-auto py-8 w-full overflow-y-auto pl-0 pr-4 sm:pr-6 lg:pr-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
           {/* Main Top Grid */}
           <div className="lg:col-span-12">
@@ -251,14 +267,25 @@ export default function Dashboard() {
                         <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Real-time Anomaly Vectors</p>
                       </div>
                       <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2 bg-[var(--status-success)]/10 px-3 py-1.5 rounded-lg border border-[var(--status-success)]/20">
-                          <div className="w-1.5 h-1.5 bg-[var(--status-success)] rounded-full animate-ping" />
-                          <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">Stable Pulse</span>
-                        </div>
+                        {lastRefreshed && (
+                          <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic opacity-50">
+                            Updated {lastRefreshed.toLocaleTimeString()}
+                          </span>
+                        )}
+                        <button
+                          onClick={handleManualRefresh}
+                          disabled={refreshing}
+                          className="flex items-center gap-2 bg-[var(--status-success)]/10 px-3 py-1.5 rounded-lg border border-[var(--status-success)]/20 hover:bg-[var(--status-success)]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/refresh"
+                        >
+                          <div className={`w-1.5 h-1.5 bg-[var(--status-success)] rounded-full ${refreshing ? 'animate-ping' : ''}`} />
+                          <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">
+                            {refreshing ? 'Refreshing...' : 'Manual Refresh'}
+                          </span>
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex-1 min-h-[300px] w-full bg-[var(--bg-primary)]/30 rounded-2xl border border-[var(--border-subtle)] p-6 relative flex items-center justify-center">
+                    <div className="flex-1 min-h-[300px] w-full bg-[var(--bg-primary)]/30 rounded-2xl border border-[var(--border-subtle)] p-6 relative flex items-center justify-center" style={{ minWidth: 0 }}>
                       {!latestScan ? (
                         <div className="flex flex-col items-center gap-3 text-center">
                           <div className="w-12 h-12 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-subtle)] flex items-center justify-center animate-pulse">
@@ -266,38 +293,40 @@ export default function Dashboard() {
                           </div>
                           <p className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic">NO SCAN DATA — RUN A SCAN</p>
                         </div>
-                      ) : (
-                        <ResponsiveContainer width="100%" height={350}>
-                          <RadarChart cx="50%" cy="50%" outerRadius="80%" data={threatData}>
-                            <PolarGrid stroke="var(--border-subtle)" strokeDasharray="3 3" />
-                            <PolarAngleAxis 
-                              dataKey="axis" 
-                              tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 'bold' }} 
-                            />
-                            <PolarRadiusAxis 
-                              angle={30} 
-                              domain={[0, 100]} 
-                              tick={false} 
-                            />
-                            <Radar
-                              name="Observed"
-                              dataKey="Observed"
-                              stroke="var(--accent-primary)"
-                              fill="var(--accent-primary)"
-                              fillOpacity={0.6}
-                            />
-                            <Tooltip 
-                              contentStyle={{ 
-                                background: 'var(--bg-card)', 
-                                border: '1px solid var(--border-subtle)',
-                                borderRadius: '12px',
-                                fontSize: '10px',
-                                fontWeight: 'bold',
-                                textTransform: 'uppercase'
-                              }}
-                            />
-                          </RadarChart>
-                        </ResponsiveContainer>
+                      ) : mounted && (
+                        <div style={{ width: '100%', height: 350, minWidth: 0 }}>
+                          <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="100%" height="100%">
+                            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={threatData}>
+                              <PolarGrid stroke="var(--border-subtle)" strokeDasharray="3 3" />
+                              <PolarAngleAxis 
+                                dataKey="axis" 
+                                tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 'bold' }} 
+                              />
+                              <PolarRadiusAxis 
+                                angle={30} 
+                                domain={[0, 100]} 
+                                tick={false} 
+                              />
+                              <Radar
+                                name="Observed"
+                                dataKey="Observed"
+                                stroke="var(--accent-primary)"
+                                fill="var(--accent-primary)"
+                                fillOpacity={0.6}
+                              />
+                              <Tooltip 
+                                contentStyle={{ 
+                                  background: 'var(--bg-card)', 
+                                  border: '1px solid var(--border-subtle)',
+                                  borderRadius: '12px',
+                                  fontSize: '10px',
+                                  fontWeight: 'bold',
+                                  textTransform: 'uppercase'
+                                }}
+                              />
+                            </RadarChart>
+                          </ResponsiveContainer>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -345,14 +374,18 @@ export default function Dashboard() {
                 ) : (
                   <>
                     <div className="relative h-48 w-full flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RadialBarChart 
-                          cx="50%" cy="50%" innerRadius="70%" outerRadius="100%" 
-                          barSize={15} data={gaugeData} startAngle={180} endAngle={0}
-                        >
-                          <RadialBar background={false} dataKey="value" cornerRadius={10} />
-                        </RadialBarChart>
-                      </ResponsiveContainer>
+                      {mounted && (
+                        <div style={{ width: '100%', height: 192, minWidth: 0 }}>
+                          <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="100%" height="100%">
+                            <RadialBarChart 
+                              cx="50%" cy="50%" innerRadius="70%" outerRadius="100%" 
+                              barSize={15} data={gaugeData} startAngle={180} endAngle={0}
+                            >
+                              <RadialBar background={false} dataKey="value" cornerRadius={10} />
+                            </RadialBarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
                       <div className="absolute flex flex-col items-center justify-center mt-6">
                         <span className="text-5xl font-black italic tracking-tighter" style={{ color: complianceColor }}>
                           {complianceScore}%
@@ -373,17 +406,21 @@ export default function Dashboard() {
                           </span>
                        </div>
                        <div className="h-10 w-full overflow-hidden opacity-50">
-                         <ResponsiveContainer width="100%" height="100%">
-                           <AreaChart data={complianceTrend}>
-                             <defs>
-                               <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                                 <stop offset="5%" stopColor={complianceColor} stopOpacity={0.8}/>
-                                 <stop offset="95%" stopColor={complianceColor} stopOpacity={0}/>
-                               </linearGradient>
-                             </defs>
-                             <Area type="monotone" dataKey="score" stroke={complianceColor} fillOpacity={1} fill="url(#colorScore)" strokeWidth={2} isAnimationActive={true} />
-                           </AreaChart>
-                         </ResponsiveContainer>
+                        {mounted && (
+                          <div style={{ width: '100%', height: 40, minWidth: 0 }}>
+                            <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="100%" height="100%">
+                              <AreaChart data={complianceTrend}>
+                                <defs>
+                                  <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={complianceColor} stopOpacity={0.8}/>
+                                    <stop offset="95%" stopColor={complianceColor} stopOpacity={0}/>
+                                  </linearGradient>
+                                </defs>
+                                <Area type="monotone" dataKey="score" stroke={complianceColor} fillOpacity={1} fill="url(#colorScore)" strokeWidth={2} isAnimationActive={true} />
+                              </AreaChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
                        </div>
                     </div>
                   </>

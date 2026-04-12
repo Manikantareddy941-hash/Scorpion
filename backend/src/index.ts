@@ -25,6 +25,7 @@ import userRoutes from './routes/userRoutes';
 import keyRoutes from './routes/keyRoutes';
 import reportRoutes from './routes/reportRoutes';
 import aiRoutes from './routes/aiRoutes';
+import webhookRoutes from './routes/webhookRoutes';
 
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
@@ -135,6 +136,7 @@ app.use('/api/user', authenticate, userRoutes);
 app.use('/api/keys', authenticate, keyRoutes);
 app.use('/api/reports', authenticate, reportRoutes);
 app.use('/api/ai', authenticate, aiRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // --- Initialization ---
 initScheduler();

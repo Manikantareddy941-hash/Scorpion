@@ -35,6 +35,7 @@ function App() {
   const location = useLocation();
 
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/verify-otp', '/reset-password', '/auth/callback', '/auth'].includes(location.pathname);
   const showSidebar = !isAuthPage && user;
@@ -73,11 +74,9 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ 
+    <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ 
       background: 'var(--bg-primary)', 
-      minHeight: '100vh',
-      marginRight: isChatOpen ? '380px' : '0',
-      transition: 'margin-right 0.3s ease-in-out'
+      minHeight: '100vh'
     }}>
       {networkError && (
         <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
@@ -85,8 +84,11 @@ function App() {
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'start', minHeight: '100vh', background: 'var(--bg-primary)' }}>
-        {showSidebar && <Sidebar />}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        {showSidebar && <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={setIsSidebarCollapsed} />}
+        <div style={{ 
+          flex: 1, 
+          overflow: 'auto'
+        }}>
           <Routes>
             <Route path="/auth" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -97,7 +99,7 @@ function App() {
             <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Dashboard isSidebarCollapsed={isSidebarCollapsed} /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
@@ -111,9 +113,9 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
+        <AIChat open={isChatOpen} setOpen={setIsChatOpen} />
       </div>
       <Footer />
-      <AIChat open={isChatOpen} setOpen={setIsChatOpen} />
     </div>
   );
 }
