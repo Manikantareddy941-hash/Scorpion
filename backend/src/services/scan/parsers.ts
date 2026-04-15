@@ -4,6 +4,9 @@ export interface Finding {
     message: string;
     file_path?: string;
     line_number?: number;
+    package?: string;
+    version?: string;
+    fixVersion?: string;
 }
 
 export const parseSemgrep = (stdout: string): Finding[] => {
@@ -14,7 +17,10 @@ export const parseSemgrep = (stdout: string): Finding[] => {
             severity: mapSemgrepSeverity(r.extra?.severity),
             message: r.extra?.message || r.check_id,
             file_path: r.path,
-            line_number: r.start?.line
+            line_number: r.start?.line,
+            package: undefined,
+            version: undefined,
+            fixVersion: undefined
         }));
     } catch (e) {
         console.error('[Parser] Semgrep error:', e);
@@ -40,7 +46,10 @@ export const parseGitleaks = (stdout: string): Finding[] => {
             severity: 'critical', // Secrets are almost always critical
             message: `Secret detected: ${l.Description} (Rule: ${l.RuleID})`,
             file_path: l.File,
-            line_number: l.StartLine
+            line_number: l.StartLine,
+            package: undefined,
+            version: undefined,
+            fixVersion: undefined
         }));
     } catch (e) {
         console.error('[Parser] Gitleaks error:', e);
@@ -60,7 +69,10 @@ export const parseTrivy = (stdout: string): Finding[] => {
                     severity: mapTrivySeverity(v.Severity),
                     message: `${v.PkgName}: ${v.Title || v.Description}`,
                     file_path: res.Target,
-                    line_number: undefined // Trivy for packages usually doesn't have line numbers
+                    line_number: undefined, 
+                    package: v.PkgName || undefined,
+                    version: v.InstalledVersion || undefined,
+                    fixVersion: v.FixedVersion || undefined
                 });
             });
         });
@@ -71,6 +83,7 @@ export const parseTrivy = (stdout: string): Finding[] => {
         return [];
     }
 };
+
 
 const mapTrivySeverity = (sev: string): Finding['severity'] => {
     switch (sev?.toUpperCase()) {

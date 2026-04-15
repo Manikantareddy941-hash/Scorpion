@@ -54,24 +54,43 @@ export default function SecurityDashboard() {
 
     const fetchDashboardData = async () => {
         try {
-            // Fetch repositories
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const jwt = localStorage.getItem('appwrite_jwt');
+
+            // 1. Fetch repositories (still needed for list/distribution)
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
+            if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
             const repoData = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
                 Query.limit(100)
             ]);
             const repositories = repoData.documents as unknown as RepoMetric[];
+            setRepos(repositories);
 
-            // Fetch scan results
+            // 2. Fetch aggregate stats from backend (Source of Truth)
+            const statsRes = await fetch(`${apiBase}/api/reports/stats?scope=global`, {
+                headers: { 'Authorization': `Bearer ${jwt}` }
+            });
+
+            if (statsRes.ok) {
+                const data = await statsRes.json();
+                const s = data.stats;
+                setStats({
+                    healthScore: 100 - (s.avg_risk_score || 0),
+                    criticalRisks: s.severity_breakdown?.critical || 0,
+                    patchRate: 0, // Not provided by stats yet
+                    avgFixTime: 12,
+                    totalVulns: s.total_findings || 0
+                });
+            }
+
+            // 3. Fetch scan results (for the live audit trail)
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+            if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scanData = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-                Query.orderDesc('$createdAt'),
+                Query.orderDesc('startedAt'), // Use startedAt as per requirements
                 Query.limit(50)
             ]);
             
-            // Fetch vulnerabilities for stats
-            const vulnData = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                Query.limit(1000)
-            ]);
-            const allVulns = vulnData.documents as any[];
-
             setResults(scanData.documents.map((item: any) => {
                 const repo = repositories.find(r => r.$id === item.repo_id);
                 return {
@@ -81,33 +100,13 @@ export default function SecurityDashboard() {
                 };
             }));
 
-            setRepos(repositories);
-
-            // Calculate aggregate stats
-            const totalRepos = repositories.length;
-            const totalVulns = repositories.reduce((acc, r) => acc + (r.vulnerability_count || 0), 0);
-            const avgRisk = totalRepos > 0
-                ? Math.round(repositories.reduce((acc, r) => acc + (r.risk_score || 0), 0) / totalRepos)
-                : 0;
-
-            const criticalRisksItems = allVulns.filter(v => v.severity === 'critical' && v.status === 'open').length;
-            const resolvedItems = allVulns.filter(v => v.status === 'resolved').length;
-            const patchRate = allVulns.length > 0 ? (resolvedItems / allVulns.length) * 100 : 0;
-
-            setStats({
-                healthScore: 100 - avgRisk,
-                criticalRisks: criticalRisksItems,
-                patchRate: Math.round(patchRate),
-                avgFixTime: 12,
-                totalVulns
-            });
-
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
         } finally {
             setLoading(false);
         }
     };
+
 
     const handleRunScan = async (repoId: string) => {
         setTriggering(repoId);

@@ -12,6 +12,8 @@ export interface GitMetadata {
  */
 export const linkCommitToScan = async (scanId: string, repoId: string, metadata: GitMetadata) => {
     try {
+        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCAN_COMMITS}`);
+        if (!COLLECTIONS.SCAN_COMMITS) throw new Error("collectionId is undefined");
         await databases.createDocument(DB_ID, COLLECTIONS.SCAN_COMMITS, ID.unique(), {
             scan_id: scanId,
             repo_id: repoId,
@@ -32,6 +34,8 @@ export const linkCommitToScan = async (scanId: string, repoId: string, metadata:
  */
 export const getFindingHistory = async (findingId: string) => {
     try {
+        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.FINDING_RESOLUTIONS}`);
+        if (!COLLECTIONS.FINDING_RESOLUTIONS) throw new Error("collectionId is undefined");
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.FINDING_RESOLUTIONS, [
             Query.equal('finding_id', findingId),
             Query.orderDesc('$createdAt')

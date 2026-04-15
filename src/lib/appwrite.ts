@@ -17,7 +17,6 @@ export const COLLECTIONS = {
   SCANS:                    import.meta.env.VITE_APPWRITE_SCANS_COLLECTION_ID,
   VULNERABILITIES:          import.meta.env.VITE_APPWRITE_VULNS_COLLECTION_ID,
   TASKS:                    import.meta.env.VITE_APPWRITE_TASKS_COLLECTION_ID,
-  FINDINGS:                 import.meta.env.VITE_APPWRITE_FINDINGS_COLLECTION_ID,
   NOTIFICATION_PREFERENCES: 'notification_preferences',
   POLICY_EVALUATIONS:       'policy_evaluations',
   NOTIFICATIONS:            'notifications',

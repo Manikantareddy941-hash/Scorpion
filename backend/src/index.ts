@@ -54,6 +54,41 @@ requiredEnv.forEach(env => {
     ];
     console.log("🛡️  Security Tool Chain Diagnostic:");
     tools.forEach(t => console.log(`${checkTool(t.cmd) ? "✅" : "❌"} ${t.name}`));
+
+    // --- Recovery Mechanism ---
+    try {
+        console.log('🔄 [Recovery] Checking for stalled scans...');
+        if (COLLECTIONS.SCANS) {
+            const stalledScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                Query.equal('status', 'running'),
+                Query.limit(50) // Adjust if expecting high volumes
+            ]);
+
+            for (const scan of stalledScans.documents) {
+                console.log(JSON.stringify({
+                    scanId: scan.$id,
+                    repoId: scan.repo_id,
+                    stage: 'fail_recovery',
+                    timestamp: new Date().toISOString(),
+                    status: 'failed',
+                    error: 'System restart aborted running scan',
+                    stack: null
+                }));
+                await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scan.$id, {
+                    status: 'failed',
+                    completedAt: new Date().toISOString(),
+                    details: JSON.stringify({ error: 'System restart aborted running scan' })
+                });
+            }
+            if (stalledScans.total > 0) {
+                console.log(`✅ [Recovery] Recovered ${stalledScans.total} stalled scans.`);
+            } else {
+                console.log(`✅ [Recovery] No stalled scans found.`);
+            }
+        }
+    } catch (err: any) {
+        console.error('❌ [Recovery] Failed to run crash recovery:', err);
+    }
 })();
 
 const app = express();

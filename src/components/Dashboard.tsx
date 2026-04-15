@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -11,6 +11,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip,
   RadialBarChart, RadialBar, AreaChart, Area
 } from 'recharts';
+import { Client } from 'appwrite';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 
 export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: boolean }) {
@@ -55,13 +56,40 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
     { axis: 'Security', Observed: securityScore },
   ];
 
+  const hasFetched = useRef(false);
+
   useEffect(() => {
+    setMounted(true);
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
     const init = async () => {
       await Promise.all([fetchLatestScan(), fetchCompliance()]);
       setLastRefreshed(new Date());
       setLoading(false);
     };
     init();
+  }, []);
+
+  // Realtime subscription for automatic dashboard updates
+  useEffect(() => {
+    const client = new Client()
+      .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+      .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
+
+    const subscription = client.subscribe(
+      `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`,
+      (response) => {
+        console.log('Realtime Dashboard Update:', response);
+        // re-fetch latest scan and compliance when any change occurs in Scans collection
+        fetchLatestScan();
+        fetchCompliance();
+      }
+    );
+
+    return () => {
+      subscription();
+    };
   }, []);
 
   const handleManualRefresh = async () => {
@@ -73,32 +101,64 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 
   const fetchLatestScan = async () => {
     try {
+      console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+      if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
       const response = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
         Query.equal('status', 'completed'),
-        Query.orderDesc('timestamp'),
+        Query.orderDesc('startedAt'),
         Query.limit(1)
       ]);
       
       if (response.documents.length > 0) {
-        setLatestScan(response.documents[0]);
+        const scan = response.documents[0];
+
+        // Ensure source of truth by querying exact vulnerabilities instead of taking old scan cached data
+        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+        if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
+        const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('scanId', scan.$id),
+            Query.limit(1000)
+        ]);
+
+        console.log(`[Dashboard] Selected ScanId: ${scan.$id}`);
+        console.log(`[Dashboard] Vulnerabilities Count: ${vulnsRes.total}`);
+
+        let critical = 0, high = 0, medium = 0, low = 0, bugs = 0, codeSmells = 0;
+        vulnsRes.documents.forEach((v: any) => {
+            if (v.severity === 'critical') critical++;
+            else if (v.severity === 'high') high++;
+            else if (v.severity === 'medium') medium++;
+            else if (v.severity === 'low') low++;
+
+            if (v.tool === 'semgrep' || v.tool === 'trivy') bugs++;
+            if (v.tool === 'gitleaks') codeSmells++;
+        });
+
+        setLatestScan({
+            ...scan,
+            criticalCount: critical,
+            highCount: high,
+            mediumCount: medium,
+            lowCount: low,
+            bugCount: bugs,
+            codeSmellCount: codeSmells
+        });
       }
     } catch (error) {
       console.error('Error fetching latest scan:', error);
     }
   };
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const fetchCompliance = async () => {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+      console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+      if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
       const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-        Query.greaterThanEqual('timestamp', thirtyDaysAgo.toISOString()),
-        Query.orderDesc('timestamp'),
+        Query.greaterThanEqual('startedAt', thirtyDaysAgo.toISOString()),
+        Query.orderDesc('startedAt'),
         Query.limit(100)
       ]);
 
@@ -110,13 +170,16 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 
       const scanIds = scansRes.documents.map(s => s.$id);
 
-      const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+      console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+      if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
+      // Finding compliance failures by checking vulnerabilities
+      const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
         Query.equal('scanId', scanIds),
-        Query.equal('type', 'policy_violation'),
+        Query.equal('tool', 'policy_violation'),
         Query.limit(500)
       ]);
 
-      const failedScanIds = new Set(findingsRes.documents.map(f => f.scanId));
+      const failedScanIds = new Set(vulnsRes.documents.map(f => f.scanId));
       
       const total = scansRes.documents.length;
       const failed = failedScanIds.size;
@@ -294,8 +357,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           <p className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic">NO SCAN DATA — RUN A SCAN</p>
                         </div>
                       ) : mounted && (
-                        <div style={{ width: '100%', height: 350, minWidth: 0 }}>
-                          <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="100%" height="100%">
+                        <div style={{ width: '100%', height: 350 }}>
+                          <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="99%" height="100%" minWidth={1} minHeight={1}>
                             <RadarChart cx="50%" cy="50%" outerRadius="80%" data={threatData}>
                               <PolarGrid stroke="var(--border-subtle)" strokeDasharray="3 3" />
                               <PolarAngleAxis 
@@ -375,8 +438,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                   <>
                     <div className="relative h-48 w-full flex items-center justify-center">
                       {mounted && (
-                        <div style={{ width: '100%', height: 192, minWidth: 0 }}>
-                          <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="100%" height="100%">
+                        <div style={{ width: '100%', height: 192 }}>
+                          <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="99%" height="100%" minWidth={1} minHeight={1}>
                             <RadialBarChart 
                               cx="50%" cy="50%" innerRadius="70%" outerRadius="100%" 
                               barSize={15} data={gaugeData} startAngle={180} endAngle={0}
@@ -407,8 +470,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                        </div>
                        <div className="h-10 w-full overflow-hidden opacity-50">
                         {mounted && (
-                          <div style={{ width: '100%', height: 40, minWidth: 0 }}>
-                            <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="100%" height="100%">
+                          <div style={{ width: '100%', height: 40 }}>
+                            <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="99%" height="100%" minWidth={1} minHeight={1}>
                               <AreaChart data={complianceTrend}>
                                 <defs>
                                   <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
