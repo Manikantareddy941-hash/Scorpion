@@ -32,25 +32,30 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         if (scope === 'project' && id) {
             repoIds = [id];
         } else if (scope === 'team' && id) {
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
+            if (!COLLECTIONS.PROJECT_ACCESS) throw new Error("collectionId is undefined");
             const accessDocs = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
                 Query.equal('team_id', id)
             ]);
             repoIds = accessDocs.documents.map(a => a.repo_id);
         } else {
-            // Global scope - Owned + Team Accessed
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
+            if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
             const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
                 Query.equal('user_id', userId)
             ]);
-            
             repoIds = ownedRepos.documents.map(r => r.$id);
 
-            // Fetch team repos
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.TEAM_MEMBERS}`);
+            if (!COLLECTIONS.TEAM_MEMBERS) throw new Error("collectionId is undefined");
             const memberships = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
                 Query.equal('user_id', userId)
             ]);
 
             if (memberships.total > 0) {
                 const teamIds = memberships.documents.map(m => m.team_id);
+                console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
+                if (!COLLECTIONS.PROJECT_ACCESS) throw new Error("collectionId is undefined");
                 const teamAccess = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
                     Query.equal('team_id', teamIds)
                 ]);
@@ -61,23 +66,58 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
 
         if (repoIds.length === 0) return null;
 
-        // Fetch Repo details for risk scores
-        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        // Fetch Repo details
+        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
+        if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
+        const reposDocs = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
             Query.equal('$id', repoIds)
         ]);
+        const repos = reposDocs.documents;
 
-        // Aggregate Vulnerabilities
+        // 1️⃣ Find the LATEST COMPLETED scan for EACH repo
+        const latestScanIds: string[] = [];
+        for (const rid of repoIds) {
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+            if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
+            const scans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                Query.equal('repo_id', rid),
+                Query.equal('status', 'completed'),
+                Query.orderDesc('startedAt'),
+                Query.limit(1)
+            ]);
+            if (scans.total > 0) {
+                latestScanIds.push(scans.documents[0].$id);
+            }
+        }
+
+        if (latestScanIds.length === 0) {
+            return {
+                total_repos: repos.length,
+                avg_risk_score: 0,
+                total_findings: 0,
+                severity_breakdown: { critical: 0, high: 0, medium: 0, low: 0 },
+                owasp_breakdown: {},
+                tool_breakdown: {}
+            };
+        }
+
+        // 2️⃣ Fetch Vulnerabilities ONLY for those specific scan IDs
+        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+        if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
         const vulnsDocs = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-            Query.equal('repo_id', repoIds),
+            Query.equal('scanId', latestScanIds),
             Query.equal('resolution_status', 'open'),
-            Query.limit(100) // Adjust limit as needed
+            Query.limit(1000)
         ]);
 
         const vulns = vulnsDocs.documents;
 
+        // Mandatory Log: Fetched report data
+        console.log(`[VERIFICATION] Fetched Report Data (Vulns) for Scans ${JSON.stringify(latestScanIds)}:`, JSON.stringify(vulns, null, 2));
+
         const stats = {
-            total_repos: repos.total,
-            avg_risk_score: Math.round(repos.documents.reduce((acc, r: any) => acc + (r.risk_score || 0), 0) / (repos.total || 1)),
+            total_repos: repos.length,
+            avg_risk_score: Math.round(repos.reduce((acc, r: any) => acc + (r.risk_score || 0), 0) / (repos.length || 1)),
             total_findings: vulnsDocs.total,
             severity_breakdown: {
                 critical: vulns.filter((v: any) => v.severity === 'critical').length,
@@ -102,21 +142,24 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
     }
 };
 
+
 export const getTrendData = async (userId: string, repoIds: string[]) => {
     try {
         if (repoIds.length === 0) return [];
 
+        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+        if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
         const scansDocs = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repo_id', repoIds),
             Query.equal('status', 'completed'),
-            Query.orderAsc('$createdAt'),
+            Query.orderAsc('startedAt'),
             Query.limit(50)
         ]);
 
         return scansDocs.documents.map(s => {
             const details = typeof s.details === 'string' ? JSON.parse(s.details) : s.details;
             return {
-                date: s.$createdAt,
+                date: s.startedAt,
                 score: details?.security_score || 0
             };
         });
