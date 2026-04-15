@@ -82,6 +82,8 @@ export default function Reports() {
 
         // Fetch Repositories for mapping names
         try {
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
+            if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
             const repoList = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES);
             const repoMap: Record<string, any> = {};
             repoList.documents.forEach(r => {
@@ -94,8 +96,10 @@ export default function Reports() {
 
         // Fetch Scans
         try {
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+            if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scanList = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-                Query.orderDesc('$createdAt'),
+                Query.orderDesc('startedAt'),
                 Query.limit(50)
             ]);
             console.log('Fetched scans in Reports:', scanList.documents);
@@ -121,7 +125,9 @@ export default function Reports() {
         if (!findingsByScan[scanId]) {
             setLoadingFindings(prev => new Set(prev).add(scanId));
             try {
-                const response = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+                console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+                if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
+                const response = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
                     Query.equal('scanId', scanId),
                     Query.limit(100)
                 ]);
@@ -145,28 +151,30 @@ export default function Reports() {
         setGenerating(true);
         try {
             // 1. Fetch the specific scan record
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+            if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, selectedExportScanId);
             setPrintableScan({
                 ...scanDoc,
                 details: typeof scanDoc.details === 'string' ? JSON.parse(scanDoc.details) : scanDoc.details
             });
 
-            // 2. Fetch Findings (already does this, but keeping it for compatibility)
-            const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+            // 2. Fetch Vulnerabilities 
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+            if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
+            const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
                 Query.equal('scanId', selectedExportScanId),
                 Query.limit(500)
             ]);
-            setPrintableFindings(findingsRes.documents);
-
-            // 3. Fetch Detailed Vulnerabilities (for file path/line number)
-            const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                Query.equal('scan_result_id', selectedExportScanId),
-                Query.limit(500)
-            ]);
+            setPrintableFindings(vulnsRes.documents);
             setPrintableVulnerabilities(vulnsRes.documents);
+
+            // 3. Fetch Policy Evaluations
 
             // 4. Fetch Policy Evaluations (for compliance section)
             try {
+                console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.POLICY_EVALUATIONS}`);
+                if (!COLLECTIONS.POLICY_EVALUATIONS) throw new Error("collectionId is undefined");
                 const policiesRes = await databases.listDocuments(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, [
                     Query.equal('scan_id', selectedExportScanId),
                     Query.limit(100)
@@ -178,7 +186,7 @@ export default function Reports() {
             }
 
             // Calculate compliance score
-            const failedScans = new Set(findingsRes.documents.filter(f => f.type === 'policy_violation').map(f => f.scanId));
+            const failedScans = new Set(vulnsRes.documents.filter(f => f.tool === 'policy_violation').map(f => f.scanId));
             setPrintableComplianceScore(Math.max(0, Math.round(((1) / 1) * 100))); // Simplified since it's 1 scan
             if (failedScans.size > 0) setPrintableComplianceScore(0);
             
@@ -209,21 +217,22 @@ export default function Reports() {
         setGenerating(true);
         try {
             // 1. Fetch detailed data
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+            if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, selectedExportScanId);
             const details = typeof scanDoc.details === 'string' ? JSON.parse(scanDoc.details) : scanDoc.details;
             
-            const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+            if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
+            const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
                 Query.equal('scanId', selectedExportScanId),
                 Query.limit(500)
             ]);
-            const allFindings = findingsRes.documents;
-
-            const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                Query.equal('scan_result_id', selectedExportScanId),
-                Query.limit(500)
-            ]);
+            const allFindings = vulnsRes.documents;
             const vulnerabilities = vulnsRes.documents;
 
+            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.POLICY_EVALUATIONS}`);
+            if (!COLLECTIONS.POLICY_EVALUATIONS) throw new Error("collectionId is undefined");
             const policiesRes = await databases.listDocuments(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, [
                 Query.equal('scan_id', selectedExportScanId),
                 Query.limit(100)
@@ -231,7 +240,7 @@ export default function Reports() {
             const policies = policiesRes.documents;
 
             // Compliance Grade
-            const failedPolicyFindings = allFindings.filter(f => f.type === 'policy_violation');
+            const failedPolicyFindings = allFindings.filter(f => f.tool === 'policy_violation');
             const score = failedPolicyFindings.length > 0 ? 0 : 100;
 
             const docElements = [];
@@ -256,7 +265,7 @@ export default function Reports() {
                     ]}),
                     new TableRow({ children: [
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Scan Date:", bold: true })] })] }),
-                        new TableCell({ children: [new Paragraph({ text: new Date(scanDoc.$createdAt).toLocaleString() })] }),
+                        new TableCell({ children: [new Paragraph({ text: scanDoc.startedAt ? new Date(scanDoc.startedAt).toLocaleString() : new Date().toLocaleString() })] }),
                     ]}),
                     new TableRow({ children: [
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Tools Used:", bold: true })] })] }),
@@ -264,7 +273,7 @@ export default function Reports() {
                     ]}),
                     new TableRow({ children: [
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Scan Duration:", bold: true })] })] }),
-                        new TableCell({ children: [new Paragraph({ text: details?.completed_at ? `${Math.round((new Date(details.completed_at).getTime() - new Date(scanDoc.$createdAt).getTime()) / 1000)}s` : "N/A" })] }),
+                        new TableCell({ children: [new Paragraph({ text: (details?.completed_at && scanDoc.startedAt) ? `${Math.round((new Date(details.completed_at).getTime() - new Date(scanDoc.startedAt).getTime()) / 1000)}s` : "N/A" })] }),
                     ]}),
                 ]
             });
