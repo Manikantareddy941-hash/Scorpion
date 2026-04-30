@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
     Save, Loader2, LogOut, Moon, Sun,
-    Terminal, Github, Eye, Snowflake, Camera, Upload, Waves
+    Terminal, Github, Eye, Snowflake, Camera, Upload, Waves, Activity
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -33,6 +33,7 @@ export default function Settings() {
     const [prefWebhook, setPrefWebhook] = useState('');
 
     const [apiKeys, setApiKeys] = useState<any[]>([]);
+    const [repositories, setRepositories] = useState<any[]>([]);
     const [newKeyName, setNewKeyName] = useState('');
     const [generatedKey, setGeneratedKey] = useState<string | null>(null);
 
@@ -77,6 +78,14 @@ export default function Settings() {
                 [Query.equal('user_id', user?.$id || '')]
             );
             setApiKeys(keysResponse.documents);
+
+            // Fetch Repositories
+            const repoResponse = await databases.listDocuments(
+                DB_ID,
+                COLLECTIONS.REPOSITORIES,
+                [Query.equal('user_id', user?.$id || '')]
+            );
+            setRepositories(repoResponse.documents);
 
         } catch (error) {
             console.error('Error fetching settings:', error);
@@ -182,6 +191,18 @@ export default function Settings() {
             console.error('Error generating API key:', error);
         } finally {
             setUpdating(false);
+        }
+    };
+
+    const handleUpdateRepoCron = async (repoId: string, cronEnabled: boolean, cronSchedule: string) => {
+        try {
+            await databases.updateDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {
+                cron_enabled: cronEnabled,
+                cron_schedule: cronSchedule
+            });
+            setRepositories(prev => prev.map(r => r.$id === repoId ? { ...r, cron_enabled: cronEnabled, cron_schedule: cronSchedule } : r));
+        } catch (err) {
+            console.error('Error updating repo cron:', err);
         }
     };
 
@@ -433,6 +454,42 @@ export default function Settings() {
                             <div className="flex justify-end pt-4">
                                 <button onClick={handleSaveNotifications} className="btn-premium">Commit Preferences</button>
                             </div>
+                        </div>
+                    </section>
+
+                    {/* Automated Scan Schedules */}
+                    <section className="premium-card p-10">
+                        <h3 className="text-xs font-black text-[var(--accent-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                            <Activity className="w-4 h-4 text-[var(--accent-primary)]" /> Automated Scan Schedules
+                        </h3>
+                        <div className="space-y-4">
+                            {repositories.length === 0 ? (
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">No repositories connected.</p>
+                            ) : repositories.map(repo => (
+                                <div key={repo.$id} className="flex justify-between items-center p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
+                                    <div>
+                                        <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">{repo.name}</p>
+                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-1 italic">{repo.url}</p>
+                                    </div>
+                                    <div className="flex items-center gap-6">
+                                        <select
+                                            value={repo.cron_schedule || '0 0 * * *'}
+                                            onChange={(e) => handleUpdateRepoCron(repo.$id, repo.cron_enabled, e.target.value)}
+                                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
+                                        >
+                                            <option value="0 0 * * *">Daily (Midnight)</option>
+                                            <option value="0 0 * * 0">Weekly (Sunday)</option>
+                                            <option value="* * * * *">Custom (* * * * *)</option>
+                                        </select>
+                                        <button
+                                            onClick={() => handleUpdateRepoCron(repo.$id, !repo.cron_enabled, repo.cron_schedule || '0 0 * * *')}
+                                            className={`w-12 h-6 rounded-full p-1 transition-colors ${repo.cron_enabled ? 'bg-[var(--status-success)]' : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)]'}`}
+                                        >
+                                            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${repo.cron_enabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </section>
 

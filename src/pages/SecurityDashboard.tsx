@@ -7,6 +7,7 @@ import {
     RefreshCw, Play, ExternalLink,
     Clock, Terminal, Bug, AlertTriangle
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface ScanResult {
     $id: string;
@@ -110,6 +111,7 @@ export default function SecurityDashboard() {
 
     const handleRunScan = async (repoId: string) => {
         setTriggering(repoId);
+        const toastId = toast.loading('Initiating fleet scan sequence...');
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
             const jwt = localStorage.getItem('appwrite_jwt');
@@ -120,14 +122,17 @@ export default function SecurityDashboard() {
                 }
             });
 
+            const data = await response.json();
+            console.log('[DEBUG] Raw Scan API Response Tracker:', data);
+            
             if (!response.ok) {
-                const data = await response.json();
-                alert(data.error || 'Failed to trigger scan');
+                toast.error(`Scan failed: ${data.error || 'Unknown error'}`, { id: toastId });
             } else {
+                toast.success('Scan completed successfully', { id: toastId });
                 fetchDashboardData();
             }
-        } catch (err) {
-            console.error('Error triggering scan:', err);
+        } catch (err: any) {
+            toast.error(`Scan failed: ${err.message || 'Unknown error'}`, { id: toastId });
         } finally {
             setTriggering(null);
         }

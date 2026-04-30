@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-    Github, Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2
+    Github, Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2, X
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import FindingsTable from '../components/FindingsTable';
 import { ScanHistory } from '../components/ScanHistory';
 import RemediationPanel from '../components/RemediationPanel';
@@ -95,6 +96,7 @@ export default function ProjectDetail() {
     const handleRunScan = async () => {
         if (!id) return;
         setTriggering(true);
+        const toastId = toast.loading('Initiating scan perimeter...');
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
             const token = localStorage.getItem('appwrite_jwt');
@@ -103,14 +105,27 @@ export default function ProjectDetail() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
+            const data = await response.json();
+            console.log('[DEBUG] Raw Scan API Response Tracker:', data);
+            
             if (!response.ok) {
-                const data = await response.json();
-                alert(data.error || 'Failed to trigger scan');
+                toast.error((t) => (
+                    <div className="flex items-center justify-between w-full gap-4">
+                        <span>Scan failed: {data.error || 'Unknown error'}</span>
+                        <button onClick={() => toast.dismiss(t.id)} className="p-1 hover:bg-black/10 rounded-full transition-colors"><X size={14} /></button>
+                    </div>
+                ), { id: toastId, duration: Infinity });
             } else {
+                toast.success('Scan completed successfully', { id: toastId });
                 fetchData();
             }
-        } catch (err) {
-            console.error('Error triggering scan:', err);
+        } catch (err: any) {
+            toast.error((t) => (
+                <div className="flex items-center justify-between w-full gap-4">
+                    <span>Scan failed: {err.message || 'Unknown error'}</span>
+                    <button onClick={() => toast.dismiss(t.id)} className="p-1 hover:bg-black/10 rounded-full transition-colors"><X size={14} /></button>
+                </div>
+            ), { id: toastId, duration: Infinity });
         } finally {
             setTriggering(false);
         }
@@ -118,6 +133,7 @@ export default function ProjectDetail() {
 
     const handleConvertToIssue = async (vulnId: string) => {
         setConverting(vulnId);
+        const toastId = toast.loading('Configuring tracker remediation...');
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
             const token = localStorage.getItem('appwrite_jwt');
@@ -127,11 +143,24 @@ export default function ProjectDetail() {
             });
 
             if (response.ok) {
-                alert('Finding converted to Task successfully!');
+                toast.success('Finding securely attached to Issue board!', { id: toastId });
                 fetchData();
+            } else {
+                const data = await response.json();
+                toast.error((t) => (
+                    <div className="flex items-center justify-between w-full gap-4">
+                        <span>{data.error || 'Failed to convert finding'}</span>
+                        <button onClick={() => toast.dismiss(t.id)} className="p-1 hover:bg-black/10 rounded-full transition-colors"><X size={14} /></button>
+                    </div>
+                ), { id: toastId, duration: Infinity });
             }
-        } catch (err) {
-            console.error('Error converting vulnerability:', err);
+        } catch (err: any) {
+            toast.error((t) => (
+                <div className="flex items-center justify-between w-full gap-4">
+                    <span>{err.message || 'Error executing remediation sequence'}</span>
+                    <button onClick={() => toast.dismiss(t.id)} className="p-1 hover:bg-black/10 rounded-full transition-colors"><X size={14} /></button>
+                </div>
+            ), { id: toastId, duration: Infinity });
         } finally {
             setConverting(null);
         }

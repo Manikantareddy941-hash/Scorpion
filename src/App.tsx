@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { useAuth } from './contexts/AuthContext';
 // import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
@@ -83,6 +84,7 @@ function App() {
           <NetworkErrorPanel onRetry={checkAppwrite} />
         </div>
       )}
+      <Toaster position="bottom-right" toastOptions={{ style: { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', fontSize: '12px', fontWeight: 'bold' } }} />
       <div style={{ display: 'flex', alignItems: 'start', minHeight: '100vh', background: 'var(--bg-primary)' }}>
         {showSidebar && <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={setIsSidebarCollapsed} />}
         <div style={{ 
