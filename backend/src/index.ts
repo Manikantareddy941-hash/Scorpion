@@ -5,7 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
-import { initScheduler } from './jobs/scheduler';
+import { initScheduler } from './scheduler';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
 
@@ -26,7 +26,8 @@ import keyRoutes from './routes/keyRoutes';
 import reportRoutes from './routes/reportRoutes';
 import aiRoutes from './routes/aiRoutes';
 import webhookRoutes from './routes/webhookRoutes';
-
+import remediationRouter from './routes/remediation';
+import analyticsRoutes from './routes/analyticsRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 
@@ -172,6 +173,8 @@ app.use('/api/keys', authenticate, keyRoutes);
 app.use('/api/reports', authenticate, reportRoutes);
 app.use('/api/ai', authenticate, aiRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/remediation', remediationRouter);
+app.use('/api/analytics', authenticate, analyticsRoutes);
 
 // --- Initialization ---
 initScheduler();

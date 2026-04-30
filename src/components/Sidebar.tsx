@@ -6,6 +6,7 @@ import UVScanOverlay from './UVScanOverlay';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
+import toast from 'react-hot-toast';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -39,7 +40,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     setScanTarget(data.type === 'github' ? data.value : `${data.value.length} local files`);
     setScanning(true);
 
-    setScanError(null);
+    const toastId = toast.loading('Establishing secure repository link...');
 
     try {
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -62,6 +63,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       
       if (!repo.$id) throw new Error(repo.error || 'Failed to register repository');
 
+      toast.loading('Initiating deep security telemetry...', { id: toastId });
+
       const scanRes = await fetch(`${apiBase}/api/repos/${repo.$id}/scan`, {
         method: 'POST',
         headers: { 
@@ -71,15 +74,16 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         body: JSON.stringify({ visibility: 'public' })
       });
       const scanResult = await scanRes.json();
+      console.log('[DEBUG] Raw Scan API Response Tracker:', scanResult);
       
       if (scanResult.scanId) {
         setScanId(scanResult.scanId);
+        toast.success('Scan completed successfully', { id: toastId });
       } else {
         throw new Error(scanResult.error || 'Failed to start scan');
       }
     } catch (err: any) {
-      console.error('Scan trigger failed:', err);
-      setScanError(err.message || 'Failed to start scan');
+      toast.error(`Scan failed: ${err.message || 'Unknown error'}`, { id: toastId });
       setScanning(false);
     }
   };
@@ -165,11 +169,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
           {isCollapsed ? '+' : '+ NEW SCAN'}
         </button>
-        {scanError && !isCollapsed && (
-          <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-[10px] text-red-500 italic font-medium animate-in fade-in slide-in-from-top-1">
-            ⚠️ {scanError}
-          </div>
-        )}
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
       </div>
 

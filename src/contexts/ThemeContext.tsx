@@ -42,8 +42,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [theme, setThemeState] = useState<Theme>(() => {
-        const saved = localStorage.getItem('theme') as Theme;
-        return (['light', 'dark', 'eye-protection', 'snow-light', 'snow-dark', 'underwater'].includes(saved)) ? saved : 'dark';
+      const saved = localStorage.getItem('theme') as Theme;
+      if (['light', 'dark', 'eye-protection', 'snow-light', 'snow-dark', 'underwater'].includes(saved)) {
+        return saved;
+      }
+      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return systemDark ? 'dark' : 'light';
     });
 
     const [echoMovementEnabled, setEchoMovementEnabledState] = useState<boolean>(() => {
@@ -74,6 +78,20 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Initial load
     useEffect(() => {
         setTheme(theme);
+    }, []);
+
+    // Listen for OS theme changes
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = (e: MediaQueryListEvent) => {
+            // Only auto-switch if user hasn't manually set a theme (no saved theme)
+            const saved = localStorage.getItem('theme');
+            if (!saved) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        };
+        mediaQuery.addEventListener('change', handler);
+        return () => mediaQuery.removeEventListener('change', handler);
     }, []);
 
     return (
