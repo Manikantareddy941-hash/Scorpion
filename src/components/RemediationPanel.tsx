@@ -18,6 +18,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
     const [feedbackSent, setFeedbackSent] = useState(false);
     const [prLoading, setPrLoading] = useState(false);
     const [prResult, setPrResult] = useState<{ url: string } | null>(null);
+    const [prState, setPrState] = useState<{status: 'idle' | 'loading' | 'success' | 'error', prUrl?: string, error?: string}>({ status: 'idle' });
 
     useEffect(() => {
         fetchFix();
@@ -50,51 +51,6 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
         setLoading(true);
         setError('');
         try {
-            // Handle mock data for development testing
-            if (import.meta.env.DEV && vulnerabilityId.startsWith('mock-id-')) {
-                const scanId = vulnerabilityId.replace('mock-id-', '');
-                const mockFinding = {
-                    $id: vulnerabilityId,
-                    title: 'CVE-2024-TEST-MOCK',
-                    severity: 'CRITICAL',
-                    package: 'lodash',
-                    installedVersion: '4.17.20',
-                    fixedVersion: '4.17.21',
-                    location: 'package.json',
-                    scan_id: scanId,
-                    description: 'Mock vulnerability for remediation testing.'
-                };
-                
-                setFinding(mockFinding);
-                
-                // Get a real scan/repo context if possible to allow PR testing
-                try {
-                    const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
-                    if (scanDoc) {
-                        const repository = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scanDoc.repo_id);
-                        setRepo(repository);
-                    }
-                } catch {
-                    // Fallback mock repo if real ones fail
-                    setRepo({
-                        $id: 'mock-repo-id',
-                        name: 'scorpion-test-repo',
-                        repo_url: 'https://github.com/Manikantareddy941-hash/food-delivery-app.git'
-                    });
-                }
-
-                // Set mock fix/diff
-                setFix({
-                    summary: 'Direct patch available: upgrade lodash to v4.17.21',
-                    technical_analysis: "This mock vulnerability represents a standard dependency risk. The fix involves a direct version upgrade which resolves the prototype pollution vulnerability in lodash.",
-                    confidence: 1.0,
-                    diff: `--- a/package.json\n+++ b/package.json\n@@ -10,1 +10,1 @@\n- "lodash": "4.17.20"\n+ "lodash": "4.17.21"`,
-                    impact_assessment: "Zero breaking changes. Direct peer-reviewed upgrade."
-                });
-                setLoading(false);
-                return;
-            }
-
             // 1. Fetch Finding Details
             const findingDoc = await databases.getDocument(
                 DB_ID,
@@ -193,7 +149,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             const payload = {
                 providerAccessToken: token,
                 repoFullName,
-                filePath: finding.location || 'package.json',
+                filePath: finding.file_path || finding.location || 'package.json',
                 packageName: finding.package,
                 oldVersion: finding.installedVersion,
                 fixedVersion: finding.fixedVersion || (fix?.summary?.match(/v([\d\.]+)/)?.[1] || ''),
@@ -226,6 +182,40 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             setPrLoading(false);
         }
     };
+
+    async function handleCreatePR() {
+        setPrState({ status: 'loading' });
+        try {
+            const res = await fetch('/api/remediation/create-pr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    findingId: finding.$id,
+                    repoUrl: repo.url || repo.repo_url,
+                    filePath: finding.file_path || finding.location || 'package.json',
+                    fixedContent: fix.fixed_code || fix.diff,
+                    vulnerabilityTitle: finding.message || finding.title || 'Unknown vulnerability',
+                    severity: finding.severity || 'low',
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            setPrState({ status: 'success', prUrl: data.prUrl });
+
+            // Store PR URL in Appwrite
+            await databases.updateDocument(
+                DB_ID,
+                COLLECTIONS.VULNERABILITIES,
+                finding.$id,
+                { pr_url: data.prUrl, resolution_status: 'remediated' }
+            );
+
+        } catch (err: any) {
+            setPrState({ status: 'error', error: err.message });
+        }
+    }
 
     return (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
@@ -325,12 +315,51 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                                         <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-secondary)]">Proposed Code Modification</span>
                                     </div>
                                     <span className="text-[9px] font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded uppercase tracking-tighter">
-                                        {finding?.location || 'package.json'}
+                                        {finding?.file_path || finding?.location || 'package.json'}
                                     </span>
                                 </div>
                                 <pre className="text-[11px] font-mono leading-relaxed text-gray-300 overflow-x-auto p-4 bg-black/30 rounded-xl">
                                     {fix?.diff || fix?.code_diff || 'Generating structural patch representation...'}
                                 </pre>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                {prState.status === 'idle' && (
+                                    <button
+                                        onClick={handleCreatePR}
+                                        disabled={!fix}
+                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-primary)] text-black rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-xs font-black uppercase italic tracking-widest shadow-xl shadow-[var(--accent-primary)]/20"
+                                    >
+                                        <GitPullRequest size={18} /> Apply Remediation Path (GitHub PR)
+                                    </button>
+                                )}
+
+                                {prState.status === 'loading' && (
+                                    <div className="flex items-center gap-2 text-xs font-black uppercase italic text-[var(--text-secondary)]">
+                                        <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-primary)]" />
+                                        <span>Opening PR...</span>
+                                    </div>
+                                )}
+
+                                {prState.status === 'success' && (
+                                    <a
+                                        href={prState.prUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)] text-white rounded-xl hover:opacity-90 transition-all text-xs font-black uppercase italic tracking-widest shadow-lg shadow-[var(--status-success)]/20"
+                                    >
+                                        View PR on GitHub →
+                                    </a>
+                                )}
+
+                                {prState.status === 'error' && (
+                                    <div className="text-xs font-bold text-red-500">
+                                        PR failed: {prState.error}
+                                        <button onClick={() => setPrState({ status: 'idle' })} className="ml-3 underline uppercase font-black italic">
+                                            Retry
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
