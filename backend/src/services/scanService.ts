@@ -46,13 +46,7 @@ export const triggerScan = async (
             if (!targetPath) return { scanId: null, error: 'Local path missing' };
         }
 
-        // 3️⃣ Cooldown
-        if (repo.last_scan_at) {
-            const last = new Date(repo.last_scan_at).getTime();
-            if (Date.now() - last < 5 * 60 * 1000) {
-                return { scanId: null, error: 'Scan cooldown active (5 min)' };
-            }
-        }
+        // Cooldown locking removed. Duplicate prevention handles running concurrency.
 
         // 4️⃣ Create scan record (status: pending)
         const scanPayload = {
@@ -62,7 +56,7 @@ export const triggerScan = async (
             repoUrl: repo.url,
             visibility: visibility,
             startedAt: new Date().toISOString(),
-            // timestamp: new Date().toISOString(), // Removing redundant timestamp in favor of startedAt
+            timestamp: new Date().toISOString(),
             scannerVersion: '0.69.3',
             criticalCount: 0,
             highCount: 0,
@@ -78,6 +72,7 @@ export const triggerScan = async (
         if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
         const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), scanPayload);
         scanId = scan.$id;
+        console.log(`[STRICT DEBUG] ScanId at creation: ${scanId}`);
 
         console.log(JSON.stringify({
             scanId,
@@ -173,12 +168,16 @@ export const triggerScan = async (
         walkSync(scanPath);
         const detectedLanguage = Object.entries(languageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
 
+        console.log(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}`);
+
         const findings: Finding[] = [];
         rawResults.forEach(res => {
             if (res.tool === 'semgrep') findings.push(...parseSemgrep(res.stdout));
             if (res.tool === 'gitleaks') findings.push(...parseGitleaks(res.stdout));
             if (res.tool === 'trivy') findings.push(...parseTrivy(res.stdout));
         });
+
+        console.log(`[STRICT DEBUG] Total Parsed Vulnerabilities: ${findings.length}`);
 
         // Mandatory Log: Parsed results
         console.log(JSON.stringify({
@@ -203,38 +202,55 @@ export const triggerScan = async (
 
         // 7️⃣ Store vulnerabilities (strictly with scanId and repoId)
         const savedFindings: any[] = [];
+        console.log(`[STRICT DEBUG] ScanId before saving: ${scanId}`);
+
         if (findings.length > 0) {
             for (const f of findings) {
-                // Data Validation Layer
-                if (!scanId || !repoId || !f.severity || !f.tool) {
-                    console.warn(`[ScanService] Skipping invalid finding payload due to missing required fields:`, f);
-                    continue;
-                }
+                try {
+                    // Data Validation Layer -> Truncate to match DB constraints
+                    const safeTool = (f.tool || 'unknown').substring(0, 50);
+                    const safeSeverity = (f.severity || 'low').substring(0, 50);
+                    const safeMessage = (f.message || '').substring(0, 4000);
+                    const safeFile = (f.file_path || '').substring(0, 2000);
+                    const safePackage = (f.package || '').substring(0, 255);
+                    const safeVersion = (f.version || '').substring(0, 255);
+                    const safeFixVersion = (f.fixVersion || '').substring(0, 255);
+                    
+                    let safeLine = parseInt(f.line_number as any, 10);
+                    if (isNaN(safeLine)) safeLine = 0;
 
-                const vulnPayload = {
-                    repo_id: repoId,
-                    scanId: scanId, 
-                    tool: f.tool,
-                    severity: f.severity,
-                    message: f.message,
-                    file_path: f.file_path,
-                    line_number: f.line_number,
-                    package: f.package || null,
-                    version: f.version || null,
-                    fixVersion: f.fixVersion || null,
-                    status: 'open',
-                    resolution_status: 'open',
-                    fingerprint: generateFingerprint({
-                        tool: f.tool,
-                        file_path: f.file_path || 'unknown',
-                        message: f.message
-                    })
-                };
-                console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
-                console.log(`[DB Payload]`, JSON.stringify(vulnPayload, null, 2));
-                if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
-                const doc = await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), vulnPayload);
-                savedFindings.push(doc);
+                    const rawFingerprint = generateFingerprint({
+                        tool: safeTool,
+                        file_path: safeFile,
+                        message: safeMessage
+                    });
+                    const safeFingerprint = rawFingerprint.substring(0, 255);
+
+                    const vulnPayload = {
+                        repo_id: repoId,
+                        scanId: scanId, 
+                        tool: safeTool,
+                        severity: safeSeverity,
+                        message: safeMessage,
+                        file_path: safeFile,
+                        line_number: safeLine,
+                        package: safePackage,
+                        version: safeVersion,
+                        fixVersion: safeFixVersion,
+                        status: 'open',
+                        resolution_status: 'open',
+                        timestamp: new Date().toISOString(),
+                        fingerprint: safeFingerprint
+                    };
+                    
+                    console.log(`[STRICT DEBUG] Saving Vuln with ScanId: ${vulnPayload.scanId}`);
+                    
+                    if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
+                    const doc = await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), vulnPayload);
+                    savedFindings.push(doc);
+                } catch (saveError: any) {
+                    console.error(`[STRICT DEBUG] Failed to save vulnerability record:`, saveError?.response || saveError);
+                }
             }
         }
 
@@ -248,6 +264,19 @@ export const triggerScan = async (
             status: 'success',
             saved_count: savedFindings.length
         }));
+
+        // Verify DB write immediately
+        console.log(`[DB Call] Verifying constraints for ScanId: ${scanId}`);
+        const verifyCheck = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES!, [
+            Query.equal('scanId', scanId!),
+            Query.limit(10)
+        ]);
+        console.log(`[STRICT DEBUG] Verification Query total records found for this scanId: ${verifyCheck.total}`);
+
+        if (findings.length > 0 && verifyCheck.total === 0) {
+            console.error(`[STRICT DEBUG] Database constraint block: Vulnerabilities exist but failed DB persistence. Failing scan.`);
+            throw new Error('Database constraint blocked vulnerability insertions.');
+        }
 
         // 8️⃣ Update scan record (status: completed)
         const scanCompletePayload = {

@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, X } from 'lucide-react';
+import { Send, X, Plus, MessageSquare, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useTheme } from '../contexts/ThemeContext';
 import robotMascot from '../assets/tony-ai.png';
+import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -38,13 +40,51 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
   // Resizable Panel State
   const [panelWidth, setPanelWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
-  
+
+  const { user } = useAuth();
+  const [currentSessionId, setCurrentSessionId] = useState(() => crypto.randomUUID());
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const loadSessions = async () => {
+    if (!user?.$id) return;
+    try {
+      console.log('Loading sessions for user:', user.$id, 'Collection:', COLLECTIONS.CHAT_SESSIONS);
+      const res = await databases.listDocuments(DB_ID, COLLECTIONS.CHAT_SESSIONS, [
+        Query.equal('userId', user.$id),
+        Query.orderDesc('createdAt'),
+        Query.limit(20)
+      ]);
+      console.log('Loaded sessions:', res.documents);
+      setSessions(res.documents);
+    } catch (e) {
+      console.error('Failed to load sessions', e);
+    }
+  };
+
+  const handleSessionClick = (session: any) => {
+    try {
+      const parsed = JSON.parse(session.messages);
+      setMessages(parsed);
+      setCurrentSessionId(session.sessionId);
+    } catch (e) {
+      console.error('Failed to parse session messages', e);
+    }
+  };
+
+  const handleNewChat = () => {
+    setCurrentSessionId(crypto.randomUUID());
+    setMessages([{ role: 'assistant', content: "Hi! I'm Echo 👋 Your DevSecOps AI assistant. Ask me anything about security scanning, vulnerabilities, or how to use SCORPION." }]);
+  };
+
   // Mascot State
-  const [position, setPosition] = useState({ 
-    x: Math.random() * (window.innerWidth - 100), 
-    y: Math.random() * (window.innerHeight - 100) 
+  const [position, setPosition] = useState({
+    x: Math.random() * (window.innerWidth - 100),
+    y: Math.random() * (window.innerHeight - 100)
   });
   const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
   const [zIndex, setZIndex] = useState(999);
   const moveCounter = useRef(0);
 
@@ -62,6 +102,12 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
     window.addEventListener('ai_prompt', handleAIPrompt);
     return () => window.removeEventListener('ai_prompt', handleAIPrompt);
   }, [setOpen]);
+
+  useEffect(() => {
+    if (open) {
+      loadSessions();
+    }
+  }, [open, user?.$id]);
 
   // Movement Logic
   useEffect(() => {
@@ -86,6 +132,8 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
   const handleMouseDown = (e: React.MouseEvent) => {
     if (open) return;
     setIsDragging(true);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    hasMoved.current = false;
     e.preventDefault();
   };
 
@@ -93,6 +141,11 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - dragStartPos.current.x;
+      const dy = e.clientY - dragStartPos.current.y;
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        hasMoved.current = true;
+      }
       setPosition({
         x: e.clientX - mascotSize / 2,
         y: e.clientY - mascotSize / 2
@@ -145,8 +198,40 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
     if (!input.trim() || loading) return;
     const userMsg = input.trim();
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+
+    const newMessages = [...messages, { role: 'user' as const, content: userMsg }];
+    setMessages(newMessages);
     setLoading(true);
+
+    try {
+      const isFirstMessage = messages.filter(m => m.role === 'user').length === 0;
+      const messagesString = JSON.stringify(newMessages);
+
+      if (isFirstMessage) {
+        await databases.createDocument(
+          DB_ID,
+          COLLECTIONS.CHAT_SESSIONS,
+          currentSessionId,
+          {
+            sessionId: currentSessionId,
+            title: userMsg.substring(0, 40) + (userMsg.length > 40 ? '...' : ''),
+            messages: messagesString,
+            userId: user?.$id || 'anonymous',
+            createdAt: new Date().toISOString()
+          }
+        );
+        loadSessions();
+      } else {
+        await databases.updateDocument(
+          DB_ID,
+          COLLECTIONS.CHAT_SESSIONS,
+          currentSessionId,
+          { messages: messagesString }
+        );
+      }
+    } catch (e) {
+      console.error('Failed to save user msg to Appwrite', e);
+    }
 
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -155,7 +240,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
         setLoading(false);
         return;
       }
-      
+
       const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
       const firstUserIndex = messages.findIndex(m => m.role === 'user');
@@ -166,16 +251,16 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
         parts: [{ text: msg.content }],
       }));
 
-      const context = location.pathname.includes('/reports') 
-        ? " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]" 
-        : location.pathname.includes('/governance') 
-        ? " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]" 
-        : "";
+      const context = location.pathname.includes('/reports')
+        ? " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]"
+        : location.pathname.includes('/governance')
+          ? " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]"
+          : "";
 
       const response = await fetch(geminiEndpoint, {
         method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
+        headers: {
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           system_instruction: {
@@ -196,11 +281,23 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
         console.error(`Gemini API Error (${response.status}):`, errBody);
         throw new Error(`API error ${response.status}: ${errBody}`);
       }
-      
+
       const data = await response.json();
       const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
 
-      setMessages(prev => [...prev, { role: 'assistant', content: reply.trim() }]);
+      const finalMessages = [...newMessages, { role: 'assistant' as const, content: reply.trim() }];
+      setMessages(finalMessages);
+
+      try {
+        await databases.updateDocument(
+          DB_ID,
+          COLLECTIONS.CHAT_SESSIONS,
+          currentSessionId,
+          { messages: JSON.stringify(finalMessages) }
+        );
+      } catch (e) {
+        console.error('Failed to update session with AI reply', e);
+      }
     } catch (err: any) {
       console.error('Neural Link Disconnection:', err);
       setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Neural Link Disconnected. ${err.message}` }]);
@@ -223,7 +320,9 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
   };
 
   const chatPanelStyle: React.CSSProperties = {
-    position: 'relative',
+    position: 'fixed',
+    right: 0,
+    top: 0,
     width: open ? `${panelWidth}px` : '0px',
     minWidth: open ? `${panelWidth}px` : '0px',
     height: '100vh',
@@ -231,7 +330,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
     borderLeft: open ? '1px solid var(--border-subtle)' : 'none',
     zIndex: 1002,
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'row',
     transition: isResizing ? 'none' : 'width 0.3s ease-in-out, min-width 0.3s ease-in-out',
     overflow: 'hidden'
   };
@@ -261,35 +360,39 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
           will-change: filter;
         }
       `}</style>
-      
+
       {!open && (
         <div
           onMouseDown={handleMouseDown}
-          onClick={() => !isDragging && setOpen(true)}
+          onClick={() => {
+            if (!hasMoved.current) {
+              setOpen(true);
+            }
+          }}
           style={mascotStyle}
         >
-          <div 
-            className={`${echoMovementEnabled ? 'zero-gravity aura-glow' : ''}`} 
-            style={{ 
-              width: '100%', 
-              height: '100%', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
+          <div
+            className={`${echoMovementEnabled ? 'zero-gravity aura-glow' : ''}`}
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               position: 'relative',
               animation: !echoMovementEnabled ? 'none !important' : undefined
             }}
           >
-            <img 
-              src={robotMascot} 
-              alt="Echo Mascot" 
-              style={{ 
-                width: '100%', 
-                height: '100%', 
-                objectFit: 'contain', 
+            <img
+              src={robotMascot}
+              alt="Echo Mascot"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
                 filter: theme === 'dark' ? 'brightness(1.1)' : 'none',
                 animation: !echoMovementEnabled ? 'none !important' : undefined
-              }} 
+              }}
             />
           </div>
         </div>
@@ -297,7 +400,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
 
       <div style={chatPanelStyle}>
         {/* Resize Handle */}
-        <div 
+        <div
           onMouseDown={(e) => { e.preventDefault(); setIsResizing(true); }}
           style={{
             position: 'absolute',
@@ -327,63 +430,108 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
           }} />
         </div>
 
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src={robotMascot} alt="Echo Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
-            <div>
-              <div style={{ color: 'var(--accent-primary)', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.1em' }}>ECHO</div>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Security Intelligence Assistant</div>
+        {/* Sessions Sidebar */}
+        <div style={{
+          width: isSidebarOpen ? '220px' : '48px',
+          minWidth: isSidebarOpen ? '220px' : '48px',
+          borderRight: '1px solid var(--border-subtle)',
+          transition: 'width 0.3s ease-in-out, min-width 0.3s ease-in-out',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          background: 'var(--bg-primary)'
+        }}>
+          {/* Top Section */}
+          <div style={{ padding: '16px 0', display: 'flex', flexDirection: 'column', gap: '20px', alignItems: isSidebarOpen ? 'flex-start' : 'center' }}>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', padding: '0', borderRadius: '50%', marginLeft: isSidebarOpen ? '8px' : '0' }}>
+              <Menu size={20} />
+            </button>
+            <div style={{ padding: isSidebarOpen ? '0 12px' : '0', width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <button onClick={handleNewChat} title="New Chat" style={{ width: isSidebarOpen ? '100%' : '36px', height: '36px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'flex-start' : 'center', padding: isSidebarOpen ? '0 16px' : '0', gap: '12px', cursor: 'pointer', transition: 'all 0.2s' }}>
+                <Plus size={16} style={{ flexShrink: 0 }} />
+                {isSidebarOpen && <span style={{ fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap' }}>New chat</span>}
+              </button>
             </div>
           </div>
-          <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
-        </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {messages.map((msg, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <div style={{
-                maxWidth: '85%', padding: '12px 16px', borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
-                background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-primary)',
-                color: msg.role === 'user' ? 'var(--text-on-accent)' : 'var(--text-primary)', fontSize: '0.85rem', lineHeight: '1.6',
-                overflowX: 'auto', border: msg.role === 'assistant' ? '1px solid var(--border-subtle)' : 'none'
-              }}>
-                <div className={`markdown-body ${msg.role === 'user' ? 'text-[var(--text-on-accent)]' : ''}`}>
-                  <ReactMarkdown 
-                    components={{
-                      pre: ({node, ...props}: any) => <pre style={{ background: '#0B1121', padding: '12px', borderRadius: '8px', overflowX: 'auto', margin: '8px 0', border: '1px solid #1e293b' }} {...props} />,
-                      code: ({node, inline, className, ...props}: any) => {
-                          return inline ? <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 4px', borderRadius: '4px', color: '#38bdf8' }} {...props} /> : <code style={{ color: '#e2e8f0', fontSize: '0.8rem' }} className={className} {...props} />
-                      },
-                      p: ({node, ...props}: any) => <p style={{ margin: '0 0 8px 0' }} {...props} />,
-                      ul: ({node, ...props}: any) => <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', listStyleType: 'disc' }} {...props} />
-                    }}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div style={{ display: 'flex', gap: '4px', padding: '10px 14px', background: 'var(--bg-primary)', borderRadius: '12px', width: 'fit-content' }}>
-              {[0, 1, 2].map(i => <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-primary)', animation: 'bounce 1s infinite', animationDelay: `${i * 0.2}s` }} />)}
+          {/* Sessions List */}
+          {isSidebarOpen && (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <div style={{ padding: '12px 8px 4px 8px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</div>
+              {sessions.map(s => (
+                <button key={s.$id} title={s.title} onClick={() => handleSessionClick(s)} style={{ width: '100%', padding: '10px 12px', textAlign: 'left', background: currentSessionId === s.sessionId ? 'var(--bg-secondary)' : 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'block', color: 'var(--text-primary)' }}>
+                  <div style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {s.title.length > 30 ? s.title.substring(0, 30) + '...' : s.title}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
-        <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: '8px' }}>
-          <input
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-            placeholder="Ask Echo..."
-            style={{ flex: 1, background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '10px 12px', color: 'var(--text-primary)', fontSize: '0.85rem', outline: 'none' }}
-          />
-          <button onClick={sendMessage} disabled={loading || !input.trim()}
-            style={{ background: 'var(--accent-primary)', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', opacity: loading || !input.trim() ? 0.4 : 1 }}>
-            <Send size={16} color="var(--text-on-accent)" />
-          </button>
+        {/* Main Chat Container */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
+
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src={robotMascot} alt="Echo Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+              <div>
+                <div style={{ color: 'var(--accent-primary)', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.1em' }}>ECHO</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Security Intelligence Assistant</div>
+              </div>
+            </div>
+            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+          </div>
+
+
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {messages.map((msg, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={{
+                  maxWidth: '85%', padding: '12px 16px', borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                  background: msg.role === 'user' ? 'var(--accent-primary)' : 'var(--bg-primary)',
+                  color: msg.role === 'user' ? 'var(--text-on-accent)' : 'var(--text-primary)', fontSize: '0.85rem', lineHeight: '1.6',
+                  overflowX: 'auto', border: msg.role === 'assistant' ? '1px solid var(--border-subtle)' : 'none'
+                }}>
+                  <div className={`markdown-body ${msg.role === 'user' ? 'text-[var(--text-on-accent)]' : ''}`}>
+                    <ReactMarkdown
+                      components={{
+                        pre: ({ node, ...props }: any) => <pre style={{ background: '#0B1121', padding: '12px', borderRadius: '8px', overflowX: 'auto', margin: '8px 0', border: '1px solid #1e293b' }} {...props} />,
+                        code: ({ node, inline, className, ...props }: any) => {
+                          return inline ? <code style={{ background: 'rgba(0,0,0,0.2)', padding: '2px 4px', borderRadius: '4px', color: '#38bdf8' }} {...props} /> : <code style={{ color: '#e2e8f0', fontSize: '0.8rem' }} className={className} {...props} />
+                        },
+                        p: ({ node, ...props }: any) => <p style={{ margin: '0 0 8px 0' }} {...props} />,
+                        ul: ({ node, ...props }: any) => <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', listStyleType: 'disc' }} {...props} />
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div style={{ display: 'flex', gap: '4px', padding: '10px 14px', background: 'var(--bg-primary)', borderRadius: '12px', width: 'fit-content' }}>
+                {[0, 1, 2].map(i => <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-primary)', animation: 'bounce 1s infinite', animationDelay: `${i * 0.2}s` }} />)}
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: '8px' }}>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+              placeholder="Ask Echo..."
+              style={{ flex: 1, background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '10px 12px', color: 'var(--text-primary)', fontSize: '0.85rem', outline: 'none' }}
+            />
+            <button onClick={sendMessage} disabled={loading || !input.trim()}
+              style={{ background: 'var(--accent-primary)', border: 'none', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', opacity: loading || !input.trim() ? 0.4 : 1 }}>
+              <Send size={16} color="var(--text-on-accent)" />
+            </button>
+          </div>
         </div>
       </div>
     </>
