@@ -28,6 +28,9 @@ import aiRoutes from './routes/aiRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import remediationRouter from './routes/remediation';
 import analyticsRoutes from './routes/analyticsRoutes';
+import alertRoutes from './routes/alerts';
+import vulnRoutes from './routes/vulnRoutes';
+import sbomRoutes from './routes/sbomRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 
@@ -174,7 +177,10 @@ app.use('/api/reports', authenticate, reportRoutes);
 app.use('/api/ai', authenticate, aiRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/remediation', remediationRouter);
+app.use('/api/vulns', authenticate, vulnRoutes);
 app.use('/api/analytics', authenticate, analyticsRoutes);
+app.use('/api/alerts', authenticate, alertRoutes);
+app.use('/api/sbom', authenticate, sbomRoutes);
 
 // --- Initialization ---
 initScheduler();

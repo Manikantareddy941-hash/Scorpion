@@ -15,6 +15,7 @@ import Teams from './pages/Teams';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import Governance from './pages/Governance';
+import MultiRepoDashboard from './pages/MultiRepoDashboard';
 import Profile from './pages/Profile';
 import ScanResults from './pages/ScanResults';
 import AIChat from './components/AIChat';
@@ -108,6 +109,7 @@ function App() {
             <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/governance" element={<ProtectedRoute><Governance /></ProtectedRoute>} />
+            <Route path="/repos" element={<ProtectedRoute><MultiRepoDashboard /></ProtectedRoute>} />
             <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />

@@ -19,13 +19,7 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
         // Fetch Repo details separately
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id);
 
-        // 2. Check for cached fix
-        const existingFixes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, [
-            Query.equal('vulnerability_id', vulnerabilityId),
-            Query.limit(1)
-        ]);
-
-        if (existingFixes.total > 0) return existingFixes.documents[0];
+        // 2. [Cache Check Disabled - Collection Missing]
 
         // 3. Read Full File Context (if available)
         let fileContent = '';
@@ -50,6 +44,8 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
         - Message: ${vuln.message}
         - File: ${vuln.file_path}
         - Line: ${vuln.line_number}
+        - Package: ${vuln.package || 'N/A'}
+        - Version: ${vuln.version || 'N/A'}
         
         CODE CONTEXT (Line ${vuln.line_number} is the center of this snippet):
         \`\`\`
@@ -57,48 +53,56 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
         \`\`\`
         
         YOUR TASK:
-        1. Explain WHY this is a security risk.
+        1. Provide a detailed technical analysis of why this is a risk.
         2. Provide the FULL, complete, and SECURE version of the file that resolves the issue.
-        3. The file must be ready to be written directly to the filesystem. Do not include diff markers or markdown commentary in the "code_diff" field.
+        3. Assess the impact of the fix on the overall system.
         4. Provide a confidence score (0.0 to 1.0) on how likely this fix is correct.
         
         FORMAT YOUR RESPONSE AS JSON:
         {
-          "explanation": "...",
-          "code_diff": "...", // THIS MUST BE THE ENTIRE FILE CONTENT
-          "confidence_score": 0.95
+          "technical_analysis": "...",
+          "diff": "...", // THIS MUST BE THE ENTIRE FILE CONTENT OR A REPLACEMENT BLOCK
+          "impact_assessment": "...",
+          "confidence": 0.95
         }
         `;
 
-        // 5. Call LLM (with safety fallback)
-        if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'mock-key') {
+        // 5. Call Gemini AI
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey || apiKey === 'mock-key') {
             return {
-                explanation: "LLM API Key not configured. This is a simulated response. The finding suggests an issue with: " + vuln.message,
+                explanation: "Gemini API Key not configured. This is a simulated response. The finding suggests an issue with: " + vuln.message,
                 code_diff: "// Fix unavailable (API Key restricted)",
                 confidence_score: 0.0
             };
         }
 
-        const response = await openai.chat.completions.create({
-            model: "gpt-4-turbo-preview",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" }
+        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+        const geminiResponse = await fetch(geminiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: prompt }]
+                }],
+                generationConfig: {
+                    response_mime_type: "application/json",
+                }
+            }),
         });
 
-        const result = JSON.parse(response.choices[0].message.content || '{}');
+        if (!geminiResponse.ok) {
+            const errData = await geminiResponse.json();
+            throw new Error(`Gemini API error: ${errData.error?.message || geminiResponse.statusText}`);
+        }
 
-        // 6. Store and Return
-        const savedFix = await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, ID.unique(), {
-            vulnerability_id: vulnerabilityId,
-            suggestion_text: result.explanation,
-            code_diff: result.code_diff,
-            confidence_score: result.confidence_score,
-            explanation: result.explanation,
-            llm_model: 'gpt-4-turbo-preview',
-            created_at: new Date().toISOString()
-        });
+        const data = await geminiResponse.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('No response from Gemini');
 
-        return savedFix;
+        const result = JSON.parse(text);
+        return result;
     } catch (err) {
         console.error('[AI Service] remediation failed:', err);
         throw err;

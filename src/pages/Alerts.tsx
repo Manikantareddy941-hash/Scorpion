@@ -1,15 +1,33 @@
 import { useEffect, useState } from 'react';
-import { databases, DB_ID, ID, Query, COLLECTIONS } from '../lib/appwrite';
+import { databases, DB_ID, ID, Query, COLLECTIONS, client } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
-import { Bell, Loader2, Save, Send } from 'lucide-react';
+import { Bell, Loader2, Save, Send, ShieldAlert, Slack, MessageSquare, AlertTriangle, AlertCircle, Info, Activity } from 'lucide-react';
+import { RealtimeResponseEvent } from 'appwrite';
+
+const SEVERITY_COLORS: Record<string, string> = {
+    critical: 'bg-red-500/20 text-red-500 border-red-500/50',
+    high: 'bg-orange-500/20 text-orange-500 border-orange-500/50',
+    medium: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50',
+    low: 'bg-green-500/20 text-green-500 border-green-500/50',
+};
 
 export default function Alerts() {
-    const { user } = useAuth();
-    const [webhookUrl, setWebhookUrl] = useState('');
+    const { user, getJWT } = useAuth();
+    
+    // Config State
+    const [activeTab, setActiveTab] = useState<'config' | 'feed'>('config');
+    const [webhookUrl, setWebhookUrl] = useState(''); // Discord
+    const [slackWebhookUrl, setSlackWebhookUrl] = useState(''); // Slack
     const [isEnabled, setIsEnabled] = useState(true);
+    const [activeSeverities, setActiveSeverities] = useState<string[]>(['critical', 'high']);
     const [saving, setSaving] = useState(false);
-    const [testing, setTesting] = useState(false);
+    const [testingDiscord, setTestingDiscord] = useState(false);
+    const [testingSlack, setTestingSlack] = useState(false);
     const [docId, setDocId] = useState<string | null>(null);
+
+    // Feed State
+    const [findings, setFindings] = useState<any[]>([]);
+    const [feedLoading, setFeedLoading] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -19,9 +37,12 @@ export default function Alerts() {
                     Query.equal('userId', user.$id)
                 ]);
                 if (res.total > 0) {
-                    setDocId(res.documents[0].$id);
-                    setWebhookUrl(res.documents[0].webhookUrl);
-                    setIsEnabled(res.documents[0].isEnabled);
+                    const doc = res.documents[0];
+                    setDocId(doc.$id);
+                    setWebhookUrl(doc.webhookUrl || '');
+                    setSlackWebhookUrl(doc.slackWebhookUrl || '');
+                    setIsEnabled(doc.isEnabled ?? true);
+                    setActiveSeverities(doc.activeSeverities || ['critical', 'high']);
                 }
             } catch (e) {
                 console.error('Error fetching integration', e);
@@ -30,25 +51,69 @@ export default function Alerts() {
         fetchIntegrations();
     }, [user]);
 
+    useEffect(() => {
+        if (activeTab === 'feed') {
+            fetchFeed();
+            
+            const unsubscribe = client.subscribe(
+                `databases.${DB_ID}.collections.${COLLECTIONS.FINDINGS}.documents`,
+                (response: RealtimeResponseEvent<any>) => {
+                    if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+                        const newDoc = response.payload;
+                        if (activeSeverities.includes(newDoc.severity?.toLowerCase())) {
+                            setFindings(prev => [newDoc, ...prev].slice(0, 100)); // Keep last 100
+                        }
+                    }
+                }
+            );
+
+            return () => unsubscribe();
+        }
+    }, [activeTab, activeSeverities]);
+
+    const fetchFeed = async () => {
+        setFeedLoading(true);
+        try {
+            if (activeSeverities.length === 0) {
+                setFindings([]);
+                return;
+            }
+            
+            // Limit to 50 recent findings that match severity
+            const queries = [
+                Query.orderDesc('$createdAt'),
+                Query.limit(50)
+            ];
+            
+            const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, queries);
+            const filtered = res.documents.filter(doc => activeSeverities.includes(doc.severity?.toLowerCase()));
+            setFindings(filtered);
+        } catch (e) {
+            console.error('Error fetching feed', e);
+        } finally {
+            setFeedLoading(false);
+        }
+    };
+
     const handleSave = async () => {
         if (!user) return;
-        if (!webhookUrl) return alert('Please enter a Webhook URL.');
         setSaving(true);
         try {
+            const data = {
+                userId: user.$id,
+                webhookUrl,
+                slackWebhookUrl,
+                isEnabled,
+                activeSeverities
+            };
+
             if (docId) {
-                await databases.updateDocument(DB_ID, COLLECTIONS.INTEGRATIONS, docId, {
-                    webhookUrl,
-                    isEnabled
-                });
+                await databases.updateDocument(DB_ID, COLLECTIONS.INTEGRATIONS, docId, data);
             } else {
-                const res = await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), {
-                    userId: user.$id,
-                    webhookUrl,
-                    isEnabled
-                });
+                const res = await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), data);
                 setDocId(res.$id);
             }
-            alert('Discord Integration configuration saved successfully.');
+            alert('Integration configuration saved successfully.');
         } catch (error) {
             console.error('Failed to commit integration', error);
             alert('Failed to save integration settings.');
@@ -57,92 +122,236 @@ export default function Alerts() {
         }
     };
 
-    const handleTest = async () => {
-        if (!webhookUrl) return alert('Please input and save a valid Discord Webhook URL first.');
-        setTesting(true);
+    const handleTest = async (type: 'discord' | 'slack') => {
+        const url = type === 'discord' ? webhookUrl : slackWebhookUrl;
+        if (!url) return alert(`Please input a valid ${type === 'discord' ? 'Discord' : 'Slack'} Webhook URL.`);
+        
+        type === 'discord' ? setTestingDiscord(true) : setTestingSlack(true);
         try {
-            const payload = {
-                embeds: [{
-                    title: "🦂 SCORPION: Secure Comlink Established",
-                    description: "The realtime security telemetry bridge between SCORPION and this Discord channel is fully operational.",
-                    color: 3652856
-                }]
-            };
-            const response = await fetch(webhookUrl, {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            
+            const response = await fetch(`${apiBase}/api/alerts/test`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ webhookUrl: url, type })
             });
-            if (response.ok || response.status === 204) {
-                alert('Test payload dispatched successfully. Check your Discord channel!');
+
+            if (response.ok) {
+                alert(`Test payload dispatched successfully. Check your ${type} channel!`);
             } else {
                 alert(`Test transmission failed. Server responded with HTTP ${response.status}.`);
             }
         } catch (err: any) {
-            alert('Test payload dispatch failed. Verify CORS compatibility or invalid string: ' + err.message);
+            alert('Test payload dispatch failed: ' + err.message);
         } finally {
-            setTesting(false);
+            type === 'discord' ? setTestingDiscord(false) : setTestingSlack(false);
+        }
+    };
+
+    const toggleSeverity = (severity: string) => {
+        setActiveSeverities(prev => 
+            prev.includes(severity) 
+                ? prev.filter(s => s !== severity)
+                : [...prev, severity]
+        );
+    };
+
+    const SeverityIcon = ({ severity }: { severity: string }) => {
+        switch (severity.toLowerCase()) {
+            case 'critical': return <ShieldAlert className="w-4 h-4" />;
+            case 'high': return <AlertTriangle className="w-4 h-4" />;
+            case 'medium': return <AlertCircle className="w-4 h-4" />;
+            default: return <Info className="w-4 h-4" />;
         }
     };
 
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] p-8 text-[var(--text-primary)] transition-colors duration-300">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-5xl mx-auto">
                 <div className="mb-12">
-                    <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">Security Alerts Pipeline</h1>
+                    <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">Security Telemetry</h1>
                     <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">
-                        Discord Webhook Integration
+                        Realtime Broadcast Pipeline
                     </p>
                 </div>
 
-                <div className="premium-card p-10">
-                    <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                        <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> Webhook Integrations
-                    </h3>
-                    <div className="mb-6">
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic leading-relaxed max-w-2xl mb-8">
-                            Configure an active Discord Webhook below. SCORPION will instantly broadcast aggressive "Rich Embed" payloads directly into your channel the exact second a Critical Vulnerability or active Guardrail Policy Breach is detected across your infrastructure surface.
-                        </p>
-                        
-                        <label className="flex items-center gap-3 mb-6 cursor-pointer w-fit opacity-80 hover:opacity-100 transition-opacity">
-                            <input 
-                                type="checkbox" 
-                                checked={isEnabled} 
-                                onChange={(e) => setIsEnabled(e.target.checked)} 
-                                className="accent-[var(--accent-primary)] w-5 h-5"
-                            />
-                            <span className="text-sm font-black uppercase italic tracking-widest">Enable Realtime Event Broadcasts</span>
-                        </label>
-
-                        <input 
-                            type="text" 
-                            value={webhookUrl} 
-                            onChange={(e) => setWebhookUrl(e.target.value)} 
-                            className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-4 text-xs font-black italic tracking-widest text-[var(--text-primary)] outline-none focus:border-[var(--accent-secondary)]/50 transition-colors"
-                            placeholder="https://discord.com/api/webhooks/..."
-                        />
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4">
-                        <button 
-                            onClick={handleTest} 
-                            disabled={testing || !webhookUrl}
-                            className="w-full sm:w-auto px-6 py-3 bg-[var(--bg-secondary)] border-2 border-[var(--border-subtle)] hover:border-[var(--accent-primary)] hover:text-white rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3"
-                        >
-                            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                            Test Transmission
-                        </button>
-
-                        <button 
-                            onClick={handleSave} 
-                            disabled={saving}
-                            className="w-full sm:w-auto btn-premium flex items-center justify-center gap-3 disabled:opacity-50"
-                        >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            Commit Configuration
-                        </button>
-                    </div>
+                <div className="flex gap-4 mb-8">
+                    <button 
+                        onClick={() => setActiveTab('config')}
+                        className={`px-6 py-3 rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all
+                            ${activeTab === 'config' ? 'bg-[var(--accent-primary)] text-black shadow-lg shadow-[var(--accent-primary)]/20' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'}`}
+                    >
+                        Configuration
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('feed')}
+                        className={`px-6 py-3 rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center gap-2
+                            ${activeTab === 'feed' ? 'bg-[var(--accent-primary)] text-black shadow-lg shadow-[var(--accent-primary)]/20' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'}`}
+                    >
+                        <Activity className="w-4 h-4" /> Live Feed
+                    </button>
                 </div>
+
+                {activeTab === 'config' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* Master Toggle & Severities */}
+                        <div className="premium-card p-8">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-[var(--border-subtle)]">
+                                <div>
+                                    <h3 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic mb-2">Master Broadcast Switch</h3>
+                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">Enable or disable all outgoing webhook telemetry.</p>
+                                </div>
+                                <label className="flex items-center gap-3 cursor-pointer w-fit opacity-80 hover:opacity-100 transition-opacity">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={isEnabled} 
+                                        onChange={(e) => setIsEnabled(e.target.checked)} 
+                                        className="accent-[var(--accent-primary)] w-5 h-5"
+                                    />
+                                    <span className="text-xs font-black uppercase italic tracking-widest">System {isEnabled ? 'Armed' : 'Standby'}</span>
+                                </label>
+                            </div>
+
+                            <div className="mb-4">
+                                <h3 className="text-xs font-black text-[var(--text-primary)] mb-4 uppercase tracking-[0.2em] italic">Active Event Triggers (Severities)</h3>
+                                <div className="flex flex-wrap gap-4">
+                                    {['critical', 'high', 'medium', 'low'].map(sev => (
+                                        <button
+                                            key={sev}
+                                            onClick={() => toggleSeverity(sev)}
+                                            className={`px-5 py-2.5 rounded-xl border-2 font-black uppercase italic tracking-widest text-[10px] transition-all flex items-center gap-2
+                                                ${activeSeverities.includes(sev) ? SEVERITY_COLORS[sev] : 'bg-transparent border-[var(--border-subtle)] text-[var(--text-secondary)] opacity-50 hover:opacity-100'}`}
+                                        >
+                                            <SeverityIcon severity={sev} /> {sev}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Discord Config */}
+                        <div className="premium-card p-8">
+                            <h3 className="text-xs font-black text-[#5865F2] mb-6 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                                <MessageSquare className="w-5 h-5" /> Discord Interceptor
+                            </h3>
+                            <div className="flex flex-col md:flex-row gap-4 items-center">
+                                <input 
+                                    type="text" 
+                                    value={webhookUrl} 
+                                    onChange={(e) => setWebhookUrl(e.target.value)} 
+                                    className="flex-1 w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-4 text-xs font-black italic tracking-widest text-[var(--text-primary)] outline-none focus:border-[#5865F2]/50 transition-colors"
+                                    placeholder="https://discord.com/api/webhooks/..."
+                                />
+                                <button 
+                                    onClick={() => handleTest('discord')} 
+                                    disabled={testingDiscord || !webhookUrl || !isEnabled}
+                                    className="w-full md:w-auto px-6 py-4 bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/30 hover:bg-[#5865F2] hover:text-white rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                >
+                                    {testingDiscord ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    Test
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Slack Config */}
+                        <div className="premium-card p-8">
+                            <h3 className="text-xs font-black text-[#E01E5A] mb-6 uppercase tracking-[0.2em] italic flex items-center gap-3">
+                                <Slack className="w-5 h-5" /> Slack Block-Kit
+                            </h3>
+                            <div className="flex flex-col md:flex-row gap-4 items-center">
+                                <input 
+                                    type="text" 
+                                    value={slackWebhookUrl} 
+                                    onChange={(e) => setSlackWebhookUrl(e.target.value)} 
+                                    className="flex-1 w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-4 text-xs font-black italic tracking-widest text-[var(--text-primary)] outline-none focus:border-[#E01E5A]/50 transition-colors"
+                                    placeholder="https://hooks.slack.com/services/..."
+                                />
+                                <button 
+                                    onClick={() => handleTest('slack')} 
+                                    disabled={testingSlack || !slackWebhookUrl || !isEnabled}
+                                    className="w-full md:w-auto px-6 py-4 bg-[#E01E5A]/10 text-[#E01E5A] border border-[#E01E5A]/30 hover:bg-[#E01E5A] hover:text-white rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                >
+                                    {testingSlack ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    Test
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Save Action */}
+                        <div className="flex justify-end mt-8">
+                            <button 
+                                onClick={handleSave} 
+                                disabled={saving}
+                                className="btn-premium flex items-center justify-center gap-3 px-10 py-4 disabled:opacity-50"
+                            >
+                                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                                Commit Telemetry Configuration
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'feed' && (
+                    <div className="premium-card p-8 min-h-[500px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex justify-between items-center mb-8 border-b border-[var(--border-subtle)] pb-6">
+                            <div>
+                                <h3 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic flex items-center gap-3">
+                                    <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> Neural Alert Feed
+                                </h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">Showing matching findings from Appwrite Realtime Channel</p>
+                            </div>
+                            <div className="flex gap-2">
+                                {activeSeverities.map(sev => (
+                                    <span key={sev} className={`px-3 py-1 rounded-md border text-[9px] font-black uppercase italic ${SEVERITY_COLORS[sev]}`}>
+                                        {sev}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+
+                        {feedLoading ? (
+                            <div className="flex justify-center items-center h-48">
+                                <Loader2 className="w-8 h-8 text-[var(--accent-primary)] animate-spin" />
+                            </div>
+                        ) : findings.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-64 opacity-50">
+                                <ShieldAlert className="w-12 h-12 mb-4 text-[var(--text-secondary)]" />
+                                <p className="text-xs font-black uppercase tracking-widest italic text-[var(--text-secondary)]">No findings matching active triggers</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {findings.map(finding => (
+                                    <div key={finding.$id} className="p-5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl flex gap-4 hover:border-[var(--accent-primary)]/30 transition-colors">
+                                        <div className="mt-1">
+                                            <div className={`p-2 rounded-lg border ${SEVERITY_COLORS[finding.severity?.toLowerCase() || 'medium']}`}>
+                                                <SeverityIcon severity={finding.severity || 'medium'} />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h4 className="text-sm font-black text-[var(--text-primary)] tracking-wide">{finding.vulnerability_id || finding.rule_id}</h4>
+                                                <span className="text-[9px] font-mono text-[var(--text-secondary)]">{new Date(finding.$createdAt).toLocaleString()}</span>
+                                            </div>
+                                            <p className="text-[11px] font-bold text-[var(--text-secondary)] italic mb-2">
+                                                {finding.package_name && <span className="mr-3">PKG: {finding.package_name}</span>}
+                                                {finding.fixed_version && <span>FIX: {finding.fixed_version}</span>}
+                                            </p>
+                                            {finding.description && (
+                                                <p className="text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed opacity-80">
+                                                    {finding.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

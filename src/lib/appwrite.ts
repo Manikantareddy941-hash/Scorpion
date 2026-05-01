@@ -1,6 +1,6 @@
 import { Client, Account, Databases, Functions, Storage, ID, Query } from 'appwrite';
 
-const client = new Client()
+export const client = new Client()
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
   .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 
@@ -14,7 +14,7 @@ export const DB_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
 
 export const COLLECTIONS = {
   REPOSITORIES:             import.meta.env.VITE_APPWRITE_REPOS_COLLECTION_ID,
-  SCANS:                    import.meta.env.VITE_APPWRITE_SCANS_COLLECTION_ID,
+  SCANS: import.meta.env.VITE_APPWRITE_SCANS_COLLECTION_ID || 'scans',
   VULNERABILITIES:          import.meta.env.VITE_APPWRITE_VULNS_COLLECTION_ID,
   TASKS:                    import.meta.env.VITE_APPWRITE_TASKS_COLLECTION_ID,
   NOTIFICATION_PREFERENCES: 'notification_preferences',
