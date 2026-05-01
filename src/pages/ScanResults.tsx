@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   Shield, AlertTriangle, Bug, Wind,
-  CheckCircle2, ArrowLeft, Clock, Activity, Loader2
+  CheckCircle2, ArrowLeft, Clock, Activity, Loader2, Download, FileJson, FileText
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query, Client } from 'appwrite';
 import FindingsTable from '../components/FindingsTable';
+import SBOMExportButton from '../components/SBOMExportButton';
 
 /* ─── Types ──────────────────────────────────────────── */
 interface Scan {
@@ -20,6 +21,7 @@ interface Scan {
   lowCount: number;
   timestamp: string;
   scannerVersion: string;
+  repo_id: string;
 }
 
 export interface AppwriteFinding {
@@ -66,7 +68,7 @@ export default function ScanResults() {
         // 2. Fetch all findings where scanId == this scan
         const findingsRes = await databases.listDocuments(
           DB_ID,
-          COLLECTIONS.FINDINGS,
+          COLLECTIONS.VULNERABILITIES,
           [Query.equal('scanId', scanId), Query.limit(500)]
         );
         const sorted = (findingsRes.documents as unknown as AppwriteFinding[]).sort(
@@ -162,6 +164,95 @@ export default function ScanResults() {
   const total = findings.length;
   const isRunning = scan.status === 'scanning' || scan.status === 'running';
 
+  /* ── Export Logic ── */
+  const exportCSV = () => {
+    if (!scan || findings.length === 0) return;
+    const headers = ['Vulnerability ID', 'Severity', 'Package', 'Installed Version', 'Fixed Version', 'Description'];
+    const rows = findings.map(f => [
+      f.title || 'N/A',
+      f.severity || 'UNKNOWN',
+      f.package || 'N/A',
+      f.installedVersion || 'N/A',
+      f.fixedVersion || 'N/A',
+      `"${(f.description || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().split('T')[0];
+    const target = (scan.repoUrl || scanTarget).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.setAttribute('download', `sbom-${target}-${date}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportCycloneDX = () => {
+    if (!scan || findings.length === 0) return;
+    
+    const components = findings.map(f => {
+      const purl = `pkg:generic/${f.package || 'unknown'}@${f.installedVersion || 'latest'}`;
+      return {
+        type: "library",
+        name: f.package || 'unknown',
+        version: f.installedVersion || 'unknown',
+        purl: purl,
+        evidence: {
+          identity: {
+            field: "purl",
+            confidence: 1
+          }
+        },
+        properties: [
+          { name: "aquasecurity:trivy:VulnerabilityID", value: f.title || "UNKNOWN" },
+          { name: "aquasecurity:trivy:Severity", value: f.severity || "UNKNOWN" }
+        ]
+      };
+    });
+
+    const uniqueComponents = Array.from(new Map(components.map(c => [`${c.name}-${c.version}`, c])).values());
+
+    const sbom = {
+      bomFormat: "CycloneDX",
+      specVersion: "1.5",
+      serialNumber: `urn:uuid:${crypto.randomUUID ? crypto.randomUUID() : 'sbom-' + Date.now()}`,
+      version: 1,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        tools: [
+          {
+            vendor: "Aqua Security",
+            name: "Trivy",
+            version: scan.scannerVersion || "Unknown"
+          },
+          {
+            vendor: "SCORPION",
+            name: "Security Engine",
+            version: "1.0.0"
+          }
+        ],
+        component: {
+          type: "application",
+          name: scan.repoUrl || scanTarget
+        }
+      },
+      components: uniqueComponents
+    };
+
+    const blob = new Blob([JSON.stringify(sbom, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().split('T')[0];
+    const target = (scan.repoUrl || scanTarget).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.setAttribute('download', `sbom-${target}-${date}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const stats = [
     { label: 'CRITICAL', value: scan.criticalCount, color: 'var(--severity-critical)', icon: Shield },
     { label: 'HIGH',     value: scan.highCount,     color: 'var(--severity-high)',     icon: AlertTriangle },
@@ -205,6 +296,12 @@ export default function ScanResults() {
               {isRunning ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : null}
               {scan.status.toUpperCase()}
             </span>
+            
+            <SBOMExportButton 
+                repoId={scan.repo_id} 
+                repoName={scan.repoUrl.split('/').pop() || 'repository'} 
+            />
+
             <Link to="/" className="btn-premium flex items-center gap-2">
               <ArrowLeft className="w-4 h-4" /> Back to Control
             </Link>

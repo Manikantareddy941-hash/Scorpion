@@ -19,7 +19,7 @@ router.get('/trends', async (req: AuthenticatedRequest, res: Response, next: Nex
         // Fetch vulnerabilities within the date range
         // Note: For scalability, we limit to 5000. In a real system, you might aggregate this in a background job
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-            Query.greaterThanEqual('$createdAt', dateLimit.toISOString()),
+            Query.greaterThanEqual('detected_at', dateLimit.toISOString()),
             Query.limit(5000)
         ]);
 
@@ -35,7 +35,8 @@ router.get('/trends', async (req: AuthenticatedRequest, res: Response, next: Nex
         }
 
         response.documents.forEach(vuln => {
-            const dateStr = vuln.$createdAt.split('T')[0];
+            const rawDate = vuln.detected_at || vuln.$createdAt;
+            const dateStr = rawDate.split('T')[0];
             const severity = vuln.severity?.toLowerCase();
             
             if (!trendsData[dateStr]) {

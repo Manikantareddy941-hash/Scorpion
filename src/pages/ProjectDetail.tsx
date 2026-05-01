@@ -246,7 +246,16 @@ export default function ProjectDetail() {
                 {activeTab === 'findings' && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
-                            <FindingsTable findings={vulnerabilities as any} />
+                            <FindingsTable 
+                                findings={vulnerabilities as any} 
+                                onRemediate={(id) => {
+                                    if (id) {
+                                        setRemediationId(id);
+                                    } else {
+                                        console.error('[ERROR] Remediation ID is empty');
+                                    }
+                                }}
+                            />
                         </div>
                         <div className="lg:col-span-1 space-y-6">
                             <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest italic leading-none">Audit History</h2>
@@ -259,7 +268,7 @@ export default function ProjectDetail() {
                 {activeTab === 'access' && <AccessView access={projectAccess} repoId={id!} onUpdate={fetchData} />}
             </div>
 
-            {remediationId && <RemediationPanel vulnerabilityId={remediationId} onClose={() => setRemediationId(null)} />}
+            {remediationId && <RemediationPanel key={remediationId} documentId={remediationId} onClose={() => setRemediationId(null)} />}
         </div>
     );
 }

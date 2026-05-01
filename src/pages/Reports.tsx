@@ -55,6 +55,10 @@ export default function Reports() {
         fetchData();
     }, [scope, scopeId]);
 
+    useEffect(() => {
+        console.log('[DEBUG] selectedVulnId changed to:', selectedVulnId);
+    }, [selectedVulnId]);
+
     const fetchData = async () => {
         setLoading(true);
         const token = await getJWT();
@@ -379,6 +383,46 @@ export default function Reports() {
         }
     };
 
+    const handleExportSBOM = async (format: 'json' | 'csv') => {
+        if (!selectedExportScanId) return;
+        setShowExportModal(false);
+        setGenerating(true);
+        try {
+            const scan = scans.find(s => s.$id === selectedExportScanId);
+            const repo = repos[scan?.repo_id] || {};
+            const repoUrl = repo.repo_url || repo.url || '';
+
+            if (!repoUrl) throw new Error('Repository URL not found for this scan.');
+
+            const params = new URLSearchParams({ format });
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+            const res = await fetch(`${apiBase}/api/sbom/${scan.repo_id}?${params.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || `Server error ${res.status}`);
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sbom-${repo.name || scan.repo_id}-${Date.now()}.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            alert(`SBOM Export Failed: ${err.message}`);
+        } finally {
+            setGenerating(false);
+        }
+    };
+
     const handleFixVulnerability = async (finding: any, scan: any) => {
         const token = await getGithubToken();
         if (!token) {
@@ -535,7 +579,10 @@ export default function Reports() {
                                         <React.Fragment key={scan.$id}>
                                             <tr
                                                 className={`hover:bg-[var(--text-primary)]/5 transition-colors group cursor-pointer ${isExpanded ? 'bg-[var(--text-primary)]/5' : ''}`}
-                                                onClick={() => toggleScanExpansion(scan.$id)}
+                                                onClick={(e) => {
+                                                    console.log('[DEBUG] Parent Scan Row Clicked:', scan.$id);
+                                                    toggleScanExpansion(scan.$id);
+                                                }}
                                             >
                                                 <td className="px-8 py-6 text-center">
                                                     {isExpanded ? <ChevronUp className="w-4 h-4 text-[var(--accent-primary)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]" />}
@@ -652,8 +699,17 @@ export default function Reports() {
                                                                     {findings.map((finding: any) => (
                                                                         <div
                                                                             key={finding.$id}
-                                                                            onClick={() => {
-                                                                                setSelectedVulnId(finding.$id);
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                console.log('[DEBUG] Opening Remediation for Finding ID:', finding.$id);
+                                                                                if (!finding.$id) {
+                                                                                    console.error('[ERROR] Finding ID is missing from document:', finding);
+                                                                                }
+                                                                                if (finding.$id) {
+                                                                                    setSelectedVulnId(finding.$id);
+                                                                                } else {
+                                                                                    console.error('[ERROR] Cannot open remediation: Finding ID is null/empty');
+                                                                                }
                                                                                 window.dispatchEvent(new CustomEvent('ai_prompt', { detail: `I need help fixing a ${finding.severity.toUpperCase()} finding in ${finding.package}. The title is: ${finding.title}` }));
                                                                             }}
                                                                             className="p-6 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl group/finding hover:border-[var(--accent-primary)]/30 transition-all cursor-pointer relative overflow-hidden"
@@ -752,8 +808,12 @@ export default function Reports() {
 
             {selectedVulnId && (
                 <RemediationPanel
-                    vulnerabilityId={selectedVulnId}
-                    onClose={() => setSelectedVulnId(null)}
+                    key={selectedVulnId}
+                    documentId={selectedVulnId}
+                    onClose={() => {
+                        console.log('[DEBUG] RemediationPanel onClose triggered');
+                        setSelectedVulnId(null);
+                    }}
                 />
             )}
 
@@ -788,8 +848,8 @@ export default function Reports() {
                                             key={scan.$id}
                                             onClick={() => setSelectedExportScanId(scan.$id)}
                                             className={`p-4 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${selectedExportScanId === scan.$id
-                                                    ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)] shadow-[0_0_15px_rgba(56,189,248,0.15)] ring-1 ring-[var(--accent-primary)]'
-                                                    : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'
+                                                ? 'bg-[var(--accent-primary)]/10 border-[var(--accent-primary)] shadow-[0_0_15px_rgba(56,189,248,0.15)] ring-1 ring-[var(--accent-primary)]'
+                                                : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'
                                                 }`}
                                         >
                                             <div className="flex flex-col gap-1">
@@ -828,7 +888,7 @@ export default function Reports() {
                             </>
                         ) : (
                             <>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-shrink-0">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 flex-shrink-0">
                                     <button
                                         onClick={() => handleExport(true)}
                                         className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)] rounded-xl transition-all group hover:bg-[var(--accent-primary)]/5"
@@ -860,6 +920,24 @@ export default function Reports() {
                                         </div>
                                         <h3 className="text-[14px] font-black text-[#60a5fa] uppercase tracking-widest italic mb-2">Word (.docx)</h3>
                                         <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">Editable Microsoft Word document.</p>
+                                    </button>
+
+                                    {/* SBOM Export */}
+                                    <button
+                                        onClick={() => handleExportSBOM('json')}
+                                        className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[#4ade80] rounded-xl transition-all group hover:bg-[#4ade80]/5"
+                                    >
+                                        <div className="w-16 h-16 bg-[#4ade80]/10 text-[#4ade80] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                            <Package className="w-8 h-8" />
+                                        </div>
+                                        <h3 className="text-[14px] font-black text-[#4ade80] uppercase tracking-widest italic mb-2">SBOM (.json)</h3>
+                                        <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">CycloneDX bill of materials for all dependencies.</p>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleExportSBOM('csv'); }}
+                                            className="mt-4 px-3 py-1 border border-[#4ade80]/30 rounded-lg text-[9px] font-black uppercase tracking-widest text-[#4ade80]/70 hover:text-[#4ade80] hover:border-[#4ade80] transition-all"
+                                        >
+                                            or CSV
+                                        </button>
                                     </button>
                                 </div>
                                 <div className="mt-6 flex justify-start flex-shrink-0 pt-4">
