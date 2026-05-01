@@ -492,7 +492,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           <div key={i} className="flex items-center gap-2 bg-[var(--bg-primary)]/50 p-2 rounded border border-[var(--border-subtle)]">
                             <span className="bg-[#ff5252]/10 text-[#ff5252] text-[9px] font-black px-1.5 py-0.5 rounded uppercase">NEW</span>
                             <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate">{v.tool}</span>
-                            <span className="text-[10px] text-[var(--text-primary)] truncate flex-1" title={v.file}>{v.file.split('/').pop()}</span>
+                             <span className="text-[10px] text-[var(--text-primary)] truncate flex-1" title={v.file || v.file_path}>{(v.file || v.file_path)?.split('/').pop() ?? ''}</span>
                           </div>
                         ))}
                       </div>
@@ -509,7 +509,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           <div key={i} className="flex items-center gap-2 bg-[var(--bg-primary)]/50 p-2 rounded border border-[var(--border-subtle)]">
                             <span className="bg-[#00ffa3]/10 text-[#00ffa3] text-[9px] font-black px-1.5 py-0.5 rounded uppercase">FIXED</span>
                             <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate">{v.tool}</span>
-                            <span className="text-[10px] text-[var(--text-primary)] truncate flex-1 line-through opacity-75" title={v.file}>{v.file.split('/').pop()}</span>
+                             <span className="text-[10px] text-[var(--text-primary)] truncate flex-1 line-through opacity-75" title={v.file || v.file_path}>{(v.file || v.file_path)?.split('/').pop() ?? ''}</span>
                           </div>
                         ))}
                       </div>

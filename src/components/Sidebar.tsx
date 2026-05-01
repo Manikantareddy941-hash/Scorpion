@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight, Layout } from 'lucide-react';
 import NewScanModal from './NewScanModal';
-import UVScanOverlay from './UVScanOverlay';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
@@ -13,6 +12,7 @@ const navItems = [
   { icon: ListTodo, label: 'Tasks', path: '/tasks' },
   { icon: BarChart2, label: 'Reports', path: '/reports' },
   { icon: Scale, label: 'Governance', path: '/governance' },
+  { icon: Layout, label: 'Repositories', path: '/repos' },
   { icon: Users, label: 'Teams', path: '/teams' },
   { icon: Bell, label: 'Alerts', path: '/alerts' },
 ];
@@ -28,64 +28,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [showScan, setShowScan] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [scanTarget, setScanTarget] = useState('');
   const { getJWT } = useAuth();
   const { getLogoFilter, getLogoBlendMode } = useTheme();
-  const [scanId, setScanId] = useState<string | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
 
-  const handleScan = async (data: any) => {
+  const handleScan = () => {
     setShowScan(false);
-    setScanTarget(data.type === 'github' ? data.value : `${data.value.length} local files`);
-    setScanning(true);
-
-    const toastId = toast.loading('Establishing secure repository link...');
-
-    try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-      const token = await getJWT();
-
-      if (!token) throw new Error('Not authenticated');
-
-      const repoRes = await fetch(`${apiBase}/api/repos`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ 
-          url: data.type === 'github' ? data.value : `upload://${Date.now()}`,
-          visibility: 'private'
-        })
-      });
-      const repo = await repoRes.json();
-      
-      if (!repo.$id) throw new Error(repo.error || 'Failed to register repository');
-
-      toast.loading('Initiating deep security telemetry...', { id: toastId });
-
-      const scanRes = await fetch(`${apiBase}/api/repos/${repo.$id}/scan`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ visibility: 'public' })
-      });
-      const scanResult = await scanRes.json();
-      console.log('[DEBUG] Raw Scan API Response Tracker:', scanResult);
-      
-      if (scanResult.scanId) {
-        setScanId(scanResult.scanId);
-        toast.success('Scan completed successfully', { id: toastId });
-      } else {
-        throw new Error(scanResult.error || 'Failed to start scan');
-      }
-    } catch (err: any) {
-      toast.error(`Scan failed: ${err.message || 'Unknown error'}`, { id: toastId });
-      setScanning(false);
-    }
   };
 
   return (
@@ -171,17 +118,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         </button>
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
       </div>
-
-      {scanning && (
-        <UVScanOverlay
-          scanTarget={scanTarget}
-          scanId={scanId}
-          onComplete={() => {
-            setScanning(false);
-            navigate('/scan-results', { state: { scanTarget, scanId } });
-          }}
-        />
-      )}
 
       {/* Nav Items */}
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
