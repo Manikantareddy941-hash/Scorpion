@@ -13,9 +13,10 @@ const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
 interface Props {
   findings: AppwriteFinding[];
+  onRemediate?: (id: string) => void;
 }
 
-export default function FindingsTable({ findings }: Props) {
+export default function FindingsTable({ findings, onRemediate }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(SEVERITY_ORDER));
 
@@ -119,6 +120,19 @@ export default function FindingsTable({ findings }: Props) {
                           <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.2)' }}>
                             no fix available
                           </span>
+                        )}
+                        {onRemediate && (
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              console.log('[DEBUG] Triggering Remediate for ID:', finding.$id);
+                              if (!finding.$id) console.error('[ERROR] Finding ID is missing in FindingsTable:', finding);
+                              onRemediate(finding.$id); 
+                            }}
+                            className="flex items-center gap-1 px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 rounded text-[9px] font-black uppercase italic hover:bg-[var(--accent-primary)] hover:text-black transition-all ml-2"
+                          >
+                            <Zap size={10} /> Remediate
+                          </button>
                         )}
                       </div>
                     </div>

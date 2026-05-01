@@ -3,6 +3,9 @@ import { X, Github, Upload, FolderOpen, Loader2 } from 'lucide-react';
 import { functions, FUNCTION_ID } from '../lib/appwrite';
 import { ExecutionMethod } from 'appwrite';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import UVScanOverlay from './UVScanOverlay';
+import toast from 'react-hot-toast';
 
 interface Props {
   onClose: () => void;
@@ -17,60 +20,106 @@ export default function NewScanModal({ onClose, onScan }: Props) {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  
+  // UV Scan State
+  const [isScanning, setIsScanning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [scanId, setScanId] = useState<string | null>(null);
+  
+  const { user, getJWT } = useAuth();
+  const navigate = useNavigate();
+
+  const pollScanStatus = async (id: string, token: string) => {
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    let pollCount = 0;
+    
+    const interval = setInterval(async () => {
+      try {
+        pollCount++;
+        const res = await fetch(`${apiBase}/api/repos/scans/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        
+        // Progress mapping based on status
+        if (data.status === 'completed') {
+          setProgress(100);
+          clearInterval(interval);
+          setTimeout(() => {
+            setIsScanning(false);
+            onClose();
+          }, 1000);
+        } else if (data.status === 'failed') {
+          clearInterval(interval);
+          setIsScanning(false);
+          setError(data.error || 'Scan execution failed');
+        } else {
+          // Dynamic progress based on status strings from backend
+          switch(data.status) {
+            case 'queued': setProgress(Math.min(15 + pollCount, 25)); break;
+            case 'cloning': setProgress(Math.min(30 + pollCount, 45)); break;
+            case 'scanning': setProgress(Math.min(50 + pollCount, 75)); break;
+            case 'analyzing': setProgress(Math.min(80 + pollCount, 95)); break;
+            default: setProgress(prev => Math.min(prev + 1, 90));
+          }
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 2000);
+  };
 
   const handleScan = async () => {
     if (tab === 'upload' && files.length > 0) {
-      onScan({ type: 'upload', value: files });
+      toast.error('Local file upload scanning is coming soon. Please use GitHub URL.');
       return;
     }
 
     if (!repoUrl.trim()) return;
 
     setLoading(true);
+    setIsScanning(true);
+    setProgress(5);
     setError(null);
 
     try {
-      const execution = await functions.createExecution(
-        FUNCTION_ID,
-        JSON.stringify({ repoUrl: repoUrl.trim(), visibility, userId: user?.$id }),
-        false,
-        '/',
-        ExecutionMethod.POST,
-        { 'Content-Type': 'application/json' }
-      );
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const token = await getJWT();
+      if (!token) throw new Error('Authentication required');
 
-      // The function responded — check if it returned an error payload
-      if (execution.responseStatusCode && execution.responseStatusCode >= 400) {
-        let msg = `Scan failed (HTTP ${execution.responseStatusCode})`;
-        try {
-          const body = JSON.parse(execution.responseBody);
-          if (body?.error) msg = body.error;
-        } catch (_) {}
-        setError(msg);
-        setLoading(false);
-        return;
+      // 1. Register/Find Repo
+      const repoRes = await fetch(`${apiBase}/api/repos`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ url: repoUrl.trim(), visibility })
+      });
+      const repo = await repoRes.json();
+      if (!repo.$id) throw new Error(repo.error || 'Failed to register repository');
+
+      // 2. Start Scan
+      const scanRes = await fetch(`${apiBase}/api/repos/${repo.$id}/scan`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ visibility })
+      });
+      const scanData = await scanRes.json();
+      
+      if (scanData.scanId) {
+        setScanId(scanData.scanId);
+        setProgress(15);
+        pollScanStatus(scanData.scanId, token);
+      } else {
+        throw new Error(scanData.error || 'Failed to initiate scan');
       }
-
-      // Parse the response body for any application-level error
-      try {
-        const body = JSON.parse(execution.responseBody);
-        if (body?.success === false) {
-          setError(body.error || 'Scan failed with an unknown error.');
-          setLoading(false);
-          return;
-        }
-      } catch (_) {}
-
-      // Success — propagate up and close
-      onScan({ type: 'github', value: repoUrl.trim() });
-      onClose();
     } catch (err: any) {
-      const message =
-        err?.response?.message ||
-        err?.message ||
-        'An unexpected error occurred. Please try again.';
-      setError(message);
+      setError(err.message || 'Failed to start scan');
+      setIsScanning(false);
     } finally {
       setLoading(false);
     }
@@ -176,6 +225,9 @@ export default function NewScanModal({ onClose, onScan }: Props) {
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      
+      {/* UV Scan Progress Overlay */}
+      <UVScanOverlay isScanning={isScanning} progress={progress} />
     </div>
   );
 }

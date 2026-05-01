@@ -4,11 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
 
 interface RemediationPanelProps {
-    vulnerabilityId: string;
+    documentId: string;
     onClose: () => void;
 }
 
-export default function RemediationPanel({ vulnerabilityId, onClose }: RemediationPanelProps) {
+export default function RemediationPanel({ documentId, onClose }: RemediationPanelProps) {
     const { getJWT, getGithubToken } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -21,8 +21,9 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
     const [prState, setPrState] = useState<{status: 'idle' | 'loading' | 'success' | 'error', prUrl?: string, error?: string}>({ status: 'idle' });
 
     useEffect(() => {
+        if (!documentId || documentId === '') return;
         fetchFix();
-    }, [vulnerabilityId]);
+    }, [documentId]);
 
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
@@ -36,7 +37,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    finding_id: vulnerabilityId,
+                    finding_id: documentId,
                     suggestion_id: suggestionId,
                     action,
                     confidence_score: confidence
@@ -48,14 +49,16 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
     };
 
     const fetchFix = async () => {
+        if (!documentId) { setLoading(false); return; }
+        
         setLoading(true);
         setError('');
         try {
             // 1. Fetch Finding Details
             const findingDoc = await databases.getDocument(
                 DB_ID,
-                COLLECTIONS.FINDINGS,
-                vulnerabilityId
+                COLLECTIONS.VULNERABILITIES,
+                documentId
             );
 
             if (!findingDoc) {
@@ -69,7 +72,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             const scanDoc = await databases.getDocument(
                 DB_ID,
                 COLLECTIONS.SCANS,
-                findingDoc.scan_id
+                findingDoc.scan_result_id
             );
             
             if (scanDoc && scanDoc.repo_id) {
@@ -86,7 +89,7 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
             try {
-                const response = await fetch(`${apiBase}/api/vulns/${vulnerabilityId}/remediate`, {
+                const response = await fetch(`${apiBase}/api/vulns/${documentId}/remediate`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -186,21 +189,27 @@ export default function RemediationPanel({ vulnerabilityId, onClose }: Remediati
     async function handleCreatePR() {
         setPrState({ status: 'loading' });
         try {
-            const res = await fetch('/api/remediation/create-pr', {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            
+            const res = await fetch(`${apiBase}/api/remediation/create-pr`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     findingId: finding.$id,
                     repoUrl: repo.url || repo.repo_url,
                     filePath: finding.file_path || finding.location || 'package.json',
-                    fixedContent: fix.fixed_code || fix.diff,
+                    fixedContent: fix.code_diff || fix.fixed_code || fix.diff,
                     vulnerabilityTitle: finding.message || finding.title || 'Unknown vulnerability',
                     severity: finding.severity || 'low',
                 }),
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
+            if (!res.ok) throw new Error(data.error || 'Failed to create PR');
 
             setPrState({ status: 'success', prUrl: data.prUrl });
 
