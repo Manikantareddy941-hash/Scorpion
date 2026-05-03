@@ -34,6 +34,8 @@ export const COLLECTIONS = {
   PASSWORD_RESETS: 'password_resets',
   INCIDENTS: 'incidents',
   COMPLIANCE_CONTROLS: 'compliance_controls',
+  AUDIT_LOGS: 'audit_logs',
+  ROLES: 'roles',
 };
 
 export { ID, Query };

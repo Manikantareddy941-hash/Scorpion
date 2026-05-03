@@ -38,6 +38,7 @@ import sbomRouter from './routes/sbomRoute';
 import ideRoutes from './routes/ideRoutes';
 import gitopsRoutes from './routes/gitopsRoutes';
 import falcoRoutes from './routes/falcoRoutes';
+import auditRoutes from './routes/auditRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 import { createNodeMiddleware } from "@octokit/webhooks";
@@ -114,7 +115,7 @@ app.use(cors({
     origin: (origin, callback) => callback(null, true),
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY', 'X-USER-ID', 'X-TENANT-ID']
 }));
 // --- GitHub Webhook (MUST be before express.json() for raw body access) ---
 app.use('/api/github/webhook', createNodeMiddleware(githubWebhooks, { path: '/api/github/webhook' }));
@@ -198,6 +199,7 @@ app.use('/api/gitops', gitopsRoutes);
 app.use('/api/runtime', falcoRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/compliance', complianceRoutes);
+app.use('/api/audit', auditRoutes);
 app.use('/metrics', metricsRoutes);
 
 // --- Initialization ---
