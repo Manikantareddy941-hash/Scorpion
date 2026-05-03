@@ -1,99 +1,51 @@
-# 🛡️ SCORPION: Enterprise DevSecOps Orchestration Platform
+# SCORPION: AI-Powered DevSecOps Orchestration
 
-SCORPION is a premium, end-to-end security orchestration platform (SOAR) designed to streamline vulnerability management, automate remediation, and enforce governance across the software development lifecycle (SDLC).
+SCORPION is a production-grade security orchestration platform that automates vulnerability detection and AI-assisted remediation across the entire SDLC.
 
----
+## 🚀 Key Features
 
-## 📊 System Architecture & Workflow
+### 🛡️ GitHub CI/CD Security Gate
+Automatically enforce security policies on every Pull Request. SCORPION acts as a GitHub App that scans PR branches and sets commit statuses (✅ Success / ❌ Failure), physically blocking merges if critical vulnerabilities or secrets are detected.
 
-The following flowchart illustrates the lifecycle of a security finding in SCORPION, from initial detection to automated remediation.
+### 🔌 VS Code Security Extension
+Bring security intelligence directly into the IDE.
+- **Inline Squiggles**: Real-time vulnerability highlighting in the editor.
+- **AI-Powered Diff Fix**: Review side-by-side AI-generated patches and apply them with one click.
+- **Security Sidebar**: Dedicated view to navigate and manage workspace findings.
 
-```mermaid
-graph TD
-    A[User / CI/CD Trigger] -->|Initiates Scan| B(Scanning Orchestrator)
-    B --> C{Scan Engines}
-    C -->|Static Analysis| D[Semgrep]
-    C -->|Secrets Detection| E[Gitleaks]
-    C -->|Vulnerability Scan| F[Trivy]
-    
-    D & E & F -->|Raw Results| G(Result Parsers)
-    G -->|Normalized Data| H[(Appwrite Database)]
-    
-    H -->|Real-time Updates| I[Security Dashboard]
-    I -->|User Identification| J{Decision Node}
-    
-    J -->|Request AI Help| K(Echo AI Assistant)
-    K -->|Generate Fix| L[Gemini 2.5 Flash]
-    L -->|Code Diff| M[Remediation Panel]
-    
-    M -->|Create PR| N[GitHub/GitLab API]
-    N -->|Fixed Code| O[Resolved Vulnerability]
-```
+### 🧠 AI Remediation Engine
+Leveraging **Google Gemini AI**, SCORPION doesn't just find bugs—it understands them. It generates context-aware patches for SAST (Semgrep), SCA (Trivy), and Secrets (Gitleaks) findings.
 
----
+### 📊 DevSecOps Command Center
+A high-fidelity dashboard powered by **Appwrite Realtime** featuring:
+- **Security Pulse**: Radar charts mapping threat vectors.
+- **Scan Registry**: Full audit trail of CI, IDE, Manual, and Scheduled scans.
+- **CI Gate Pass Rate**: Analytics on pipeline security integrity.
 
-## 🚀 Core Features & Functionality
+## 🏗️ Architecture
 
-### 1. Unified Security Dashboard
-*   **Centralized Metrics**: Aggregates data from `Scans` and `Findings` into high-fidelity visualizations using **Recharts**.
-*   **Risk Profiling**: Instant visibility into severity distributions (Critical, High, Medium, Low) and tool-specific performance.
+- **Frontend**: React (Vite), Tailwind CSS, Recharts.
+- **Backend**: Node.js, Express, Octokit (GitHub App), node-appwrite.
+- **Realtime/DB**: Appwrite Cloud.
+- **Security Toolchain**: Trivy, Semgrep, Gitleaks.
+- **AI**: Google Gemini Pro.
 
-### 2. Multi-Engine Scanning Orchestrator
-*   **Parallel Execution**: Clones repositories and runs **Trivy**, **Semgrep**, and **Gitleaks** in parallel.
-*   **Normalized Data**: Automatically parses heterogeneous tool outputs into a consistent vulnerability schema.
+## 🛠️ Getting Started
 
-### 3. Echo: The AI DevSecOps Assistant
-*   **Intelligent Chat**: A context-aware chatbot powered by **Gemini 2.5 Flash** that understands the platform's features and your specific scan data.
-*   **Contextual Help**: Echo knows which page you're viewing (Reports, Governance, etc.) and provides tailored guidance.
+### Backend Setup
+1. `cd backend`
+2. `npm install`
+3. Configure `backend/.env` with your Appwrite and GitHub App credentials.
+4. `npm run dev`
 
-### 4. Automated AI Remediation
-*   **Self-Healing Code**: Generates precise code fixes for detected vulnerabilities with detailed explanations and confidence scores.
-*   **One-Click PRs**: Instantly create Pull Requests for approved fixes directly via backend Git integrations.
+### Frontend Setup
+1. `npm install`
+2. `npm run dev`
 
-### 5. Policy & Governance Management
-*   **Governance-as-Code**: Define and enforce security policies across all projects to ensure compliance with organizational standards.
-*   **Compliance Tracking**: Automated detection of non-compliant infrastructure and code.
-
-### 6. Security Pulse & Alerts
-*   **Discord Integration**: Real-time notifications for critical findings sent as rich embeds to your developer channels.
-*   **Health Diagnostics**: Built-in monitoring suite for backend services, database connectivity, and scanner operational status.
+### IDE Extension
+1. `cd scorpion-vscode`
+2. `npm install`
+3. Open in VS Code and press **F5** to run.
 
 ---
-
-## 🛠️ Technical Stack
-
-| Component | Technology |
-| :--- | :--- |
-| **Frontend** | React 18, Vite, Tailwind CSS, Framer Motion |
-| **Backend** | Node.js, Express, TypeScript |
-| **Database & Auth** | Appwrite |
-| **AI Engine** | Google Gemini 2.5 Flash |
-| **Security Scanners** | Trivy, Semgrep, Gitleaks |
-
----
-
-## 📜 Setup & Installation
-
-### 1. Prerequisites
-- **Node.js**: v18 or higher.
-- **Appwrite**: Active project with API Keys and Database ID.
-- **Gemini API Key**: For Echo AI features.
-
-### 2. Installation
-```bash
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-cd backend
-npm install
-```
-
-### 3. Running the App
-**Frontend:** `npm run dev` (from root)  
-**Backend:** `npm run dev` (from /backend)
-
----
-
-## 📜 License
-Distributed under the MIT License.
+*Built for modern DevSecOps teams who want to move fast without breaking security.*

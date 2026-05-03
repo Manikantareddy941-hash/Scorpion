@@ -1,0 +1,70 @@
+{
+  "name": "scorpion-security",
+  "displayName": "SCORPION Security",
+  "description": "AI-powered security scanning and remediation",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Security"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "scorpion.scanWorkspace",
+        "title": "SCORPION: Scan Workspace"
+      },
+      {
+        "command": "scorpion.fixWithAI",
+        "title": "SCORPION: Fix with AI"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "scorpion-sidebar",
+          "title": "SCORPION",
+          "icon": "$(shield)"
+        }
+      ]
+    },
+    "views": {
+      "scorpion-sidebar": [
+        {
+          "id": "scorpion.findings",
+          "name": "Security Findings"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SCORPION",
+      "properties": {
+        "scorpion.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:3001",
+          "description": "SCORPION backend URL"
+        },
+        "scorpion.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "SCORPION API key"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.14.6",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.0.2"
+  }
+}

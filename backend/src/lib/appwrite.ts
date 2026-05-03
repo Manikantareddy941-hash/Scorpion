@@ -32,6 +32,8 @@ export const COLLECTIONS = {
   FINDING_RESOLUTIONS: 'finding_resolutions',
   PROJECTS: 'projects',
   PASSWORD_RESETS: 'password_resets',
+  INCIDENTS: 'incidents',
+  COMPLIANCE_CONTROLS: 'compliance_controls',
 };
 
 export { ID, Query };
