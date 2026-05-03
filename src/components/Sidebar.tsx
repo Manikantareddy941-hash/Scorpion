@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight, Layout } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight, Layout, Clock } from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,6 +15,7 @@ const navItems = [
   { icon: Layout, label: 'Repositories', path: '/repos' },
   { icon: Users, label: 'Teams', path: '/teams' },
   { icon: Bell, label: 'Alerts', path: '/alerts' },
+  { icon: Clock, label: 'Audit Log', path: '/audit' },
 ];
 
 const settingsItem = { icon: Settings, label: 'Settings', path: '/settings' };

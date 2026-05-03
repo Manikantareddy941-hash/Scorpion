@@ -7,6 +7,7 @@ import { deploymentBlocks, scansTotal } from '../services/metrics';
 import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
 import axios from 'axios';
+import { auditLog } from '../services/auditService';
 
 export interface ArgoCDSyncPayload {
   app: string;
@@ -84,6 +85,19 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
         criticalCount
       });
       logRollbackTriggered(payload.app, payload.revision);
+      
+      await auditLog({
+        action: 'rollback.triggered',
+        actor: 'system',
+        actorEmail: 'system@scorpion',
+        resource: 'deployment',
+        resourceId: payload.revision,
+        details: { 
+          app: payload.app, 
+          image: payload.image, 
+          criticalCount 
+        }
+      });
       
       // 5. Alert via Slack (if configured)
       if (process.env.SLACK_WEBHOOK_URL) {
