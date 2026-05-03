@@ -21,6 +21,7 @@ import ScanResults from './pages/ScanResults';
 import AIChat from './components/AIChat';
 import { Shield } from 'lucide-react';
 import AuthCallback from './pages/AuthCallback';
+import AuditLog from './pages/AuditLog';
 import Footer from './components/Footer';
 import NetworkErrorPanel from './components/NetworkErrorPanel';
 import { useEffect, useState } from 'react';
@@ -113,6 +114,7 @@ function App() {
             <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />
+            <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
