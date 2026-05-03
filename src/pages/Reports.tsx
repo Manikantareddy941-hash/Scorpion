@@ -392,6 +392,8 @@ export default function Reports() {
             const repo = repos[scan?.repo_id] || {};
             const repoUrl = repo.repo_url || repo.url || '';
 
+            console.log('[SBOM Debug]', { repoUrl, repo, scan });
+
             if (!repoUrl) throw new Error('Repository URL not found for this scan.');
 
             const params = new URLSearchParams({ format });
@@ -923,22 +925,27 @@ export default function Reports() {
                                     </button>
 
                                     {/* SBOM Export */}
-                                    <button
-                                        onClick={() => handleExportSBOM('json')}
-                                        className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[#4ade80] rounded-xl transition-all group hover:bg-[#4ade80]/5"
-                                    >
+                                    <div className="flex flex-col items-center text-center p-8 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[#4ade80] rounded-xl transition-all group hover:bg-[#4ade80]/5">
                                         <div className="w-16 h-16 bg-[#4ade80]/10 text-[#4ade80] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                                             <Package className="w-8 h-8" />
                                         </div>
-                                        <h3 className="text-[14px] font-black text-[#4ade80] uppercase tracking-widest italic mb-2">SBOM (.json)</h3>
-                                        <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed">CycloneDX bill of materials for all dependencies.</p>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleExportSBOM('csv'); }}
-                                            className="mt-4 px-3 py-1 border border-[#4ade80]/30 rounded-lg text-[9px] font-black uppercase tracking-widest text-[#4ade80]/70 hover:text-[#4ade80] hover:border-[#4ade80] transition-all"
-                                        >
-                                            or CSV
-                                        </button>
-                                    </button>
+                                        <h3 className="text-[14px] font-black text-[#4ade80] uppercase tracking-widest italic mb-2">SBOM</h3>
+                                        <p className="text-[11px] text-[var(--text-secondary)] font-medium leading-relaxed mb-4">CycloneDX bill of materials for all dependencies.</p>
+                                        <div className="flex gap-2 mt-auto">
+                                            <button
+                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExportSBOM('json'); }}
+                                                className="px-4 py-2 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#4ade80] hover:bg-[#4ade80] hover:text-black transition-all"
+                                            >
+                                                JSON
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleExportSBOM('csv'); }}
+                                                className="px-4 py-2 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-lg text-[10px] font-black uppercase tracking-widest text-[#4ade80] hover:bg-[#4ade80] hover:text-black transition-all"
+                                            >
+                                                CSV
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="mt-6 flex justify-start flex-shrink-0 pt-4">
                                     <button

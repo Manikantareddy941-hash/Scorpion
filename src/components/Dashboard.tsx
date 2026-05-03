@@ -5,13 +5,15 @@ import { useTheme } from '../contexts/ThemeContext';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
   LogOut, Shield, Settings, ChevronDown, Activity, ListTodo, AlertCircle,
-  ShieldAlert, ShieldCheck, ShieldX, Zap, ArrowRight, Gavel, Sun, Moon, Eye, Cloud, Waves, Bug, Wind, GitCompare, CheckCircle, TrendingUp, ArrowLeftRight
+  ShieldAlert, ShieldCheck, ShieldX, Zap, ArrowRight, Gavel, Sun, Moon, Eye, Cloud, Waves, Bug, Wind, GitCompare, CheckCircle, TrendingUp, ArrowLeftRight,
+  XCircle, GitBranch, Monitor, ExternalLink
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip,
   RadialBarChart, RadialBar, AreaChart, Area
 } from 'recharts';
 import { Client } from 'appwrite';
+import axios from 'axios';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 import TrendChart from './TrendChart';
 
@@ -19,14 +21,14 @@ const SecurityRadarChart = memo(({ data, isSidebarCollapsed }: { data: any[], is
   <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="99%" height="100%" minWidth={1} minHeight={1}>
     <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
       <PolarGrid stroke="var(--border-subtle)" strokeDasharray="3 3" />
-      <PolarAngleAxis 
-        dataKey="axis" 
-        tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 'bold' }} 
+      <PolarAngleAxis
+        dataKey="axis"
+        tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 'bold' }}
       />
-      <PolarRadiusAxis 
-        angle={30} 
-        domain={[0, 100]} 
-        tick={false} 
+      <PolarRadiusAxis
+        angle={30}
+        domain={[0, 100]}
+        tick={false}
       />
       <Radar
         name="Observed"
@@ -36,9 +38,9 @@ const SecurityRadarChart = memo(({ data, isSidebarCollapsed }: { data: any[], is
         fillOpacity={0.6}
         isAnimationActive={false}
       />
-      <Tooltip 
-        contentStyle={{ 
-          background: 'var(--bg-card)', 
+      <Tooltip
+        contentStyle={{
+          background: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
           borderRadius: '12px',
           fontSize: '10px',
@@ -62,14 +64,18 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   const [latestVulnerabilities, setLatestVulnerabilities] = useState<any[]>([]);
   const [prevScan, setPrevScan] = useState<any | null>(null);
   const [prevVulnerabilities, setPrevVulnerabilities] = useState<any[]>([]);
+  const [repositories, setRepositories] = useState<any[]>([]);
 
   // Compliance Widget State
   const [complianceScore, setComplianceScore] = useState<number>(100);
   const [complianceTrend, setComplianceTrend] = useState<any[]>([{ day: 'A', score: 100 }, { day: 'B', score: 100 }]);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingCompliance, setLoadingCompliance] = useState(false);
+  const [recentScans, setRecentScans] = useState<any[]>([]);
+  const [incidents, setIncidents] = useState<any[]>([]);
+  const [loadingCompliance, setLoadingCompliance] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const securityScore = Math.max(0, 100 - ((latestScan?.criticalCount ?? 0) * 10) - ((latestScan?.highCount ?? 0) * 5));
 
@@ -84,7 +90,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
     { label: 'Security', value: `${securityScore}%`, icon: Zap, color: '#00ffa3' },
   ];
 
-  const threatData = useMemo(() => [
+  const threatData = [
     { axis: 'Critical', Observed: latestScan?.criticalCount ?? 0 },
     { axis: 'High', Observed: latestScan?.highCount ?? 0 },
     { axis: 'Medium', Observed: latestScan?.mediumCount ?? 0 },
@@ -93,12 +99,11 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
     { axis: 'Vulnerabilities', Observed: (latestScan?.criticalCount ?? 0) + (latestScan?.highCount ?? 0) + (latestScan?.mediumCount ?? 0) + (latestScan?.lowCount ?? 0) },
     { axis: 'Code Smells', Observed: latestScan?.codeSmellCount ?? 0 },
     { axis: 'Security', Observed: securityScore },
-  ], [latestScan, securityScore]);
+  ];
 
-  const hasFetched = useRef(false);
 
   const fingerprint = (v: any) => `${v.tool}-${v.file}-${v.line}-${v.severity}`;
-  
+
   const scanDelta = useMemo(() => {
     if (!latestScan) return null;
     if (!prevScan) return { noPrev: true, newFindings: [], fixedFindings: [] };
@@ -118,11 +123,13 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 
   useEffect(() => {
     setMounted(true);
-    if (hasFetched.current) return;
-    hasFetched.current = true;
 
     const init = async () => {
-      await Promise.all([fetchLatestScan(), fetchCompliance()]);
+      await Promise.all([
+        fetchLatestScan(),
+        fetchCompliance(),
+        fetchRepositories()
+      ]);
       setLastRefreshed(new Date());
       setLoading(false);
     };
@@ -135,89 +142,159 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
       .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 
+    let realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
+
     const subscription = client.subscribe(
       `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`,
       (response) => {
         console.log('Realtime Dashboard Update:', response);
-        // re-fetch latest scan and compliance when any change occurs in Scans collection
-        fetchLatestScan();
-        fetchCompliance();
+        if (realtimeDebounce) clearTimeout(realtimeDebounce);
+        realtimeDebounce = setTimeout(() => {
+          fetchLatestScan();
+          fetchCompliance();
+          fetchRepositories();
+        }, 2000);
       }
     );
 
     return () => {
       subscription();
+      if (realtimeDebounce) clearTimeout(realtimeDebounce);
     };
   }, []);
 
   const handleManualRefresh = async () => {
+    if (refreshing) return;
     setRefreshing(true);
-    await Promise.all([fetchLatestScan(), fetchCompliance()]);
-    setLastRefreshed(new Date());
-    setRefreshing(false);
+    try {
+      // Step 1: Visual reset to 0 to show activity
+      setLatestScan((prev: any) => prev ? {
+        ...prev,
+        criticalCount: 0, highCount: 0, mediumCount: 0, lowCount: 0,
+        bugCount: 0, codeSmellCount: 0
+      } : null);
+
+      await Promise.all([
+        fetchLatestScan(),
+        fetchCompliance(),
+        fetchRepositories()
+      ]);
+      setLastRefreshed(new Date());
+      setRefreshKey(k => k + 1);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const fetchLatestScan = async () => {
     try {
-      console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
-      if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
       const response = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-        Query.equal('status', 'completed'),
-        Query.orderDesc('startedAt'),
+        Query.orderDesc('$createdAt'),
         Query.limit(2)
       ]);
-      
-      if (response.documents.length > 0) {
-        const scan = response.documents[0];
 
-        // Ensure source of truth by querying exact vulnerabilities instead of taking old scan cached data
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
-        if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
-        const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-            Query.equal('scanId', scan.$id),
-            Query.limit(1000)
+      if (response.documents.length === 0) return;
+
+      const scan = response.documents[0];
+
+      const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+        Query.equal('scanId', scan.$id),
+        Query.limit(1000)
+      ]);
+
+      let critical = 0, high = 0, medium = 0, low = 0, bugs = 0, codeSmells = 0;
+
+      vulnsRes.documents.forEach((v: any) => {
+        const sev = v.severity?.toLowerCase();
+        if (sev === 'critical') critical++;
+        else if (sev === 'high') high++;
+        else if (sev === 'medium') medium++;
+        else if (sev === 'low') low++;
+
+        const tool = v.tool?.toLowerCase();
+        if (tool === 'semgrep' || tool === 'trivy') bugs++;
+        if (tool === 'gitleaks') codeSmells++;
+      });
+
+      // Try to extract counts from details JSON if root fields are 0
+      let detailsData: any = {};
+      try {
+        if (scan.details) {
+          detailsData = JSON.parse(scan.details);
+          // If the DB totals are valid (>0), we can use them as a fallback/verification
+          if (detailsData.critical_count > critical) critical = detailsData.critical_count;
+          if (detailsData.high_count > high) high = detailsData.high_count;
+        }
+      } catch (e) { }
+
+      // Force new object reference so React detects the change
+      setLatestScan({
+        ...scan,
+        criticalCount: critical,
+        highCount: high,
+        mediumCount: medium,
+        lowCount: low,
+        bugCount: bugs,
+        codeSmellCount: codeSmells,
+        _refreshedAt: Date.now() // forces new reference every time
+      });
+      setLatestVulnerabilities([...vulnsRes.documents]);
+
+      // Fetch recent scans for history
+      setRecentScans(response.documents.slice(0, 5));
+
+      // Fetch latest incidents
+      fetchIncidents();
+
+      if (response.documents.length > 1) {
+        const prev = response.documents[1];
+
+        // Count previous vulnerabilities for delta
+        const prevVulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+          Query.equal('scanId', prev.$id),
+          Query.limit(1000)
         ]);
 
-        console.log(`[Dashboard] Selected ScanId: ${scan.$id}`);
-        console.log(`[Dashboard] Vulnerabilities Count: ${vulnsRes.total}`);
+        let pCrit = 0, pHigh = 0, pMed = 0, pLow = 0, pBugs = 0, pSmells = 0;
+        prevVulnsRes.documents.forEach((v: any) => {
+          const sev = v.severity?.toLowerCase();
+          if (sev === 'critical') pCrit++;
+          else if (sev === 'high') pHigh++;
+          else if (sev === 'medium') pMed++;
+          else if (sev === 'low') pLow++;
 
-        let critical = 0, high = 0, medium = 0, low = 0, bugs = 0, codeSmells = 0;
-        vulnsRes.documents.forEach((v: any) => {
-            if (v.severity === 'critical') critical++;
-            else if (v.severity === 'high') high++;
-            else if (v.severity === 'medium') medium++;
-            else if (v.severity === 'low') low++;
-
-            if (v.tool === 'semgrep' || v.tool === 'trivy') bugs++;
-            if (v.tool === 'gitleaks') codeSmells++;
+          const tool = v.tool?.toLowerCase();
+          if (tool === 'semgrep' || tool === 'trivy') pBugs++;
+          if (tool === 'gitleaks') pSmells++;
         });
 
-        setLatestScan({
-            ...scan,
-            criticalCount: critical,
-            highCount: high,
-            mediumCount: medium,
-            lowCount: low,
-            bugCount: bugs,
-            codeSmellCount: codeSmells
+        setPrevScan({
+          ...prev,
+          criticalCount: pCrit,
+          highCount: pHigh,
+          mediumCount: pMed,
+          lowCount: pLow,
+          bugCount: pBugs,
+          codeSmellCount: pSmells
         });
-        setLatestVulnerabilities(vulnsRes.documents);
-
-        if (response.documents.length > 1) {
-          const prev = response.documents[1];
-          setPrevScan(prev);
-          const prevVulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-              Query.equal('scanId', prev.$id),
-              Query.limit(1000)
-          ]);
-          setPrevVulnerabilities(prevVulnsRes.documents);
-        } else {
-          setPrevScan(null);
-          setPrevVulnerabilities([]);
-        }
+        setPrevVulnerabilities([...prevVulnsRes.documents]);
+      } else {
+        setPrevScan(null);
+        setPrevVulnerabilities([]);
       }
     } catch (error) {
       console.error('Error fetching latest scan:', error);
+    }
+  };
+
+  const fetchRepositories = async () => {
+    try {
+      const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.limit(100)
+      ]);
+      setRepositories(response.documents);
+    } catch (err) {
+      console.error('[FETCH] Error fetching repos:', err);
     }
   };
 
@@ -229,8 +306,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
       if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
       const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-        Query.greaterThanEqual('startedAt', thirtyDaysAgo.toISOString()),
-        Query.orderDesc('startedAt'),
+        Query.greaterThanEqual('$createdAt', thirtyDaysAgo.toISOString()),
+        Query.orderDesc('$createdAt'),
         Query.limit(100)
       ]);
 
@@ -252,11 +329,11 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       ]);
 
       const failedScanIds = new Set(vulnsRes.documents.map(f => f.scanId));
-      
+
       const total = scansRes.documents.length;
       const failed = failedScanIds.size;
       const score = Math.max(0, Math.round(((total - failed) / total) * 100));
-      
+
       setComplianceScore(score);
 
       setComplianceTrend([
@@ -270,6 +347,15 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       console.error('Error fetching compliance:', error);
     } finally {
       setLoadingCompliance(false);
+    }
+  };
+
+  const fetchIncidents = async () => {
+    try {
+      const res = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/incidents?status=open`);
+      setIncidents(res.data.documents || []);
+    } catch (err) {
+      console.error('[FETCH] Incidents error:', err);
     }
   };
 
@@ -304,7 +390,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-end items-center h-16">
             <div className="flex items-center gap-6">
-              <div style={{position:'relative'}}>
+              <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setShowThemeMenu(!showThemeMenu)}
                   className="p-2 hover:bg-white/10 rounded-xl transition-all text-[var(--text-secondary)] border border-transparent hover:border-[var(--border-subtle)] flex items-center gap-1 active:scale-95 z-50 relative"
@@ -318,12 +404,12 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                 </button>
 
                 {showThemeMenu && (
-                  <div style={{position:'absolute', top:'50px', right:'0', background:'var(--bg-secondary)', borderRadius:'8px', padding:'8px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', zIndex:9999}}>
-                    <button onClick={() => { setTheme('light'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Sun size={18}/></button>
-                    <button onClick={() => { setTheme('dark'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Moon size={18}/></button>
-                    <button onClick={() => { setTheme('eye-protection'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Eye size={18}/></button>
-                    <button onClick={() => { setTheme('snow-light'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Cloud size={18}/></button>
-                    <button onClick={() => { setTheme('underwater'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Waves size={18}/></button>
+                  <div style={{ position: 'absolute', top: '50px', right: '0', background: 'var(--bg-secondary)', borderRadius: '8px', padding: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', zIndex: 9999 }}>
+                    <button onClick={() => { setTheme('light'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Sun size={18} /></button>
+                    <button onClick={() => { setTheme('dark'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Moon size={18} /></button>
+                    <button onClick={() => { setTheme('eye-protection'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Eye size={18} /></button>
+                    <button onClick={() => { setTheme('snow-light'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Cloud size={18} /></button>
+                    <button onClick={() => { setTheme('underwater'); setShowThemeMenu(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><Waves size={18} /></button>
                   </div>
                 )}
               </div>
@@ -384,6 +470,14 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       </nav>
 
       <main className="flex-1 max-w-full mx-auto py-8 w-full overflow-y-auto pl-0 pr-4 sm:pr-6 lg:pr-8">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <CIGateSummaryCard scans={recentScans} />
+          <MetricCard icon={Shield} label="Total Assets" value={repositories.length} trend="+2 New" color="#0ea5e9" />
+          <MetricCard icon={Activity} label="Scans (24h)" value={recentScans.filter(s => new Date(s.$createdAt) > new Date(Date.now() - 86400000)).length} trend="Active" color="#f59e0b" />
+          <MetricCard icon={Gavel} label="Policy Pass" value={`${complianceScore}%`} trend={trendIsUp ? 'UP ▲' : 'DOWN ▼'} color={complianceColor} />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
           {/* Main Top Grid */}
           <div className="lg:col-span-12">
@@ -410,12 +504,18 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                         <button
                           onClick={handleManualRefresh}
                           disabled={refreshing}
-                          className="flex items-center gap-2 bg-[var(--status-success)]/10 px-3 py-1.5 rounded-lg border border-[var(--status-success)]/20 hover:bg-[var(--status-success)]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/refresh"
+                          className="flex items-center gap-2 bg-[var(--status-success)]/10 px-3 py-1.5 rounded-lg border border-[var(--status-success)]/20 hover:bg-[var(--status-success)]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <div className={`w-1.5 h-1.5 bg-[var(--status-success)] rounded-full ${refreshing ? 'animate-ping' : ''}`} />
+                          <div className={`w-1.5 h-1.5 bg-[var(--status-success)] rounded-full ${refreshing ? 'animate-ping' : 'animate-pulse'}`} />
                           <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">
-                            {refreshing ? 'Refreshing...' : 'Manual Refresh'}
+                            {refreshing ? 'Syncing...' : 'Manual Refresh'}
                           </span>
+                          {refreshing && (
+                            <svg className="w-3 h-3 text-[var(--status-success)] animate-spin" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -430,7 +530,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                         </div>
                       ) : mounted && (
                         <div style={{ width: '100%', height: 350 }}>
-                          <SecurityRadarChart data={threatData} isSidebarCollapsed={isSidebarCollapsed} />
+                          <SecurityRadarChart key={refreshKey} data={threatData} isSidebarCollapsed={isSidebarCollapsed} />
                         </div>
                       )}
                     </div>
@@ -455,20 +555,20 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
               </div>
             </div>
           </div>
-          
+
           {/* Scan Delta Widget */}
           <div className="lg:col-span-8">
             <div className="premium-card p-6 md:p-8 relative overflow-hidden group flex flex-col h-full min-h-[300px]">
               <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-10 transition-opacity">
                 <ArrowLeftRight className="w-32 h-32" />
               </div>
-              
+
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex items-center gap-2 mb-6">
                   <GitCompare className="w-5 h-5 text-[var(--accent-primary)]" />
                   <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Scan Delta</h2>
                 </div>
-                
+
                 {!scanDelta ? (
                   <div className="flex-1 flex items-center justify-center text-[var(--text-secondary)] text-sm italic">Loading delta...</div>
                 ) : scanDelta.noPrev ? (
@@ -492,12 +592,12 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           <div key={i} className="flex items-center gap-2 bg-[var(--bg-primary)]/50 p-2 rounded border border-[var(--border-subtle)]">
                             <span className="bg-[#ff5252]/10 text-[#ff5252] text-[9px] font-black px-1.5 py-0.5 rounded uppercase">NEW</span>
                             <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate">{v.tool}</span>
-                             <span className="text-[10px] text-[var(--text-primary)] truncate flex-1" title={v.file || v.file_path}>{(v.file || v.file_path)?.split('/').pop() ?? ''}</span>
+                            <span className="text-[10px] text-[var(--text-primary)] truncate flex-1" title={v.file || v.file_path}>{(v.file || v.file_path)?.split('/').pop() ?? ''}</span>
                           </div>
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* RIGHT: Fixed Issues */}
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center gap-2">
@@ -509,7 +609,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           <div key={i} className="flex items-center gap-2 bg-[var(--bg-primary)]/50 p-2 rounded border border-[var(--border-subtle)]">
                             <span className="bg-[#00ffa3]/10 text-[#00ffa3] text-[9px] font-black px-1.5 py-0.5 rounded uppercase">FIXED</span>
                             <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate">{v.tool}</span>
-                             <span className="text-[10px] text-[var(--text-primary)] truncate flex-1 line-through opacity-75" title={v.file || v.file_path}>{(v.file || v.file_path)?.split('/').pop() ?? ''}</span>
+                            <span className="text-[10px] text-[var(--text-primary)] truncate flex-1 line-through opacity-75" title={v.file || v.file_path}>{(v.file || v.file_path)?.split('/').pop() ?? ''}</span>
                           </div>
                         ))}
                       </div>
@@ -526,7 +626,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
               <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-10 transition-opacity">
                 <Gavel className="w-32 h-32" />
               </div>
-              
+
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Compliance Health</h2>
@@ -538,7 +638,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 
                 {loadingCompliance ? (
                   <div className="flex items-center justify-center py-12">
-                     <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] animate-pulse tracking-widest">Evaluating Checks...</span>
+                    <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] animate-pulse tracking-widest">Evaluating Checks...</span>
                   </div>
                 ) : (
                   <>
@@ -546,8 +646,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                       {mounted && (
                         <div style={{ width: '100%', height: 192 }}>
                           <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="99%" height="100%" minWidth={1} minHeight={1}>
-                            <RadialBarChart 
-                              cx="50%" cy="50%" innerRadius="70%" outerRadius="100%" 
+                            <RadialBarChart
+                              cx="50%" cy="50%" innerRadius="70%" outerRadius="100%"
                               barSize={15} data={gaugeData} startAngle={180} endAngle={0}
                             >
                               <RadialBar background={false} dataKey="value" cornerRadius={10} />
@@ -566,23 +666,23 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-[var(--border-subtle)]/50">
-                       <div className="flex items-center justify-between mb-2">
-                          <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
-                            Activity Trend vs Target
-                          </span>
-                          <span className="text-[9px] font-black uppercase tracking-widest italic pt-0.5" style={{ color: trendIsUp ? 'var(--status-success)' : 'var(--status-danger)' }}>
-                            {trendIsUp ? 'UP ▲' : 'DOWN ▼'}
-                          </span>
-                       </div>
-                       <div className="h-10 w-full overflow-hidden opacity-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
+                          Activity Trend vs Target
+                        </span>
+                        <span className="text-[9px] font-black uppercase tracking-widest italic pt-0.5" style={{ color: trendIsUp ? 'var(--status-success)' : 'var(--status-danger)' }}>
+                          {trendIsUp ? 'UP ▲' : 'DOWN ▼'}
+                        </span>
+                      </div>
+                      <div className="h-10 w-full overflow-hidden opacity-50">
                         {mounted && (
                           <div style={{ width: '100%', height: 40 }}>
                             <ResponsiveContainer key={isSidebarCollapsed ? 'collapsed' : 'expanded'} width="99%" height="100%" minWidth={1} minHeight={1}>
                               <AreaChart data={complianceTrend}>
                                 <defs>
                                   <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={complianceColor} stopOpacity={0.8}/>
-                                    <stop offset="95%" stopColor={complianceColor} stopOpacity={0}/>
+                                    <stop offset="5%" stopColor={complianceColor} stopOpacity={0.8} />
+                                    <stop offset="95%" stopColor={complianceColor} stopOpacity={0} />
                                   </linearGradient>
                                 </defs>
                                 <Area type="monotone" dataKey="score" stroke={complianceColor} fillOpacity={1} fill="url(#colorScore)" strokeWidth={2} isAnimationActive={true} />
@@ -590,7 +690,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                             </ResponsiveContainer>
                           </div>
                         )}
-                       </div>
+                      </div>
                     </div>
                   </>
                 )}
@@ -598,15 +698,215 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
             </div>
           </div>
 
-          {/* CVE Trend Charts */}
-          <div className="lg:col-span-12">
-              <div className="h-[400px]">
-                  <TrendChart />
+          {/* Runtime, Incidents & History Row */}
+          <div className="lg:col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Live Threats */}
+            <div className="lg:col-span-4">
+              <div className="premium-card p-6 md:p-8 relative overflow-hidden group flex flex-col h-full bg-red-500/5 border-red-500/20">
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <ShieldAlert className="w-24 h-24 text-[var(--status-error)]" />
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Live Threats</h2>
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Runtime Anomalies</p>
+                    </div>
+                    <div className="bg-red-500/20 px-2 py-1 rounded text-[9px] font-black text-red-400 animate-pulse">LIVE</div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {incidents.filter(i => i.source === 'falco').length === 0 ? (
+                      <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-[var(--border-subtle)] rounded-2xl opacity-50">
+                        <ShieldCheck className="w-8 h-8 text-[var(--status-success)] mb-2" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">No active threats</span>
+                      </div>
+                    ) : (
+                      incidents.filter(i => i.source === 'falco').slice(0, 3).map((inc) => (
+                        <div key={inc.$id} className="bg-[var(--bg-primary)]/60 p-4 rounded-xl border border-red-500/10 hover:border-red-500/30 transition-all">
+                          <div className="flex items-start justify-between mb-2">
+                            <span className="text-[10px] font-black text-red-400 uppercase tracking-tighter truncate max-w-[120px]">{inc.title || inc.rule}</span>
+                            <span className="text-[8px] font-bold bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded">{inc.severity || inc.priority}</span>
+                          </div>
+                          <p className="text-[9px] text-[var(--text-secondary)] line-clamp-1 font-mono">{inc.description || inc.output}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
+            </div>
+
+            {/* Open Incidents */}
+            <div className="lg:col-span-4">
+              <div className="premium-card p-6 md:p-8 relative overflow-hidden group flex flex-col h-full bg-[var(--accent-primary)]/5 border-[var(--accent-primary)]/20">
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <ListTodo className="w-24 h-24 text-[var(--accent-primary)]" />
+                </div>
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Active Incidents</h2>
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Pending Resolution</p>
+                    </div>
+                    <div className="bg-[var(--accent-primary)]/20 px-2 py-1 rounded text-[9px] font-black text-[var(--accent-primary)]">{incidents.length} OPEN</div>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    {incidents.length === 0 ? (
+                      <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-[var(--border-subtle)] rounded-2xl opacity-50">
+                        <CheckCircle className="w-8 h-8 text-[var(--status-success)] mb-2" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">All clear</span>
+                      </div>
+                    ) : (
+                      incidents.slice(0, 3).map((inc) => (
+                        <div key={inc.$id} className="bg-[var(--bg-primary)]/60 p-4 rounded-xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 transition-all group/inc">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-black text-[var(--text-primary)] uppercase truncate italic">{inc.title}</span>
+                            <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">{inc.source}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[8px] font-bold text-red-400 uppercase tracking-widest">{inc.severity}</span>
+                            <button className="text-[8px] font-black text-[var(--accent-primary)] uppercase opacity-0 group-hover/inc:opacity-100 transition-opacity">Acknowledge</button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Scan Registry */}
+            <div className="lg:col-span-4">
+              <div className="premium-card p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Scan Registry</h2>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Recent</span>
+                </div>
+                <div className="flex flex-col gap-2 flex-1">
+                  {recentScans.slice(0, 4).map((scan) => (
+                    <ScanHistoryRow key={scan.$id} scan={scan} compact={true} />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
         </div>
       </main>
+    </div>
+  );
+}
+
+function CIGateSummaryCard({ scans }: { scans: any[] }) {
+  const ciScans = scans.filter(s => s.scanType === 'ci_pipeline' || s.scan_type === 'ci_pipeline');
+  const passed = ciScans.filter(s => s.gateStatus === 'passed').length;
+  const failed = ciScans.filter(s => s.gateStatus === 'failed').length;
+  const rate = ciScans.length ? Math.round((passed / ciScans.length) * 100) : 0;
+
+  return (
+    <div className="premium-card p-5 group transition-all flex flex-col justify-between h-full min-h-[140px] relative overflow-hidden">
+      <div className="absolute top-0 right-0 p-4 opacity-[0.05] group-hover:scale-110 transition-transform">
+        <GitBranch className="w-16 h-16" />
+      </div>
+      <div className="relative z-10 h-full flex flex-col justify-between">
+        <div>
+          <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-1">CI Gate Integrity</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black italic tracking-tighter text-[var(--text-primary)]">{rate}%</span>
+            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">Success Rate</span>
+          </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
+          <div className="flex gap-4">
+            <div>
+              <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Passed</p>
+              <p className="text-sm font-black text-[var(--status-success)]">{passed}</p>
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Blocked</p>
+              <p className="text-sm font-black text-[var(--status-error)]">{failed}</p>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-full border-2 border-[var(--border-subtle)] flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full" style={{
+              background: `conic-gradient(var(--status-success) ${rate}%, transparent 0)`
+            }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScanHistoryRow({ scan, compact = false }: { scan: any, compact?: boolean }) {
+  const gateIcon: Record<string, any> = {
+    passed: <span className="text-[var(--status-success)] flex items-center gap-1"><CheckCircle className="w-3 h-3" /> PASS</span>,
+    failed: <span className="text-[var(--status-error)] flex items-center gap-1"><XCircle className="w-3 h-3" /> FAIL</span>,
+    not_applicable: <span className="text-[var(--text-secondary)]">— N/A</span>
+  };
+
+  const scanTypeBadge: Record<string, any> = {
+    ci_pipeline: { label: 'CI', color: 'rgba(99, 102, 241, 0.1)', textColor: '#818cf8', icon: GitBranch },
+    gitops_deploy: { label: 'K8S', color: 'rgba(16, 185, 129, 0.1)', textColor: '#10b981', icon: Cloud },
+    ide: { label: 'IDE', color: 'rgba(14, 165, 233, 0.1)', textColor: '#38bdf8', icon: Monitor },
+    scheduled: { label: 'CRON', color: 'rgba(245, 158, 11, 0.1)', textColor: '#fbbf24', icon: Activity },
+    manual: { label: 'USER', color: 'rgba(107, 114, 128, 0.1)', textColor: '#9ca3af', icon: Shield }
+  };
+
+  const type = scan.scanType || scan.scan_type || 'manual';
+  const badge = scanTypeBadge[type] || scanTypeBadge.manual;
+  const status = scan.gateStatus || 'not_applicable';
+  const Icon = badge.icon;
+
+  return (
+    <div className="flex items-center gap-4 bg-[var(--bg-primary)]/40 p-4 rounded-xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 transition-all group/row">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: badge.color }}>
+        <Icon className="w-5 h-5" style={{ color: badge.textColor }} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest" style={{ backgroundColor: badge.color, color: badge.textColor }}>
+            {badge.label}
+          </span>
+          <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase truncate italic tracking-tight">
+            {scan.repoUrl?.split('/').pop()?.replace('.git', '') || 'Unknown Repo'}
+          </h3>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-bold text-[var(--text-secondary)] flex items-center gap-1 italic">
+            <Activity className="w-3 h-3" />
+            {new Date(scan.$createdAt).toLocaleString()}
+          </span>
+          {scan.prUrl && (
+            <a href={scan.prUrl} target="_blank" rel="noreferrer" className="text-[10px] font-black text-[var(--accent-primary)] hover:underline flex items-center gap-1 italic">
+              <ExternalLink className="w-3 h-3" /> PR #{scan.prNumber}
+            </a>
+          )}
+        </div>
+      </div>
+
+      {!compact && (
+        <div className="hidden md:flex items-center gap-6 px-4">
+          <div className="text-center">
+            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1">Critical</p>
+            <p className="text-xs font-black text-[var(--status-error)]">{scan.criticalCount || 0}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1">High</p>
+            <p className="text-xs font-black text-[#ff8c00]">{scan.highCount || 0}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="shrink-0 text-right min-w-[80px]">
+        <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1 tracking-widest">Gate Result</p>
+        <div className="text-[10px] font-black italic tracking-tighter">
+          {gateIcon[status]}
+        </div>
+      </div>
     </div>
   );
 }

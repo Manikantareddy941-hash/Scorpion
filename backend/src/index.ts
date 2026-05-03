@@ -1,3 +1,4 @@
+import './services/tracer';
 import dotenv from "dotenv";
 dotenv.config();
 import express, { Request, Response, NextFunction } from 'express';
@@ -18,8 +19,11 @@ import repoRoutes from './routes/repoRoutes';
 import policyRoutes from './routes/policyRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import findingRoutes from './routes/findingRoutes';
+import metricsRoutes from './routes/metricsRoutes';
 import teamRoutes from './routes/teamRoutes';
 import ciRoutes from './routes/ciRoutes';
+import incidentRoutes from './routes/incidentRoutes';
+import complianceRoutes from './routes/complianceRoutes';
 import insightRoutes from './routes/insightRoutes';
 import userRoutes from './routes/userRoutes';
 import keyRoutes from './routes/keyRoutes';
@@ -30,9 +34,14 @@ import remediationRouter from './routes/remediation';
 import analyticsRoutes from './routes/analyticsRoutes';
 import alertRoutes from './routes/alerts';
 import vulnRoutes from './routes/vulnRoutes';
-import sbomRoutes from './routes/sbomRoutes';
+import sbomRouter from './routes/sbomRoute';
+import ideRoutes from './routes/ideRoutes';
+import gitopsRoutes from './routes/gitopsRoutes';
+import falcoRoutes from './routes/falcoRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
+import { createNodeMiddleware } from "@octokit/webhooks";
+import githubWebhooks from "./github/webhookHandler";
 
 // --- Startup Diagnostic ---
 console.log('🚀 [Startup] System Diagnostic Initiated');
@@ -107,6 +116,9 @@ app.use(cors({
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY']
 }));
+// --- GitHub Webhook (MUST be before express.json() for raw body access) ---
+app.use('/api/github/webhook', createNodeMiddleware(githubWebhooks, { path: '/api/github/webhook' }));
+
 app.use(express.json());
 
 // --- Rate Limiting ---
@@ -180,7 +192,13 @@ app.use('/api/remediation', remediationRouter);
 app.use('/api/vulns', authenticate, vulnRoutes);
 app.use('/api/analytics', authenticate, analyticsRoutes);
 app.use('/api/alerts', authenticate, alertRoutes);
-app.use('/api/sbom', authenticate, sbomRoutes);
+app.use('/api/sbom', authenticate, sbomRouter);
+app.use('/api/scan/ide', ideRoutes);
+app.use('/api/gitops', gitopsRoutes);
+app.use('/api/runtime', falcoRoutes);
+app.use('/api/incidents', incidentRoutes);
+app.use('/api/compliance', complianceRoutes);
+app.use('/metrics', metricsRoutes);
 
 // --- Initialization ---
 initScheduler();
