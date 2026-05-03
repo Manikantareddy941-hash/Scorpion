@@ -30,7 +30,9 @@ export default function Settings() {
 
     const [prefEmail, setPrefEmail] = useState(true);
     const [prefSlack, setPrefSlack] = useState(false);
-    const [prefWebhook, setPrefWebhook] = useState('');
+    const [prefDiscord, setPrefDiscord] = useState(false);
+    const [prefSlackWebhook, setPrefSlackWebhook] = useState('');
+    const [prefDiscordWebhook, setPrefDiscordWebhook] = useState('');
 
     const [apiKeys, setApiKeys] = useState<any[]>([]);
     const [repositories, setRepositories] = useState<any[]>([]);
@@ -68,7 +70,9 @@ export default function Settings() {
                 const prefs = prefResponse.documents;
                 setPrefEmail(prefs.some(p => p.channel === 'email' && p.enabled));
                 setPrefSlack(prefs.some(p => p.channel === 'slack' && p.enabled));
-                setPrefWebhook(prefs.find(p => p.channel === 'webhook')?.target || '');
+                setPrefDiscord(prefs.some(p => p.channel === 'discord' && p.enabled));
+                setPrefSlackWebhook(prefs.find(p => p.channel === 'slack')?.target_value || '');
+                setPrefDiscordWebhook(prefs.find(p => p.channel === 'discord')?.target_value || '');
             }
 
             // Fetch API Keys
@@ -150,9 +154,12 @@ export default function Settings() {
                 },
                 body: JSON.stringify({
                     preferences: [
-                        { channel: 'email', enabled: prefEmail, event_type: 'scan_completed' },
-                        { channel: 'slack', enabled: prefSlack, event_type: 'scan_completed' },
-                        { channel: 'webhook', target: prefWebhook, enabled: !!prefWebhook, event_type: 'scan_completed' }
+                        { channel: 'email',   enabled: prefEmail,                        event_type: 'scan_completed' },
+                        { channel: 'email',   enabled: prefEmail,                        event_type: 'critical_detected' },
+                        { channel: 'slack',   enabled: prefSlack && !!prefSlackWebhook,   event_type: 'scan_completed',    target_value: prefSlackWebhook },
+                        { channel: 'slack',   enabled: prefSlack && !!prefSlackWebhook,   event_type: 'critical_detected', target_value: prefSlackWebhook },
+                        { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'scan_completed',  target_value: prefDiscordWebhook },
+                        { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'critical_detected', target_value: prefDiscordWebhook },
                     ]
                 })
             });
@@ -415,6 +422,8 @@ export default function Settings() {
                             <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> Neural Alert Feeds
                         </h3>
                         <div className="space-y-6">
+
+                            {/* Email */}
                             <div className="flex items-center justify-between p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
                                 <div className="flex items-center gap-4">
                                     <div className="w-10 h-10 bg-[var(--accent-primary)]/10 rounded-xl flex items-center justify-center text-[var(--accent-primary)]">
@@ -422,7 +431,7 @@ export default function Settings() {
                                     </div>
                                     <div>
                                         <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">Direct Dispatch (Email)</p>
-                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Receive critical vectors to {profile.email}</p>
+                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Critical findings sent to {profile.email}</p>
                                     </div>
                                 </div>
                                 <button
@@ -433,26 +442,103 @@ export default function Settings() {
                                 </button>
                             </div>
 
-                            <div className="flex items-center justify-between p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-[var(--accent-secondary)]/10 rounded-xl flex items-center justify-center text-[var(--accent-secondary)]">
-                                        <Github className="w-5 h-5" />
+                            {/* Slack */}
+                            <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-[#4A154B]/40 rounded-xl flex items-center justify-center">
+                                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#E01E5A"/>
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">Slack Webhook</p>
+                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Instant critical alerts to your Slack channel</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">PR Interceptor (Slack)</p>
-                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Trigger alerts on security posture regression</p>
-                                    </div>
+                                    <button
+                                        onClick={() => setPrefSlack(!prefSlack)}
+                                        className={`w-12 h-6 rounded-full p-1 transition-colors ${prefSlack ? 'bg-[var(--status-success)]' : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)]'}`}
+                                    >
+                                        <div className={`w-4 h-4 rounded-full bg-white transition-transform ${prefSlack ? 'translate-x-6' : 'translate-x-0'}`} />
+                                    </button>
                                 </div>
-                                <button
-                                    onClick={() => setPrefSlack(!prefSlack)}
-                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${prefSlack ? 'bg-[var(--status-success)]' : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)]'}`}
-                                >
-                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${prefSlack ? 'translate-x-6' : 'translate-x-0'}`} />
-                                </button>
+                                {prefSlack && (
+                                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                        <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">
+                                            Slack Webhook URL
+                                        </label>
+                                        <input
+                                            type="url"
+                                            placeholder="https://hooks.slack.com/services/T.../B.../..."
+                                            value={prefSlackWebhook}
+                                            onChange={(e) => setPrefSlackWebhook(e.target.value)}
+                                            className="w-full px-5 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl font-mono text-[10px] outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] text-[var(--text-primary)] transition-all placeholder:text-[var(--text-secondary)]/40"
+                                        />
+                                        <p className="text-[9px] text-[var(--text-secondary)] italic">
+                                            Go to Slack → Apps → Incoming Webhooks → Add New Webhook
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="flex justify-end pt-4">
-                                <button onClick={handleSaveNotifications} className="btn-premium">Commit Preferences</button>
+                            {/* Discord */}
+                            <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-[#5865F2]/20 rounded-xl flex items-center justify-center">
+                                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#5865F2">
+                                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.015.04.037.05A19.9 19.9 0 0 0 6.204 21a.077.077 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.074.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">Discord Webhook</p>
+                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Push critical findings to your Discord server</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setPrefDiscord(!prefDiscord)}
+                                        className={`w-12 h-6 rounded-full p-1 transition-colors ${prefDiscord ? 'bg-[var(--status-success)]' : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)]'}`}
+                                    >
+                                        <div className={`w-4 h-4 rounded-full bg-white transition-transform ${prefDiscord ? 'translate-x-6' : 'translate-x-0'}`} />
+                                    </button>
+                                </div>
+                                {prefDiscord && (
+                                    <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                        <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">
+                                            Discord Webhook URL
+                                        </label>
+                                        <input
+                                            type="url"
+                                            placeholder="https://discord.com/api/webhooks/..."
+                                            value={prefDiscordWebhook}
+                                            onChange={(e) => setPrefDiscordWebhook(e.target.value)}
+                                            className="w-full px-5 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl font-mono text-[10px] outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] text-[var(--text-primary)] transition-all placeholder:text-[var(--text-secondary)]/40"
+                                        />
+                                        <p className="text-[9px] text-[var(--text-secondary)] italic">
+                                            Discord → Channel Settings → Integrations → Webhooks → New Webhook
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Critical-only notice */}
+                            <div className="flex items-center gap-3 px-4 py-3 bg-red-500/5 border border-red-500/20 rounded-xl">
+                                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                                <p className="text-[9px] font-black text-red-400 uppercase tracking-widest italic">
+                                    Critical findings trigger instant alerts — all other severities are batched in the daily digest
+                                </p>
+                            </div>
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={handleSaveNotifications}
+                                    disabled={updating}
+                                    className="btn-premium flex items-center gap-2"
+                                >
+                                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    Commit Preferences
+                                </button>
                             </div>
                         </div>
                     </section>
