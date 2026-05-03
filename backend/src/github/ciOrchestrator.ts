@@ -7,6 +7,7 @@ import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { logScanCompleted, logCIGateBlocked } from '../services/logEvents';
 import { scansTotal, ciGateDecisions, scanDuration, activeScans } from '../services/metrics';
 import { withSpan } from '../services/tracing';
+import { auditLog } from '../services/auditService';
 
 export interface CIJobOptions {
   owner: string;
@@ -97,6 +98,20 @@ export async function triggerCIScan(options: CIJobOptions) {
       criticalCount,
       highCount,
       timestamp: new Date().toISOString()
+    });
+
+    await auditLog({
+      action: passed ? 'scan.created' : 'gate.blocked',
+      actor: 'system',
+      actorEmail: 'system@scorpion',
+      resource: 'scan',
+      resourceId: options.sha,
+      details: { 
+        repo: options.repo, 
+        criticalCount, 
+        passed,
+        prNumber: options.prNumber 
+      }
     });
 
     console.log(`[CI] Scan completed for ${options.repo} (${options.sha}). Passed: ${passed}`);

@@ -4,6 +4,7 @@ import { logRuntimeThreat } from '../services/logEvents';
 import { runtimeThreats } from '../services/metrics';
 import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
+import { auditLog } from '../services/auditService';
 
 export interface FalcoEvent {
   rule: string;
@@ -57,6 +58,18 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       status: 'open',
       timestamp: event.time || new Date().toISOString(),
       correlated_scan_id: correlatedScanId
+    });
+
+    await auditLog({
+      action: 'incident.created',
+      actor: 'system',
+      actorEmail: 'system@scorpion',
+      resource: 'incident',
+      details: { 
+        rule: event.rule, 
+        priority: event.priority, 
+        image: containerImage 
+      }
     });
 
     // Loki Logging
