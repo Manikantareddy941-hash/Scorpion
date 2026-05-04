@@ -8,6 +8,7 @@ import {
     Clock, Terminal, Bug, AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 interface ScanResult {
     $id: string;
@@ -35,6 +36,7 @@ interface DashboardStats {
 }
 
 export default function SecurityDashboard() {
+    const { t } = useTranslation();
     const [results, setResults] = useState<ScanResult[]>([]);
     const [repos, setRepos] = useState<RepoMetric[]>([]);
     const [stats, setStats] = useState<DashboardStats>({
@@ -49,7 +51,7 @@ export default function SecurityDashboard() {
 
     useEffect(() => {
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 30000); // 30s polling
+        const interval = setInterval(fetchDashboardData, 30000);
         return () => clearInterval(interval);
     }, []);
 
@@ -58,8 +60,6 @@ export default function SecurityDashboard() {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
             const jwt = localStorage.getItem('appwrite_jwt');
 
-            // 1. Fetch repositories (still needed for list/distribution)
-            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
             if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
             const repoData = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
                 Query.limit(100)
@@ -67,7 +67,6 @@ export default function SecurityDashboard() {
             const repositories = repoData.documents as unknown as RepoMetric[];
             setRepos(repositories);
 
-            // 2. Fetch aggregate stats from backend (Source of Truth)
             const statsRes = await fetch(`${apiBase}/api/reports/stats?scope=global`, {
                 headers: { 'Authorization': `Bearer ${jwt}` }
             });
@@ -78,17 +77,15 @@ export default function SecurityDashboard() {
                 setStats({
                     healthScore: 100 - (s.avg_risk_score || 0),
                     criticalRisks: s.severity_breakdown?.critical || 0,
-                    patchRate: 0, // Not provided by stats yet
+                    patchRate: 0,
                     avgFixTime: 12,
                     totalVulns: s.total_findings || 0
                 });
             }
 
-            // 3. Fetch scan results (for the live audit trail)
-            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
             if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scanData = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-                Query.orderDesc('startedAt'), // Use startedAt as per requirements
+                Query.orderDesc('startedAt'),
                 Query.limit(50)
             ]);
             
@@ -96,7 +93,7 @@ export default function SecurityDashboard() {
                 const repo = repositories.find(r => r.$id === item.repo_id);
                 return {
                     ...item,
-                    repo_name: repo?.name || 'Unknown Repo',
+                    repo_name: repo?.name || t('dashboard.unknown_repo', 'Unknown Repo'),
                     repo_url: (repo as any)?.url || '#'
                 };
             }));
@@ -111,7 +108,7 @@ export default function SecurityDashboard() {
 
     const handleRunScan = async (repoId: string) => {
         setTriggering(repoId);
-        const toastId = toast.loading('Initiating fleet scan sequence...');
+        const toastId = toast.loading(t('dashboard.initiating_scan', 'Initiating fleet scan sequence...'));
         try {
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
             const jwt = localStorage.getItem('appwrite_jwt');
@@ -123,16 +120,15 @@ export default function SecurityDashboard() {
             });
 
             const data = await response.json();
-            console.log('[DEBUG] Raw Scan API Response Tracker:', data);
             
             if (!response.ok) {
-                toast.error(`Scan failed: ${data.error || 'Unknown error'}`, { id: toastId });
+                toast.error(t('dashboard.scan_failed', { error: data.error || 'Unknown error', defaultValue: `Scan failed: ${data.error || 'Unknown error'}` }), { id: toastId });
             } else {
-                toast.success('Scan completed successfully', { id: toastId });
+                toast.success(t('dashboard.scan_success', 'Scan completed successfully'), { id: toastId });
                 fetchDashboardData();
             }
         } catch (err: any) {
-            toast.error(`Scan failed: ${err.message || 'Unknown error'}`, { id: toastId });
+            toast.error(t('dashboard.scan_failed', { error: err.message || 'Unknown error', defaultValue: `Scan failed: ${err.message || 'Unknown error'}` }), { id: toastId });
         } finally {
             setTriggering(null);
         }
@@ -143,7 +139,7 @@ export default function SecurityDashboard() {
         <div className="min-h-screen bg-[var(--bg-primary)] p-8 flex items-center justify-center">
             <div className="text-center">
                 <Shield className="w-12 h-12 text-[var(--accent-primary)] animate-pulse mx-auto mb-4" />
-                <h2 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-widest animate-pulse">Scanning Perimeter...</h2>
+                <h2 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-widest animate-pulse">{t('dashboard.scanning_perimeter', 'Scanning Perimeter...')}</h2>
             </div>
         </div>
     );
@@ -157,8 +153,8 @@ export default function SecurityDashboard() {
                             <Shield className="w-8 h-8 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black tracking-tighter italic uppercase text-[var(--text-primary)] leading-none">Fleet Security</h1>
-                            <p className="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-widest mt-1">Real-time Perimeter Defense</p>
+                            <h1 className="text-3xl font-black tracking-tighter italic uppercase text-[var(--text-primary)] leading-none">{t('dashboard.fleet_security', 'Fleet Security')}</h1>
+                            <p className="text-[var(--text-secondary)] text-xs font-bold uppercase tracking-widest mt-1">{t('dashboard.realtime_defense', 'Real-time Perimeter Defense')}</p>
                         </div>
                     </div>
                 </div>
@@ -174,9 +170,9 @@ export default function SecurityDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <MetricCard label="Active Findings" value={stats.totalVulns} icon={<Bug className="text-[var(--status-error)]" />} />
-                    <MetricCard label="High Risk Targets" value={repos.filter(r => r.risk_score > 70).length} icon={<AlertTriangle className="text-[var(--status-warning)]" />} />
-                    <MetricCard label="Audit Logs" value={results.length} icon={<Terminal className="text-[var(--accent-primary)]" />} />
+                    <MetricCard label={t('dashboard.active_findings', 'Active Findings')} value={stats.totalVulns} icon={<Bug className="text-[var(--status-error)]" />} />
+                    <MetricCard label={t('dashboard.high_risk_targets', 'High Risk Targets')} value={repos.filter(r => r.risk_score > 70).length} icon={<AlertTriangle className="text-[var(--status-warning)]" />} />
+                    <MetricCard label={t('dashboard.audit_logs_count', 'Audit Logs')} value={results.length} icon={<Terminal className="text-[var(--accent-primary)]" />} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -185,14 +181,14 @@ export default function SecurityDashboard() {
                             <div className="p-6 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--text-primary)]/5 backdrop-blur-sm">
                                 <div className="flex items-center gap-3">
                                     <Clock className="w-5 h-5 text-[var(--text-secondary)]" />
-                                    <h2 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-widest italic">Live Audit Trail</h2>
+                                    <h2 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('dashboard.live_audit_trail', 'Live Audit Trail')}</h2>
                                 </div>
                                 <button onClick={fetchDashboardData} className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/5 rounded-xl transition-all"><RefreshCw className="w-5 h-5" /></button>
                             </div>
 
                             <div className="divide-y divide-[var(--border-subtle)]">
                                 {results.length === 0 ? (
-                                    <div className="p-20 text-center flex flex-col items-center text-[var(--text-secondary)] uppercase tracking-widest text-sm font-bold">No Audit Logs Found</div>
+                                    <div className="p-20 text-center flex flex-col items-center text-[var(--text-secondary)] uppercase tracking-widest text-sm font-bold">{t('dashboard.no_audit_logs', 'No Audit Logs Found')}</div>
                                 ) : (
                                     results.map((scan: any) => (
                                         <ScanItem key={scan.$id} scan={scan} onRescan={handleRunScan} isTriggering={triggering === scan.repo_id} />
@@ -225,6 +221,7 @@ function MetricCard({ label, value, icon }: { label: string, value: any, icon: a
 }
 
 function ScanItem({ scan, onRescan, isTriggering }: { scan: ScanResult, onRescan: (id: string) => void, isTriggering: boolean }) {
+    const { t } = useTranslation();
     return (
         <div className="p-6 hover:bg-[var(--text-primary)]/5 transition-all group">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -239,7 +236,7 @@ function ScanItem({ scan, onRescan, isTriggering }: { scan: ScanResult, onRescan
                         </div>
                         <div className="flex items-center gap-4 text-[10px] font-bold text-[var(--text-secondary)] font-black uppercase tracking-widest italic">
                             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(scan.$createdAt).toLocaleTimeString()}</span>
-                            <span className={scan.status === 'completed' ? 'text-[var(--status-success)]' : scan.status === 'failed' ? 'text-[var(--status-error)]' : 'text-[var(--accent-primary)]'}>{scan.status}</span>
+                            <span className={scan.status === 'completed' ? 'text-[var(--status-success)]' : scan.status === 'failed' ? 'text-[var(--status-error)]' : 'text-[var(--accent-primary)]'}>{t(`dashboard.status_${scan.status}`, scan.status)}</span>
                         </div>
                     </div>
                 </div>
@@ -258,29 +255,31 @@ function ScanItem({ scan, onRescan, isTriggering }: { scan: ScanResult, onRescan
 }
 
 function RiskDistribution({ repos }: { repos: RepoMetric[] }) {
+    const { t } = useTranslation();
     const critical = repos.filter(r => r.risk_score > 70).length;
     const medium = repos.filter(r => r.risk_score > 30 && r.risk_score <= 70).length;
     const low = repos.filter(r => r.risk_score <= 30).length;
 
     return (
         <div className="bg-[var(--bg-card)] p-6 rounded-3xl shadow-sm border border-[var(--border-subtle)]">
-            <h2 className="text-sm font-black text-[var(--text-secondary)] uppercase tracking-widest mb-6 italic">Health Distribution</h2>
+            <h2 className="text-sm font-black text-[var(--text-secondary)] uppercase tracking-widest mb-6 italic">{t('dashboard.health_distribution', 'Health Distribution')}</h2>
             <div className="space-y-4">
-                <DistributionBar label="CRITICAL RISK" count={critical} total={repos.length} color="bg-[var(--status-error)]" />
-                <DistributionBar label="ELEVATED RISK" count={medium} total={repos.length} color="bg-[var(--status-warning)]" />
-                <DistributionBar label="SECURE BASELINE" count={low} total={repos.length} color="bg-[var(--status-success)]" />
+                <DistributionBar label={t('dashboard.critical_risk', 'CRITICAL RISK')} count={critical} total={repos.length} color="bg-[var(--status-error)]" />
+                <DistributionBar label={t('dashboard.elevated_risk', 'ELEVATED RISK')} count={medium} total={repos.length} color="bg-[var(--status-warning)]" />
+                <DistributionBar label={t('dashboard.secure_baseline', 'SECURE BASELINE')} count={low} total={repos.length} color="bg-[var(--status-success)]" />
             </div>
         </div>
     );
 }
 
 function DistributionBar({ label, count, total, color }: { label: string, count: number, total: number, color: string }) {
+    const { t } = useTranslation();
     const percentage = total > 0 ? (count / total) * 100 : 0;
     return (
         <div>
             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-1 italic">
                 <span>{label}</span>
-                <span>{count} REPOS</span>
+                <span>{t('dashboard.repos_count', { count, defaultValue: `${count} REPOS` })}</span>
             </div>
             <div className="h-2 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
                 <div className={`h-full ${color} transition-all duration-1000`} style={{ width: `${percentage}%` }} />
@@ -290,10 +289,11 @@ function DistributionBar({ label, count, total, color }: { label: string, count:
 }
 
 function DocumentationCard() {
+    const { t } = useTranslation();
     return (
         <div className="bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] p-6 rounded-3xl text-white relative overflow-hidden group">
-            <h3 className="text-lg font-black uppercase italic leading-none mb-2">Audit Compliance</h3>
-            <p className="text-[10px] font-bold uppercase text-white/80 mb-4">View security policy docs</p>
+            <h3 className="text-lg font-black uppercase italic leading-none mb-2">{t('dashboard.audit_compliance', 'Audit Compliance')}</h3>
+            <p className="text-[10px] font-bold uppercase text-white/80 mb-4">{t('dashboard.view_policy_docs', 'View security policy docs')}</p>
             <Shield className="absolute -right-8 -bottom-8 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
         </div>
     );

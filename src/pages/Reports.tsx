@@ -11,9 +11,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { databases, DB_ID, COLLECTIONS, Query, functions } from '../lib/appwrite';
 import RemediationPanel from '../components/RemediationPanel';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
+import { useTranslation } from 'react-i18next';
 
-const getRepoName = (url?: string) => {
-    if (!url) return 'Unknown Repository';
+const getRepoName = (url?: string, t?: any) => {
+    if (!url) return t ? t('reports.unknown_repository', 'Unknown Repository') : 'Unknown Repository';
     try {
         const urlObj = new URL(url);
         const parts = urlObj.pathname.split('/').filter(Boolean);
@@ -26,6 +27,7 @@ const getRepoName = (url?: string) => {
 };
 
 export default function Reports() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { getJWT } = useAuth();
     const [loading, setLoading] = useState(true);
@@ -207,9 +209,9 @@ export default function Reports() {
         } catch (err: any) {
             console.error('PDF Export failed:', err);
             if (err.code === 403 || err.message?.toLowerCase().includes('permission') || err.message?.toLowerCase().includes('unauthorized')) {
-                alert('Permission Denied: You do not have the required access to generate this export.');
+                alert(t('reports.permission_denied', 'Permission Denied: You do not have the required access to generate this export.'));
             } else {
-                alert(`Export Failed: ${err.message || 'An unexpected error occurred during generation.'}`);
+                alert(t('reports.export_failed_msg', { error: err.message || 'An unexpected error occurred during generation.', defaultValue: `Export Failed: ${err.message || 'An unexpected error occurred during generation.'}` }));
             }
             setGenerating(false);
         }
@@ -265,8 +267,8 @@ export default function Reports() {
                 rows: [
                     new TableRow({
                         children: [
-                            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Repository:", bold: true })] })] }),
-                            new TableCell({ children: [new Paragraph({ text: getRepoName(scanDoc.repoUrl) })] }),
+                            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${t('reports.repository', 'Repository')}:`, bold: true })] })] }),
+                            new TableCell({ children: [new Paragraph({ text: getRepoName(scanDoc.repoUrl, t) })] }),
                         ]
                     }),
                     new TableRow({
@@ -428,13 +430,13 @@ export default function Reports() {
     const handleFixVulnerability = async (finding: any, scan: any) => {
         const token = await getGithubToken();
         if (!token) {
-            alert('GitHub connection required to automate remediation.');
+            alert(t('reports.github_required', 'GitHub connection required to automate remediation.'));
             return;
         }
 
         const repo = repos[scan.repo_id];
         if (!repo) {
-            setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: 'Repository information missing' } }));
+            setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: t('reports.repo_info_missing', 'Repository information missing') } }));
             return;
         }
 
@@ -461,16 +463,16 @@ export default function Reports() {
             const execution = await functions.createExecution('github-remediator', JSON.stringify(payload));
             let result;
             try {
-                result = execution.responseBody ? JSON.parse(execution.responseBody) : { error: 'Empty response from remediation engine' };
+                result = execution.responseBody ? JSON.parse(execution.responseBody) : { error: t('reports.empty_response', 'Empty response from remediation engine') };
             } catch (e) {
                 console.error('Failed to parse remediation response:', execution.responseBody);
-                result = { error: 'Invalid response format from remediation engine' };
+                result = { error: t('reports.invalid_response', 'Invalid response format from remediation engine') };
             }
 
             if (result.prUrl) {
                 setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, prUrl: result.prUrl } }));
             } else {
-                setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: result.error || 'Remediation failed' } }));
+                setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: result.error || t('reports.remediation_failed', 'Remediation failed') } }));
             }
         } catch (err: any) {
             setFixingFindings((prev: any) => ({ ...prev, [finding.$id]: { loading: false, error: err.message } }));
@@ -481,7 +483,7 @@ export default function Reports() {
         <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
             <div className="flex flex-col items-center gap-4">
                 <TrendingUp className="w-12 h-12 text-[var(--accent-primary)] animate-pulse" />
-                <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">Synthesizing Posture Data...</h2>
+                <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">{t('reports.synthesizing', 'Synthesizing Fleet Intelligence...')}</h2>
             </div>
         </div>
     );
@@ -491,7 +493,7 @@ export default function Reports() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 <button onClick={() => navigate('/')} className="mb-6 px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50 transition-all flex items-center gap-2 group/btn w-fit">
                     <ArrowLeft className="w-3.5 h-3.5 group-hover/btn:-translate-x-1 transition-transform" />
-                    Back to Dashboard
+                    {t('reports.back_to_dashboard')}
                 </button>
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
                     <div className="flex items-center gap-5">
@@ -499,8 +501,8 @@ export default function Reports() {
                             <TrendingUp className="w-7 h-7" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">Executive Intelligence</h1>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">Strategic vulnerability clusters & scan history</p>
+                            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">{t('reports.title', 'Fleet Security Intelligence')}</h1>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">{t('reports.subtitle', 'Operational vulnerability reporting and trend analysis')}</p>
                         </div>
                     </div>
 
@@ -512,9 +514,9 @@ export default function Reports() {
                                 onChange={(e) => setScope(e.target.value as any)}
                                 className="pl-12 pr-10 py-3.5 w-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 transition-all font-black text-[10px] uppercase tracking-widest italic appearance-none text-[var(--text-primary)]"
                             >
-                                <option value="global">Organization Matrix</option>
-                                <option value="team">Cluster Isolation</option>
-                                <option value="project">Unit Resolution</option>
+                                <option value="global">{t('reports.org_matrix')}</option>
+                                <option value="team">{t('reports.cluster_isolation')}</option>
+                                <option value="project">{t('reports.unit_resolution')}</option>
                             </select>
                         </div>
 
@@ -529,7 +531,7 @@ export default function Reports() {
                                 className="w-full md:w-auto px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white border-2 border-[var(--accent-primary)] hover:border-[var(--accent-secondary)] rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(56,189,248,0.2)] disabled:opacity-80"
                             >
                                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                                {generating ? 'GENERATING...' : 'EXPORT RESULTS'}
+                                {generating ? t('reports.generating', 'Generating...') : t('reports.export_results', 'Export Results')}
                             </button>
                         </div>
                     </div>
@@ -542,9 +544,9 @@ export default function Reports() {
                     <div className="p-8 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--text-primary)]/5">
                         <div className="flex items-center gap-3">
                             <Database className="w-5 h-5 text-[var(--accent-primary)]" />
-                            <h2 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Fleet Scan History</h2>
+                            <h2 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('reports.fleet_history')}</h2>
                         </div>
-                        <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{scans.length} Cycles Ingested</div>
+                        <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{t('reports.cycles_ingested', { count: scans.length })}</div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -552,19 +554,19 @@ export default function Reports() {
                             <thead className="bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[9px] font-black uppercase tracking-widest border-b border-[var(--border-subtle)]">
                                 <tr>
                                     <th className="px-8 py-5 w-10"></th>
-                                    <th className="px-8 py-5">Repository</th>
-                                    <th className="px-8 py-5 text-center">Language</th>
-                                    <th className="px-8 py-5">Scan Date</th>
-                                    <th className="px-8 py-5 text-center">Vulnerabilities</th>
-                                    <th className="px-8 py-5 text-center">Bugs</th>
-                                    <th className="px-8 py-5 text-center">Status</th>
+                                    <th className="px-8 py-5">{t('reports.repository')}</th>
+                                    <th className="px-8 py-5 text-center">{t('reports.language')}</th>
+                                    <th className="px-8 py-5">{t('reports.scan_date')}</th>
+                                    <th className="px-8 py-5 text-center">{t('reports.vulnerabilities')}</th>
+                                    <th className="px-8 py-5 text-center">{t('reports.bugs')}</th>
+                                    <th className="px-8 py-5 text-center">{t('reports.status')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--border-subtle)]">
                                 {scans.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-8 py-20 text-center text-[var(--text-secondary)] uppercase italic font-black text-[10px] tracking-widest">
-                                            No scan telemetry detected in current matrix
+                                            {t('reports.no_scans', 'No scans found in this vector.')}
                                         </td>
                                     </tr>
                                 ) : scans.map((scan) => {
@@ -591,13 +593,13 @@ export default function Reports() {
                                                 </td>
                                                 <td className="px-8 py-6">
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{repo.name || 'Unknown Unit'}</span>
+                                                        <span className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{repo.name || t('reports.unknown_unit', 'Unknown Unit')}</span>
                                                         <span className="text-[9px] text-[var(--text-secondary)] font-mono mt-0.5">{scan.repo_id}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-6 text-center">
                                                     <span className="px-3 py-1 bg-[var(--bg-secondary)] rounded-lg text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">
-                                                        {repo.language || 'Hybrid'}
+                                                        {repo.language || t('reports.hybrid_lang', 'Hybrid')}
                                                     </span>
                                                 </td>
                                                 <td className="px-8 py-6">
@@ -619,8 +621,8 @@ export default function Reports() {
                                                 <td className="px-8 py-6 text-center">
                                                     <div className="flex items-center justify-center gap-2">
                                                         <div className={`w-1.5 h-1.5 rounded-full ${scan.status === 'completed' ? 'bg-[var(--status-success)]' : scan.status === 'failed' ? 'bg-[var(--status-error)]' : 'bg-[var(--accent-primary)] animate-pulse'}`} />
-                                                        <span className={`text-[9px] font-black uppercase tracking-widest italic ${scan.status === 'completed' ? 'text-[var(--status-success)]' : scan.status === 'failed' ? 'text-[var(--status-error)]' : 'text-[var(--accent-primary)]'}`}>
-                                                            {scan.status}
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest italic ${scan.status === 'completed' ? 'text-[var(--status-success)]' : scan.status === 'failed' ? 'text-[var(--status-error)]' : 'bg-[var(--accent-primary)]'}`}>
+                                                            {t(`dashboard.status_${scan.status}`, scan.status)}
                                                         </span>
                                                     </div>
                                                 </td>
@@ -633,15 +635,15 @@ export default function Reports() {
                                                                 {/* Column 1: Identity & Status */}
                                                                 <div className="space-y-4">
                                                                     <div className="flex flex-col gap-1">
-                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Unit Identity</span>
-                                                                        <span className="text-xs font-black text-[var(--accent-primary)] uppercase italic tracking-tighter">{repo.name || 'Unknown Unit'}</span>
+                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">{t('reports.unit_identity', 'Unit Identity')}</span>
+                                                                        <span className="text-xs font-black text-[var(--accent-primary)] uppercase italic tracking-tighter">{repo.name || t('reports.unknown_unit', 'Unknown Unit')}</span>
                                                                     </div>
                                                                     <div className="flex flex-col gap-1">
-                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Resource Locator</span>
+                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">{t('reports.resource_locator', 'Resource Locator')}</span>
                                                                         <span className="text-[10px] font-mono text-[var(--text-primary)] truncate block opacity-80">{repo.repo_url || repo.url || 'Internal Resource'}</span>
                                                                     </div>
                                                                     <div className="flex flex-col gap-1">
-                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Active Status</span>
+                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">{t('reports.active_status_label', 'Active Status')}</span>
                                                                         <div className="flex items-center gap-2 mt-1">
                                                                             <div className={`w-2 h-2 rounded-full ${scan.status === 'completed' ? 'bg-[var(--status-success)]' : 'bg-[var(--accent-primary)] animate-pulse'}`} />
                                                                             <span className="text-[11px] font-black uppercase italic tracking-widest text-[var(--text-primary)]">{scan.status}</span>
@@ -652,7 +654,7 @@ export default function Reports() {
                                                                 {/* Column 2: Technical Breakdown */}
                                                                 <div className="space-y-4">
                                                                     <div className="flex flex-col gap-2">
-                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Anomaly Distribution</span>
+                                                                        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">{t('reports.anomaly_distribution', 'Anomaly Distribution')}</span>
                                                                         <div className="flex flex-wrap gap-2">
                                                                             {[
                                                                                 { label: 'Crit', count: scan.criticalCount || 0, color: 'bg-red-500/10 text-red-500 border-red-500/20' },
@@ -669,11 +671,11 @@ export default function Reports() {
                                                                     </div>
                                                                     <div className="grid grid-cols-2 gap-4">
                                                                         <div className="flex flex-col gap-1">
-                                                                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Analysis Core</span>
+                                                                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">{t('reports.analysis_core', 'Analysis Core')}</span>
                                                                             <span className="text-[10px] font-black text-[var(--accent-primary)] uppercase italic">Trivy v0.69.3</span>
                                                                         </div>
                                                                         <div className="flex flex-col gap-1">
-                                                                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">Cycle Duration</span>
+                                                                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic opacity-50">{t('reports.cycle_duration', 'Cycle Duration')}</span>
                                                                             <span className="text-[10px] font-black text-[var(--status-warning)] uppercase italic">
                                                                                 {(() => {
                                                                                     const diff = new Date(scan.$updatedAt).getTime() - new Date(scan.$createdAt).getTime();
@@ -689,12 +691,12 @@ export default function Reports() {
                                                             {isLoading ? (
                                                                 <div className="flex flex-col items-center justify-center py-12 gap-4">
                                                                     <Loader2 className="w-8 h-8 text-[var(--accent-primary)] animate-spin" />
-                                                                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Decrypting scan findings...</span>
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">{t('reports.decrypting', 'Decrypting Scan Findings...')}</span>
                                                                 </div>
                                                             ) : findings.length === 0 ? (
                                                                 <div className="text-center py-12">
                                                                     <Zap className="w-10 h-10 text-[var(--status-success)] opacity-20 mx-auto mb-4" />
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">No critical anomalies detected in this cycle</p>
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">{t('reports.no_anomalies', 'No anomalies detected in this cycle.')}</p>
                                                                 </div>
                                                             ) : (
                                                                 <div className="grid grid-cols-1 gap-4">
@@ -744,7 +746,7 @@ export default function Reports() {
                                                                                                         rel="noopener noreferrer"
                                                                                                         className="flex items-center gap-2 px-4 py-2 bg-[var(--status-success)]/10 text-[var(--status-success)] border border-[var(--status-success)]/20 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-[var(--status-success)] transition-all animate-in zoom-in duration-300 shadow-lg shadow-[var(--status-success)]/10"
                                                                                                     >
-                                                                                                        View PR <ExternalLink size={12} />
+                                                                                                        {t('reports.view_pr')} <ExternalLink size={12} />
                                                                                                     </a>
                                                                                                 ) : (
                                                                                                     <button
@@ -755,7 +757,7 @@ export default function Reports() {
                                                                                                         {fixingFindings[finding.$id]?.loading ? (
                                                                                                             <Loader2 className="w-3 h-3 animate-spin" />
                                                                                                         ) : <Zap size={12} />}
-                                                                                                        Fix This
+                                                                                                        {t('reports.fix_this')}
                                                                                                     </button>
                                                                                                 )}
                                                                                             </div>
@@ -764,18 +766,18 @@ export default function Reports() {
                                                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                                                                         <div className="flex items-center gap-2">
                                                                                             <Package className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
-                                                                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">Package:</span>
+                                                                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">{t('reports.package')}:</span>
                                                                                             <span className="text-[10px] font-black text-[var(--text-primary)] font-mono">{finding.package}</span>
                                                                                         </div>
                                                                                         <div className="flex items-center gap-2">
                                                                                             <Hash className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
-                                                                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">Version:</span>
+                                                                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">{t('reports.version')}:</span>
                                                                                             <span className="text-[10px] font-black text-[var(--text-primary)] font-mono">{finding.installedVersion}</span>
                                                                                         </div>
                                                                                         {finding.fixedVersion && (
                                                                                             <div className="flex items-center gap-2">
                                                                                                 <Zap className="w-3.5 h-3.5 text-[var(--status-success)]" />
-                                                                                                <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">Fixed In:</span>
+                                                                                                <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider italic">{t('reports.fixed_in')}:</span>
                                                                                                 <span className="text-[10px] font-black text-[var(--status-success)] font-mono">{finding.fixedVersion}</span>
                                                                                             </div>
                                                                                         )}
