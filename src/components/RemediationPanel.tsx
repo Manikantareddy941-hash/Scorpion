@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
 
 interface RemediationPanelProps {
@@ -9,6 +10,7 @@ interface RemediationPanelProps {
 }
 
 export default function RemediationPanel({ documentId, onClose }: RemediationPanelProps) {
+    const { t } = useTranslation();
     const { getJWT, getGithubToken } = useAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -62,7 +64,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
             );
 
             if (!findingDoc) {
-                setError('Vulnerability footprint not found in central registry.');
+                setError(t('remediation.vuln_not_found', 'Vulnerability footprint not found in central registry.'));
                 return;
             }
 
@@ -101,24 +103,24 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                 } else if (findingDoc.fixedVersion) {
                     // Fallback to direct patch if AI endpoint fails but fixedVersion exists
                     setFix({
-                        summary: `Direct patch available: upgrade to v${findingDoc.fixedVersion}`,
-                        technical_analysis: "This is a known vulnerability with a direct version upgrade available in the ecosystem registry.",
+                        summary: t('remediation.direct_patch', { version: findingDoc.fixedVersion, defaultValue: `Direct patch available: upgrade to v${findingDoc.fixedVersion}` }),
+                        technical_analysis: t('remediation.known_vuln_desc', 'This is a known vulnerability with a direct version upgrade available in the ecosystem registry.'),
                         confidence: 1.0,
                         diff: `--- a/${findingDoc.location || 'package.json'}\n+++ b/${findingDoc.location || 'package.json'}\n@@ -10,1 +10,1 @@\n- "${findingDoc.package}": "${findingDoc.installedVersion}"\n+ "${findingDoc.package}": "${findingDoc.fixedVersion}"`,
-                        impact_assessment: "Low risk. Direct dependency upgrade typically maintains backward compatibility."
+                        impact_assessment: t('remediation.low_risk_desc', 'Low risk. Direct dependency upgrade typically maintains backward compatibility.')
                     });
                 } else {
-                    setError('No automated remediation path available for detected anomaly.');
+                    setError(t('remediation.no_path', 'No automated remediation path available for detected anomaly.'));
                 }
             } catch (err) {
                 // Fallback for network errors to the API
                 if (findingDoc.fixedVersion) {
                     setFix({
-                        summary: `Direct patch available: upgrade to v${findingDoc.fixedVersion}`,
-                        technical_analysis: "Automated patch analysis available via direct version upgrade. AI recommendation engine offline.",
+                        summary: t('remediation.direct_patch', { version: findingDoc.fixedVersion, defaultValue: `Direct patch available: upgrade to v${findingDoc.fixedVersion}` }),
+                        technical_analysis: t('remediation.ai_offline_desc', 'Automated patch analysis available via direct version upgrade. AI recommendation engine offline.'),
                         confidence: 1.0,
                         diff: `--- a/${findingDoc.location || 'package.json'}\n+++ b/${findingDoc.location || 'package.json'}\n@@ -10,1 +10,1 @@\n- "${findingDoc.package}": "${findingDoc.installedVersion}"\n+ "${findingDoc.package}": "${findingDoc.fixedVersion}"`,
-                        impact_assessment: "Low risk upgrade."
+                        impact_assessment: t('remediation.low_risk', 'Low risk upgrade.')
                     });
                 } else {
                     throw err;
@@ -126,7 +128,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
             }
         } catch (err: any) {
             console.error('Error fetching remediation data:', err);
-            setError(err.message || 'Failed to retrieve remediation intelligence.');
+            setError(err.message || t('remediation.fail_retrieve', 'Failed to retrieve remediation intelligence.'));
         } finally {
             setLoading(false);
         }
@@ -135,7 +137,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
     const handleFixVulnerability = async () => {
         const token = await getGithubToken();
         if (!finding || !repo || !token) {
-            setError('Unauthorized or missing metadata. Ensure GitHub is connected in Settings.');
+            setError(t('remediation.github_required', 'Unauthorized or missing metadata. Ensure GitHub is connected in Settings.'));
             return;
         }
 
@@ -146,7 +148,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
         try {
             const repoFullName = repo.repo_url ? repo.repo_url.replace('https://github.com/', '') : '';
             if (!repoFullName) {
-                throw new Error('Could not resolve repository path from metadata.');
+                throw new Error(t('remediation.no_repo_path', 'Could not resolve repository path from metadata.'));
             }
 
             const payload = {
@@ -166,21 +168,21 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
 
             let result;
             try {
-                result = response.responseBody ? JSON.parse(response.responseBody) : { error: 'Empty response from patch window' };
+                result = response.responseBody ? JSON.parse(response.responseBody) : { error: t('remediation.empty_response', 'Empty response from patch window') };
             } catch (e) {
                 console.error('Failed to parse patch response:', response.responseBody);
-                result = { error: 'Invalid response format from patch window' };
+                result = { error: t('remediation.invalid_format', 'Invalid response format from patch window') };
             }
             
             if (response.status === 'completed' && result.prUrl) {
                 setPrResult({ url: result.prUrl });
                 trackEvent('accepted', fix?.$id, fix?.confidence);
             } else {
-                throw new Error(result.error || 'Patch window execution failed.');
+                throw new Error(result.error || t('remediation.execution_fail', 'Patch window execution failed.'));
             }
         } catch (err: any) {
             console.error('Remediation error:', err);
-            setError(err.message || 'Automated remediation flow interrupted.');
+            setError(err.message || t('remediation.flow_interrupted', 'Automated remediation flow interrupted.'));
         } finally {
             setPrLoading(false);
         }
@@ -209,7 +211,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to create PR');
+            if (!res.ok) throw new Error(data.error || t('remediation.fail_pr', 'Failed to create PR'));
 
             setPrState({ status: 'success', prUrl: data.prUrl });
 
@@ -239,10 +241,10 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                         </div>
                         <div>
                             <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight">
-                                Intelligence Remediation Engine
+                                {t('remediation.title', 'Intelligence Remediation Engine')}
                             </h2>
                             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
-                                Scoping patch for {finding?.title || 'Unknown Threat'}
+                                {t('remediation.scoping_patch', 'Scoping patch for')} {finding?.title || t('common.unknown_threat', 'Unknown Threat')}
                             </p>
                         </div>
                     </div>
@@ -255,13 +257,13 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-20 gap-4">
                             <Loader2 className="w-10 h-10 text-[var(--accent-primary)] animate-spin" />
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] animate-pulse">Running Neural Analysis...</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] animate-pulse">{t('remediation.running_analysis', 'Running Neural Analysis...')}</p>
                         </div>
                     ) : error ? (
                         <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-500">
                             <AlertCircle size={24} />
                             <div>
-                                <p className="text-xs font-black uppercase italic">System Fault Detected</p>
+                                <p className="text-xs font-black uppercase italic">{t('remediation.system_fault', 'System Fault Detected')}</p>
                                 <p className="text-[10px] font-bold opacity-80">{error}</p>
                             </div>
                         </div>
@@ -271,11 +273,11 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative group">
                                     <div className="absolute -top-3 -left-3 px-3 py-1 bg-[var(--accent-primary)] text-black text-[9px] font-black uppercase italic rounded-lg flex items-center gap-2">
-                                        <Sparkles size={10} /> AI Recommendation
+                                        <Sparkles size={10} /> {t('remediation.ai_recommendation', 'AI Recommendation')}
                                     </div>
-                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">Technical Breakdown</h4>
+                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">{t('remediation.technical_breakdown', 'Technical Breakdown')}</h4>
                                     <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-medium">
-                                        {fix?.technical_analysis || fix?.explanation || 'Neural engine assessing structural vulnerabilities...'}
+                                        {fix?.technical_analysis || fix?.explanation || t('remediation.neural_assessing', 'Neural engine assessing structural vulnerabilities...')}
                                     </p>
                                     <div className="mt-6 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
@@ -293,24 +295,24 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                             </button>
                                         </div>
                                         <div className="text-[9px] font-black uppercase italic text-[var(--accent-primary)] opacity-60">
-                                            Confidence Index: {((fix?.confidence || fix?.confidence_score || 0) * 100).toFixed(1)}%
+                                            {t('remediation.confidence_index', 'Confidence Index')}: {((fix?.confidence || fix?.confidence_score || 0) * 100).toFixed(1)}%
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
-                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">Impact Assessment</h4>
+                                    <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">{t('remediation.impact_assessment', 'Impact Assessment')}</h4>
                                     <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-medium">
-                                        {fix?.impact_assessment || 'Assessment restricted to localized dependency tree. Minimal risk to core logic detected.'}
+                                        {fix?.impact_assessment || t('remediation.impact_desc', 'Assessment restricted to localized dependency tree. Minimal risk to core logic detected.')}
                                     </p>
                                     <div className="mt-6 pt-6 border-t border-[var(--border-subtle)] flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-[var(--status-success)] animate-pulse" />
-                                            <span className="text-[9px] font-black uppercase italic text-[var(--status-success)] tracking-widest">Safe for Execution</span>
+                                            <span className="text-[9px] font-black uppercase italic text-[var(--status-success)] tracking-widest">{t('remediation.safe_execution', 'Safe for Execution')}</span>
                                         </div>
                                         <div className="flex items-center gap-1">
                                             <CheckCircle size={12} className="text-[var(--status-success)]" />
-                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase">Verified Patch</span>
+                                            <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase">{t('remediation.verified_patch', 'Verified Patch')}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -321,14 +323,14 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         <Code size={14} className="text-[var(--text-secondary)]" />
-                                        <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-secondary)]">Proposed Code Modification</span>
+                                        <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-secondary)]">{t('remediation.proposed_mod', 'Proposed Code Modification')}</span>
                                     </div>
                                     <span className="text-[9px] font-bold text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 px-2 py-0.5 rounded uppercase tracking-tighter">
                                         {finding?.file_path || finding?.location || 'package.json'}
                                     </span>
                                 </div>
                                 <pre className="text-[11px] font-mono leading-relaxed text-gray-300 overflow-x-auto p-4 bg-black/30 rounded-xl">
-                                    {fix?.diff || fix?.code_diff || 'Generating structural patch representation...'}
+                                    {fix?.diff || fix?.code_diff || t('remediation.generating_diff', 'Generating structural patch representation...')}
                                 </pre>
                             </div>
 
@@ -339,14 +341,14 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         disabled={!fix}
                                         className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-primary)] text-black rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-xs font-black uppercase italic tracking-widest shadow-xl shadow-[var(--accent-primary)]/20"
                                     >
-                                        <GitPullRequest size={18} /> Apply Remediation Path (GitHub PR)
+                                        <GitPullRequest size={18} /> {t('remediation.apply_path_pr', 'Apply Remediation Path (GitHub PR)')}
                                     </button>
                                 )}
 
                                 {prState.status === 'loading' && (
                                     <div className="flex items-center gap-2 text-xs font-black uppercase italic text-[var(--text-secondary)]">
                                         <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-primary)]" />
-                                        <span>Opening PR...</span>
+                                        <span>{t('remediation.opening_pr', 'Opening PR...')}</span>
                                     </div>
                                 )}
 
@@ -357,15 +359,15 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)] text-white rounded-xl hover:opacity-90 transition-all text-xs font-black uppercase italic tracking-widest shadow-lg shadow-[var(--status-success)]/20"
                                     >
-                                        View PR on GitHub →
+                                        {t('remediation.view_pr_github', 'View PR on GitHub →')}
                                     </a>
                                 )}
 
                                 {prState.status === 'error' && (
                                     <div className="text-xs font-bold text-red-500">
-                                        PR failed: {prState.error}
+                                        {t('remediation.pr_failed', 'PR failed')}: {prState.error}
                                         <button onClick={() => setPrState({ status: 'idle' })} className="ml-3 underline uppercase font-black italic">
-                                            Retry
+                                            {t('remediation.retry', 'Retry')}
                                         </button>
                                     </div>
                                 )}
@@ -379,7 +381,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                     <div className="flex items-center gap-2">
                         <Info size={14} className="text-[var(--text-secondary)]" />
                         <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">
-                            Execution will create a secure patch branch and opening a Pull Request.
+                            {t('remediation.footer_info', 'Execution will create a secure patch branch and opening a Pull Request.')}
                         </span>
                     </div>
                     
@@ -390,7 +392,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)]/10 text-[var(--status-success)] border border-[var(--status-success)]/20 rounded-xl text-xs font-black uppercase italic tracking-widest hover:bg-[var(--status-success)]/20 transition-all shadow-lg shadow-[var(--status-success)]/5"
                         >
-                            <ExternalLink size={16} /> View Pull Request
+                            <ExternalLink size={16} /> {t('remediation.view_pr', 'View Pull Request')}
                         </a>
                     ) : (
                         <div className="flex gap-4">
@@ -408,11 +410,11 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             >
                                 {prLoading ? (
                                     <>
-                                        <Loader2 size={18} className="animate-spin" /> Patching...
+                                        <Loader2 size={18} className="animate-spin" /> {t('remediation.patching', 'Patching...')}
                                     </>
                                 ) : (
                                     <>
-                                        <GitPullRequest size={18} /> Apply Remediation Path
+                                        <GitPullRequest size={18} /> {t('remediation.apply_path', 'Apply Remediation Path')}
                                     </>
                                 )}
                             </button>

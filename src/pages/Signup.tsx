@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { UserPlus, Eye, EyeOff } from 'lucide-react';
 import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 import SocialLoginButtons from '../components/auth/SocialLoginButtons';
+import { useTranslation } from 'react-i18next';
 
 function getStrength(password: string) {
   if (!password) return 0;
@@ -15,6 +16,7 @@ function getStrength(password: string) {
 }
 
 export default function Signup() {
+  const { t } = useTranslation();
   const { signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,33 +33,33 @@ export default function Signup() {
     setError('');
     setSuccess('');
     if (password !== confirm) {
-      setError('Passwords do not match');
+      setError(t('auth.passwords_not_match', 'Passwords do not match'));
       return;
     }
     setLoading(true);
     const { error } = await signUp(email, password);
-    if (error) setError(error.message || 'Signup failed');
-    else setSuccess('Account created! Check your email to verify.');
+    if (error) setError(error.message || t('auth.signup_failed', 'Signup failed'));
+    else setSuccess(t('auth.signup_success', 'Account created! Check your email to verify.'));
     setLoading(false);
   };
 
   return (
     <ModernAuthLayout
-      subtext="Modern DevOps, Secure by Default."
+      subtext={t('auth.signup_subtext', 'Modern DevOps, Secure by Default.')}
     >
       <div className="w-full">
         <h1 className="text-xl font-black mb-1 text-[var(--text-primary)] uppercase italic tracking-tight">
-          Join the Fleet
+          {t('auth.join_fleet', 'Join the Fleet')}
         </h1>
 
         <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] mb-8 italic">
-          Provision your secure development identity.
+          {t('auth.provision_identity', 'Provision your operator identity.')}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Email */}
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Vector ID (Email)</label>
+            <label htmlFor="email" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">{t('auth.vector_id', 'Vector ID (Email)')}</label>
             <input
               id="email"
               type="email"
@@ -66,13 +68,13 @@ export default function Signup() {
               onChange={e => setEmail(e.target.value)}
               required
               className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
-              placeholder="you@example.com"
+              placeholder={t('auth.email_placeholder', 'Enter your vector ID')}
             />
           </div>
 
           {/* Password */}
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Access Key</label>
+            <label htmlFor="password" title={t('auth.access_key', 'Access Key')} className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">{t('auth.access_key', 'Access Key')}</label>
             <div className="relative">
               <input
                 id="password"
@@ -82,13 +84,13 @@ export default function Signup() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
-                placeholder="••••••••"
+                placeholder={t('auth.password_placeholder', 'Enter access key')}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? t('auth.hide_password', 'Hide password') : t('auth.show_password', 'Show password')}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -97,14 +99,18 @@ export default function Signup() {
             {/* Strength Indicator */}
             <div className="mt-3 px-1">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Signal Strength</span>
+                <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{t('auth.signal_strength', 'Signal Strength')}</span>
                 <span className={`text-[8px] font-black uppercase italic ${
                   strength >= 4 ? 'text-[var(--status-success)]' :
                   strength >= 3 ? 'text-blue-500' :
                   strength >= 2 ? 'text-yellow-500' :
                   strength >= 1 ? 'text-[var(--status-error)]' : 'text-[var(--text-secondary)]'
                 }`}>
-                  {strength >= 4 ? 'Optimal' : strength >= 3 ? 'Strong' : strength >= 2 ? 'Fair' : strength >= 1 ? 'Weak' : 'None'}
+                  {strength >= 4 ? t('auth.strength_optimal', 'Optimal') : 
+                   strength >= 3 ? t('auth.strength_strong', 'Strong') : 
+                   strength >= 2 ? t('auth.strength_fair', 'Fair') : 
+                   strength >= 1 ? t('auth.strength_weak', 'Weak') : 
+                   t('auth.strength_none', 'None')}
                 </span>
               </div>
               <div className="h-1 w-full bg-[#1E1E1E] rounded-full overflow-hidden flex gap-1">
@@ -127,7 +133,7 @@ export default function Signup() {
 
           {/* Confirm Password */}
           <div className="space-y-2">
-            <label htmlFor="confirm" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Verify Key</label>
+            <label htmlFor="confirm" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">{t('auth.verify_key', 'Verify Key')}</label>
             <input
               id="confirm"
               type={showPassword ? "text" : "password"}
@@ -136,7 +142,7 @@ export default function Signup() {
               onChange={e => setConfirm(e.target.value)}
               required
               className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
-              placeholder="••••••••"
+              placeholder={t('auth.password_placeholder', 'Enter access key')}
             />
           </div>
 
@@ -144,17 +150,11 @@ export default function Signup() {
           {success && <div className="text-[var(--status-success)] text-[10px] font-black uppercase tracking-widest italic">{success}</div>}
 
           {/* Primary Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] bg-[var(--accent-primary)] hover:opacity-90 transition-all shadow-xl shadow-[var(--accent-primary)]/20 border-b-4 border-[var(--accent-secondary)] active:border-b-0 active:translate-y-1 disabled:opacity-50 italic"
-          >
-            {loading ? (
-              <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
+          <button type="submit" disabled={loading} className="btn-premium w-full flex items-center justify-center gap-3 py-4">
+            {loading ? <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : (
               <>
-                Create Account
-                <UserPlus className="w-4 h-4" />
+                <UserPlus size={18} />
+                <span>{t('auth.create_account', 'Create Account').toUpperCase()}</span>
               </>
             )}
           </button>
@@ -163,7 +163,7 @@ export default function Signup() {
         {/* Divider */}
         <div className="my-8 flex items-center px-4">
           <div className="flex-grow h-px bg-[var(--border-subtle)]" />
-          <span className="mx-4 text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.3em] italic">Secondary Auth</span>
+          <span className="mx-4 text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.3em] italic">{t('auth.secondary_auth', 'Secondary Authentication')}</span>
           <div className="flex-grow h-px bg-[var(--border-subtle)]" />
         </div>
 
@@ -171,9 +171,9 @@ export default function Signup() {
         <SocialLoginButtons />
 
         <p className="mt-10 text-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
-          Already active operative?{' '}
+          {t('auth.already_active', 'Already active?')}{' '}
           <a href="/login" className="text-[var(--accent-primary)] hover:underline decoration-2 underline-offset-4 decoration-[var(--accent-primary)]/30 transition-all">
-            Initiate Session
+            {t('auth.initiate_session', 'Initiate Session')}
           </a>
         </p>
       </div>

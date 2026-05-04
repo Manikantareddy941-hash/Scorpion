@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { Users, Plus, Shield, UserPlus, Trash2, Mail, ChevronRight, X, User } from 'lucide-react';
 
 interface Team {
@@ -18,6 +19,7 @@ interface TeamMember {
 }
 
 export default function Teams() {
+    const { t } = useTranslation();
     const { user, getJWT } = useAuth();
     const [teams, setTeams] = useState<Team[]>([]);
     const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -100,7 +102,7 @@ export default function Teams() {
             setNewTeamName('');
         } catch (error: any) {
             console.error('Error creating team:', error);
-            setError(error.message || 'Failed to create team');
+            setError(error.message || t('teams.fail_create', 'Failed to create team'));
         } finally {
             setSubmitting(false);
         }
@@ -125,7 +127,7 @@ export default function Teams() {
 
             if (!response.ok) {
                 const data = await response.json();
-                alert(data.error || 'Failed to invite member');
+                alert(data.error || t('teams.fail_invite', 'Failed to invite member'));
                 return;
             }
 
@@ -138,7 +140,7 @@ export default function Teams() {
     };
 
     const handleDeleteTeam = async (teamId: string, teamName: string) => {
-        if (!window.confirm(`Are you sure you want to decommission Cluster: ${teamName}? This action is irreversible.`)) return;
+        if (!window.confirm(t('teams.delete_confirm', { name: teamName, defaultValue: `Are you sure you want to decommission Cluster: ${teamName}? This action is irreversible.` }))) return;
 
         try {
             await databases.deleteDocument(DB_ID, 'teams', teamId);
@@ -155,7 +157,7 @@ export default function Teams() {
             }
         } catch (error: any) {
             console.error('Error deleting team:', error);
-            alert(error.message || 'Failed to delete team');
+            alert(error.message || t('teams.fail_delete', 'Failed to delete team'));
         }
     };
 
@@ -173,7 +175,7 @@ export default function Teams() {
             <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <Users className="w-12 h-12 text-[var(--accent-primary)] animate-pulse" />
-                    <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">Synchronizing Fleet...</h2>
+                    <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">{t('teams.sync_fleet', 'Synchronizing Fleet...')}</h2>
                 </div>
             </div>
         );
@@ -188,15 +190,15 @@ export default function Teams() {
                             <Users className="w-7 h-7" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">Collaborators</h1>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic">Fleet Command & Access Control</p>
+                            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">{t('teams.collaborators', 'Collaborators')}</h1>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic">{t('teams.fleet_command', 'Fleet Command & Access Control')}</p>
                         </div>
                     </div>
                     <button
                         onClick={() => setShowCreateModal(true)}
                         className="btn-premium flex items-center gap-2 group"
                     >
-                        <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" /> Initialize Team
+                        <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" /> {t('teams.init_team', 'Initialize Team')}
                     </button>
                 </div>
 
@@ -205,22 +207,22 @@ export default function Teams() {
                         <div className="w-24 h-24 bg-[var(--bg-secondary)] rounded-[2rem] flex items-center justify-center mb-8 border border-[var(--border-subtle)]">
                             <Users className="w-10 h-10 text-[var(--text-secondary)]/10" />
                         </div>
-                        <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">Lone Pilot Detected</h2>
+                        <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{t('teams.lone_pilot', 'Lone Pilot Detected')}</h2>
                         <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-10 italic max-w-xs mx-auto">
-                            No active clusters found. Deploy your first team to start multi-vector collaboration.
+                            {t('teams.no_clusters', 'No active clusters found. Deploy your first team to start multi-vector collaboration.')}
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
                             className="px-10 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40"
                         >
-                            Deploy New Team
+                            {t('teams.deploy_team', 'Deploy New Team')}
                         </button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
                         {/* Team List Sidebar */}
                         <div className="lg:col-span-1 border-r border-[var(--border-subtle)] pr-12">
-                            <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mb-8">Active Clusters</h3>
+                            <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mb-8">{t('teams.active_clusters', 'Active Clusters')}</h3>
                             <div className="space-y-4">
                                 {teams.map((t) => (
                                     <div key={t.$id} className="flex items-center gap-3 w-full">
@@ -246,7 +248,7 @@ export default function Teams() {
                                                 handleDeleteTeam(t.$id, t.name);
                                             }}
                                             className="p-4 rounded-2xl border border-[var(--status-error)]/20 text-[var(--status-error)]/60 hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/5 transition-all"
-                                            title="Decommission Cluster"
+                                            title={t('teams.decommission_cluster', 'Decommission Cluster')}
                                         >
                                             <Trash2 className="w-5 h-5" />
                                         </button>
@@ -265,10 +267,10 @@ export default function Teams() {
                                                 <h2 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-2">{selectedTeam.name}</h2>
                                                 <div className="flex items-center gap-2">
                                                     <span className="px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] rounded text-[9px] font-black uppercase tracking-widest italic border border-[var(--accent-primary)]/10">
-                                                        Cluster ID: {selectedTeam.$id.slice(0, 8)}
+                                                        {t('teams.cluster_id', 'Cluster ID')}: {selectedTeam.$id.slice(0, 8)}
                                                     </span>
                                                     <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">
-                                                        &bull; DEPLOYED {new Date(selectedTeam.$createdAt).toLocaleDateString()}
+                                                        &bull; {t('teams.deployed', 'DEPLOYED')} {new Date(selectedTeam.$createdAt).toLocaleDateString()}
                                                     </span>
                                                 </div>
                                             </div>
@@ -277,13 +279,13 @@ export default function Teams() {
                                                 className="flex items-center gap-3 px-6 py-3 bg-[var(--bg-card)] text-[var(--accent-primary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--accent-primary)]/5 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[var(--accent-primary)]/5"
                                             >
                                                 <UserPlus className="w-4 h-4 text-[var(--accent-primary)]" />
-                                                Add Operator
+                                                {t('teams.add_operator', 'Add Operator')}
                                             </button>
                                         </div>
                                     </div>
 
                                     <div className="p-10">
-                                        <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-widest italic">Operations Personnel</h3>
+                                        <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-widest italic">{t('teams.ops_personnel', 'Operations Personnel')}</h3>
                                         <div className="space-y-4">
                                             {members.map((member) => (
                                                 <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 transition-all group">
@@ -295,10 +297,10 @@ export default function Teams() {
                                                             <p className="font-black text-[var(--text-primary)] italic uppercase tracking-tight text-sm mb-1">{member.user_email}</p>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-widest italic">
-                                                                    {member.user_id === user?.$id ? 'Primary Controller' : 'Sub-Operator'}
+                                                                    {member.user_id === user?.$id ? t('teams.primary_controller', 'Primary Controller') : t('teams.sub_operator', 'Sub-Operator')}
                                                                 </span>
                                                                 <span className="w-1 h-1 bg-[var(--border-subtle)] rounded-full" />
-                                                                <span className="text-[9px] text-[var(--status-success)] font-black uppercase tracking-widest italic">Online-Ready</span>
+                                                                <span className="text-[9px] text-[var(--status-success)] font-black uppercase tracking-widest italic">{t('teams.online_ready', 'Online-Ready')}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -329,8 +331,8 @@ export default function Teams() {
                     <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] w-full max-w-md p-10 shadow-2xl border border-[var(--border-subtle)] animate-in zoom-in duration-300 pointer-events-auto">
                         <div className="flex items-center justify-between mb-8">
                             <div>
-                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">New Fleet Cluster</h3>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Initialize organizational vector</p>
+                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('teams.new_cluster', 'New Fleet Cluster')}</h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">{t('teams.init_vector', 'Initialize organizational vector')}</p>
                             </div>
                             <button onClick={() => setShowCreateModal(false)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                                 <X className="w-6 h-6" />
@@ -339,7 +341,7 @@ export default function Teams() {
                         <form onSubmit={handleCreateTeam}>
                             <div className="space-y-8">
                                 <div>
-                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">Designation Name</label>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">{t('teams.designation_name', 'Designation Name')}</label>
                                     <div className="relative">
                                         <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)]" />
                                         <input
@@ -347,7 +349,7 @@ export default function Teams() {
                                             autoFocus
                                             value={newTeamName}
                                             onChange={(e) => setNewTeamName(e.target.value)}
-                                            placeholder="e.g. CORE-OPS"
+                                            placeholder={t('teams.name_placeholder', 'e.g. CORE-OPS')}
                                             className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black uppercase italic text-sm tracking-tight text-[var(--text-primary)]"
                                         />
                                     </div>
@@ -360,14 +362,14 @@ export default function Teams() {
                                     onClick={() => setShowCreateModal(false)}
                                     className="flex-1 px-6 py-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--bg-secondary)] transition-all border border-[var(--border-subtle)]"
                                 >
-                                    Abort
+                                    {t('teams.abort', 'Abort')}
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submitting}
                                     className="flex-1 px-6 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {submitting ? 'Initializing...' : 'Activate Cluster'}
+                                    {submitting ? t('teams.initializing', 'Initializing...') : t('teams.activate_cluster', 'Activate Cluster')}
                                 </button>
                             </div>
                         </form>
@@ -381,8 +383,8 @@ export default function Teams() {
                     <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] w-full max-w-md p-10 shadow-2xl border border-[var(--border-subtle)] animate-in zoom-in duration-300">
                         <div className="flex items-center justify-between mb-8">
                             <div>
-                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Add Personnel</h3>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Onboard new security operator</p>
+                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('teams.add_personnel', 'Add Personnel')}</h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">{t('teams.onboard_operator', 'Onboard new security operator')}</p>
                             </div>
                             <button onClick={() => setShowInviteModal(false)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                                 <X className="w-6 h-6" />
@@ -391,7 +393,7 @@ export default function Teams() {
                         <form onSubmit={handleInviteMember}>
                             <div className="space-y-8">
                                 <div>
-                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">Communications ID (Email)</label>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">{t('teams.comms_id', 'Communications ID (Email)')}</label>
                                     <div className="relative">
                                         <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)]" />
                                         <input
@@ -399,13 +401,13 @@ export default function Teams() {
                                             required
                                             value={inviteEmail}
                                             onChange={(e) => setInviteEmail(e.target.value)}
-                                            placeholder="operator@sector.com"
+                                            placeholder={t('teams.email_placeholder', 'operator@sector.com')}
                                             className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black italic text-sm tracking-tight text-[var(--text-primary)]"
                                         />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-[var(--accent-primary)] uppercase tracking-widest italic mb-3 block">Authority Level (Role)</label>
+                                    <label className="text-[10px] font-black text-[var(--accent-primary)] uppercase tracking-widest italic mb-3 block">{t('teams.authority_level', 'Authority Level (Role)')}</label>
                                     <div className="relative">
                                         <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)] pointer-events-none" />
                                         <select
@@ -413,9 +415,9 @@ export default function Teams() {
                                             onChange={(e) => setInviteRole(e.target.value as any)}
                                             className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black italic text-sm tracking-tight appearance-none text-[var(--text-primary)]"
                                         >
-                                            <option value="viewer">Viewer Protocol (Read-Only)</option>
-                                            <option value="developer">Developer Protocol (Scan & Resolve)</option>
-                                            <option value="admin">Administrator Protocol (Manage Cluster)</option>
+                                            <option value="viewer">{t('teams.role_viewer', 'Viewer Protocol (Read-Only)')}</option>
+                                            <option value="developer">{t('teams.role_developer', 'Developer Protocol (Scan & Resolve)')}</option>
+                                            <option value="admin">{t('teams.role_admin', 'Administrator Protocol (Manage Cluster)')}</option>
                                         </select>
                                     </div>
                                 </div>
@@ -426,13 +428,13 @@ export default function Teams() {
                                     onClick={() => setShowInviteModal(false)}
                                     className="flex-1 px-6 py-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--bg-secondary)] transition-all border border-[var(--border-subtle)]"
                                 >
-                                    Abort
+                                    {t('teams.abort', 'Abort')}
                                 </button>
                                 <button
                                     type="submit"
                                     className="flex-1 px-6 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40"
                                 >
-                                    Deploy Invitation
+                                    {t('teams.deploy_invite', 'Deploy Invitation')}
                                 </button>
                             </div>
                         </form>

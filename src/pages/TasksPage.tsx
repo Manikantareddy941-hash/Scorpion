@@ -6,7 +6,10 @@ import {
 } from 'lucide-react';
 import TaskModal from '../components/TaskModal';
 
+import { useTranslation } from 'react-i18next';
+
 export default function TasksPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +98,7 @@ export default function TasksPage() {
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
-          <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Loading tasks...</h2>
+          <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{t('dashboard.loading')}</h2>
         </div>
       </div>
     );
@@ -109,8 +112,8 @@ export default function TasksPage() {
             <CheckCircle2 className="w-7 h-7" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">Security Action Center</h1>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">Operations & Remediation lifecycle</p>
+            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">{t('tasks.title')}</h1>
+            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">{t('tasks.subtitle')}</p>
           </div>
         </div>
         
@@ -118,17 +121,17 @@ export default function TasksPage() {
           onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
           className="btn-premium flex items-center gap-2"
         >
-          <Plus className="w-4 h-4" /> Deploy Task
+          <Plus className="w-4 h-4" /> {t('tasks.deploy_task')}
         </button>
       </div>
 
       {/* Action Center Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         {[
-          { label: 'Active Tasks', value: stats.total },
-          { label: 'Pending', value: stats.todo },
-          { label: 'In Progress', value: stats.inProgress },
-          { label: 'Resolved', value: stats.completed },
+          { label: t('tasks.active_tasks'), value: stats.total },
+          { label: t('tasks.pending'), value: stats.todo },
+          { label: t('tasks.in_progress'), value: stats.inProgress },
+          { label: t('tasks.resolved'), value: stats.completed },
         ].map((stat) => (
           <div key={stat.label} className="p-6 flex items-center justify-between group hover:border-[var(--accent-primary)] transition-colors premium-card">
             <div>
@@ -144,18 +147,18 @@ export default function TasksPage() {
         <div className="px-10 py-8 border-b border-[var(--border-subtle)] bg-white/5 dark:bg-white/10">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
-              <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">Fleet Tasks</h2>
-              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 italic font-mono">Real-time status tracking</p>
+              <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">{t('tasks.fleet_tasks')}</h2>
+              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 italic font-mono">{t('tasks.status_tracking')}</p>
             </div>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as any)}
               className="px-6 py-3 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black text-[var(--text-primary)] uppercase italic tracking-widest outline-none focus:ring-2 focus:ring-[var(--accent-primary)] transition-all"
             >
-              <option value="all">Global Fleet</option>
-              <option value="todo">Pending Stage</option>
-              <option value="in_progress">Active Remediation</option>
-              <option value="completed">Production Ready</option>
+              <option value="all">{t('tasks.global_fleet')}</option>
+              <option value="todo">{t('tasks.pending_stage')}</option>
+              <option value="in_progress">{t('tasks.active_remediation')}</option>
+              <option value="completed">{t('tasks.production_ready')}</option>
             </select>
           </div>
         </div>
@@ -168,7 +171,7 @@ export default function TasksPage() {
             </div>
           ) : filteredTasks.length === 0 ? (
             <div className="p-24 text-center">
-              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">No active security tasks detected</p>
+              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">{t('tasks.no_tasks')}</p>
             </div>
           ) : (
             filteredTasks.map((task) => (
@@ -182,7 +185,7 @@ export default function TasksPage() {
                       <div className="flex flex-wrap items-center gap-3 mb-3">
                         <h3 className="text-lg font-black text-[var(--text-primary)] leading-tight italic uppercase tracking-tight">{task.title}</h3>
                         <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.15em] italic border ${getPriorityColor(task.priority)}`}>
-                          {task.priority} Priority
+                          {task.priority} {t('tasks.priority')}
                         </span>
                       </div>
                       {task.description && (
@@ -196,9 +199,9 @@ export default function TasksPage() {
                           onChange={(e) => updateTaskStatus(task.$id, e.target.value)}
                           className="px-4 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-[9px] font-black text-[var(--text-primary)] uppercase tracking-widest italic outline-none focus:ring-2 focus:ring-[var(--accent-primary)] transition-all"
                         >
-                          <option value="todo">Pending</option>
-                          <option value="in_progress">Executing</option>
-                          <option value="completed">Verified</option>
+                          <option value="todo">{t('tasks.pending')}</option>
+                          <option value="in_progress">{t('tasks.executing')}</option>
+                          <option value="completed">{t('tasks.verified')}</option>
                         </select>
                       </div>
                     </div>
@@ -212,7 +215,7 @@ export default function TasksPage() {
                       <Edit2 className="w-5 h-5" />
                     </button>
                     <button
-                      onClick={() => { if (confirm('Erase this task?')) deleteTask(task.$id); }}
+                      onClick={() => { if (confirm(t('tasks.erase_task'))) deleteTask(task.$id); }}
                       className="p-3 text-[var(--text-secondary)] hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded-xl transition-all border border-transparent hover:border-[var(--border-subtle)]"
                     >
                       <Trash2 className="w-5 h-5" />

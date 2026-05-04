@@ -7,6 +7,8 @@ import robotMascot from '../assets/tony-ai.png';
 import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 
+import { useTranslation } from 'react-i18next';
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -27,11 +29,12 @@ interface AIChatProps {
 }
 
 export default function AIChat({ open, setOpen }: AIChatProps) {
+  const { t } = useTranslation();
   const { theme, echoMovementEnabled } = useTheme();
   const location = useLocation();
 
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: "Hi! I'm Echo 👋 Your DevSecOps AI assistant. Ask me anything about security scanning, vulnerabilities, or how to use SCORPION." }
+    { role: 'assistant', content: t('aichat.welcome_message', "Hi! I'm Echo 👋 Your DevSecOps AI assistant. Ask me anything about security scanning, vulnerabilities, or how to use SCORPION.") }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,7 +77,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
 
   const handleNewChat = () => {
     setCurrentSessionId(crypto.randomUUID());
-    setMessages([{ role: 'assistant', content: "Hi! I'm Echo 👋 Your DevSecOps AI assistant. Ask me anything about security scanning, vulnerabilities, or how to use SCORPION." }]);
+    setMessages([{ role: 'assistant', content: t('aichat.welcome_message', "Hi! I'm Echo 👋 Your DevSecOps AI assistant. Ask me anything about security scanning, vulnerabilities, or how to use SCORPION.") }]);
   };
 
   // Mascot State
@@ -236,7 +239,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey || apiKey === 'undefined') {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Missing API Key. Please add VITE_GEMINI_API_KEY to your .env file.' }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: t('aichat.missing_api_key', '⚠️ Missing API Key. Please add VITE_GEMINI_API_KEY to your .env file.') }]);
         setLoading(false);
         return;
       }
@@ -252,9 +255,9 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
       }));
 
       const context = location.pathname.includes('/reports')
-        ? " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]"
+        ? t('aichat.system_note_reports', " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]")
         : location.pathname.includes('/governance')
-          ? " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]"
+          ? t('aichat.system_note_governance', " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]")
           : "";
 
       const response = await fetch(geminiEndpoint, {
@@ -283,7 +286,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
       }
 
       const data = await response.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || t('aichat.no_response', 'No response received.');
 
       const finalMessages = [...newMessages, { role: 'assistant' as const, content: reply.trim() }];
       setMessages(finalMessages);
@@ -300,7 +303,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
       }
     } catch (err: any) {
       console.error('Neural Link Disconnection:', err);
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Neural Link Disconnected. ${err.message}` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: t('aichat.neural_link_disconnected', { error: err.message, defaultValue: `⚠️ Neural Link Disconnected. ${err.message}` }) }]);
     } finally {
       setLoading(false);
     }
@@ -447,9 +450,9 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
               <Menu size={20} />
             </button>
             <div style={{ padding: isSidebarOpen ? '0 12px' : '0', width: '100%', display: 'flex', justifyContent: 'center' }}>
-              <button onClick={handleNewChat} title="New Chat" style={{ width: isSidebarOpen ? '100%' : '36px', height: '36px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'flex-start' : 'center', padding: isSidebarOpen ? '0 16px' : '0', gap: '12px', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <button onClick={handleNewChat} title={t('aichat.new_chat', 'New Chat')} style={{ width: isSidebarOpen ? '100%' : '36px', height: '36px', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: 'none', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: isSidebarOpen ? 'flex-start' : 'center', padding: isSidebarOpen ? '0 16px' : '0', gap: '12px', cursor: 'pointer', transition: 'all 0.2s' }}>
                 <Plus size={16} style={{ flexShrink: 0 }} />
-                {isSidebarOpen && <span style={{ fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap' }}>New chat</span>}
+                {isSidebarOpen && <span style={{ fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap' }}>{t('aichat.new_chat', 'New chat')}</span>}
               </button>
             </div>
           </div>
@@ -457,7 +460,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
           {/* Sessions List */}
           {isSidebarOpen && (
             <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <div style={{ padding: '12px 8px 4px 8px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Recent</div>
+              <div style={{ padding: '12px 8px 4px 8px', fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('aichat.recent', 'Recent')}</div>
               {sessions.map(s => (
                 <button key={s.$id} title={s.title} onClick={() => handleSessionClick(s)} style={{ width: '100%', padding: '10px 12px', textAlign: 'left', background: currentSessionId === s.sessionId ? 'var(--bg-secondary)' : 'transparent', border: 'none', borderRadius: '8px', cursor: 'pointer', display: 'block', color: 'var(--text-primary)' }}>
                   <div style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -476,8 +479,8 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <img src={robotMascot} alt="Echo Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
               <div>
-                <div style={{ color: 'var(--accent-primary)', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.1em' }}>ECHO</div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>Security Intelligence Assistant</div>
+                <div style={{ color: 'var(--accent-primary)', fontWeight: 800, fontSize: '0.85rem', letterSpacing: '0.1em' }}>{t('aichat.echo_name', 'ECHO')}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>{t('aichat.echo_subtitle', 'Security Intelligence Assistant')}</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
@@ -524,7 +527,7 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder="Ask Echo..."
+              placeholder={t('aichat.input_placeholder', 'Ask Echo...')}
               style={{ flex: 1, background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '10px 12px', color: 'var(--text-primary)', fontSize: '0.85rem', outline: 'none' }}
             />
             <button onClick={sendMessage} disabled={loading || !input.trim()}

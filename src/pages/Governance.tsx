@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, Gavel, CheckCircle, XCircle, AlertTriangle, ArrowRight, Activity, FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Governance() {
+  const { t } = useTranslation();
   const [controls, setControls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +41,7 @@ export default function Governance() {
   if (loading && controls.length === 0) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[400px]">
-        <div className="animate-pulse text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">Evaluating Controls...</div>
+        <div className="animate-pulse text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">{t('governance.eval_controls')}</div>
       </div>
     );
   }
@@ -48,15 +50,15 @@ export default function Governance() {
     <div className="p-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">Governance & Compliance</h1>
-          <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mt-1">Regulatory Mapping (SOC2 / ISO 27001)</p>
+          <h1 className="text-3xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">{t('governance.title')}</h1>
+          <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mt-1">{t('governance.subtitle')}</p>
         </div>
         <button 
           onClick={triggerEvaluation}
           disabled={loading}
           className="px-6 py-2.5 bg-[var(--accent-primary)] text-black text-[10px] font-black uppercase tracking-widest italic rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
         >
-          {loading ? 'Evaluating...' : 'Trigger Audit Re-scan'}
+          {loading ? t('governance.evaluating') : t('governance.trigger_audit')}
         </button>
       </div>
 
@@ -65,7 +67,7 @@ export default function Governance() {
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
             <Shield className="w-20 h-20" />
           </div>
-          <p className="text-[10px] uppercase font-black text-[var(--text-secondary)] tracking-widest mb-2">Compliance Score</p>
+          <p className="text-[10px] uppercase font-black text-[var(--text-secondary)] tracking-widest mb-2">{t('governance.compliance_score')}</p>
           <p className="text-5xl font-black italic tracking-tighter" style={{ color: score > 80 ? 'var(--status-success)' : 'var(--status-warning)' }}>{score}%</p>
         </div>
         
@@ -73,7 +75,7 @@ export default function Governance() {
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
             <CheckCircle className="w-20 h-20" />
           </div>
-          <p className="text-[10px] uppercase font-black text-[var(--text-secondary)] tracking-widest mb-2">Passing Controls</p>
+          <p className="text-[10px] uppercase font-black text-[var(--text-secondary)] tracking-widest mb-2">{t('governance.passing_controls')}</p>
           <p className="text-5xl font-black italic tracking-tighter text-[var(--status-success)]">{passing}</p>
         </div>
 
@@ -81,7 +83,7 @@ export default function Governance() {
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
             <AlertTriangle className="w-20 h-20 text-red-500" />
           </div>
-          <p className="text-[10px] uppercase font-black text-[var(--text-secondary)] tracking-widest mb-2">Remediation Required</p>
+          <p className="text-[10px] uppercase font-black text-[var(--text-secondary)] tracking-widest mb-2">{t('governance.remediation_required')}</p>
           <p className="text-5xl font-black italic tracking-tighter text-red-500">{controls.length - passing}</p>
         </div>
       </div>
@@ -91,7 +93,7 @@ export default function Governance() {
           <div key={framework} className="flex flex-col gap-4">
             <div className="flex items-center gap-3 mb-2">
               <Gavel className="w-5 h-5 text-[var(--accent-primary)]" />
-              <h2 className="text-lg font-black uppercase italic tracking-tight text-[var(--text-primary)]">{framework} Framework</h2>
+              <h2 className="text-lg font-black uppercase italic tracking-tight text-[var(--text-primary)]">{t('governance.framework', { framework })}</h2>
             </div>
             
             <div className="flex flex-col gap-3">
@@ -109,23 +111,23 @@ export default function Governance() {
                     <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-tighter ${
                       c.status === 'passing' ? 'bg-[var(--status-success)]/10 text-[var(--status-success)]' : 'bg-red-500/10 text-red-400'
                     }`}>
-                      {c.status}
+                      {c.status === 'passing' ? t('governance.passing') : t('governance.failed')}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between pt-4 border-t border-[var(--border-subtle)]/50">
                     <div className="flex items-center gap-4">
                       <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Last Audit</span>
+                        <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase">{t('governance.last_audit')}</span>
                         <span className="text-[9px] font-bold text-[var(--text-primary)]">{new Date(c.lastEvaluated).toLocaleDateString()}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Evidence</span>
-                        <span className="text-[9px] font-bold text-[var(--text-primary)]">{JSON.parse(c.evidence || '[]').length} Logs</span>
+                        <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase">{t('governance.evidence')}</span>
+                        <span className="text-[9px] font-bold text-[var(--text-primary)]">{t('governance.logs', { count: JSON.parse(c.evidence || '[]').length })}</span>
                       </div>
                     </div>
                     <button className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors">
-                      View Audit Trail <ArrowRight className="w-3 h-3" />
+                      {t('governance.view_audit')} <ArrowRight className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
