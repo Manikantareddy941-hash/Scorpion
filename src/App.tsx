@@ -78,8 +78,10 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden" style={{ 
-      background: 'var(--bg-primary)', 
-      minHeight: '100vh'
+      background: 'transparent', 
+      minHeight: '100vh',
+      position: 'relative',
+      zIndex: 2
     }}>
       {networkError && (
         <div className="fixed top-0 left-0 w-full z-50 flex justify-center p-4 bg-transparent">
@@ -87,7 +89,7 @@ function App() {
         </div>
       )}
       <Toaster position="bottom-right" toastOptions={{ style: { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', fontSize: '12px', fontWeight: 'bold' } }} />
-      <div style={{ display: 'flex', alignItems: 'start', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      <div style={{ display: 'flex', alignItems: 'start', minHeight: '100vh', background: 'transparent' }}>
         {showSidebar && <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={setIsSidebarCollapsed} />}
         <div style={{ 
           flex: 1, 

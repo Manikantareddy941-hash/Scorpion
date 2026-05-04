@@ -66,27 +66,6 @@ html.eye-protection {
   --severity-info: #4682b4;
 }
 
-/* Snow Light Mode */
-html.snow-light {
-  --bg-primary: #ffffff;
-  --bg-card: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --border-subtle: #e2e8f0;
-  --border-color: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --text-on-accent: #ffffff;
-  --accent-primary: #38bdf8;
-  --accent-secondary: #0ea5e9;
-  --status-success: #10b981;
-  --status-error: #f43f5e;
-  --status-warning: #f59e0b;
-  --severity-critical: #f43f5e;
-  --severity-high: #fb923c;
-  --severity-medium: #f59e0b;
-  --severity-low: #10b981;
-  --severity-info: #38bdf8;
-}
 
 
 /* Underwater Theme */
@@ -147,6 +126,75 @@ html.underwater .premium-card {
   100% { transform: translateY(-10vh) translateX(20px) scale(1.3); opacity: 0; }
 }
 
+/* Matrix Theme */
+html.matrix {
+  --bg-primary: rgba(0, 0, 0, 0.85);
+  --bg-card: rgba(3, 15, 3, 0.6);
+  --bg-secondary: rgba(2, 10, 2, 0.5);
+  --border-subtle: rgba(0, 255, 65, 0.15);
+  --border-color: rgba(0, 255, 65, 0.15);
+  --text-primary: #00ff41;
+  --text-secondary: #007a1f;
+  --text-on-accent: #000000;
+  --accent-primary: #00ff41;
+  --accent-secondary: #00cc33;
+  --status-success: #00ff41;
+  --status-error: #ff0040;
+  --status-warning: #ffcc00;
+  --severity-critical: #ff0040;
+  --severity-high: #ff6600;
+  --severity-medium: #ffcc00;
+  --severity-low: #00ff41;
+  --severity-info: #00ccff;
+}
+
+html.matrix body {
+  background: #000000 !important;
+}
+
+html.matrix #root {
+  position: relative;
+  z-index: 2;
+  background: transparent !important;
+}
+
+/* Only premium-card gets glass */
+html.matrix .premium-card {
+  background: rgba(0, 30, 0, 0.25) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  border: 1px solid rgba(0, 255, 65, 0.15) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+}
+
+html.matrix .premium-card:hover {
+  border-color: rgba(0, 255, 65, 0.35) !important;
+}
+
+/* Button text fixes */
+html.matrix .btn-premium {
+  background: #00ff41 !important;
+  color: #000000 !important;
+}
+
+html.matrix button {
+  color: #00ff41 !important;
+}
+
+/* ── SCROLLBAR ── */
+html.matrix ::-webkit-scrollbar-track {
+  background: rgba(0, 10, 0, 0.3) !important;
+}
+html.matrix ::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 65, 0.3) !important;
+  border-radius: 4px;
+}
+
+@keyframes matrixGlobeSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
 .underwater-bubble {
   position: fixed;
   bottom: -40px;
@@ -165,39 +213,6 @@ body {
   min-height: 100vh;
 }
 
-/* Snowfall Animation */
-.snow-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 9999;
-  overflow: hidden;
-}
-
-.snowflake {
-  position: absolute;
-  top: -10px;
-  background: white;
-  border-radius: 50%;
-  opacity: 0.8;
-  animation: fall linear infinite;
-}
-
-html.snow-light .snowflake {
-  background: #cbd5e1;
-}
-
-@keyframes fall {
-  from {
-    transform: translateY(-10px) translateX(0);
-  }
-  to {
-    transform: translateY(100vh) translateX(20px);
-  }
-}
 
 @layer components {
   .premium-card {
