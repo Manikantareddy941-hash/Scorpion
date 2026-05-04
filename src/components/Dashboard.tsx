@@ -385,8 +385,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   const trendIsUp = complianceTrend.length > 1 && complianceTrend[complianceTrend.length - 1].score >= complianceTrend[0].score;
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col transition-colors duration-300">
-      <nav className="bg-[var(--bg-primary)] backdrop-blur-md shadow-sm border-b border-[var(--border-subtle)] sticky top-0 z-40 text-[var(--text-primary)]">
+    <div className="min-h-screen flex flex-col transition-colors duration-300" style={{ background: 'transparent' }}>
+      <nav className="backdrop-blur-md shadow-sm border-b border-[var(--border-subtle)] sticky top-0 z-40 text-[var(--text-primary)]" style={{ background: 'transparent' }}>
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-end items-center h-16">
             <div className="flex items-center gap-6">
@@ -469,7 +469,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
         </div>
       </nav>
 
-      <main className="flex-1 max-w-full mx-auto py-8 w-full overflow-y-auto pl-0 pr-4 sm:pr-6 lg:pr-8">
+      <main className="flex-1 max-w-full mx-auto py-8 w-full overflow-y-auto pl-0 pr-4 sm:pr-6 lg:pr-8" style={{ position: 'relative', zIndex: 1 }}>
         {/* Top Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <CIGateSummaryCard scans={recentScans} />
