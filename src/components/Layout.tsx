@@ -16,11 +16,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isThemeOpen, setIsThemeOpen] = React.useState(false);
 
   return (
-    <div className="flex flex-col min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+    <div className="flex flex-col min-h-screen text-[var(--text-primary)]" style={{ background: 'transparent' }}>
       <div className="flex flex-1 items-start">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-16 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)] flex items-center justify-between px-8 sticky top-0 z-40">
+          <header className="h-16 border-b border-[var(--border-subtle)] flex items-center justify-between px-8 sticky top-0 z-40" style={{ background: 'transparent' }}>
             <div className="flex items-center bg-[var(--bg-card)] rounded-lg px-4 py-2 border border-[var(--border-subtle)] w-96">
               <Search className="w-4 h-4 text-[var(--text-secondary)] mr-2" />
               <input 
@@ -96,7 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto custom-scrollbar">
+          <main className="flex-1 overflow-y-auto custom-scrollbar" style={{ position: 'relative', zIndex: 1 }}>
             <div className="p-8">
               {children}
             </div>

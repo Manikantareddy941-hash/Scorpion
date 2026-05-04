@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
     Save, Loader2, LogOut, Moon, Sun,
-    Terminal, Github, Eye, Snowflake, Camera, Upload, Waves, Activity
+    Terminal, Github, Eye, Snowflake, Camera, Upload, Waves, Activity, Cpu
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -253,6 +253,7 @@ export default function Settings() {
                                 { id: 'snow-light', label: 'Snow Light', icon: Snowflake, desc: 'Arctic day with active precipitation' },
                                 { id: 'snow-dark', label: 'Snow Dark', icon: Snowflake, desc: 'Arctic night with active precipitation' },
                                 { id: 'underwater', label: 'Underwater', icon: Waves, desc: 'Deep sea stealth mode with caustic light' },
+                                { id: 'matrix', label: 'Matrix', icon: Cpu, desc: 'Particle globe · green terminal · cyber ops' },
                             ].map((t) => (
                                 <button
                                     key={t.id}
