@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   Shield, AlertTriangle, Bug, Wind,
-  CheckCircle2, ArrowLeft, Clock, Activity, Loader2, Download, FileJson, FileText
+  CheckCircle2, ArrowLeft, Clock, Activity, Loader2
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query, Client } from 'appwrite';
 import FindingsTable from '../components/FindingsTable';
 import SBOMExportButton from '../components/SBOMExportButton';
+import { useTranslation } from 'react-i18next';
 
 /* ─── Types ──────────────────────────────────────────── */
 interface Scan {
@@ -41,9 +42,10 @@ const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2
 
 /* ─── Component ──────────────────────────────────────── */
 export default function ScanResults() {
+  const { t } = useTranslation();
   const location = useLocation();
   const scanId: string | undefined = location.state?.scanId;
-  const scanTarget: string = location.state?.scanTarget || 'Unknown';
+  const scanTarget: string = location.state?.scanTarget || t('common.unknown', 'Unknown');
 
   const [scan, setScan] = useState<Scan | null>(null);
   const [findings, setFindings] = useState<AppwriteFinding[]>([]);
@@ -61,11 +63,9 @@ export default function ScanResults() {
 
     const load = async () => {
       try {
-        // 1. Fetch the scan document
         const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
         setScan(scanDoc as unknown as Scan);
 
-        // 2. Fetch all findings where scanId == this scan
         const findingsRes = await databases.listDocuments(
           DB_ID,
           COLLECTIONS.VULNERABILITIES,
@@ -76,14 +76,14 @@ export default function ScanResults() {
         );
         setFindings(sorted);
       } catch (err: any) {
-        setError(err?.message || 'Failed to load scan results.');
+        setError(err?.message || t('scan_results.load_failed', 'Failed to load scan results.'));
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, [scanId]);
+  }, [scanId, t]);
 
   /* ── Realtime subscription for scan status ── */
   useEffect(() => {
@@ -102,11 +102,10 @@ export default function ScanResults() {
       ) {
         setScan(prev => ({ ...prev, ...response.payload } as Scan));
 
-        // When scan completes, re-fetch findings in case new ones arrived
         if (response.payload.status === 'completed') {
           databases.listDocuments(
             DB_ID,
-            COLLECTIONS.FINDINGS,
+            COLLECTIONS.VULNERABILITIES,
             [Query.equal('scanId', scanId!), Query.limit(500)]
           ).then(res => {
             const sorted = (res.documents as unknown as AppwriteFinding[]).sort(
@@ -129,7 +128,7 @@ export default function ScanResults() {
         <div className="text-center">
           <Shield className="w-12 h-12 text-[var(--accent-primary)] animate-pulse mx-auto mb-4" />
           <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">
-            Retrieving Audit Data...
+            {t('scan_results.retrieving', 'Retrieving Audit Data...')}
           </h2>
         </div>
       </div>
@@ -143,7 +142,7 @@ export default function ScanResults() {
         <div className="text-center max-w-md">
           <AlertTriangle className="w-12 h-12 text-[var(--severity-high)] mx-auto mb-4" />
           <p className="text-[var(--text-secondary)] text-sm">{error}</p>
-          <Link to="/" className="btn-premium mt-6 inline-flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</Link>
+          <Link to="/" className="btn-premium mt-6 inline-flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> {t('scan_results.back', 'Back')}</Link>
         </div>
       </div>
     );
@@ -154,8 +153,8 @@ export default function ScanResults() {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-8">
         <div className="text-center">
-          <p className="text-[var(--text-secondary)]">No scan selected.</p>
-          <Link to="/" className="btn-premium mt-6 inline-flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> Back</Link>
+          <p className="text-[var(--text-secondary)]">{t('scan_results.no_scan_selected', 'No scan selected.')}</p>
+          <Link to="/" className="btn-premium mt-6 inline-flex items-center gap-2"><ArrowLeft className="w-4 h-4" /> {t('scan_results.back', 'Back')}</Link>
         </div>
       </div>
     );
@@ -163,95 +162,6 @@ export default function ScanResults() {
 
   const total = findings.length;
   const isRunning = scan.status === 'scanning' || scan.status === 'running';
-
-  /* ── Export Logic ── */
-  const exportCSV = () => {
-    if (!scan || findings.length === 0) return;
-    const headers = ['Vulnerability ID', 'Severity', 'Package', 'Installed Version', 'Fixed Version', 'Description'];
-    const rows = findings.map(f => [
-      f.title || 'N/A',
-      f.severity || 'UNKNOWN',
-      f.package || 'N/A',
-      f.installedVersion || 'N/A',
-      f.fixedVersion || 'N/A',
-      `"${(f.description || '').replace(/"/g, '""')}"`
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const date = new Date().toISOString().split('T')[0];
-    const target = (scan.repoUrl || scanTarget).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    link.setAttribute('download', `sbom-${target}-${date}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportCycloneDX = () => {
-    if (!scan || findings.length === 0) return;
-    
-    const components = findings.map(f => {
-      const purl = `pkg:generic/${f.package || 'unknown'}@${f.installedVersion || 'latest'}`;
-      return {
-        type: "library",
-        name: f.package || 'unknown',
-        version: f.installedVersion || 'unknown',
-        purl: purl,
-        evidence: {
-          identity: {
-            field: "purl",
-            confidence: 1
-          }
-        },
-        properties: [
-          { name: "aquasecurity:trivy:VulnerabilityID", value: f.title || "UNKNOWN" },
-          { name: "aquasecurity:trivy:Severity", value: f.severity || "UNKNOWN" }
-        ]
-      };
-    });
-
-    const uniqueComponents = Array.from(new Map(components.map(c => [`${c.name}-${c.version}`, c])).values());
-
-    const sbom = {
-      bomFormat: "CycloneDX",
-      specVersion: "1.5",
-      serialNumber: `urn:uuid:${crypto.randomUUID ? crypto.randomUUID() : 'sbom-' + Date.now()}`,
-      version: 1,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        tools: [
-          {
-            vendor: "Aqua Security",
-            name: "Trivy",
-            version: scan.scannerVersion || "Unknown"
-          },
-          {
-            vendor: "SCORPION",
-            name: "Security Engine",
-            version: "1.0.0"
-          }
-        ],
-        component: {
-          type: "application",
-          name: scan.repoUrl || scanTarget
-        }
-      },
-      components: uniqueComponents
-    };
-
-    const blob = new Blob([JSON.stringify(sbom, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const date = new Date().toISOString().split('T')[0];
-    const target = (scan.repoUrl || scanTarget).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    link.setAttribute('download', `sbom-${target}-${date}.json`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const stats = [
     { label: 'CRITICAL', value: scan.criticalCount, color: 'var(--severity-critical)', icon: Shield },
@@ -271,14 +181,13 @@ export default function ScanResults() {
               <Activity className="w-7 h-7" />
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">Scan Results</h1>
+              <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">{t('scan_results.title', 'Scan Results')}</h1>
               <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono truncate max-w-[300px]">
-                TARGET: {scan.repoUrl || scanTarget}
+                {t('scan_results.target_label', 'TARGET')}: {scan.repoUrl || scanTarget}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {/* Live status badge */}
             <span style={{
               padding: '6px 14px',
               borderRadius: '999px',
@@ -294,7 +203,7 @@ export default function ScanResults() {
               border: `1px solid ${isRunning ? '#fbbf24' : scan.status === 'completed' ? '#4ade80' : '#f87171'}44`,
             }}>
               {isRunning ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : null}
-              {scan.status.toUpperCase()}
+              {t(`dashboard.status_${scan.status}`, scan.status).toUpperCase()}
             </span>
             
             <SBOMExportButton 
@@ -303,7 +212,7 @@ export default function ScanResults() {
             />
 
             <Link to="/" className="btn-premium flex items-center gap-2">
-              <ArrowLeft className="w-4 h-4" /> Back to Control
+               <ArrowLeft className="w-4 h-4" /> {t('scan_results.back_to_control', 'Back to Control')}
             </Link>
           </div>
         </div>
@@ -311,15 +220,15 @@ export default function ScanResults() {
         {/* Summary Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {[
-            { label: 'Total Findings', value: total, icon: Bug },
-            { label: 'Visibility',     value: scan.visibility || 'N/A', icon: Shield },
-            { label: 'Scanner',        value: scan.scannerVersion || 'N/A', icon: Activity },
-            { label: 'Scanned At',     value: scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A', icon: Clock },
-          ].map(({ label, value, icon: Icon }) => (
+            { label: 'Total Findings', value: total, icon: Bug, key: 'total_findings' },
+            { label: 'Visibility',     value: scan.visibility || t('common.not_available', 'N/A'), icon: Shield, key: 'visibility' },
+            { label: 'Scanner',        value: scan.scannerVersion || t('common.not_available', 'N/A'), icon: Activity, key: 'scanner' },
+            { label: 'Scanned At',     value: scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('common.not_available', 'N/A'), icon: Clock, key: 'scanned_at' },
+          ].map(({ label, value, icon: Icon, key }) => (
             <div key={label} className="premium-card p-6 group">
               <div className="flex items-center gap-3 mb-2">
                 <Icon className="w-4 h-4 text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)] transition-colors" />
-                <span className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{label}</span>
+                <span className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{t(`scan_results.${key}`, label)}</span>
               </div>
               <div className="text-2xl font-black italic tracking-tighter truncate">{value}</div>
             </div>
@@ -332,7 +241,7 @@ export default function ScanResults() {
             <div key={label} className="premium-card p-5 text-center group" style={{ borderColor: `${color}33` }}>
               <Icon className="w-6 h-6 mx-auto mb-3 transition-transform group-hover:scale-110" style={{ color }} />
               <div className="text-3xl font-black italic tracking-tighter mb-1" style={{ color }}>{value}</div>
-              <div className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{label}</div>
+              <div className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{t(`scan_results.severity.${label.toLowerCase()}`, label)}</div>
             </div>
           ))}
         </div>
@@ -340,22 +249,22 @@ export default function ScanResults() {
         {/* Findings Table */}
         <div className="premium-card overflow-hidden">
           <div className="p-8 border-b border-[var(--border-subtle)] bg-[var(--text-primary)]/5 flex justify-between items-center">
-            <h2 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Detected Issues</h2>
+            <h2 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('scan_results.detected_issues', 'Detected Issues')}</h2>
             <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic bg-[var(--bg-secondary)] px-3 py-1 rounded-full border border-[var(--border-subtle)]">
-              {total} Findings
+              {t('scan_results.findings_count', { count: total, defaultValue: `${total} Findings` })}
             </span>
           </div>
           {isRunning ? (
             <div className="p-20 text-center flex flex-col items-center justify-center">
               <Loader2 className="w-10 h-10 text-[var(--accent-primary)] mb-4" style={{ animation: 'spin 1s linear infinite' }} />
               <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">
-                Scan in progress — results will appear automatically...
+                {t('scan_results.scan_in_progress', 'Scan in progress — results will appear automatically...')}
               </p>
             </div>
           ) : findings.length === 0 ? (
             <div className="p-20 text-center flex flex-col items-center justify-center">
               <CheckCircle2 className="w-12 h-12 text-[var(--status-success)] mb-4 animate-bounce" />
-              <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">No vulnerabilities identified. Code is secure.</p>
+              <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">{t('scan_results.no_vulnerabilities', 'No vulnerabilities identified. Code is secure.')}</p>
             </div>
           ) : (
             <FindingsTable findings={findings} />

@@ -52,7 +52,10 @@ const SecurityRadarChart = memo(({ data, isSidebarCollapsed }: { data: any[], is
   </ResponsiveContainer>
 ));
 
+import { useTranslation } from 'react-i18next';
+
 export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: boolean }) {
+  const { t } = useTranslation();
   console.log('CRITICAL: Dashboard component v2 loading...');
   const { user, signOut } = useAuth();
   const { theme, setTheme, getLogoFilter } = useTheme();
@@ -80,14 +83,14 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   const securityScore = Math.max(0, 100 - ((latestScan?.criticalCount ?? 0) * 10) - ((latestScan?.highCount ?? 0) * 5));
 
   const metrics = [
-    { label: 'Critical', value: latestScan?.criticalCount ?? 0, icon: ShieldX, color: '#ff5252' },
-    { label: 'High Risk', value: latestScan?.highCount ?? 0, icon: ShieldAlert, color: '#ff8a80' },
-    { label: 'Medium Risk', value: latestScan?.mediumCount ?? 0, icon: AlertCircle, color: '#ffd740' },
-    { label: 'Low Risk', value: latestScan?.lowCount ?? 0, icon: ShieldCheck, color: '#00ffcc' },
-    { label: 'Bugs', value: latestScan?.bugCount ?? 0, icon: Bug, color: '#00e5ff' },
-    { label: 'Vulnerabilities', value: (latestScan?.criticalCount ?? 0) + (latestScan?.highCount ?? 0) + (latestScan?.mediumCount ?? 0) + (latestScan?.lowCount ?? 0), icon: Activity, color: '#38bdf8' },
-    { label: 'Code Smells', value: latestScan?.codeSmellCount ?? 0, icon: Wind, color: '#fbbf24' },
-    { label: 'Security', value: `${securityScore}%`, icon: Zap, color: '#00ffa3' },
+    { label: t('dashboard.critical_vulnerabilities'), value: latestScan?.criticalCount ?? 0, icon: ShieldX, color: '#ff5252' },
+    { label: t('dashboard.high_vulnerabilities'), value: latestScan?.highCount ?? 0, icon: ShieldAlert, color: '#ff8a80' },
+    { label: t('dashboard.medium_vulnerabilities'), value: latestScan?.mediumCount ?? 0, icon: AlertCircle, color: '#ffd740' },
+    { label: t('dashboard.low_vulnerabilities', 'Low Risk'), value: latestScan?.lowCount ?? 0, icon: ShieldCheck, color: '#00ffcc' },
+    { label: t('reports.bugs'), value: latestScan?.bugCount ?? 0, icon: Bug, color: '#00e5ff' },
+    { label: t('reports.vulnerabilities'), value: (latestScan?.criticalCount ?? 0) + (latestScan?.highCount ?? 0) + (latestScan?.mediumCount ?? 0) + (latestScan?.lowCount ?? 0), icon: Activity, color: '#38bdf8' },
+    { label: t('dashboard.code_smells', 'Code Smells'), value: latestScan?.codeSmellCount ?? 0, icon: Wind, color: '#fbbf24' },
+    { label: t('dashboard.security_posture'), value: `${securityScore}%`, icon: Zap, color: '#00ffa3' },
   ];
 
   const threatData = [
@@ -364,7 +367,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <img src={logoImg} alt="Scorpion Logo" className="w-16 h-16 object-contain animate-pulse" style={{ filter: getLogoFilter(), mixBlendMode: 'multiply' }} />
-          <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">Initializing Scorpion Protocols...</h2>
+          <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">{t('dashboard.initializing')}</h2>
         </div>
       </div>
     );
@@ -427,7 +430,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                     )}
                   </div>
                   <div className="hidden md:block">
-                    <p className="text-[10px] font-black text-[var(--text-primary)] leading-none italic uppercase">Operator</p>
+                    <p className="text-[10px] font-black text-[var(--text-primary)] leading-none italic uppercase">{t('dashboard.operator')}</p>
                     <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter mt-1">{user?.email}</p>
                   </div>
                   <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform ${isNavOpen ? 'rotate-180' : ''}`} />
@@ -458,7 +461,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest italic text-[var(--status-error)] hover:bg-[var(--status-error)]/5 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
-                        Disconnect
+                        {t('dashboard.disconnect')}
                       </button>
                     </div>
                   </>
@@ -473,9 +476,9 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
         {/* Top Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <CIGateSummaryCard scans={recentScans} />
-          <MetricCard icon={Shield} label="Total Assets" value={repositories.length} trend="+2 New" color="#0ea5e9" />
-          <MetricCard icon={Activity} label="Scans (24h)" value={recentScans.filter(s => new Date(s.$createdAt) > new Date(Date.now() - 86400000)).length} trend="Active" color="#f59e0b" />
-          <MetricCard icon={Gavel} label="Policy Pass" value={`${complianceScore}%`} trend={trendIsUp ? 'UP ▲' : 'DOWN ▼'} color={complianceColor} />
+          <MetricCard icon={Shield} label={t('dashboard.total_assets')} value={repositories.length} trend="+2 New" color="#0ea5e9" />
+          <MetricCard icon={Activity} label={t('dashboard.active_scans')} value={recentScans.filter(s => new Date(s.$createdAt) > new Date(Date.now() - 86400000)).length} trend="Active" color="#f59e0b" />
+          <MetricCard icon={Gavel} label={t('dashboard.policy_pass')} value={`${complianceScore}%`} trend={trendIsUp ? 'UP ▲' : 'DOWN ▼'} color={complianceColor} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
@@ -492,13 +495,13 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                   <div className="relative z-10 flex flex-col h-full w-full">
                     <div className="flex items-center justify-between mb-8">
                       <div>
-                        <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Security Pulse</h2>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Real-time Anomaly Vectors</p>
+                        <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('dashboard.security_pulse')}</h2>
+                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">{t('dashboard.real_time_anomalies')}</p>
                       </div>
                       <div className="flex items-center gap-4">
                         {lastRefreshed && (
                           <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic opacity-50">
-                            Updated {lastRefreshed.toLocaleTimeString()}
+                            {t('dashboard.updated_at', { time: lastRefreshed.toLocaleTimeString() })}
                           </span>
                         )}
                         <button
@@ -508,7 +511,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                         >
                           <div className={`w-1.5 h-1.5 bg-[var(--status-success)] rounded-full ${refreshing ? 'animate-ping' : 'animate-pulse'}`} />
                           <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">
-                            {refreshing ? 'Syncing...' : 'Manual Refresh'}
+                            {refreshing ? t('dashboard.syncing') : t('dashboard.manual_refresh')}
                           </span>
                           {refreshing && (
                             <svg className="w-3 h-3 text-[var(--status-success)] animate-spin" fill="none" viewBox="0 0 24 24">
@@ -526,7 +529,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           <div className="w-12 h-12 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-subtle)] flex items-center justify-center animate-pulse">
                             <AlertCircle className="w-6 h-6 text-[var(--text-secondary)] opacity-50" />
                           </div>
-                          <p className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic">NO SCAN DATA — RUN A SCAN</p>
+                          <p className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic">{t('dashboard.no_scan_data')}</p>
                         </div>
                       ) : mounted && (
                         <div style={{ width: '100%', height: 350 }}>
@@ -566,18 +569,18 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
               <div className="relative z-10 flex flex-col h-full">
                 <div className="flex items-center gap-2 mb-6">
                   <GitCompare className="w-5 h-5 text-[var(--accent-primary)]" />
-                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Scan Delta</h2>
+                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('dashboard.scan_delta')}</h2>
                 </div>
 
                 {!scanDelta ? (
-                  <div className="flex-1 flex items-center justify-center text-[var(--text-secondary)] text-sm italic">Loading delta...</div>
+                  <div className="flex-1 flex items-center justify-center text-[var(--text-secondary)] text-sm italic">{t('dashboard.loading_delta')}</div>
                 ) : scanDelta.noPrev ? (
                   <div className="flex-1 flex items-center justify-center text-[var(--text-secondary)] text-sm font-bold uppercase tracking-widest italic opacity-50">
-                    First scan — no delta available
+                    {t('dashboard.first_scan_notice')}
                   </div>
                 ) : scanDelta.newFindings.length === 0 && scanDelta.fixedFindings.length === 0 ? (
                   <div className="flex-1 flex items-center justify-center text-[var(--status-success)] text-sm font-bold uppercase tracking-widest italic">
-                    No changes since last scan
+                    {t('dashboard.no_changes_notice')}
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-6 flex-1">
@@ -585,7 +588,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-[#ff5252]" />
-                        <span className="text-[#ff5252] font-black uppercase tracking-widest text-sm">{scanDelta.newFindings.length} New Issues</span>
+                        <span className="text-[#ff5252] font-black uppercase tracking-widest text-sm">{scanDelta.newFindings.length} {t('dashboard.new_issues')}</span>
                       </div>
                       <div className="flex flex-col gap-2">
                         {scanDelta.newFindings.slice(0, 5).map((v: any, i: number) => (
@@ -602,7 +605,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-[#00ffa3]" />
-                        <span className="text-[#00ffa3] font-black uppercase tracking-widest text-sm">{scanDelta.fixedFindings.length} Fixed</span>
+                        <span className="text-[#00ffa3] font-black uppercase tracking-widest text-sm">{scanDelta.fixedFindings.length} {t('dashboard.fixed')}</span>
                       </div>
                       <div className="flex flex-col gap-2">
                         {scanDelta.fixedFindings.slice(0, 5).map((v: any, i: number) => (
@@ -629,16 +632,16 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Compliance Health</h2>
+                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('dashboard.compliance_health')}</h2>
                   <Link to="/governance" className="px-3 py-1.5 bg-[var(--text-primary)]/5 border border-[var(--border-subtle)] rounded-lg text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-primary)]/50 transition-all flex items-center gap-1 group/btn">
-                    View Governance <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
+                    {t('dashboard.view_governance')} <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
                   </Link>
                 </div>
-                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mb-6">30-Day Policy Adherence</p>
+                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mb-6">{t('dashboard.policy_adherence_notice')}</p>
 
                 {loadingCompliance ? (
                   <div className="flex items-center justify-center py-12">
-                    <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] animate-pulse tracking-widest">Evaluating Checks...</span>
+                    <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] animate-pulse tracking-widest">{t('dashboard.evaluating_checks')}</span>
                   </div>
                 ) : (
                   <>
@@ -660,7 +663,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           {complianceScore}%
                         </span>
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] italic text-[var(--text-secondary)] mt-1">
-                          Pass Rate
+                          {t('dashboard.pass_rate')}
                         </span>
                       </div>
                     </div>
@@ -709,7 +712,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Live Threats</h2>
+                      <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('dashboard.live_threats')}</h2>
                       <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Runtime Anomalies</p>
                     </div>
                     <div className="bg-red-500/20 px-2 py-1 rounded text-[9px] font-black text-red-400 animate-pulse">LIVE</div>
@@ -719,7 +722,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                     {incidents.filter(i => i.source === 'falco').length === 0 ? (
                       <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-[var(--border-subtle)] rounded-2xl opacity-50">
                         <ShieldCheck className="w-8 h-8 text-[var(--status-success)] mb-2" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">No active threats</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">{t('dashboard.no_threats')}</span>
                       </div>
                     ) : (
                       incidents.filter(i => i.source === 'falco').slice(0, 3).map((inc) => (
@@ -746,17 +749,17 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Active Incidents</h2>
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">Pending Resolution</p>
+                      <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('dashboard.active_incidents')}</h2>
+                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">{t('dashboard.pending_resolution')}</p>
                     </div>
-                    <div className="bg-[var(--accent-primary)]/20 px-2 py-1 rounded text-[9px] font-black text-[var(--accent-primary)]">{incidents.length} OPEN</div>
+                    <div className="bg-[var(--accent-primary)]/20 px-2 py-1 rounded text-[9px] font-black text-[var(--accent-primary)]">{incidents.length} {t('dashboard.open_incidents_count')}</div>
                   </div>
 
                   <div className="flex flex-col gap-3">
                     {incidents.length === 0 ? (
                       <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-[var(--border-subtle)] rounded-2xl opacity-50">
                         <CheckCircle className="w-8 h-8 text-[var(--status-success)] mb-2" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">All clear</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">{t('dashboard.all_clear')}</span>
                       </div>
                     ) : (
                       incidents.slice(0, 3).map((inc) => (
@@ -767,7 +770,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-[8px] font-bold text-red-400 uppercase tracking-widest">{inc.severity}</span>
-                            <button className="text-[8px] font-black text-[var(--accent-primary)] uppercase opacity-0 group-hover/inc:opacity-100 transition-opacity">Acknowledge</button>
+                            <button className="text-[8px] font-black text-[var(--accent-primary)] uppercase opacity-0 group-hover/inc:opacity-100 transition-opacity">{t('dashboard.acknowledge')}</button>
                           </div>
                         </div>
                       ))
@@ -781,7 +784,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
             <div className="lg:col-span-4">
               <div className="premium-card p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Scan Registry</h2>
+                  <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('dashboard.scan_registry')}</h2>
                   <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Recent</span>
                 </div>
                 <div className="flex flex-col gap-2 flex-1">
@@ -800,6 +803,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 }
 
 function CIGateSummaryCard({ scans }: { scans: any[] }) {
+  const { t } = useTranslation();
   const ciScans = scans.filter(s => s.scanType === 'ci_pipeline' || s.scan_type === 'ci_pipeline');
   const passed = ciScans.filter(s => s.gateStatus === 'passed').length;
   const failed = ciScans.filter(s => s.gateStatus === 'failed').length;
@@ -812,20 +816,20 @@ function CIGateSummaryCard({ scans }: { scans: any[] }) {
       </div>
       <div className="relative z-10 h-full flex flex-col justify-between">
         <div>
-          <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-1">CI Gate Integrity</p>
+          <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-1">{t('dashboard.ci_gate_integrity')}</p>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black italic tracking-tighter text-[var(--text-primary)]">{rate}%</span>
-            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">Success Rate</span>
+            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">{t('dashboard.success_rate')}</span>
           </div>
         </div>
         <div className="mt-4 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between">
           <div className="flex gap-4">
             <div>
-              <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Passed</p>
+              <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">{t('dashboard.passed')}</p>
               <p className="text-sm font-black text-[var(--status-success)]">{passed}</p>
             </div>
             <div>
-              <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Blocked</p>
+              <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">{t('dashboard.blocked')}</p>
               <p className="text-sm font-black text-[var(--status-error)]">{failed}</p>
             </div>
           </div>
@@ -841,9 +845,10 @@ function CIGateSummaryCard({ scans }: { scans: any[] }) {
 }
 
 function ScanHistoryRow({ scan, compact = false }: { scan: any, compact?: boolean }) {
+  const { t } = useTranslation();
   const gateIcon: Record<string, any> = {
-    passed: <span className="text-[var(--status-success)] flex items-center gap-1"><CheckCircle className="w-3 h-3" /> PASS</span>,
-    failed: <span className="text-[var(--status-error)] flex items-center gap-1"><XCircle className="w-3 h-3" /> FAIL</span>,
+    passed: <span className="text-[var(--status-success)] flex items-center gap-1"><CheckCircle className="w-3 h-3" /> {t('dashboard.pass')}</span>,
+    failed: <span className="text-[var(--status-error)] flex items-center gap-1"><XCircle className="w-3 h-3" /> {t('dashboard.fail')}</span>,
     not_applicable: <span className="text-[var(--text-secondary)]">— N/A</span>
   };
 
@@ -891,18 +896,18 @@ function ScanHistoryRow({ scan, compact = false }: { scan: any, compact?: boolea
       {!compact && (
         <div className="hidden md:flex items-center gap-6 px-4">
           <div className="text-center">
-            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1">Critical</p>
+            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1">{t('dashboard.critical')}</p>
             <p className="text-xs font-black text-[var(--status-error)]">{scan.criticalCount || 0}</p>
           </div>
           <div className="text-center">
-            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1">High</p>
+            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1">{t('dashboard.high')}</p>
             <p className="text-xs font-black text-[#ff8c00]">{scan.highCount || 0}</p>
           </div>
         </div>
       )}
 
       <div className="shrink-0 text-right min-w-[80px]">
-        <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1 tracking-widest">Gate Result</p>
+        <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase mb-1 tracking-widest">{t('dashboard.gate_result')}</p>
         <div className="text-[10px] font-black italic tracking-tighter">
           {gateIcon[status]}
         </div>

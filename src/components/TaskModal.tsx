@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 interface TaskModalProps {
   task: any | null;
@@ -10,6 +11,7 @@ interface TaskModalProps {
 }
 
 export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -27,7 +29,6 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       setStatus(task.status);
       setPriority(task.priority);
       setDueDate(task.due_date ? task.due_date.split('T')[0] : '');
-      setRepoUrl(task.repo_url || '');
       setRepoUrl(task.repo_url || '');
     }
   }, [task]);
@@ -58,7 +59,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
 
       onSave();
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(err.message || t('common.error_occurred', 'An error occurred'));
     } finally {
       setLoading(false);
     }
@@ -69,7 +70,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-[var(--border-subtle)]">
           <h2 className="text-2xl font-black italic tracking-tighter text-[var(--text-primary)]">
-            {task ? 'REDEFINE PROTOCOL' : 'INITIATE NEW TASK'}
+            {task ? t('tasks.modal.edit_title', 'REDEFINE PROTOCOL') : t('tasks.modal.create_title', 'INITIATE NEW TASK')}
           </h2>
           <button
             onClick={onClose}
@@ -88,7 +89,7 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
 
           <div>
             <label htmlFor="title" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
-              Task Title <span className="text-[var(--status-error)]">*</span>
+              {t('tasks.modal.title_label', 'Task Title')} <span className="text-[var(--status-error)]">*</span>
             </label>
             <input
               id="title"
@@ -97,13 +98,13 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               onChange={(e) => setTitle(e.target.value)}
               required
               className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50"
-              placeholder="Enter task title"
+              placeholder={t('tasks.modal.title_placeholder', 'Enter task title')}
             />
           </div>
 
           <div>
             <label htmlFor="description" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
-              Description
+              {t('tasks.modal.description_label', 'Description')}
             </label>
             <textarea
               id="description"
@@ -111,14 +112,14 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
               className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition resize-none text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50"
-              placeholder="Enter task description"
+              placeholder={t('tasks.modal.description_placeholder', 'Enter task description')}
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="status" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
-                Status
+                {t('tasks.modal.status_label', 'Status')}
               </label>
               <select
                 id="status"
@@ -126,15 +127,15 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 onChange={(e) => setStatus(e.target.value)}
                 className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)]"
               >
-                <option value="todo" className="bg-[var(--bg-card)]">To Do</option>
-                <option value="in_progress" className="bg-[var(--bg-card)]">In Progress</option>
-                <option value="completed" className="bg-[var(--bg-card)]">Completed</option>
+                <option value="todo" className="bg-[var(--bg-card)]">{t('tasks.modal.status_todo', 'To Do')}</option>
+                <option value="in_progress" className="bg-[var(--bg-card)]">{t('tasks.modal.status_in_progress', 'In Progress')}</option>
+                <option value="completed" className="bg-[var(--bg-card)]">{t('tasks.modal.status_completed', 'Completed')}</option>
               </select>
             </div>
  
             <div>
               <label htmlFor="priority" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
-                Priority
+                {t('tasks.modal.priority_label', 'Priority')}
               </label>
               <select
                 id="priority"
@@ -142,16 +143,16 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
                 onChange={(e) => setPriority(e.target.value)}
                 className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)] outline-none transition text-[var(--text-primary)]"
               >
-                <option value="low" className="bg-[var(--bg-card)]">Low</option>
-                <option value="medium" className="bg-[var(--bg-card)]">Medium</option>
-                <option value="high" className="bg-[var(--bg-card)]">High</option>
+                <option value="low" className="bg-[var(--bg-card)]">{t('tasks.modal.priority_low', 'Low')}</option>
+                <option value="medium" className="bg-[var(--bg-card)]">{t('tasks.modal.priority_medium', 'Medium')}</option>
+                <option value="high" className="bg-[var(--bg-card)]">{t('tasks.modal.priority_high', 'High')}</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Due Date
+            <label htmlFor="dueDate" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
+              {t('tasks.modal.due_date_label', 'Due Date')}
             </label>
             <input
               id="dueDate"
@@ -163,8 +164,8 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
           </div>
 
             <div>
-              <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Repository URL
+              <label htmlFor="repoUrl" className="block text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] mb-2">
+                {t('tasks.modal.repo_url_label', 'Repository URL')}
               </label>
               <input
                 id="repoUrl"
@@ -182,14 +183,14 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
               onClick={onClose}
               className="flex-1 px-6 py-3 border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--bg-secondary)] transition font-black uppercase tracking-widest italic text-xs"
             >
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </button>
             <button
               type="submit"
               disabled={loading}
               className="flex-1 px-6 py-3 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] disabled:opacity-50 text-white rounded-lg transition font-black uppercase tracking-widest italic text-xs shadow-xl shadow-[var(--accent-primary)]/20"
             >
-              {loading ? 'Processing...' : task ? 'Confirm Override' : 'Deploy Task'}
+              {loading ? t('common.processing', 'Processing...') : task ? t('tasks.modal.confirm_update', 'Confirm Override') : t('tasks.modal.confirm_create', 'Deploy Task')}
             </button>
           </div>
         </form>

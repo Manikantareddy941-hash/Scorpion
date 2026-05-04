@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { KeyRound, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 
 export default function VerifyOtp() {
+    const { t } = useTranslation();
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -16,7 +18,7 @@ export default function VerifyOtp() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (otp.length !== 6) {
-            setError('Please enter a valid 6-digit code.');
+            setError(t('auth.invalid_otp', 'Please enter a valid 6-digit code.'));
             return;
         }
 
@@ -31,20 +33,20 @@ export default function VerifyOtp() {
                 navigate('/reset-password', { state: { email, resetToken } });
             }
         } catch (err) {
-            setError('An unexpected error occurred.');
+            setError(t('auth.unexpected_error', 'An unexpected error occurred.'));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <ModernAuthLayout subtext="Identity Verification">
+        <ModernAuthLayout subtext={t('auth.identity_verification', 'Identity Verification')}>
             <div className="w-full">
                 <h1 className="text-xl font-black mb-1 text-[var(--text-primary)] uppercase italic tracking-tight">
-                    Verify Vector
+                    {t('auth.verify_vector', 'Verify Vector')}
                 </h1>
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] mb-8 italic">
-                    Transmission sent to <span className="text-[var(--accent-primary)]">{email}</span>.
+                    {t('auth.transmission_sent_to', { email: email, defaultValue: `Transmission sent to ${email}.` })}
                 </p>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -56,7 +58,7 @@ export default function VerifyOtp() {
                     )}
 
                     <div className="space-y-2">
-                        <label htmlFor="otp" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Transmission Code</label>
+                        <label htmlFor="otp" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">{t('auth.transmission_code', 'Transmission Code')}</label>
                         <input
                             id="otp"
                             type="text"
@@ -65,7 +67,7 @@ export default function VerifyOtp() {
                             onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
                             required
                             className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-4 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] text-center text-3xl tracking-[12px] font-black transition-all placeholder-[var(--text-secondary)]/20"
-                            placeholder="000000"
+                            placeholder={t('auth.otp_placeholder', '000000')}
                         />
                     </div>
 
@@ -78,7 +80,7 @@ export default function VerifyOtp() {
                             <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                             <>
-                                Authenticate Vector
+                                {t('auth.authenticate_vector', 'Authenticate Vector')}
                                 <KeyRound className="w-4 h-4" />
                             </>
                         )}
@@ -88,7 +90,7 @@ export default function VerifyOtp() {
                 <div className="mt-8 pt-6 border-t border-[var(--border-subtle)] text-center">
                     <Link to="/forgot-password" className="inline-flex items-center gap-2 text-[var(--accent-primary)] hover:underline font-black text-[10px] uppercase tracking-widest italic transition">
                         <ArrowLeft className="w-4 h-4" />
-                        Resend Transmission
+                        {t('auth.resend_transmission', 'Resend Transmission')}
                     </Link>
                 </div>
             </div>

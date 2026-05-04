@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, AlertCircle, Mail } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 
 export default function ForgotPassword() {
+    const { t } = useTranslation();
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -20,7 +22,7 @@ export default function ForgotPassword() {
             const { error } = await requestReset(email);
             if (error) {
                 if (error.toLowerCase().includes('fetch') || error.toLowerCase().includes('network')) {
-                    setError('Working on it... Please wait.');
+                    setError(t('auth.working_on_it', 'Working on it... Please wait.'));
                 } else {
                     setError(error);
                 }
@@ -28,20 +30,20 @@ export default function ForgotPassword() {
                 navigate('/verify-otp', { state: { email } });
             }
         } catch (err: any) {
-            setError('An unexpected error occurred.');
+            setError(t('auth.unexpected_error', 'An unexpected error occurred.'));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <ModernAuthLayout subtext="Secure Identity Recovery">
+        <ModernAuthLayout subtext={t('auth.secure_recovery', 'Secure Identity Recovery')}>
             <div className="w-full">
                 <h1 className="text-xl font-black mb-1 text-[var(--text-primary)] uppercase italic tracking-tight">
-                    Reset Access
+                    {t('auth.reset_access', 'Reset Access')}
                 </h1>
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] mb-8 italic">
-                    Enter vector ID to initiate recovery sequence.
+                    {t('auth.enter_vector_id_desc', 'Enter vector ID to initiate recovery sequence.')}
                 </p>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -53,7 +55,7 @@ export default function ForgotPassword() {
                     )}
 
                     <div className="space-y-2">
-                        <label htmlFor="email" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">Vector ID (Email)</label>
+                        <label htmlFor="email" className="block text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic ml-1">{t('auth.vector_id_label', 'Vector ID (Email)')}</label>
                         <input
                             id="email"
                             type="email"
@@ -61,7 +63,7 @@ export default function ForgotPassword() {
                             onChange={(e) => setEmail(e.target.value)}
                             required
                             className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 focus:border-[var(--accent-primary)] text-[var(--text-primary)] placeholder-[var(--text-secondary)] transition-all"
-                            placeholder="operator@scorpion.secure"
+                            placeholder={t('auth.forgot_password_placeholder', 'operator@scorpion.secure')}
                         />
                     </div>
 
@@ -74,7 +76,7 @@ export default function ForgotPassword() {
                             <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                             <>
-                                Send Recovery Code
+                                {t('auth.send_recovery_code', 'Send Recovery Code')}
                                 <Mail className="w-4 h-4" />
                             </>
                         )}
@@ -84,7 +86,7 @@ export default function ForgotPassword() {
                 <div className="mt-8 pt-6 border-t border-[var(--border-subtle)] text-center">
                     <Link to="/login" className="inline-flex items-center gap-2 text-[var(--accent-primary)] hover:underline font-black text-[10px] uppercase tracking-widest italic transition">
                         <ArrowLeft className="w-4 h-4" />
-                        Return to Uplink
+                        {t('auth.return_to_uplink', 'Return to Uplink')}
                     </Link>
                 </div>
             </div>
