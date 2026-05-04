@@ -30,7 +30,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const location = useLocation();
   const [showScan, setShowScan] = useState(false);
   const { getJWT } = useAuth();
-  const { getLogoFilter, getLogoBlendMode } = useTheme();
+  const { theme, getLogoFilter, getLogoBlendMode } = useTheme();
 
   const handleScan = () => {
     setShowScan(false);
@@ -114,7 +114,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
       {/* New Scan Button */}
       <div style={{ padding: isCollapsed ? '0 10px 24px' : '0 16px 24px' }}>
-        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
+        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: theme === 'matrix' ? '#000000' : 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
           {isCollapsed ? '+' : '+ NEW SCAN'}
         </button>
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
