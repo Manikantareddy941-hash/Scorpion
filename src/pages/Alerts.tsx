@@ -3,6 +3,7 @@ import { databases, DB_ID, ID, Query, COLLECTIONS, client } from '../lib/appwrit
 import { useAuth } from '../contexts/AuthContext';
 import { Bell, Loader2, Save, Send, ShieldAlert, Slack, MessageSquare, AlertTriangle, AlertCircle, Info, Activity } from 'lucide-react';
 import { RealtimeResponseEvent } from 'appwrite';
+import { useTranslation } from 'react-i18next';
 
 const SEVERITY_COLORS: Record<string, string> = {
     critical: 'bg-red-500/20 text-red-500 border-red-500/50',
@@ -12,6 +13,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export default function Alerts() {
+    const { t } = useTranslation();
     const { user, getJWT } = useAuth();
     
     // Config State
@@ -113,10 +115,10 @@ export default function Alerts() {
                 const res = await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), data);
                 setDocId(res.$id);
             }
-            alert('Integration configuration saved successfully.');
+            alert(t('alerts.save_success'));
         } catch (error) {
             console.error('Failed to commit integration', error);
-            alert('Failed to save integration settings.');
+            alert(t('alerts.save_error'));
         } finally {
             setSaving(false);
         }
@@ -124,7 +126,7 @@ export default function Alerts() {
 
     const handleTest = async (type: 'discord' | 'slack') => {
         const url = type === 'discord' ? webhookUrl : slackWebhookUrl;
-        if (!url) return alert(`Please input a valid ${type === 'discord' ? 'Discord' : 'Slack'} Webhook URL.`);
+        if (!url) return alert(t('alerts.invalid_url', { type: type === 'discord' ? 'Discord' : 'Slack' }));
         
         type === 'discord' ? setTestingDiscord(true) : setTestingSlack(true);
         try {
@@ -141,9 +143,9 @@ export default function Alerts() {
             });
 
             if (response.ok) {
-                alert(`Test payload dispatched successfully. Check your ${type} channel!`);
+                alert(t('alerts.test_success', { type }));
             } else {
-                alert(`Test transmission failed. Server responded with HTTP ${response.status}.`);
+                alert(t('alerts.test_fail', { status: response.status }));
             }
         } catch (err: any) {
             alert('Test payload dispatch failed: ' + err.message);
@@ -173,9 +175,9 @@ export default function Alerts() {
         <div className="min-h-screen bg-[var(--bg-primary)] p-8 text-[var(--text-primary)] transition-colors duration-300">
             <div className="max-w-5xl mx-auto">
                 <div className="mb-12">
-                    <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">Security Telemetry</h1>
+                    <h1 className="text-3xl font-black tracking-tighter italic uppercase leading-none">{t('alerts.title')}</h1>
                     <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">
-                        Realtime Broadcast Pipeline
+                        {t('alerts.subtitle')}
                     </p>
                 </div>
 
@@ -185,14 +187,14 @@ export default function Alerts() {
                         className={`px-6 py-3 rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all
                             ${activeTab === 'config' ? 'bg-[var(--accent-primary)] text-black shadow-lg shadow-[var(--accent-primary)]/20' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'}`}
                     >
-                        Configuration
+                        {t('alerts.configuration')}
                     </button>
                     <button 
                         onClick={() => setActiveTab('feed')}
                         className={`px-6 py-3 rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center gap-2
                             ${activeTab === 'feed' ? 'bg-[var(--accent-primary)] text-black shadow-lg shadow-[var(--accent-primary)]/20' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'}`}
                     >
-                        <Activity className="w-4 h-4" /> Live Feed
+                        <Activity className="w-4 h-4" /> {t('alerts.live_feed')}
                     </button>
                 </div>
 
@@ -202,8 +204,8 @@ export default function Alerts() {
                         <div className="premium-card p-8">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 pb-8 border-b border-[var(--border-subtle)]">
                                 <div>
-                                    <h3 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic mb-2">Master Broadcast Switch</h3>
-                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">Enable or disable all outgoing webhook telemetry.</p>
+                                    <h3 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic mb-2">{t('alerts.master_switch')}</h3>
+                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">{t('alerts.master_desc')}</p>
                                 </div>
                                 <label className="flex items-center gap-3 cursor-pointer w-fit opacity-80 hover:opacity-100 transition-opacity">
                                     <input 
@@ -212,12 +214,12 @@ export default function Alerts() {
                                         onChange={(e) => setIsEnabled(e.target.checked)} 
                                         className="accent-[var(--accent-primary)] w-5 h-5"
                                     />
-                                    <span className="text-xs font-black uppercase italic tracking-widest">System {isEnabled ? 'Armed' : 'Standby'}</span>
+                                    <span className="text-xs font-black uppercase italic tracking-widest">{isEnabled ? t('alerts.system_armed') : t('alerts.system_standby')}</span>
                                 </label>
                             </div>
 
                             <div className="mb-4">
-                                <h3 className="text-xs font-black text-[var(--text-primary)] mb-4 uppercase tracking-[0.2em] italic">Active Event Triggers (Severities)</h3>
+                                <h3 className="text-xs font-black text-[var(--text-primary)] mb-4 uppercase tracking-[0.2em] italic">{t('alerts.event_triggers')}</h3>
                                 <div className="flex flex-wrap gap-4">
                                     {['critical', 'high', 'medium', 'low'].map(sev => (
                                         <button
@@ -236,7 +238,7 @@ export default function Alerts() {
                         {/* Discord Config */}
                         <div className="premium-card p-8">
                             <h3 className="text-xs font-black text-[#5865F2] mb-6 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                                <MessageSquare className="w-5 h-5" /> Discord Interceptor
+                                <MessageSquare className="w-5 h-5" /> {t('alerts.discord_interceptor')}
                             </h3>
                             <div className="flex flex-col md:flex-row gap-4 items-center">
                                 <input 
@@ -252,7 +254,7 @@ export default function Alerts() {
                                     className="w-full md:w-auto px-6 py-4 bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/30 hover:bg-[#5865F2] hover:text-white rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                                 >
                                     {testingDiscord ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                    Test
+                                    {t('alerts.test')}
                                 </button>
                             </div>
                         </div>
@@ -260,7 +262,7 @@ export default function Alerts() {
                         {/* Slack Config */}
                         <div className="premium-card p-8">
                             <h3 className="text-xs font-black text-[#E01E5A] mb-6 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                                <Slack className="w-5 h-5" /> Slack Block-Kit
+                                <Slack className="w-5 h-5" /> {t('alerts.slack_block_kit')}
                             </h3>
                             <div className="flex flex-col md:flex-row gap-4 items-center">
                                 <input 
@@ -276,7 +278,7 @@ export default function Alerts() {
                                     className="w-full md:w-auto px-6 py-4 bg-[#E01E5A]/10 text-[#E01E5A] border border-[#E01E5A]/30 hover:bg-[#E01E5A] hover:text-white rounded-xl font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                                 >
                                     {testingSlack ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                    Test
+                                    {t('alerts.test')}
                                 </button>
                             </div>
                         </div>
@@ -289,7 +291,7 @@ export default function Alerts() {
                                 className="btn-premium flex items-center justify-center gap-3 px-10 py-4 disabled:opacity-50"
                             >
                                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                                Commit Telemetry Configuration
+                                {t('alerts.commit_config')}
                             </button>
                         </div>
                     </div>
@@ -300,9 +302,9 @@ export default function Alerts() {
                         <div className="flex justify-between items-center mb-8 border-b border-[var(--border-subtle)] pb-6">
                             <div>
                                 <h3 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic flex items-center gap-3">
-                                    <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> Neural Alert Feed
+                                    <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> {t('alerts.neural_feed')}
                                 </h3>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">Showing matching findings from Appwrite Realtime Channel</p>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">{t('alerts.feed_desc')}</p>
                             </div>
                             <div className="flex gap-2">
                                 {activeSeverities.map(sev => (
@@ -320,7 +322,7 @@ export default function Alerts() {
                         ) : findings.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-64 opacity-50">
                                 <ShieldAlert className="w-12 h-12 mb-4 text-[var(--text-secondary)]" />
-                                <p className="text-xs font-black uppercase tracking-widest italic text-[var(--text-secondary)]">No findings matching active triggers</p>
+                                <p className="text-xs font-black uppercase tracking-widest italic text-[var(--text-secondary)]">{t('alerts.no_findings')}</p>
                             </div>
                         ) : (
                             <div className="space-y-4">

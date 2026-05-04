@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, ChevronDown, Loader2, FileJson, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 interface SBOMExportButtonProps {
@@ -9,6 +10,7 @@ interface SBOMExportButtonProps {
 }
 
 export default function SBOMExportButton({ repoId, repoName }: SBOMExportButtonProps) {
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const { getJWT } = useAuth();
@@ -26,7 +28,7 @@ export default function SBOMExportButton({ repoId, repoName }: SBOMExportButtonP
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to generate SBOM');
+                throw new Error(errorData.error || t('sbom.fail_gen', 'Failed to generate SBOM'));
             }
 
             const blob = await response.blob();
@@ -39,10 +41,10 @@ export default function SBOMExportButton({ repoId, repoName }: SBOMExportButtonP
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            toast.success(`SBOM (${format.toUpperCase()}) exported successfully`);
+            toast.success(t('sbom.export_success', { format: format.toUpperCase(), defaultValue: `SBOM (${format.toUpperCase()}) exported successfully` }));
         } catch (err: any) {
             console.error('SBOM Export Error:', err);
-            toast.error(err.message || 'Failed to export SBOM');
+            toast.error(err.message || t('sbom.fail_export', 'Failed to export SBOM'));
         } finally {
             setLoading(false);
         }
@@ -56,7 +58,7 @@ export default function SBOMExportButton({ repoId, repoName }: SBOMExportButtonP
                 className="flex items-center gap-2 px-4 h-full bg-[var(--accent-primary)] text-white text-[10px] font-black uppercase tracking-widest rounded-l-xl hover:opacity-90 disabled:opacity-50 transition-all border-r border-white/20"
             >
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                {loading ? 'Generating...' : 'Export SBOM'}
+                {loading ? t('sbom.generating', 'Generating...') : t('sbom.export_btn', 'Export SBOM')}
             </button>
             <button
                 onClick={() => setShowMenu(!showMenu)}
@@ -73,14 +75,14 @@ export default function SBOMExportButton({ repoId, repoName }: SBOMExportButtonP
                         className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-bold text-[var(--text-primary)] hover:bg-[var(--accent-primary)]/10 transition-colors border-b border-[var(--border-subtle)]"
                     >
                         <FileJson className="w-4 h-4 text-amber-400" />
-                        JSON Format (CycloneDX)
+                        {t('sbom.json_format', 'JSON Format (CycloneDX)')}
                     </button>
                     <button
                         onClick={() => handleDownload('csv')}
                         className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-bold text-[var(--text-primary)] hover:bg-[var(--accent-primary)]/10 transition-colors"
                     >
                         <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                        CSV Summary
+                        {t('sbom.csv_summary', 'CSV Summary')}
                     </button>
                 </div>
             )}

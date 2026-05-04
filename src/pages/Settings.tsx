@@ -9,9 +9,12 @@ import {
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
 import robotMascot from '../assets/tony-ai.png';
-import { Bot } from 'lucide-react';
+import { Bot, Globe } from 'lucide-react';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 export default function Settings() {
+    const { t } = useTranslation();
     const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT } = useAuth();
     const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled } = useTheme();
     const [isGithubConnected, setIsGithubConnected] = useState(false);
@@ -59,7 +62,6 @@ export default function Settings() {
     const fetchSettings = async () => {
         setLoading(true);
         try {
-            // Fetch notification preferences
             const prefResponse = await databases.listDocuments(
                 DB_ID,
                 'notification_preferences',
@@ -75,7 +77,6 @@ export default function Settings() {
                 setPrefDiscordWebhook(prefs.find(p => p.channel === 'discord')?.target_value || '');
             }
 
-            // Fetch API Keys
             const keysResponse = await databases.listDocuments(
                 DB_ID,
                 'api_keys',
@@ -83,7 +84,6 @@ export default function Settings() {
             );
             setApiKeys(keysResponse.documents);
 
-            // Fetch Repositories
             const repoResponse = await databases.listDocuments(
                 DB_ID,
                 COLLECTIONS.REPOSITORIES,
@@ -104,7 +104,7 @@ export default function Settings() {
         try {
             await account.updateName(profile.name);
             await refreshUser();
-            alert('Profile updated successfully');
+            alert(t('settings.profile_updated', 'Profile updated successfully'));
         } catch (error) {
             console.error('Update profile error:', error);
         } finally {
@@ -123,7 +123,6 @@ export default function Settings() {
             const response = await storage.createFile(bucketId, fileId, file);
             
             const url = `${import.meta.env.VITE_APPWRITE_ENDPOINT}/storage/buckets/${bucketId}/files/${response.$id}/view?project=${import.meta.env.VITE_APPWRITE_PROJECT_ID}`;
-            // 3. Update User Preferences
             await account.updatePrefs({
                 ...user?.prefs,
                 profilePic: url
@@ -131,10 +130,10 @@ export default function Settings() {
 
             setAvatarUrl(url);
             await refreshUser();
-            alert('Profile picture updated');
+            alert(t('settings.avatar_updated', 'Profile picture updated'));
         } catch (error: any) {
             console.error('Avatar upload error:', error);
-            alert(`Upload failed: ${error.message}`);
+            alert(t('settings.upload_failed', { error: error.message, defaultValue: `Upload failed: ${error.message}` }));
         } finally {
             setUploading(false);
         }
@@ -164,7 +163,7 @@ export default function Settings() {
                 })
             });
 
-            alert('Preferences saved');
+            alert(t('settings.prefs_saved', 'Preferences saved'));
         } catch (error) {
             console.error('Error saving notifications:', error);
         } finally {
@@ -227,12 +226,34 @@ export default function Settings() {
                         <Terminal className="w-6 h-6" />
                     </div>
                     <div>
-                        <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">System Configuration</h1>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Neural Interface & Access Protocols</p>
+                        <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('settings.title', 'Orchestration Settings')}</h1>
+                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">{t('settings.subtitle', 'Configure system parameters & operator protocols')}</p>
                     </div>
                 </div>
 
                 <div className="space-y-12">
+                    {/* Language Selection */}
+                    <section className="premium-card p-10">
+                        <div className="flex items-center gap-5 mb-8">
+                            <div className="w-12 h-12 bg-[var(--accent-primary)]/10 rounded-2xl flex items-center justify-center border border-[var(--accent-primary)]/20">
+                                <Globe className="w-5 h-5 text-[var(--accent-primary)]" />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('settings.linguistic_protocols', 'Linguistic Protocols')}</h3>
+                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('settings.linguistic_desc', 'Define neural interface base language')}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                            <LanguageSwitcher />
+                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">
+                                * {t('settings.neural_engine_notice', 'Linguistic shifts require neural engine recalibration (page refresh)')}
+                            </p>
+                        </div>
+                    </section>
+
+                    <div className="h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent opacity-50" />
+
                     {/* Dark Mode Toggle */}
                     <div className="premium-card p-10">
                         <div className="flex items-center gap-5 mb-8">
@@ -240,37 +261,37 @@ export default function Settings() {
                                 {theme === 'dark' || theme === 'snow-dark' ? <Moon className="w-5 h-5 text-[var(--accent-primary)]" /> : <Sun className="w-5 h-5 text-[var(--accent-primary)]" />}
                             </div>
                             <div>
-                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Visual Interface Mode</h3>
-                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">Select a luminance vector for your terminal</p>
+                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('settings.visual_mode', 'Visual Interface Mode')}</h3>
+                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('settings.visual_desc', 'Select ocular spectral preference')}</p>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {[
-                                { id: 'light', label: 'Light Mode', icon: Sun, desc: 'High visibility daylight protocol' },
-                                { id: 'dark', label: 'Dark Mode', icon: Moon, desc: 'Stealth ops standard interface' },
-                                { id: 'eye-protection', label: 'Eye Protection', icon: Eye, desc: 'Warm amber neural filter' },
-                                { id: 'snow-light', label: 'Snow Light', icon: Snowflake, desc: 'Arctic day with active precipitation' },
-                                { id: 'snow-dark', label: 'Snow Dark', icon: Snowflake, desc: 'Arctic night with active precipitation' },
-                                { id: 'underwater', label: 'Underwater', icon: Waves, desc: 'Deep sea stealth mode with caustic light' },
-                                { id: 'matrix', label: 'Matrix', icon: Cpu, desc: 'Particle globe · green terminal · cyber ops' },
-                            ].map((t) => (
+                                { id: 'light', label: t('settings.theme_light', 'Light Mode'), icon: Sun, desc: t('settings.theme_light_desc', 'High visibility daylight protocol') },
+                                { id: 'dark', label: t('settings.theme_dark', 'Dark Mode'), icon: Moon, desc: t('settings.theme_dark_desc', 'Stealth ops standard interface') },
+                                { id: 'eye-protection', label: t('settings.theme_eye', 'Eye Protection'), icon: Eye, desc: t('settings.theme_eye_desc', 'Warm amber neural filter') },
+                                { id: 'snow-light', label: t('settings.theme_snow_light', 'Snow Light'), icon: Snowflake, desc: t('settings.theme_snow_light_desc', 'Arctic day with active precipitation') },
+                                { id: 'snow-dark', label: t('settings.theme_snow_dark', 'Snow Dark'), icon: Snowflake, desc: t('settings.theme_snow_dark_desc', 'Arctic night with active precipitation') },
+                                { id: 'underwater', label: t('settings.theme_underwater', 'Underwater'), icon: Waves, desc: t('settings.theme_underwater_desc', 'Deep sea stealth mode with caustic light') },
+                                { id: 'matrix', label: t('settings.theme_matrix', 'Matrix'), icon: Cpu, desc: t('settings.theme_matrix_desc', 'Particle globe · green terminal · cyber ops') },
+                            ].map((themeOption) => (
                                 <button
-                                    key={t.id}
-                                    onClick={() => setTheme(t.id as Theme)}
+                                    key={themeOption.id}
+                                    onClick={() => setTheme(themeOption.id as Theme)}
                                     className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-start gap-4 text-left group
-                                        ${theme === t.id ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5 shadow-lg shadow-[var(--accent-primary)]/10' : 'border-[var(--border-subtle)] bg-[var(--bg-primary)] hover:border-[var(--accent-primary)]/30'}`}
+                                        ${theme === themeOption.id ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5 shadow-lg shadow-[var(--accent-primary)]/10' : 'border-[var(--border-subtle)] bg-[var(--bg-primary)] hover:border-[var(--accent-primary)]/30'}`}
                                 >
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                                        ${theme === t.id ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)]'}`}>
-                                        <t.icon size={20} />
+                                        ${theme === themeOption.id ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)]'}`}>
+                                        <themeOption.icon size={20} />
                                     </div>
                                     <div>
-                                        <p className={`text-[11px] font-black uppercase italic tracking-wider mb-1 ${theme === t.id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                                            {t.label}
+                                        <p className={`text-[11px] font-black uppercase italic tracking-wider mb-1 ${theme === themeOption.id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+                                            {themeOption.label}
                                         </p>
                                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-tight italic">
-                                            {t.desc}
+                                            {themeOption.desc}
                                         </p>
                                     </div>
                                 </button>
@@ -281,7 +302,7 @@ export default function Settings() {
                     {/* Profile Section */}
                     <section className="premium-card p-10">
                         <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                            <User className="w-4 h-4 text-[var(--accent-primary)]" /> Operator Credentials
+                            <User className="w-4 h-4 text-[var(--accent-primary)]" /> {t('settings.operator_credentials', 'Operator Credentials')}
                         </h3>
 
                         {/* Avatar Section */}
@@ -307,16 +328,16 @@ export default function Settings() {
                                 </label>
                             </div>
                             <div className="flex-1 text-center md:text-left">
-                                <h4 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">Neural Link Visualization</h4>
+                                <h4 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{t('settings.neural_link_visualization', 'Neural Link Visualization')}</h4>
                                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic leading-relaxed max-w-sm">
-                                    Register your operational appearance in the system. This identifier will be broadcasted across all encrypted command interfaces.
+                                    {t('settings.neural_link_desc', 'Synchronize your biological appearance with the Scorpion neural mesh. Recommended format: PNG/JPG @ 512px.')}
                                 </p>
                                 <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-4">
                                     <button 
                                         onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}
                                         className="text-[10px] font-black uppercase tracking-widest text-[var(--accent-primary)] flex items-center gap-2 hover:opacity-70 transition-opacity"
                                     >
-                                        <Upload size={14} /> Upload Binary Image
+                                        <Upload size={14} /> {t('settings.upload_binary', 'Upload Binary')}
                                     </button>
                                 </div>
                             </div>
@@ -334,9 +355,9 @@ export default function Settings() {
                                         <Github size={24} />
                                     </div>
                                     <div>
-                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">GitHub Repository Access</h4>
+                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">{t('settings.repo_access_heading', 'Repository Access Neural Link')}</h4>
                                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
-                                            {isGithubConnected ? 'Neural Link Active — Authorized for Scan Operations' : 'Neural Link Required for Repository Indexing'}
+                                            {isGithubConnected ? t('settings.neural_link_active', 'Neural Link Active: ScorpNet Integrated') : t('settings.neural_link_inactive', 'Neural Link Offline: Manual Auth Required')}
                                         </p>
                                     </div>
                                 </div>
@@ -348,7 +369,7 @@ export default function Settings() {
                                     className={`px-8 py-3 rounded-xl text-xs font-black uppercase italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl
                                         ${isGithubConnected ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-[var(--accent-primary)] text-black shadow-[var(--accent-primary)]/20 hover:shadow-[var(--accent-primary)]/40'}`}
                                 >
-                                    {isGithubConnected ? 'Reconnect Neural Link' : 'Initialize Neural Link'}
+                                    {isGithubConnected ? t('settings.reconnect_link', 'Reconnect Neural Link') : t('settings.init_link', 'Initialize Neural Link')}
                                 </button>
                             </div>
                         </div>
@@ -365,11 +386,11 @@ export default function Settings() {
                                         <Bot size={24} />
                                     </div>
                                     <div>
-                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">Institutional Access (GitHub App)</h4>
+                                        <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">{t('settings.institutional_access', 'Institutional Mesh Access')}</h4>
                                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
                                             {(user?.prefs as any)?.github_installation_id 
-                                                ? `Neural Mesh Integrated (Installation ID: ${(user?.prefs as any)?.github_installation_id})` 
-                                                : 'Establish structural link for autonomous fleet orchestration'}
+                                                ? t('settings.mesh_active', { id: (user?.prefs as any)?.github_installation_id, defaultValue: `Neural Mesh Integrated (Installation ID: ${(user?.prefs as any)?.github_installation_id})` })
+                                                : t('settings.mesh_description', 'Connect the ScorpApp to your organization for full spectrum scanning.')}
                                         </p>
                                     </div>
                                 </div>
@@ -380,14 +401,14 @@ export default function Settings() {
                                     className={`px-8 py-3 rounded-xl text-xs font-black uppercase italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl
                                         ${(user?.prefs as any)?.github_installation_id ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-cyan-500 text-black shadow-cyan-500/20 hover:shadow-cyan-500/40'}`}
                                 >
-                                    {(user?.prefs as any)?.github_installation_id ? 'Sync Neural Mesh' : 'Install ScorpApp'}
+                                    {(user?.prefs as any)?.github_installation_id ? t('settings.sync_mesh', 'Sync Neural Mesh') : t('settings.install_scorpapp', 'Install ScorpApp')}
                                 </button>
                             </div>
                         </div>
 
                         <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">Designation Name</label>
+                                <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">{t('settings.designation_name', 'Designation Name')}</label>
                                 <input
                                     type="text"
                                     value={profile.name}
@@ -396,7 +417,7 @@ export default function Settings() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">Communications ID</label>
+                                <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">{t('settings.communications_id', 'Communications ID')}</label>
                                 <input
                                     type="email"
                                     disabled
@@ -411,7 +432,7 @@ export default function Settings() {
                                     className="btn-premium flex items-center gap-3"
                                 >
                                     {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    Sync Profile Info
+                                    {t('settings.sync_profile', 'Sync Profile')}
                                 </button>
                             </div>
                         </form>
@@ -420,7 +441,7 @@ export default function Settings() {
                     {/* Notifications */}
                     <section className="premium-card p-10">
                         <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                            <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> Neural Alert Feeds
+                            <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> {t('settings.alert_feeds', 'Intelligence Alert Feeds')}
                         </h3>
                         <div className="space-y-6">
 
@@ -431,8 +452,8 @@ export default function Settings() {
                                         <Mail className="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">Direct Dispatch (Email)</p>
-                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Critical findings sent to {profile.email}</p>
+                                        <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">{t('settings.email_dispatch', 'Email Dispatch')}</p>
+                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">{t('settings.email_desc', { email: profile.email, defaultValue: `Primary contact: ${profile.email}` })}</p>
                                     </div>
                                 </div>
                                 <button
@@ -453,8 +474,8 @@ export default function Settings() {
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">Slack Webhook</p>
-                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Instant critical alerts to your Slack channel</p>
+                                            <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">{t('settings.slack_webhook', 'Slack Webhook')}</p>
+                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">{t('settings.slack_desc', 'Forward alerts to workspace')}</p>
                                         </div>
                                     </div>
                                     <button
@@ -467,7 +488,7 @@ export default function Settings() {
                                 {prefSlack && (
                                     <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
                                         <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">
-                                            Slack Webhook URL
+                                            {t('settings.slack_url_label', 'Webhook URL')}
                                         </label>
                                         <input
                                             type="url"
@@ -477,7 +498,7 @@ export default function Settings() {
                                             className="w-full px-5 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl font-mono text-[10px] outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] text-[var(--text-primary)] transition-all placeholder:text-[var(--text-secondary)]/40"
                                         />
                                         <p className="text-[9px] text-[var(--text-secondary)] italic">
-                                            Go to Slack → Apps → Incoming Webhooks → Add New Webhook
+                                            {t('settings.slack_help', 'Instructions: Create an app in your Slack workspace and enable Incoming Webhooks.')}
                                         </p>
                                     </div>
                                 )}
@@ -493,8 +514,8 @@ export default function Settings() {
                                             </svg>
                                         </div>
                                         <div>
-                                            <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">Discord Webhook</p>
-                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">Push critical findings to your Discord server</p>
+                                            <p className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">{t('settings.discord_webhook', 'Discord Webhook')}</p>
+                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">{t('settings.discord_desc', 'Forward alerts to server')}</p>
                                         </div>
                                     </div>
                                     <button
@@ -507,7 +528,7 @@ export default function Settings() {
                                 {prefDiscord && (
                                     <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
                                         <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest block">
-                                            Discord Webhook URL
+                                            {t('settings.discord_url_label', 'Webhook URL')}
                                         </label>
                                         <input
                                             type="url"
@@ -517,7 +538,7 @@ export default function Settings() {
                                             className="w-full px-5 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl font-mono text-[10px] outline-none focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] text-[var(--text-primary)] transition-all placeholder:text-[var(--text-secondary)]/40"
                                         />
                                         <p className="text-[9px] text-[var(--text-secondary)] italic">
-                                            Discord → Channel Settings → Integrations → Webhooks → New Webhook
+                                            {t('settings.discord_help', 'Instructions: Open Server Settings > Integrations > Webhooks to create a new endpoint.')}
                                         </p>
                                     </div>
                                 )}
@@ -527,7 +548,7 @@ export default function Settings() {
                             <div className="flex items-center gap-3 px-4 py-3 bg-red-500/5 border border-red-500/20 rounded-xl">
                                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                                 <p className="text-[9px] font-black text-red-400 uppercase tracking-widest italic">
-                                    Critical findings trigger instant alerts — all other severities are batched in the daily digest
+                                    {t('settings.alert_warning', 'Intelligence protocols will exclusively trigger for CRITICAL severity events.')}
                                 </p>
                             </div>
 
@@ -538,7 +559,7 @@ export default function Settings() {
                                     className="btn-premium flex items-center gap-2"
                                 >
                                     {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    Commit Preferences
+                                    {t('settings.commit_prefs', 'Commit Preferences')}
                                 </button>
                             </div>
                         </div>
@@ -547,11 +568,11 @@ export default function Settings() {
                     {/* Automated Scan Schedules */}
                     <section className="premium-card p-10">
                         <h3 className="text-xs font-black text-[var(--accent-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                            <Activity className="w-4 h-4 text-[var(--accent-primary)]" /> Automated Scan Schedules
+                            <Activity className="w-4 h-4 text-[var(--accent-primary)]" /> {t('settings.scan_schedules', 'Automated Scan Schedules')}
                         </h3>
                         <div className="space-y-4">
                             {repositories.length === 0 ? (
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">No repositories connected.</p>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">{t('settings.no_repos', 'No repositories connected.')}</p>
                             ) : repositories.map(repo => (
                                 <div key={repo.$id} className="flex justify-between items-center p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
                                     <div>
@@ -564,9 +585,9 @@ export default function Settings() {
                                             onChange={(e) => handleUpdateRepoCron(repo.$id, repo.cron_enabled, e.target.value)}
                                             className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
                                         >
-                                            <option value="0 0 * * *">Daily (Midnight)</option>
-                                            <option value="0 0 * * 0">Weekly (Sunday)</option>
-                                            <option value="* * * * *">Custom (* * * * *)</option>
+                                            <option value="0 0 * * *">{t('settings.daily_midnight', 'Daily (Midnight)')}</option>
+                                            <option value="0 0 * * 0">{t('settings.weekly_sunday', 'Weekly (Sunday)')}</option>
+                                            <option value="* * * * *">{t('settings.custom_cron', 'Custom (* * * * *)')}</option>
                                         </select>
                                         <button
                                             onClick={() => handleUpdateRepoCron(repo.$id, !repo.cron_enabled, repo.cron_schedule || '0 0 * * *')}
@@ -583,28 +604,28 @@ export default function Settings() {
                     {/* API Keys */}
                     <section className="premium-card p-10">
                         <h3 className="text-xs font-black text-[var(--status-success)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
-                            <Key className="w-4 h-4 text-[var(--status-success)]" /> Automated Access Keys (CI/CD)
+                            <Key className="w-4 h-4 text-[var(--status-success)]" /> {t('settings.api_keys_heading', 'Secure API Vectors')}
                         </h3>
                         
                         {generatedKey && (
                             <div className="mb-8 p-6 bg-[var(--status-success)]/10 border border-[var(--status-success)]/20 rounded-2xl">
-                                <p className="text-[10px] font-black text-[var(--status-success)] uppercase tracking-widest mb-3 animate-pulse">New Neural Key Linked - COPY NOW</p>
+                                <p className="text-[10px] font-black text-[var(--status-success)] uppercase tracking-widest mb-3 animate-pulse">{t('settings.new_key_linked', 'New neural key linked successfully.')}</p>
                                 <code className="block bg-[var(--bg-primary)] text-[var(--status-success)] p-4 rounded-xl font-mono text-sm break-all border border-[var(--status-success)]/30">
                                     {generatedKey}
                                 </code>
-                                <p className="text-[9px] text-[var(--text-secondary)] mt-3 italic">* This key will not be displayed again. Store it in a secure vault.</p>
+                                <p className="text-[9px] text-[var(--text-secondary)] mt-3 italic">{t('settings.key_security_notice', 'Caution: This key will not be displayed again. Archive it securely.')}</p>
                             </div>
                         )}
 
                         <div className="flex gap-4 mb-10">
                             <input
                                 type="text"
-                                placeholder="Key Designation (e.g. JENKINS-MASTER)"
+                                placeholder={t('settings.key_designation_placeholder', 'Key Designation (e.g. JENKINS-MASTER)')}
                                 value={newKeyName}
                                 onChange={(e) => setNewKeyName(e.target.value)}
                                 className="flex-1 px-6 py-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl font-black italic text-xs outline-none text-[var(--text-primary)] focus:ring-4 focus:ring-[var(--accent-primary)]/10"
                             />
-                            <button onClick={generateApiKey} className="btn-premium whitespace-nowrap">Generate Neural Key</button>
+                            <button onClick={generateApiKey} className="btn-premium whitespace-nowrap">{t('settings.generate_key', 'Generate Key')}</button>
                         </div>
 
                         <div className="space-y-4">
@@ -615,7 +636,7 @@ export default function Settings() {
                                         <p className="text-[10px] font-mono text-[var(--text-secondary)] mt-1">{key.masked_key || 'sk_••••••••••••'}</p>
                                     </div>
                                     <div className="flex items-center gap-6">
-                                        <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">Active Vector</span>
+                                        <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">{t('settings.active_vector', 'Active Vector')}</span>
                                         <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--status-error)] transition-colors">
                                             <LogOut className="w-4 h-4 rotate-90" />
                                         </button>
@@ -633,8 +654,8 @@ export default function Settings() {
                                     <Bot className="w-6 h-6 text-cyan-500" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Echo Neural Interface</h3>
-                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">Control autonomous movement vectors for your AI assistant</p>
+                                    <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('settings.echo_heading', 'Echo Neural Interface')}</h3>
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('settings.echo_description', 'Configure the autonomous security mascot behavior')}</p>
                                 </div>
                             </div>
                             <button
@@ -651,13 +672,13 @@ export default function Settings() {
                                     <div className="flex items-center gap-3 mb-2">
                                         <div className={`w-2 h-2 rounded-full ${echoMovementEnabled ? 'bg-cyan-400 animate-pulse' : 'bg-gray-500'}`} />
                                         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)]">
-                                            Status: {echoMovementEnabled ? 'Echo is floating freely' : 'Movement paused'}
+                                            {t('settings.echo_status_label', 'Status')}: {echoMovementEnabled ? t('settings.echo_status_floating', 'Floating') : t('settings.echo_status_paused', 'Paused')}
                                         </span>
                                     </div>
                                     <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed italic">
                                         {echoMovementEnabled 
-                                            ? 'The Neural Link is active. Echo will automatically navigate across your command interface using zero-gravity propulsion.' 
-                                            : 'The Neural Link is on standby. Echo will remain anchored at its current coordinate vector until manual movement is initialized.'}
+                                            ? t('settings.echo_explanation_active', 'Echo is currently navigating your workspace, providing real-time security intuition.') 
+                                            : t('settings.echo_explanation_standby', 'Echo is in standby mode. Movement protocols are temporarily suspended.')}
                                     </p>
                                 </div>
 
@@ -667,14 +688,14 @@ export default function Settings() {
                                         className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${echoMovementEnabled ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 opacity-40 cursor-not-allowed' : 'bg-cyan-500 text-black hover:scale-[1.02] active:scale-[0.98]'}`}
                                         disabled={echoMovementEnabled}
                                     >
-                                        Initialize Movement
+                                        {t('settings.init_movement', 'Initialize Movement')}
                                     </button>
                                     <button 
                                         onClick={() => setEchoMovementEnabled(false)}
                                         className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!echoMovementEnabled ? 'bg-white/5 border border-white/10 text-[var(--text-secondary)] opacity-40 cursor-not-allowed' : 'bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]'}`}
                                         disabled={!echoMovementEnabled}
                                     >
-                                        Halt Propulsion
+                                        {t('settings.halt_propulsion', 'Halt Propulsion')}
                                     </button>
                                 </div>
                             </div>
@@ -697,8 +718,8 @@ export default function Settings() {
                                 `}</style>
 
                                 <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center px-4">
-                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[var(--text-secondary)]">Neural Link Preview</span>
-                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-cyan-500 animate-pulse">{echoMovementEnabled ? 'LIVE' : 'IDLE'}</span>
+                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[var(--text-secondary)]">{t('settings.neural_link_preview', 'Neural Link Preview')}</span>
+                                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-cyan-500 animate-pulse">{echoMovementEnabled ? t('settings.live_status', 'LIVE') : t('settings.idle_status', 'IDLE')}</span>
                                 </div>
                             </div>
                         </div>
@@ -706,22 +727,25 @@ export default function Settings() {
 
                     {/* Danger Zone */}
                     <section className="premium-card p-10 border-[var(--status-error)]/20">
-                        <h3 className="text-xs font-black text-[var(--status-error)] mb-8 uppercase tracking-[0.2em] italic">Decommissioning Zone</h3>
+                        <h3 className="text-xs font-black text-[var(--status-error)] mb-8 uppercase tracking-[0.2em] italic">{t('settings.decommissioning_zone', 'Decommissioning Zone')}</h3>
                         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
                             <div>
-                                <h4 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">System Termination</h4>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">Disconnect current telemetry session</p>
+                                <h4 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">{t('settings.system_termination', 'System Termination')}</h4>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">{t('settings.disconnect_session', 'Disconnect your current operator session from the neural mesh.')}</p>
                             </div>
                             <button
                                 onClick={signOut}
                                 className="px-10 py-4 bg-[var(--status-error)]/10 text-[var(--status-error)] border border-[var(--status-error)]/20 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--status-error)] hover:text-white transition-all shadow-xl shadow-[var(--status-error)]/5"
                             >
-                                Deactivate Session
+                                {t('settings.deactivate_session', 'Deactivate Session')}
                             </button>
                         </div>
                     </section>
                 </div>
             </div>
         </div>
+    );
+}
+       </div>
     );
 }

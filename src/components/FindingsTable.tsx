@@ -1,5 +1,6 @@
 import { Package, Wrench, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AppwriteFinding } from '../pages/ScanResults';
 
 const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function FindingsTable({ findings, onRemediate }: Props) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(SEVERITY_ORDER));
 
@@ -26,7 +28,7 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
         <div className="bg-[var(--bg-secondary)] w-20 h-20 rounded-3xl flex items-center justify-center mb-6 border border-[var(--border-subtle)]">
           <Zap className="w-10 h-10 text-[var(--text-secondary)] opacity-30" />
         </div>
-        <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">No active threats detected. Clean scan.</p>
+        <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">{t('findings_table.no_threats', 'No active threats detected. Clean scan.')}</p>
       </div>
     );
   }
@@ -67,7 +69,7 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: colors.bg, borderLeft: `4px solid ${colors.text}`, cursor: 'pointer' }}
             >
               <span style={{ color: colors.text, fontWeight: 800, fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                {sev} &nbsp;·&nbsp; {items.length} {items.length === 1 ? 'finding' : 'findings'}
+                {t(`scan_results.severity.${sev.toLowerCase()}`, sev)} &nbsp;·&nbsp; {t('findings_table.findings_count', { count: items.length, defaultValue: '{{count}} findings' })}
               </span>
               {isOpen ? <ChevronUp size={14} color={colors.text} /> : <ChevronDown size={14} color={colors.text} />}
             </button>
@@ -95,11 +97,11 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
                         {finding.type === 'policy_violation' ? (
                           <span style={{ fontSize: '0.7rem', color: '#c084fc', background: 'rgba(192,132,252,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(192,132,252,0.25)', fontWeight: 800, letterSpacing: '0.05em' }}>
-                            POLICY VIOLATION
+                            {t('findings_table.policy_violation', 'POLICY VIOLATION')}
                           </span>
                         ) : (
                           <span style={{ fontSize: '0.7rem', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(96,165,250,0.25)', fontWeight: 800, letterSpacing: '0.05em' }}>
-                            VULNERABILITY
+                            {t('findings_table.vulnerability', 'VULNERABILITY')}
                           </span>
                         )}
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
@@ -108,17 +110,17 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                         
                         {finding.type !== 'policy_violation' && (
                           <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
-                            installed: {finding.installedVersion}
+                            {t('findings_table.installed', 'installed')}: {finding.installedVersion}
                           </span>
                         )}
                         {finding.type !== 'policy_violation' && finding.fixedVersion && (
                           <span style={{ fontSize: '0.7rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(74,222,128,0.2)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Wrench size={10} /> fix: {finding.fixedVersion}
+                            <Wrench size={10} /> {t('findings_table.fix', 'fix')}: {finding.fixedVersion}
                           </span>
                         )}
                         {finding.type !== 'policy_violation' && !finding.fixedVersion && (
                           <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.2)' }}>
-                            no fix available
+                            {t('findings_table.no_fix', 'no fix available')}
                           </span>
                         )}
                         {onRemediate && (
@@ -131,7 +133,7 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                             }}
                             className="flex items-center gap-1 px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 rounded text-[9px] font-black uppercase italic hover:bg-[var(--accent-primary)] hover:text-black transition-all ml-2"
                           >
-                            <Zap size={10} /> Remediate
+                            <Zap size={10} /> {t('findings_table.remediate', 'Remediate')}
                           </button>
                         )}
                       </div>

@@ -4,19 +4,9 @@ import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, Che
 import NewScanModal from './NewScanModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 import toast from 'react-hot-toast';
-
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: ListTodo, label: 'Tasks', path: '/tasks' },
-  { icon: BarChart2, label: 'Reports', path: '/reports' },
-  { icon: Scale, label: 'Governance', path: '/governance' },
-  { icon: Layout, label: 'Repositories', path: '/repos' },
-  { icon: Users, label: 'Teams', path: '/teams' },
-  { icon: Bell, label: 'Alerts', path: '/alerts' },
-  { icon: Clock, label: 'Audit Log', path: '/audit' },
-];
 
 const settingsItem = { icon: Settings, label: 'Settings', path: '/settings' };
 
@@ -26,11 +16,23 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [showScan, setShowScan] = useState(false);
   const { getJWT } = useAuth();
   const { theme, getLogoFilter, getLogoBlendMode } = useTheme();
+
+  const navItems = [
+    { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' },
+    { icon: ListTodo, label: t('sidebar.tasks'), path: '/tasks' },
+    { icon: BarChart2, label: t('sidebar.reports'), path: '/reports' },
+    { icon: Scale, label: t('sidebar.governance'), path: '/governance' },
+    { icon: Layout, label: t('sidebar.repositories'), path: '/repos' },
+    { icon: Users, label: t('sidebar.teams'), path: '/teams' },
+    { icon: Bell, label: t('sidebar.alerts'), path: '/alerts' },
+    { icon: Clock, label: t('sidebar.audit_log'), path: '/audit' },
+  ];
 
   const handleScan = () => {
     setShowScan(false);
@@ -115,7 +117,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
       {/* New Scan Button */}
       <div style={{ padding: isCollapsed ? '0 10px 24px' : '0 16px 24px' }}>
         <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: theme === 'matrix' ? '#000000' : 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
-          {isCollapsed ? '+' : '+ NEW SCAN'}
+          {isCollapsed ? '+' : `+ ${t('sidebar.new_scan').toUpperCase()}`}
         </button>
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
       </div>
@@ -150,8 +152,9 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
         </div>
       </nav>
 
-      {/* Bottom Section: Settings + Version */}
+      {/* Bottom Section: Language + Settings + Version */}
       <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-subtle)' }}>
+
         <div 
             onClick={() => navigate(settingsItem.path)}
             style={{ 
@@ -171,11 +174,11 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
             }}
         >
             <settingsItem.icon size={16} />
-            {!isCollapsed && settingsItem.label}
+            {!isCollapsed && t('sidebar.settings')}
         </div>
         {!isCollapsed && (
           <div style={{ padding: '12px 20px', color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.5 }}>
-            SCORPION V1.0
+            SCORPION {t('sidebar.version')} 1.0
           </div>
         )}
       </div>

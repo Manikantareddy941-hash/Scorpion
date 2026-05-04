@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { X, Github, Upload, FolderOpen, Loader2 } from 'lucide-react';
-import { functions, FUNCTION_ID } from '../lib/appwrite';
-import { ExecutionMethod } from 'appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import UVScanOverlay from './UVScanOverlay';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   onClose: () => void;
@@ -13,6 +12,7 @@ interface Props {
 }
 
 export default function NewScanModal({ onClose, onScan }: Props) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'github' | 'upload'>('github');
   const [repoUrl, setRepoUrl] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
@@ -52,7 +52,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         } else if (data.status === 'failed') {
           clearInterval(interval);
           setIsScanning(false);
-          setError(data.error || 'Scan execution failed');
+          setError(data.error || t('dashboard.modal.scan_execution_failed', 'Scan execution failed'));
         } else {
           // Dynamic progress based on status strings from backend
           switch(data.status) {
@@ -71,7 +71,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
 
   const handleScan = async () => {
     if (tab === 'upload' && files.length > 0) {
-      toast.error('Local file upload scanning is coming soon. Please use GitHub URL.');
+      toast.error(t('dashboard.modal.upload_coming_soon', 'Local file upload scanning is coming soon. Please use GitHub URL.'));
       return;
     }
 
@@ -85,7 +85,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
     try {
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
       const token = await getJWT();
-      if (!token) throw new Error('Authentication required');
+      if (!token) throw new Error(t('common.auth_required', 'Authentication required'));
 
       // 1. Register/Find Repo
       const repoRes = await fetch(`${apiBase}/api/repos`, {
@@ -97,7 +97,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         body: JSON.stringify({ url: repoUrl.trim(), visibility })
       });
       const repo = await repoRes.json();
-      if (!repo.$id) throw new Error(repo.error || 'Failed to register repository');
+      if (!repo.$id) throw new Error(repo.error || t('dashboard.modal.repo_register_failed', 'Failed to register repository'));
 
       // 2. Start Scan
       const scanRes = await fetch(`${apiBase}/api/repos/${repo.$id}/scan`, {
@@ -115,10 +115,10 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         setProgress(15);
         pollScanStatus(scanData.scanId, token);
       } else {
-        throw new Error(scanData.error || 'Failed to initiate scan');
+        throw new Error(scanData.error || t('dashboard.modal.scan_initiate_failed', 'Failed to initiate scan'));
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to start scan');
+      setError(err.message || t('dashboard.modal.scan_start_failed', 'Failed to start scan'));
       setIsScanning(false);
     } finally {
       setLoading(false);
@@ -134,19 +134,23 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
-            <h2 style={{ color: 'var(--accent-primary)', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.1em', margin: 0 }}>NEW SCAN</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '4px 0 0' }}>Upload code or connect a GitHub repository</p>
+            <h2 style={{ color: 'var(--accent-primary)', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.1em', margin: 0 }}>
+              {t('dashboard.modal.new_scan_title', 'NEW SCAN')}
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '4px 0 0' }}>
+              {t('dashboard.modal.new_scan_subtitle', 'Upload code or connect a GitHub repository')}
+            </p>
           </div>
           <button onClick={onClose} disabled={loading} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: loading ? 'not-allowed' : 'pointer' }}><X size={20} /></button>
         </div>
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-          {(['github', 'upload'] as const).map(t => (
-            <button key={t} onClick={() => { setTab(t); setError(null); }}
+          {(['github', 'upload'] as const).map(t_val => (
+            <button key={t_val} onClick={() => { setTab(t_val); setError(null); }}
               disabled={loading}
-              style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${tab === t ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: tab === t ? 'var(--accent-primary)0D' : 'transparent', color: tab === t ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.8rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {t === 'github' ? <><Github size={16} /> GITHUB REPO</> : <><Upload size={16} /> LOCAL FILES</>}
+              style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${tab === t_val ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: tab === t_val ? 'var(--accent-primary)0D' : 'transparent', color: tab === t_val ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.8rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              {t_val === 'github' ? <><Github size={16} /> {t('dashboard.modal.tab_github', 'GITHUB REPO')}</> : <><Upload size={16} /> {t('dashboard.modal.tab_upload', 'LOCAL FILES')}</>}
             </button>
           ))}
         </div>
@@ -155,10 +159,12 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         {tab === 'github' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
-              <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>REPOSITORY URL</label>
+              <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
+                {t('dashboard.modal.repo_url_label', 'REPOSITORY URL')}
+              </label>
               <input
                 type="text"
-                placeholder="https://github.com/username/repository"
+                placeholder={t('dashboard.modal.repo_url_placeholder', 'https://github.com/username/repository')}
                 value={repoUrl}
                 onChange={e => { setRepoUrl(e.target.value); setError(null); }}
                 disabled={loading}
@@ -166,12 +172,14 @@ export default function NewScanModal({ onClose, onScan }: Props) {
               />
             </div>
             <div>
-              <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>VISIBILITY</label>
+              <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
+                {t('dashboard.modal.visibility_label', 'VISIBILITY')}
+              </label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 {(['public', 'private'] as const).map(v => (
                   <button key={v} onClick={() => setVisibility(v)} disabled={loading}
                     style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${visibility === v ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: visibility === v ? 'var(--accent-primary)0D' : 'transparent', color: visibility === v ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase' }}>
-                    {v}
+                    {t(`dashboard.modal.visibility_${v}`, v)}
                   </button>
                 ))}
               </div>
@@ -189,8 +197,12 @@ export default function NewScanModal({ onClose, onScan }: Props) {
             onClick={() => document.getElementById('file-input')?.click()}
           >
             <FolderOpen size={32} color={dragging ? 'var(--accent-primary)' : 'var(--text-secondary)'} style={{ marginBottom: '12px' }} />
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 4px' }}>Drag & drop files or click to browse</p>
-            <p style={{ color: 'var(--text-secondary)', opacity: 0.6, fontSize: '0.75rem', margin: 0 }}>Supports .js .ts .py .java .go .rs and more</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 4px' }}>
+              {t('dashboard.modal.upload_drag_drop', 'Drag & drop files or click to browse')}
+            </p>
+            <p style={{ color: 'var(--text-secondary)', opacity: 0.6, fontSize: '0.75rem', margin: 0 }}>
+              {t('dashboard.modal.upload_supported_formats', 'Supports .js .ts .py .java .go .rs and more')}
+            </p>
             <input id="file-input" type="file" multiple style={{ display: 'none' }} onChange={e => setFiles(Array.from(e.target.files || []))} />
           </div>
         )}
@@ -217,9 +229,9 @@ export default function NewScanModal({ onClose, onScan }: Props) {
           disabled={!canSubmit || loading}
           style={{ width: '100%', marginTop: '24px', padding: '14px', background: 'var(--accent-primary)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 800, fontSize: '0.9rem', letterSpacing: '0.15em', cursor: (!canSubmit || loading) ? 'not-allowed' : 'pointer', opacity: (!canSubmit || loading) ? 0.5 : 1, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
           {loading ? (
-            <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> SCANNING...</>
+            <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> {t('dashboard.modal.scanning_button', 'SCANNING...')}</>
           ) : (
-            <>⚡ INITIATE SCAN</>
+            <>⚡ {t('dashboard.modal.initiate_scan_button', 'INITIATE SCAN')}</>
           )}
         </button>
       </div>
