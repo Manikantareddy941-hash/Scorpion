@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import UVScanOverlay from './UVScanOverlay';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface Props {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface Props {
 
 export default function NewScanModal({ onClose, onScan }: Props) {
   const { t } = useTranslation();
+  const { theme } = useTheme();
   const [tab, setTab] = useState<'github' | 'upload'>('github');
   const [repoUrl, setRepoUrl] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
@@ -227,7 +229,8 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         <button
           onClick={handleScan}
           disabled={!canSubmit || loading}
-          style={{ width: '100%', marginTop: '24px', padding: '14px', background: 'var(--accent-primary)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 800, fontSize: '0.9rem', letterSpacing: '0.15em', cursor: (!canSubmit || loading) ? 'not-allowed' : 'pointer', opacity: (!canSubmit || loading) ? 0.5 : 1, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+          className="btn-premium"
+          style={{ width: '100%', marginTop: '24px', padding: '14px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', opacity: (!canSubmit || loading) ? 0.5 : 1 }}>
           {loading ? (
             <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> {t('dashboard.modal.scanning_button', 'SCANNING...')}</>
           ) : (
