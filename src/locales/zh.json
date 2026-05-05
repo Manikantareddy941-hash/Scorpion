@@ -338,5 +338,26 @@
     "input_placeholder": "询问 Echo...",
     "system_note_reports": " [系统说明：用户正在查看报告页面。如果需要，请分析最新的扫描上下文数据。]",
     "system_note_governance": " [系统说明：用户目前在治理页面管理基础设施政策。]"
+  },
+  "verify": {
+    "button": "Verify Fix",
+    "verifying": "Verifying...",
+    "verified": "Verified",
+    "retry": "Retry Verification",
+    "no_repo": "No repository linked to this task.",
+    "still_found": "Fix Not Verified: Vulnerability still detected.",
+    "success": "Verification Successful: Vulnerability resolved.",
+    "error": "Verification failed due to a system error."
+  },
+  "monitor": {
+    "title": "Continuous Monitoring",
+    "live_status": "Live Data Feed",
+    "fetch_error": "Failed to synchronize monitor data.",
+    "threat_trend": "Vulnerability Trend (Last 7 Days)",
+    "live_feed": "Real-time Finding Stream",
+    "no_findings": "No new findings detected in the last cycle.",
+    "fleet_health": "Fleet Health Scorecards",
+    "stale": "STALE",
+    "last_seen": "Last Scan"
   }
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, Bell, Sun, Moon, ChevronDown, Eye, Cloud, CloudSnow, Waves } from 'lucide-react';
+import { Search, Bell, Sun, Moon, ChevronDown, Eye, Cloud, CloudSnow, Waves, Cpu } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import Footer from './Footer';
@@ -47,6 +47,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {theme === 'snow-light' && <Cloud className="w-5 h-5" />}
                   {theme === 'snow-dark' && <CloudSnow className="w-5 h-5" />}
                   {theme === 'underwater' && <Waves className="w-5 h-5" />}
+                  {theme === 'matrix' && <Cpu className="w-5 h-5" />}
                   <ChevronDown className={`w-3 h-3 transition-transform ${isThemeOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -62,6 +63,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                           { id: 'snow-light', icon: Cloud },
                           { id: 'snow-dark', icon: CloudSnow },
                           { id: 'underwater', icon: Waves },
+                          { id: 'matrix', icon: Cpu },
                         ].map((t) => (
                           <button
                             key={t.id}

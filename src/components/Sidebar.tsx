@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight, Layout, Clock } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight, Layout, Clock, Map, GitCommit, Hammer, TestTube2, Activity, Rocket, SearchCode } from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useTranslation } from 'react-i18next';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 import toast from 'react-hot-toast';
@@ -29,9 +30,16 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     { icon: BarChart2, label: t('sidebar.reports'), path: '/reports' },
     { icon: Scale, label: t('sidebar.governance'), path: '/governance' },
     { icon: Layout, label: t('sidebar.repositories'), path: '/repos' },
+    { icon: GitCommit, label: 'CODE', path: '/code' },
+    { icon: Hammer, label: 'BUILD', path: '/builds' },
+    { icon: TestTube2, label: 'TEST', path: '/tests' },
+    { icon: SearchCode, label: 'ANALYZE', path: '/analyze' },
+    { icon: Activity, label: 'MONITOR', path: '/monitor' },
     { icon: Users, label: t('sidebar.teams'), path: '/teams' },
     { icon: Bell, label: t('sidebar.alerts'), path: '/alerts' },
     { icon: Clock, label: t('sidebar.audit_log'), path: '/audit' },
+    { icon: Map, label: 'MAP', path: '/map' },
+    { icon: Rocket, label: 'RELEASE', path: '/release' },
   ];
 
   const handleScan = () => {
@@ -116,7 +124,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
 
       {/* New Scan Button */}
       <div style={{ padding: isCollapsed ? '0 10px 24px' : '0 16px 24px' }}>
-        <button onClick={() => setShowScan(true)} style={{ width: '100%', background: 'var(--accent-primary)', color: theme === 'matrix' ? '#000000' : 'white', border: 'none', borderRadius: '6px', padding: '10px', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.1em', cursor: 'pointer', display: 'flex', justifyContent: 'center' }}>
+        <button onClick={() => setShowScan(true)} className="btn-premium" style={{ width: '100%', border: 'none', padding: '10px', display: 'flex', justifyContent: 'center' }}>
           {isCollapsed ? '+' : `+ ${t('sidebar.new_scan').toUpperCase()}`}
         </button>
         {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}

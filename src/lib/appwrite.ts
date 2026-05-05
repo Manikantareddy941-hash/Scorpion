@@ -23,7 +23,13 @@ export const COLLECTIONS = {
   AVATARS_BUCKET_ID:        '69ba01e5000964e8c2c0',
   POLICIES:                 import.meta.env.VITE_APPWRITE_POLICIES_COLLECTION_ID || 'policies',
   INTEGRATIONS:             import.meta.env.VITE_APPWRITE_INTEGRATIONS_COLLECTION_ID || 'integrations',
-  CHAT_SESSIONS:            import.meta.env.VITE_APPWRITE_CHAT_SESSIONS_ID || 'chat_sessions'
+  CHAT_SESSIONS:            import.meta.env.VITE_APPWRITE_CHAT_SESSIONS_ID || 'chat_sessions',
+  COMMITS:                  'commits',
+  BUILDS:                   'builds',
+  TEST_RUNS:                'test_runs',
+  RELEASES:                 'releases',
+  AUDIT_LOGS:               'audit_logs',
+  CERTIFICATES:             'certificates'
 };
 
 export const FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_ID;

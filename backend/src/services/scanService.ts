@@ -241,7 +241,8 @@ export const triggerScan = async (
                         status: 'open',
                         resolution_status: 'open',
                         fingerprint: safeFingerprint,
-                        detected_at: new Date().toISOString()
+                        detected_at: new Date().toISOString(),
+                        cvss_score: f.cvss_score
                     };
                     
                     console.log(`[STRICT DEBUG] Saving Vuln with ScanId: ${vulnPayload.scanId}`);

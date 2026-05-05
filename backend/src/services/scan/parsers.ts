@@ -7,6 +7,7 @@ export interface Finding {
     package?: string;
     version?: string;
     fixVersion?: string;
+    cvss_score?: number;
 }
 
 export const parseSemgrep = (stdout: string): Finding[] => {
@@ -72,7 +73,8 @@ export const parseTrivy = (stdout: string): Finding[] => {
                     line_number: undefined, 
                     package: v.PkgName || undefined,
                     version: v.InstalledVersion || undefined,
-                    fixVersion: v.FixedVersion || undefined
+                    fixVersion: v.FixedVersion || undefined,
+                    cvss_score: v.CVSS?.nvd?.V3Score || v.CVSS?.redhat?.V3Score || v.CVSS?.ghsa?.V3Score
                 });
             });
         });

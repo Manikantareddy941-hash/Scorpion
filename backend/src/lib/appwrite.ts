@@ -36,6 +36,10 @@ export const COLLECTIONS = {
   COMPLIANCE_CONTROLS: 'compliance_controls',
   AUDIT_LOGS: 'audit_logs',
   ROLES: 'roles',
+  COMMITS: 'commits',
+  BUILDS: 'builds',
+  TEST_RUNS: 'test_runs',
+  RELEASES: 'releases',
 };
 
 export { ID, Query };
