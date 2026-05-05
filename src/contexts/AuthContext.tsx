@@ -23,12 +23,14 @@ interface AuthContextType {
   getGithubToken: () => Promise<string | null>;
   getJWT: () => Promise<string | null>;
   refreshUser: () => Promise<AppUser | null>;
+  role: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -47,6 +49,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const currentUser = await account.get();
         setUser(currentUser);
+        
+        // Fetch role
+        const { databases, DB_ID } = await import("../lib/appwrite");
+        const roleRes = await databases.listDocuments(DB_ID, 'roles', [
+          (await import("appwrite")).Query.equal('userId', currentUser.$id)
+        ]).catch(() => ({ documents: [] }));
+        
+        if (roleRes.documents.length > 0) {
+          setRole((roleRes.documents[0] as any).role);
+        }
       } catch (error: any) {
         if (error?.code === 401) {
           setUser(null);
@@ -215,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         getJWT,
         refreshUser,
         getGithubToken,
+        role,
       }}
     >
       {children}

@@ -338,5 +338,26 @@
     "input_placeholder": "Echo से पूछें...",
     "system_note_reports": " [सिस्टम नोट: उपयोगकर्ता वर्तमान में रिपोर्ट पेज देख रहा है। यदि अनुरोध किया जाए तो नवीनतम स्कैन प्रासंगिक डेटा का विश्लेषण करें।]",
     "system_note_governance": " [सिस्टम नोट: उपयोगकर्ता वर्तमान में बुनियादी ढांचा नीतियों का प्रबंधन करने वाले गवर्नेंस पेज पर है।]"
+  },
+  "verify": {
+    "button": "Verify Fix",
+    "verifying": "Verifying...",
+    "verified": "Verified",
+    "retry": "Retry Verification",
+    "no_repo": "No repository linked to this task.",
+    "still_found": "Fix Not Verified: Vulnerability still detected.",
+    "success": "Verification Successful: Vulnerability resolved.",
+    "error": "Verification failed due to a system error."
+  },
+  "monitor": {
+    "title": "Continuous Monitoring",
+    "live_status": "Live Data Feed",
+    "fetch_error": "Failed to synchronize monitor data.",
+    "threat_trend": "Vulnerability Trend (Last 7 Days)",
+    "live_feed": "Real-time Finding Stream",
+    "no_findings": "No new findings detected in the last cycle.",
+    "fleet_health": "Fleet Health Scorecards",
+    "stale": "STALE",
+    "last_seen": "Last Scan"
   }
 }

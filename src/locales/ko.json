@@ -338,5 +338,26 @@
     "input_placeholder": "Echo에게 물어보기...",
     "system_note_reports": " [시스템 노트: 사용자가 현재 보고서 페이지를 보고 있습니다. 요청 시 최신 스캔 상황별 데이터를 분석하십시오.]",
     "system_note_governance": " [시스템 노트: 사용자가 현재 인프라 정책을 관리하는 거버넌스 페이지에 있습니다.]"
+  },
+  "verify": {
+    "button": "Verify Fix",
+    "verifying": "Verifying...",
+    "verified": "Verified",
+    "retry": "Retry Verification",
+    "no_repo": "No repository linked to this task.",
+    "still_found": "Fix Not Verified: Vulnerability still detected.",
+    "success": "Verification Successful: Vulnerability resolved.",
+    "error": "Verification failed due to a system error."
+  },
+  "monitor": {
+    "title": "Continuous Monitoring",
+    "live_status": "Live Data Feed",
+    "fetch_error": "Failed to synchronize monitor data.",
+    "threat_trend": "Vulnerability Trend (Last 7 Days)",
+    "live_feed": "Real-time Finding Stream",
+    "no_findings": "No new findings detected in the last cycle.",
+    "fleet_health": "Fleet Health Scorecards",
+    "stale": "STALE",
+    "last_seen": "Last Scan"
   }
 }

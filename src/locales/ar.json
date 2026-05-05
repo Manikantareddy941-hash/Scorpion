@@ -338,5 +338,26 @@
     "input_placeholder": "اسأل Echo...",
     "system_note_reports": " [ملاحظة النظام: المستخدم يشاهد حاليًا صفحة التقارير. قم بتحليل أحدث بيانات الفحص السياقية إذا طلب ذلك.]",
     "system_note_governance": " [ملاحظة النظام: المستخدم موجود حاليًا في صفحة الحوكمة لإدارة سياسات البنية التحتية.]"
+  },
+  "verify": {
+    "button": "تأكيد الإصلاح",
+    "verifying": "جاري التأكيد...",
+    "verified": "تم التأكيد",
+    "retry": "إعادة المحاولة",
+    "no_repo": "لا يوجد مستودع مرتبط.",
+    "still_found": "فشل التأكيد: الثغرة لا تزال موجودة.",
+    "success": "نجح التأكيد: تم حل الثغرة.",
+    "error": "فشل التأكيد بسبب خطأ في النظام."
+  },
+  "monitor": {
+    "title": "Continuous Monitoring",
+    "live_status": "Live Data Feed",
+    "fetch_error": "Failed to synchronize monitor data.",
+    "threat_trend": "Vulnerability Trend (Last 7 Days)",
+    "live_feed": "Real-time Finding Stream",
+    "no_findings": "No new findings detected in the last cycle.",
+    "fleet_health": "Fleet Health Scorecards",
+    "stale": "STALE",
+    "last_seen": "Last Scan"
   }
 }

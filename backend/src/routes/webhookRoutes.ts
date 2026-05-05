@@ -36,6 +36,54 @@ router.post('/github', async (req: Request, res: Response) => {
     }
 
     const event = req.headers['x-github-event'];
+    
+    if (event === 'workflow_run') {
+        const workflowRun = req.body.workflow_run;
+        if (!workflowRun) return res.json({ message: 'Missing workflow_run payload' });
+
+        const repoUrl = req.body.repository?.html_url;
+        if (!repoUrl) return res.status(400).json({ error: 'Missing repository URL in payload' });
+
+        try {
+            const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+                Query.equal('url', repoUrl)
+            ]);
+
+            if (repos.total === 0) {
+                return res.json({ message: 'No matching repository found' });
+            }
+
+            const status = workflowRun.conclusion || workflowRun.status || 'in_progress';
+
+            for (const repo of repos.documents) {
+                try {
+                    await databases.createDocument(DB_ID, COLLECTIONS.BUILDS, ID.unique(), {
+                        repo_id: repo.$id,
+                        repo_name: req.body.repository?.name || 'Unknown',
+                        workflow_name: workflowRun.name || 'CI',
+                        status: status,
+                        run_number: String(workflowRun.run_number || '1'),
+                        run_url: workflowRun.html_url || '',
+                        timestamp: workflowRun.updated_at || workflowRun.created_at || new Date().toISOString()
+                    });
+                } catch (err) {
+                    console.error('[Webhook] Failed to log build:', err);
+                }
+
+                if (status === 'success') {
+                    triggerScan(repo.$id, 'public').catch(err => {
+                        console.error(`[Webhook] Failed to trigger scan for ${repo.$id}:`, err);
+                    });
+                }
+            }
+
+            return res.json({ message: `Logged workflow_run and handled triggers for ${repos.total} repository(ies)` });
+        } catch (err) {
+            console.error('[Webhook] Error processing workflow_run:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
     if (event !== 'push') {
         return res.json({ message: `Event ${event} ignored` });
     }
@@ -54,13 +102,43 @@ router.post('/github', async (req: Request, res: Response) => {
             return res.json({ message: 'No matching repository found' });
         }
 
+        const commits = req.body.commits || [];
+        const sensitivePatterns = ['.env', 'password', 'secret', 'key.pem', 'credentials', 'config.json', 'token'];
+
         for (const repo of repos.documents) {
+            for (const commit of commits) {
+                const filesChanged = [
+                    ...(commit.added || []),
+                    ...(commit.modified || []),
+                    ...(commit.removed || [])
+                ];
+                
+                const isSensitive = filesChanged.some(file => 
+                    sensitivePatterns.some(pattern => file.toLowerCase().includes(pattern))
+                );
+
+                try {
+                    await databases.createDocument(DB_ID, COLLECTIONS.COMMITS, ID.unique(), {
+                        repo_id: repo.$id,
+                        commit_hash: commit.id || String(Date.now()),
+                        author: commit.author?.name || commit.author?.username || 'Unknown',
+                        message: commit.message || '',
+                        url: commit.url || '',
+                        timestamp: commit.timestamp || new Date().toISOString(),
+                        files_changed: filesChanged.map(String),
+                        is_sensitive: isSensitive
+                    });
+                } catch (err) {
+                    console.error('[Webhook] Failed to log commit:', err);
+                }
+            }
+
             triggerScan(repo.$id, 'public').catch(err => {
                 console.error(`[Webhook] Failed to trigger scan for ${repo.$id}:`, err);
             });
         }
 
-        res.json({ message: `Scan triggered for ${repos.total} repository(ies)` });
+        res.json({ message: `Processed ${commits.length} commits and triggered scan for ${repos.total} repository(ies)` });
     } catch (err: any) {
         console.error('[Webhook] Error processing webhook:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -130,6 +208,51 @@ router.post('/github/app-install', async (req: Request, res: Response) => {
         res.json({ message: 'Installation processed and repositories synchronized' });
     } catch (err: any) {
         console.error('[Webhook] App installation error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * CI Test Report Webhook
+ */
+router.post('/tests/report', async (req: Request, res: Response) => {
+    const { repo_url, build_id, total_tests, passed_tests, failed_tests, skipped_tests, coverage, status } = req.body;
+    
+    if (!repo_url) return res.status(400).json({ error: 'Missing repo_url' });
+
+    try {
+        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+            Query.equal('url', repo_url)
+        ]);
+
+        if (repos.total === 0) return res.json({ message: 'No matching repository found' });
+        
+        for (const repo of repos.documents) {
+            const hasFailed = Number(failed_tests || 0) > 0 || status === 'failed';
+            
+            await databases.createDocument(DB_ID, COLLECTIONS.TEST_RUNS, ID.unique(), {
+                repo_id: repo.$id,
+                repo_name: repo.name,
+                build_id: String(build_id || Date.now()),
+                total_tests: Number(total_tests || 0),
+                passed_tests: Number(passed_tests || 0),
+                failed_tests: Number(failed_tests || 0),
+                skipped_tests: Number(skipped_tests || 0),
+                coverage: Number(coverage || 0),
+                status: hasFailed ? 'failed' : 'passed',
+                timestamp: new Date().toISOString()
+            });
+
+            if (!hasFailed) {
+               triggerScan(repo.$id, 'public').catch(e => console.error(e));
+            } else {
+               console.warn(`[Test Webhook] Skipping scan for ${repo.$id} due to failed tests`);
+            }
+        }
+
+        res.json({ message: 'Test report recorded' });
+    } catch (err) {
+        console.error('[Webhook] Error processing test report:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
