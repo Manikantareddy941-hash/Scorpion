@@ -19,6 +19,14 @@ import MultiRepoDashboard from './pages/MultiRepoDashboard';
 import Profile from './pages/Profile';
 import ScanResults from './pages/ScanResults';
 import AIChat from './components/AIChat';
+import JourneyMap from './pages/JourneyMap';
+import CodeActivity from './pages/CodeActivity';
+import BuildPipeline from './pages/BuildPipeline';
+import TestResults from './pages/TestResults';
+import DeepAnalysis from './pages/DeepAnalysis';
+import ReleaseGate from './pages/ReleaseGate';
+import Monitor from './pages/Monitor';
+import PolicyBuilder from './pages/PolicyBuilder';
 import { Shield } from 'lucide-react';
 import AuthCallback from './pages/AuthCallback';
 import AuditLog from './pages/AuditLog';
@@ -117,13 +125,20 @@ function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />
             <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
+            <Route path="/map" element={<ProtectedRoute><JourneyMap /></ProtectedRoute>} />
+            <Route path="/code" element={<ProtectedRoute><CodeActivity /></ProtectedRoute>} />
+            <Route path="/builds" element={<ProtectedRoute><BuildPipeline /></ProtectedRoute>} />
+            <Route path="/tests" element={<ProtectedRoute><TestResults /></ProtectedRoute>} />
+            <Route path="/analyze" element={<ProtectedRoute><DeepAnalysis /></ProtectedRoute>} />
+            <Route path="/release" element={<ProtectedRoute><ReleaseGate /></ProtectedRoute>} />
+            <Route path="/monitor" element={<ProtectedRoute><Monitor /></ProtectedRoute>} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
-        <AIChat open={isChatOpen} setOpen={setIsChatOpen} />
+        {!isAuthPage && <AIChat open={isChatOpen} setOpen={setIsChatOpen} />}
       </div>
-      <Footer />
+      {!isAuthPage && <Footer />}
     </div>
   );
 }

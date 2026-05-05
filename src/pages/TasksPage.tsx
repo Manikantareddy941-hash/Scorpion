@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-  Plus, CheckCircle2, Clock, AlertCircle, Edit2, Trash2
+  Plus, CheckCircle2, Clock, AlertCircle, Edit2, Trash2, ShieldCheck
 } from 'lucide-react';
 import TaskModal from '../components/TaskModal';
+import VerifyFixButton from '../components/VerifyFixButton';
 
 import { useTranslation } from 'react-i18next';
 
@@ -203,6 +204,15 @@ export default function TasksPage() {
                           <option value="in_progress">{t('tasks.executing')}</option>
                           <option value="completed">{t('tasks.verified')}</option>
                         </select>
+                        
+                        {task.status === 'completed' && task.repo_id && (
+                          <VerifyFixButton 
+                            taskId={task.$id}
+                            repoId={task.repo_id}
+                            repoUrl={task.repo_url}
+                            onVerified={fetchTasks}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
