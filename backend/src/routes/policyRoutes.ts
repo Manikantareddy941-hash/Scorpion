@@ -1,60 +1,75 @@
-import { Router, Response, Request, NextFunction } from 'express';
-import { Models, ID } from 'node-appwrite';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { getEffectivePolicy } from '../services/policyService';
-
-interface AuthenticatedRequest extends Request {
-    user?: Models.User<Models.Preferences>;
-}
+import { Router, Response, Request } from 'express';
+import { databases, DB_ID, ID, Query } from '../lib/appwrite';
+import { verifyUser } from '../middleware/auth';
 
 const router = Router();
 
-// Get active policy for a repository
-router.get('/:id/policy', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// Get policies
+router.get('/', verifyUser, async (req: Request, res: Response) => {
     try {
-        const repoId = req.params.id;
-        const policy = await getEffectivePolicy(repoId);
-        res.json(policy);
-    } catch (err) {
-        next(err);
+        const userId = (req as any).user?.$id;
+        const response = await databases.listDocuments(
+            DB_ID,
+            'policies',
+            [Query.equal('userId', userId)]
+        );
+        res.json(response.documents);
+    } catch (err: any) {
+        console.error('[Policy API Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// Update policy for a repository (Override)
-router.put('/:id/policy', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// Create policy
+router.post('/', verifyUser, async (req: Request, res: Response) => {
     try {
-        const repoId = req.params.id;
-        const { policy_id, custom_max_critical, custom_max_high, custom_min_risk_score } = req.body;
+        const userId = (req as any).user?.$id;
+        const policyData = {
+            ...req.body,
+            userId,
+            isActive: true, // Legacy support
+            code: 'N/A' // Legacy support
+        };
 
-        // Check for existing override
-        const existing = await databases.listDocuments(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, [
-            Query.equal('repo_id', repoId),
-            Query.limit(1)
-        ]);
+        const policy = await databases.createDocument(
+            DB_ID,
+            'policies',
+            ID.unique(),
+            policyData
+        );
+        res.json(policy);
+    } catch (err: any) {
+        console.error('[Policy Create Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
-        let data;
-        if (existing.total > 0) {
-            data = await databases.updateDocument(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, existing.documents[0].$id, {
-                policy_id,
-                custom_max_critical,
-                custom_max_high,
-                custom_min_risk_score,
-                updated_at: new Date().toISOString()
-            });
-        } else {
-            data = await databases.createDocument(DB_ID, COLLECTIONS.POLICY_EVALUATIONS, ID.unique(), {
-                repo_id: repoId,
-                policy_id,
-                custom_max_critical,
-                custom_max_high,
-                custom_min_risk_score,
-                updated_at: new Date().toISOString()
-            });
-        }
+// Update policy
+router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const policy = await databases.updateDocument(
+            DB_ID,
+            'policies',
+            id,
+            req.body
+        );
+        res.json(policy);
+    } catch (err: any) {
+        console.error('[Policy Update Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
-        res.json(data);
-    } catch (err) {
-        next(err);
+// Delete policy
+router.delete('/:id', verifyUser, async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        await databases.deleteDocument(DB_ID, 'policies', id);
+        res.json({ message: 'Policy deleted' });
+    } catch (err: any) {
+        console.error('[Policy Delete Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

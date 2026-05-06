@@ -1,446 +1,435 @@
-import { useEffect, useState } from 'react';
-import { databases, DB_ID, ID, Query } from '../lib/appwrite';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { 
+    Users, UserPlus, Shield, Star, 
+    Trash2, LogOut, Settings, MoreVertical,
+    Search, Filter, Plus, ChevronRight,
+    Loader2, Mail, Lock, CheckCircle, X,
+    Activity, Globe, UserCheck
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Users, Plus, Shield, UserPlus, Trash2, Mail, ChevronRight, X, User } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface Team {
     $id: string;
     name: string;
+    description: string;
     owner_id: string;
-    $createdAt: string;
+    role?: string;
 }
 
-interface TeamMember {
+interface Member {
     $id: string;
     user_id: string;
-    role: 'owner' | 'admin' | 'developer' | 'viewer';
-    user_email?: string;
+    email: string;
+    name: string;
+    role: string;
 }
 
 export default function Teams() {
     const { t } = useTranslation();
-    const { user, getJWT } = useAuth();
+    const { getJWT, user } = useAuth();
     const [teams, setTeams] = useState<Team[]>([]);
-    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-    const [members, setMembers] = useState<TeamMember[]>([]);
+    const [activeTeam, setActiveTeam] = useState<Team | null>(null);
+    const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [membersLoading, setMembersLoading] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newTeamName, setNewTeamName] = useState('');
     const [showInviteModal, setShowInviteModal] = useState(false);
+    
+    const [newTeamName, setNewTeamName] = useState('');
+    const [newTeamDesc, setNewTeamDesc] = useState('');
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<'admin' | 'developer' | 'viewer'>('viewer');
+    const [inviteRole, setInviteRole] = useState('viewer');
 
     useEffect(() => {
         fetchTeams();
     }, []);
 
+    useEffect(() => {
+        if (activeTeam) {
+            fetchMembers(activeTeam.$id);
+        }
+    }, [activeTeam]);
+
     const fetchTeams = async () => {
         setLoading(true);
         try {
-            const response = await databases.listDocuments(
-                DB_ID,
-                'teams',
-                [Query.orderDesc('$createdAt')]
-            );
-
-            const data = response.documents as unknown as Team[];
-            setTeams(data);
-            if (data.length > 0) {
-                setSelectedTeam(data[0]);
-                fetchMembers(data[0].$id);
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const res = await fetch(`${apiBase}/api/teams`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setTeams(data || []);
+            if (data.length > 0 && !activeTeam) {
+                setActiveTeam(data[0]);
             }
-        } catch (error) {
-            console.error('Error fetching teams:', error);
+        } catch (err) {
+            toast.error('Failed to fetch teams');
         } finally {
             setLoading(false);
         }
     };
 
     const fetchMembers = async (teamId: string) => {
+        setMembersLoading(true);
         try {
-            const response = await databases.listDocuments(
-                DB_ID,
-                'team_members',
-                [Query.equal('team_id', teamId)]
-            );
-
-            const data = response.documents as unknown as TeamMember[];
-            setMembers(data.map(m => ({ ...m, user_email: m.user_id })));
-        } catch (error) {
-            console.error('Error fetching members:', error);
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const res = await fetch(`${apiBase}/api/teams/${teamId}/members`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setMembers(data || []);
+        } catch (err) {
+            toast.error('Failed to fetch team members');
+        } finally {
+            setMembersLoading(false);
         }
     };
 
     const handleCreateTeam = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newTeamName || !user) return;
-
-        setSubmitting(true);
-        setError(null);
         try {
-            const team = await databases.createDocument(
-                DB_ID,
-                'teams',
-                ID.unique(),
-                { name: newTeamName, owner_id: user.$id, created_at: new Date().toISOString() }
-            ) as unknown as Team;
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const res = await fetch(`${apiBase}/api/teams`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: newTeamName, description: newTeamDesc })
+            });
 
-            await databases.createDocument(
-                DB_ID,
-                'team_members',
-                ID.unique(),
-                { team_id: team.$id, user_id: user.$id, role: 'owner', created_at: new Date().toISOString() }
-            );
-
-            setTeams([team, ...teams]);
-            setSelectedTeam(team);
-            setMembers([{ $id: ID.unique(), user_id: user.$id, role: 'owner', user_email: user.email }]);
-            setShowCreateModal(false);
-            setNewTeamName('');
-        } catch (error: any) {
-            console.error('Error creating team:', error);
-            setError(error.message || t('teams.fail_create', 'Failed to create team'));
-        } finally {
-            setSubmitting(false);
+            if (res.ok) {
+                toast.success('Team battalion created');
+                setShowCreateModal(false);
+                setNewTeamName('');
+                setNewTeamDesc('');
+                fetchTeams();
+            }
+        } catch (err) {
+            toast.error('Failed to create team');
         }
     };
 
     const handleInviteMember = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inviteEmail || !selectedTeam) return;
-
+        if (!activeTeam) return;
         try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
             const token = await getJWT();
-            
-            const response = await fetch(`${apiBase}/api/teams/${selectedTeam.$id}/invite`, {
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const res = await fetch(`${apiBase}/api/teams/${activeTeam.$id}/invite`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ email: inviteEmail, role: inviteRole })
             });
 
-            if (!response.ok) {
-                const data = await response.json();
-                alert(data.error || t('teams.fail_invite', 'Failed to invite member'));
-                return;
+            if (res.ok) {
+                toast.success('Operator deployed to team');
+                setShowInviteModal(false);
+                setInviteEmail('');
+                fetchMembers(activeTeam.$id);
+            } else {
+                const err = await res.json();
+                toast.error(err.error || 'Failed to invite operator');
             }
-
-            fetchMembers(selectedTeam.$id);
-            setShowInviteModal(false);
-            setInviteEmail('');
-        } catch (error) {
-            console.error('Error inviting member:', error);
+        } catch (err) {
+            toast.error('Failed to invite operator');
         }
     };
 
-    const handleDeleteTeam = async (teamId: string, teamName: string) => {
-        if (!window.confirm(t('teams.delete_confirm', { name: teamName, defaultValue: `Are you sure you want to decommission Cluster: ${teamName}? This action is irreversible.` }))) return;
-
+    const handleRemoveMember = async (memberUserId: string) => {
+        if (!activeTeam) return;
+        if (!window.confirm('Eject this operator from the battalion?')) return;
+        
         try {
-            await databases.deleteDocument(DB_ID, 'teams', teamId);
-            setTeams(teams.filter(t => t.$id !== teamId));
-            if (selectedTeam?.$id === teamId) {
-                const remaining = teams.filter(t => t.$id !== teamId);
-                if (remaining.length > 0) {
-                    setSelectedTeam(remaining[0]);
-                    fetchMembers(remaining[0].$id);
-                } else {
-                    setSelectedTeam(null);
-                    setMembers([]);
-                }
-            }
-        } catch (error: any) {
-            console.error('Error deleting team:', error);
-            alert(error.message || t('teams.fail_delete', 'Failed to delete team'));
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            await fetch(`${apiBase}/api/teams/${activeTeam.$id}/members/${memberUserId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            setMembers(prev => prev.filter(m => m.user_id !== memberUserId));
+            toast.success('Operator ejected');
+        } catch (err) {
+            toast.error('Failed to remove member');
         }
     };
 
-    const getRoleBadgeColor = (role: string) => {
-        switch (role) {
-            case 'owner': return 'text-[var(--accent-secondary)] bg-[var(--accent-secondary)]/10 border-[var(--accent-secondary)]/20';
-            case 'admin': return 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/20';
-            case 'developer': return 'text-[var(--status-success)] bg-[var(--status-success)]/10 border-[var(--status-success)]/20';
-            default: return 'text-[var(--text-secondary)] bg-[var(--bg-secondary)] border-[var(--border-subtle)]';
+    const getRoleBadge = (role: string) => {
+        const style = "px-2 py-0.5 rounded text-[8px] font-black uppercase italic border";
+        switch (role.toLowerCase()) {
+            case 'owner': return <span className={`${style} bg-orange-500/10 text-orange-500 border-orange-500/20`}>Commander</span>;
+            case 'admin': return <span className={`${style} bg-purple-500/10 text-purple-500 border-purple-500/20`}>Officer</span>;
+            case 'editor': return <span className={`${style} bg-blue-500/10 text-blue-500 border-blue-500/20`}>Specialist</span>;
+            default: return <span className={`${style} bg-emerald-500/10 text-emerald-500 border-emerald-500/20`}>Operator</span>;
         }
     };
-
-    if (loading && teams.length === 0) {
-        return (
-            <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <Users className="w-12 h-12 text-[var(--accent-primary)] animate-pulse" />
-                    <h2 className="text-xs font-black text-[var(--text-secondary)] uppercase tracking-widest animate-pulse italic">{t('teams.sync_fleet', 'Synchronizing Fleet...')}</h2>
-                </div>
-            </div>
-        );
-    }
 
     return (
-        <div className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
-                    <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-[var(--accent-primary)] rounded-2xl flex items-center justify-center text-white shadow-xl shadow-[var(--accent-primary)]/20">
-                            <Users className="w-7 h-7" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">{t('teams.collaborators', 'Collaborators')}</h1>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic">{t('teams.fleet_command', 'Fleet Command & Access Control')}</p>
-                        </div>
+        <div className="min-h-screen bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-7xl mx-auto">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                    <div>
+                        <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Tactical Battalions</h1>
+                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Multi-tenant security team orchestration</p>
                     </div>
-                    <button
+
+                    <button 
                         onClick={() => setShowCreateModal(true)}
-                        className="btn-premium flex items-center gap-2 group"
+                        className="btn-premium flex items-center gap-2"
                     >
-                        <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" /> {t('teams.init_team', 'Initialize Team')}
+                        <Plus size={18} />
+                        Found Team
                     </button>
                 </div>
 
-                {teams.length === 0 ? (
-                    <div className="premium-card p-24 text-center flex flex-col items-center">
-                        <div className="w-24 h-24 bg-[var(--bg-secondary)] rounded-[2rem] flex items-center justify-center mb-8 border border-[var(--border-subtle)]">
-                            <Users className="w-10 h-10 text-[var(--text-secondary)]/10" />
-                        </div>
-                        <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{t('teams.lone_pilot', 'Lone Pilot Detected')}</h2>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-10 italic max-w-xs mx-auto">
-                            {t('teams.no_clusters', 'No active clusters found. Deploy your first team to start multi-vector collaboration.')}
-                        </p>
-                        <button
-                            onClick={() => setShowCreateModal(true)}
-                            className="px-10 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40"
-                        >
-                            {t('teams.deploy_team', 'Deploy New Team')}
-                        </button>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-12">
-                        {/* Team List Sidebar */}
-                        <div className="lg:col-span-1 border-r border-[var(--border-subtle)] pr-12">
-                            <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] italic mb-8">{t('teams.active_clusters', 'Active Clusters')}</h3>
-                            <div className="space-y-4">
-                                {teams.map((t) => (
-                                    <div key={t.$id} className="flex items-center gap-3 w-full">
-                                        <button
-                                            onClick={() => {
-                                                setSelectedTeam(t);
-                                                fetchMembers(t.$id);
-                                            }}
-                                            className={`flex-1 text-left p-5 rounded-2xl transition-all flex items-center justify-between group relative overflow-hidden ${selectedTeam?.$id === t.$id
-                                                ? 'bg-[var(--accent-primary)] text-white shadow-xl shadow-[var(--accent-primary)]/30'
-                                                : 'hover:bg-[var(--text-primary)]/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
-                                                }`}
-                                        >
-                                            <span className="font-black text-xs uppercase tracking-tight italic z-10">{t.name}</span>
-                                            <ChevronRight className={`w-4 h-4 transition-transform z-10 ${selectedTeam?.$id === t.$id ? 'translate-x-1' : 'opacity-0'}`} />
-                                            {selectedTeam?.$id === t.$id && (
-                                                <div className="absolute inset-0 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-primary)]/80 opacity-100" />
-                                            )}
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteTeam(t.$id, t.name);
-                                            }}
-                                            className="p-4 rounded-2xl border border-[var(--status-error)]/20 text-[var(--status-error)]/60 hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/5 transition-all"
-                                            title={t('teams.decommission_cluster', 'Decommission Cluster')}
-                                        >
-                                            <Trash2 className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                ))}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                    {/* Team List Sidebar */}
+                    <div className="lg:col-span-1 space-y-4">
+                        <div className="premium-card p-4">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={14} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Find team..."
+                                    className="w-full pl-9 pr-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black italic outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)]"
+                                />
                             </div>
                         </div>
 
-                        {/* Team Details & Members */}
-                        <div className="lg:col-span-3">
-                            {selectedTeam && (
-                                <div className="premium-card overflow-hidden animate-in fade-in slide-in-from-right-4 duration-500">
-                                    <div className="p-10 border-b border-[var(--border-subtle)] bg-[var(--bg-accent)]/30">
-                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-                                            <div>
-                                                <h2 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-2">{selectedTeam.name}</h2>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] rounded text-[9px] font-black uppercase tracking-widest italic border border-[var(--accent-primary)]/10">
-                                                        {t('teams.cluster_id', 'Cluster ID')}: {selectedTeam.$id.slice(0, 8)}
-                                                    </span>
-                                                    <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">
-                                                        &bull; {t('teams.deployed', 'DEPLOYED')} {new Date(selectedTeam.$createdAt).toLocaleDateString()}
-                                                    </span>
-                                                </div>
+                        {loading ? (
+                            Array(3).fill(0).map((_, i) => (
+                                <div key={i} className="premium-card h-20 animate-pulse bg-[var(--bg-card)]" />
+                            ))
+                        ) : teams.length === 0 ? (
+                            <div className="text-center py-12 opacity-40">
+                                <Users size={32} className="mx-auto mb-4" />
+                                <p className="text-[10px] font-black uppercase italic tracking-widest">Lone Wolf Protocol</p>
+                            </div>
+                        ) : (
+                            teams.map((team) => (
+                                <button 
+                                    key={team.$id}
+                                    onClick={() => setActiveTeam(team)}
+                                    className={`w-full premium-card p-6 text-left transition-all hover:scale-[1.02] active:scale-95 ${activeTeam?.$id === team.$id ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5' : ''}`}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">{team.name}</h3>
+                                            <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">{team.role || 'Member'}</p>
+                                        </div>
+                                        <ChevronRight size={14} className={activeTeam?.$id === team.$id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'} />
+                                    </div>
+                                </button>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Team Details Area */}
+                    <div className="lg:col-span-3 space-y-8">
+                        {activeTeam ? (
+                            <>
+                                <div className="premium-card p-8">
+                                    <div className="flex flex-col md:flex-row justify-between gap-6">
+                                        <div className="flex items-start gap-6">
+                                            <div className="w-16 h-16 rounded-2xl bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 flex items-center justify-center text-[var(--accent-primary)]">
+                                                <Users size={32} />
                                             </div>
-                                            <button
+                                            <div>
+                                                <div className="flex items-center gap-3">
+                                                    <h2 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{activeTeam.name}</h2>
+                                                    {getRoleBadge(activeTeam.role || 'viewer')}
+                                                </div>
+                                                <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase italic mt-2 leading-relaxed max-w-xl">
+                                                    {activeTeam.description || 'No operational brief provided for this battalion.'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            <button 
                                                 onClick={() => setShowInviteModal(true)}
-                                                className="flex items-center gap-3 px-6 py-3 bg-[var(--bg-card)] text-[var(--accent-primary)] border border-[var(--border-subtle)] rounded-2xl hover:bg-[var(--accent-primary)]/5 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[var(--accent-primary)]/5"
+                                                className="p-3 bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20 rounded-xl text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/20 transition-all flex items-center gap-2 text-[10px] font-black uppercase italic"
                                             >
-                                                <UserPlus className="w-4 h-4 text-[var(--accent-primary)]" />
-                                                {t('teams.add_operator', 'Add Operator')}
+                                                <UserPlus size={16} />
+                                                Add Member
+                                            </button>
+                                            <button className="p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                                                <Settings size={20} />
                                             </button>
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="p-10">
-                                        <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-widest italic">{t('teams.ops_personnel', 'Operations Personnel')}</h3>
-                                        <div className="space-y-4">
+                                <div className="premium-card overflow-hidden">
+                                    <div className="px-8 py-6 border-b border-[var(--border-subtle)] flex justify-between items-center bg-[var(--bg-primary)]/30">
+                                        <h3 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-[0.2em]">Deployment Roster</h3>
+                                        <div className="flex items-center gap-2 text-[9px] font-black text-[var(--text-secondary)] uppercase italic">
+                                            <Activity size={10} className="text-green-500" />
+                                            {members.length} Operators Online
+                                        </div>
+                                    </div>
+
+                                    {membersLoading ? (
+                                        <div className="p-24 flex justify-center">
+                                            <Loader2 size={32} className="animate-spin text-[var(--accent-primary)]" />
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y divide-[var(--border-subtle)]">
                                             {members.map((member) => (
-                                                <div key={member.$id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-[var(--bg-secondary)] rounded-3xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 transition-all group">
-                                                    <div className="flex items-center gap-5 w-full md:w-auto">
-                                                        <div className="w-12 h-12 bg-[var(--bg-card)] rounded-2xl flex items-center justify-center text-[var(--text-secondary)] border border-[var(--border-subtle)] shadow-sm font-black group-hover:scale-110 transition-transform">
-                                                            <User className="w-6 h-6" />
+                                                <div key={member.$id} className="p-6 flex items-center justify-between hover:bg-[var(--bg-secondary)]/50 transition-colors group">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] flex items-center justify-center font-black text-[var(--accent-primary)] italic text-sm">
+                                                            {member.email.charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <p className="font-black text-[var(--text-primary)] italic uppercase tracking-tight text-sm mb-1">{member.user_email}</p>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-widest italic">
-                                                                    {member.user_id === user?.$id ? t('teams.primary_controller', 'Primary Controller') : t('teams.sub_operator', 'Sub-Operator')}
-                                                                </span>
-                                                                <span className="w-1 h-1 bg-[var(--border-subtle)] rounded-full" />
-                                                                <span className="text-[9px] text-[var(--status-success)] font-black uppercase tracking-widest italic">{t('teams.online_ready', 'Online-Ready')}</span>
+                                                                <p className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-tight">{member.name || member.email.split('@')[0]}</p>
+                                                                {getRoleBadge(member.role)}
+                                                                {member.user_id === user?.$id && (
+                                                                    <span className="text-[7px] font-black bg-[var(--text-secondary)]/10 text-[var(--text-secondary)] px-1 rounded uppercase italic">You</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Mail size={10} className="text-[var(--text-secondary)]" />
+                                                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">{member.email}</p>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-8 mt-6 md:mt-0 w-full md:w-auto justify-between md:justify-end">
-                                                        <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.15em] italic border shadow-sm ${getRoleBadgeColor(member.role)}`}>
-                                                            {member.role}
-                                                        </span>
-                                                        {member.user_id !== user?.$id && (
-                                                            <button className="p-2.5 text-[var(--text-secondary)] hover:text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded-xl transition-all border border-transparent hover:border-[var(--status-error)]/20">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        )}
+
+                                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                        <button 
+                                                            onClick={() => handleRemoveMember(member.user_id)}
+                                                            disabled={member.user_id === user?.$id}
+                                                            className="p-2 text-[var(--text-secondary)] hover:text-red-500 disabled:opacity-30"
+                                                        >
+                                                            <LogOut size={16} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="premium-card p-32 text-center border-dashed">
+                                <Users size={48} className="mx-auto mb-6 opacity-20 text-[var(--text-secondary)]" />
+                                <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">Select Operations Center</h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">Manage your battalions and operator deployments</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Create Team Modal */}
+                {showCreateModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
+                        <div className="premium-card max-w-md w-full p-10 relative z-10">
+                            <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-8">Found Battalion</h2>
+                            <form onSubmit={handleCreateTeam} className="space-y-6">
+                                <div>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block mb-2">Battalion Name</label>
+                                    <input 
+                                        type="text" 
+                                        required
+                                        placeholder="SCORPION-ALPHA"
+                                        value={newTeamName}
+                                        onChange={(e) => setNewTeamName(e.target.value)}
+                                        className="w-full px-6 py-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl font-black italic text-xs outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block mb-2">Mission Description</label>
+                                    <textarea 
+                                        rows={3}
+                                        placeholder="Core security operations for..."
+                                        value={newTeamDesc}
+                                        onChange={(e) => setNewTeamDesc(e.target.value)}
+                                        className="w-full px-6 py-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl font-black italic text-xs outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)] resize-none"
+                                    />
+                                </div>
+                                <div className="flex gap-4 pt-4">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowCreateModal(false)}
+                                        className="flex-1 py-4 text-[10px] font-black uppercase italic tracking-widest border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-2xl"
+                                    >
+                                        Abort
+                                    </button>
+                                    <button 
+                                        type="submit"
+                                        className="flex-1 py-4 text-[10px] font-black uppercase italic tracking-widest bg-[var(--accent-primary)] text-black rounded-2xl shadow-lg shadow-[var(--accent-primary)]/20"
+                                    >
+                                        Commence
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Invite Member Modal */}
+                {showInviteModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowInviteModal(false)} />
+                        <div className="premium-card max-w-md w-full p-10 relative z-10">
+                            <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-8">Deploy Operator</h2>
+                            <form onSubmit={handleInviteMember} className="space-y-6">
+                                <div>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block mb-2">Operator Email</label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={16} />
+                                        <input 
+                                            type="email" 
+                                            required
+                                            placeholder="operator@scorpion.io"
+                                            value={inviteEmail}
+                                            onChange={(e) => setInviteEmail(e.target.value)}
+                                            className="w-full pl-12 pr-6 py-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl font-black italic text-xs outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)]"
+                                        />
                                     </div>
                                 </div>
-                            )}
+                                <div>
+                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block mb-2">Assignment Role</label>
+                                    <select 
+                                        value={inviteRole}
+                                        onChange={(e) => setInviteRole(e.target.value)}
+                                        className="w-full px-6 py-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl font-black italic text-xs outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)] appearance-none"
+                                    >
+                                        <option value="viewer">Operator (Viewer)</option>
+                                        <option value="editor">Specialist (Editor)</option>
+                                        <option value="admin">Officer (Admin)</option>
+                                    </select>
+                                </div>
+                                <div className="flex gap-4 pt-4">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowInviteModal(false)}
+                                        className="flex-1 py-4 text-[10px] font-black uppercase italic tracking-widest border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-2xl"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        type="submit"
+                                        className="flex-1 py-4 text-[10px] font-black uppercase italic tracking-widest bg-[var(--accent-primary)] text-black rounded-2xl shadow-lg shadow-[var(--accent-primary)]/20"
+                                    >
+                                        Deploy
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}
             </div>
-
-            {/* Create Team Modal */}
-            {showCreateModal && (
-                <div className="fixed inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300 pointer-events-auto">
-                    <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] w-full max-w-md p-10 shadow-2xl border border-[var(--border-subtle)] animate-in zoom-in duration-300 pointer-events-auto">
-                        <div className="flex items-center justify-between mb-8">
-                            <div>
-                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('teams.new_cluster', 'New Fleet Cluster')}</h3>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">{t('teams.init_vector', 'Initialize organizational vector')}</p>
-                            </div>
-                            <button onClick={() => setShowCreateModal(false)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-                        <form onSubmit={handleCreateTeam}>
-                            <div className="space-y-8">
-                                <div>
-                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">{t('teams.designation_name', 'Designation Name')}</label>
-                                    <div className="relative">
-                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)]" />
-                                        <input
-                                            type="text"
-                                            autoFocus
-                                            value={newTeamName}
-                                            onChange={(e) => setNewTeamName(e.target.value)}
-                                            placeholder={t('teams.name_placeholder', 'e.g. CORE-OPS')}
-                                            className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black uppercase italic text-sm tracking-tight text-[var(--text-primary)]"
-                                        />
-                                    </div>
-                                    {error && <p className="mt-2 text-[10px] font-bold text-[var(--status-error)] uppercase tracking-widest italic">{error}</p>}
-                                </div>
-                            </div>
-                            <div className="flex gap-4 mt-12">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCreateModal(false)}
-                                    className="flex-1 px-6 py-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--bg-secondary)] transition-all border border-[var(--border-subtle)]"
-                                >
-                                    {t('teams.abort', 'Abort')}
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="flex-1 px-6 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {submitting ? t('teams.initializing', 'Initializing...') : t('teams.activate_cluster', 'Activate Cluster')}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Invite Modal */}
-            {showInviteModal && (
-                <div className="fixed inset-0 bg-slate-900/40 dark:bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
-                    <div className="bg-[var(--bg-secondary)] rounded-[var(--card-radius)] w-full max-w-md p-10 shadow-2xl border border-[var(--border-subtle)] animate-in zoom-in duration-300">
-                        <div className="flex items-center justify-between mb-8">
-                            <div>
-                                <h3 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{t('teams.add_personnel', 'Add Personnel')}</h3>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1">{t('teams.onboard_operator', 'Onboard new security operator')}</p>
-                            </div>
-                            <button onClick={() => setShowInviteModal(false)} className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                                <X className="w-6 h-6" />
-                            </button>
-                        </div>
-                        <form onSubmit={handleInviteMember}>
-                            <div className="space-y-8">
-                                <div>
-                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic mb-3 block">{t('teams.comms_id', 'Communications ID (Email)')}</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)]" />
-                                        <input
-                                            type="email"
-                                            required
-                                            value={inviteEmail}
-                                            onChange={(e) => setInviteEmail(e.target.value)}
-                                            placeholder={t('teams.email_placeholder', 'operator@sector.com')}
-                                            className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black italic text-sm tracking-tight text-[var(--text-primary)]"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-[var(--accent-primary)] uppercase tracking-widest italic mb-3 block">{t('teams.authority_level', 'Authority Level (Role)')}</label>
-                                    <div className="relative">
-                                        <Shield className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--accent-primary)] pointer-events-none" />
-                                        <select
-                                            value={inviteRole}
-                                            onChange={(e) => setInviteRole(e.target.value as any)}
-                                            className="w-full pl-14 pr-6 py-5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl focus:ring-4 focus:ring-[var(--accent-primary)]/10 focus:border-[var(--accent-primary)] outline-none transition-all font-black italic text-sm tracking-tight appearance-none text-[var(--text-primary)]"
-                                        >
-                                            <option value="viewer">{t('teams.role_viewer', 'Viewer Protocol (Read-Only)')}</option>
-                                            <option value="developer">{t('teams.role_developer', 'Developer Protocol (Scan & Resolve)')}</option>
-                                            <option value="admin">{t('teams.role_admin', 'Administrator Protocol (Manage Cluster)')}</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex gap-4 mt-12">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowInviteModal(false)}
-                                    className="flex-1 px-6 py-4 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--bg-secondary)] transition-all border border-[var(--border-subtle)]"
-                                >
-                                    {t('teams.abort', 'Abort')}
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-6 py-4 bg-[var(--accent-primary)] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--accent-primary)]/90 transition-all shadow-xl shadow-[var(--accent-primary)]/40"
-                                >
-                                    {t('teams.deploy_invite', 'Deploy Invitation')}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

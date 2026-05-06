@@ -9,11 +9,13 @@ import {
 } from 'recharts';
 import { monitorService } from '../services/monitorService';
 import { client, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 export default function Monitor() {
   const { t } = useTranslation();
+  const { getJWT } = useAuth();
   const [loading, setLoading] = useState(true);
   const [trends, setTrends] = useState<any[]>([]);
   const [health, setHealth] = useState<any[]>([]);
@@ -22,18 +24,29 @@ export default function Monitor() {
 
   const fetchData = async () => {
     try {
-      const [trendData, healthData, findingsData] = await Promise.all([
-        monitorService.getVulnerabilityTrends(7),
-        monitorService.getRepoHealth(),
-        monitorService.getLatestFindings()
-      ]);
-      setTrends(trendData);
-      setHealth(healthData);
-      setFindings(findingsData);
+      console.log('[Monitor] Fetching telemetry from backend...');
+      const data = await monitorService.getMonitorData(getJWT);
+      
+      setTrends(data.trend || []);
+      setHealth(data.fleet || []);
+      setFindings(data.findings_stream || []);
       setLastUpdated(new Date());
     } catch (err) {
-      console.error(err);
-      toast.error(t('monitor.fetch_error'));
+      console.error('[Monitor] Backend fetch failed, falling back to direct Appwrite synchronization:', err);
+      try {
+        const [trendData, healthData, findingsData] = await Promise.all([
+          monitorService.getVulnerabilityTrends(7),
+          monitorService.getRepoHealth(),
+          monitorService.getLatestFindings()
+        ]);
+        setTrends(trendData);
+        setHealth(healthData);
+        setFindings(findingsData);
+        setLastUpdated(new Date());
+      } catch (fallbackErr) {
+        console.error('[Monitor] Fallback failed:', fallbackErr);
+        toast.error(t('monitor.fetch_error'));
+      }
     } finally {
       setLoading(false);
     }
@@ -46,7 +59,7 @@ export default function Monitor() {
     const unsubscribeFindings = client.subscribe(
       `databases.${DB_ID}.collections.${COLLECTIONS.VULNERABILITIES}.documents`,
       (response: any) => {
-        if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+        if (response.events.some(e => e.includes('.create'))) {
           setFindings(prev => [response.payload, ...prev].slice(0, 10));
           toast.success(t('monitor.new_finding_detected'), { icon: '🔍' });
         }
@@ -57,13 +70,13 @@ export default function Monitor() {
     const unsubscribeScans = client.subscribe(
       `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`,
       (response: any) => {
-        if (response.events.includes('databases.*.collections.*.documents.*.update')) {
+        if (response.events.some(e => e.includes('.update'))) {
           fetchData(); // Refresh health scorecards when a scan completes
         }
       }
     );
 
-    const interval = setInterval(fetchData, 300000); // Reduce polling to every 5 mins as backup
+    const interval = setInterval(fetchData, 300000); 
     
     return () => {
       unsubscribeFindings();
@@ -169,7 +182,7 @@ export default function Monitor() {
                       {finding.severity}
                     </span>
                     <span className="text-[8px] text-[var(--text-secondary)] font-mono">
-                      {new Date(finding.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(finding.$createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   <p className="text-[10px] text-[var(--text-primary)] font-bold truncate">{finding.title}</p>

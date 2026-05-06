@@ -7,6 +7,7 @@ const toolPaths: Record<string, string> = {
     semgrep: "C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\semgrep.exe",
     gitleaks: "c:\\Users\\LENOVO\\Stackpilot\\tools\\gitleaks\\gitleaks.exe",
     trivy: "c:\\Users\\LENOVO\\Stackpilot\\tools\\trivy\\trivy.exe",
+    checkov: "C:\\Users\\manik\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\checkov.CMD"
 };
 
 export const checkTool = (cmd: string): boolean => {
