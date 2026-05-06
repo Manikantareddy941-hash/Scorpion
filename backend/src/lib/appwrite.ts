@@ -22,6 +22,7 @@ export const COLLECTIONS = {
   POLICY_EVALUATIONS: 'policy_evaluations',
   PROJECT_ACCESS: 'project_access',
   TEAM_MEMBERS: 'team_members',
+  TEAMS: 'teams',
   RBAC_AUDIT_LOG: 'rbac_audit_log',
   NOTIFICATIONS: 'notifications',
   SECURITY_REPORTS: 'security_reports',

@@ -1,12 +1,24 @@
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
 export const monitorService = {
+  // Legacy direct Appwrite calls (kept for reference or if needed)
   async getRecentScans() {
     const response = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
       Query.orderDesc('$createdAt'),
       Query.limit(10)
     ]);
     return response.documents;
+  },
+
+  // New backend-driven monitor data
+  async getMonitorData(getJWT: () => Promise<string>) {
+    const token = await getJWT();
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const res = await fetch(`${apiBase}/api/monitor`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to fetch monitor data from backend');
+    return res.json();
   },
 
   async getVulnerabilityTrends(days: number = 7) {
@@ -18,7 +30,6 @@ export const monitorService = {
       Query.limit(1000)
     ]);
     
-    // Group by day
     const grouped: { [key: string]: number } = {};
     for (let i = 0; i < days; i++) {
       const d = new Date();
@@ -52,7 +63,6 @@ export const monitorService = {
 
       const isStale = latestScan.total === 0 || new Date(latestScan.documents[0].$createdAt) < staleThreshold;
       
-      // Calculate risk score based on open vulnerabilities
       const openVulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
         Query.equal('repo_id', repo.$id),
         Query.equal('status', 'open'),

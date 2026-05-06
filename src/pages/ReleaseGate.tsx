@@ -1,403 +1,272 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Rocket, CheckCircle2, XCircle, AlertTriangle, Shield, 
-  FileText, ClipboardCheck, UserCheck, RefreshCw, ChevronRight,
-  ArrowRight, Award
+    Rocket, Shield, AlertTriangle, CheckCircle2, 
+    XCircle, RefreshCw, ChevronRight, ArrowRight,
+    Award, ShieldAlert, Loader2, Database
 } from 'lucide-react';
-import { auditService } from '../services/auditService';
-import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import Certificate from '../components/Certificate';
 
 interface Repo {
-  $id: string;
-  name: string;
-  vulnerability_count: number;
+    repo_id: string;
+    repo_name: string;
+    count: number;
+}
+
+interface Blocker {
+    $id: string;
+    title: string;
+    severity: string;
+    type: string;
+    file_path: string;
+}
+
+interface GateResult {
+    allowed: boolean;
+    blocker_count: number;
+    blockers: Blocker[];
 }
 
 export default function ReleaseGate() {
-  const { user, role } = useAuth();
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [checking, setChecking] = useState(false);
-  const [approvalDoc, setApprovalDoc] = useState<any>(null);
+    const { getJWT } = useAuth();
+    const [repos, setRepos] = useState<Repo[]>([]);
+    const [selectedRepo, setSelectedRepo] = useState<any | null>(null);
+    const [gateResult, setGateResult] = useState<GateResult | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [checking, setChecking] = useState(false);
 
-  // Checklist state
-  const [checklist, setChecklist] = useState({
-    noCriticals: false,
-    testsPassing: false,
-    reportGenerated: false,
-    leadApproved: false
-  });
+    useEffect(() => {
+        console.log('[ReleaseGate] Component mounted');
+        fetchRepos();
+    }, []);
 
-  const [stats, setStats] = useState({
-    criticalResolved: 0,
-    highResolved: 0,
-    testsPassed: 0,
-    coverage: 0,
-    scanId: ''
-  });
+    const fetchRepos = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const res = await fetch(`${apiBase}/api/dashboard/security`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+            
+            const data = await res.json();
+            const repoList = data.by_repo || [];
+            setRepos(repoList);
+            console.log(`[ReleaseGate] Loaded ${repoList.length} repositories for gate check`);
+        } catch (err: any) {
+            console.error('[ReleaseGate] Failed to load repositories:', err);
+            setError(err.message);
+            toast.error('Failed to synchronize repository security state');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  useEffect(() => {
-    fetchRepos();
-  }, []);
-
-  const fetchRepos = async () => {
-    try {
-      console.log('ReleaseGate: Fetching repositories...');
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-        Query.orderDesc('$createdAt')
-      ]);
-      console.log('ReleaseGate: Repositories fetched:', res.documents.length);
-      setRepos(res.documents as any);
-    } catch (err) {
-      console.error('ReleaseGate: Failed to load repositories:', err);
-      toast.error('Failed to load repositories');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyReleaseCriteria = async (repo: Repo) => {
-    setChecking(true);
-    setChecklist({
-      noCriticals: false,
-      testsPassing: false,
-      reportGenerated: false,
-      leadApproved: false
-    });
-
-    try {
-      console.log('Verifying release criteria for repo:', repo.name);
-      
-      // 1. Check Critical Vulnerabilities
-      const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-        Query.equal('repo_id', repo.$id),
-        Query.equal('severity', 'critical'),
-        Query.equal('status', 'open')
-      ]);
-      
-      const noCriticals = vulnsRes.total === 0;
-
-      // 2. Check Tests (latest test run)
-      const testsRes = await databases.listDocuments(DB_ID, COLLECTIONS.TEST_RUNS, [
-        Query.equal('repo_id', repo.$id),
-        Query.orderDesc('timestamp'),
-        Query.limit(1)
-      ]).catch(err => {
-        console.error('Test runs fetch failed:', err);
-        return { documents: [], total: 0 };
-      });
-      
-      const latestTest = testsRes.documents[0] as any;
-      const testsPassing = latestTest ? latestTest.status === 'passed' : false;
-
-      // 3. Check for Scans/Reports
-      const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-        Query.equal('repo_id', repo.$id),
-        Query.limit(1)
-      ]).catch(err => {
-        console.error('Scans fetch failed:', err);
-        return { total: 0 };
-      });
-      
-      const reportGenerated = scansRes.total > 0;
-
-      // 4. Fetch stats for certificate
-      const resolvedRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-        Query.equal('repo_id', repo.$id),
-        Query.equal('status', ['fixed', 'resolved', 'verified'])
-      ]).catch(err => {
-        console.error('Resolved vulnerabilities fetch failed:', err);
-        return { documents: [], total: 0 };
-      });
-
-      const passed = latestTest?.passed_tests || 0;
-      const total = latestTest?.total_tests || 0;
-      const testsPct = total > 0 ? Math.round((passed / total) * 100) : 0;
-
-      setStats({
-        criticalResolved: resolvedRes.documents.filter((v: any) => v.severity === 'critical').length || 0,
-        highResolved: resolvedRes.documents.filter((v: any) => v.severity === 'high').length || 0,
-        testsPassed: testsPct,
-        coverage: latestTest?.coverage || 0,
-        scanId: latestTest?.build_id || 'SCAN-AUTO-VAL'
-      });
-
-      setChecklist({
-        noCriticals,
-        testsPassing,
-        reportGenerated,
-        leadApproved: false 
-      });
-
-      // Check if already approved
-      const existingApproval = await databases.listDocuments(DB_ID, COLLECTIONS.RELEASES, [
-        Query.equal('repo_id', repo.$id),
-        Query.equal('status', 'approved'),
-        Query.limit(1)
-      ]).catch(err => {
-        console.error('Existing approval fetch failed:', err);
-        return { total: 0, documents: [] };
-      });
-
-      if (existingApproval.total > 0) {
-        setApprovalDoc(existingApproval.documents[0]);
-        setChecklist(prev => ({ ...prev, leadApproved: true }));
-      }
-
-    } catch (err) {
-      console.error('Release criteria verification error:', err);
-      toast.error('Criteria verification failed. Check console for details.');
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const handleFinalApproval = async () => {
-    if (!selectedRepo || !user) return;
-    
-    setLoading(true);
-    try {
-      const payload = {
-        repo_id: selectedRepo.$id,
-        version: `1.0.${Math.floor(Date.now()/1000000)}`,
-        status: 'approved',
-        approved_by: user.name,
-        approved_at: new Date().toISOString(),
-        checks_json: JSON.stringify(checklist)
-      };
-
-      const doc = await databases.createDocument(DB_ID, COLLECTIONS.RELEASES, ID.unique(), payload);
-      
-      await databases.createDocument(DB_ID, COLLECTIONS.CERTIFICATES, ID.unique(), {
-        repo_name: selectedRepo.name,
-        version: payload.version,
-        approval_date: payload.approved_at,
-        approved_by: payload.approved_by,
-        scan_id: stats.scanId,
-        stats_json: JSON.stringify(stats)
-      }).catch(err => console.error('Certificate storage failed:', err));
-
-      await auditService.log(
-        'RELEASE_APPROVED', 
-        'Repository', 
-        `Release version ${payload.version} approved by ${user.name}`,
-        selectedRepo.$id
-      );
-
-      setApprovalDoc(doc);
-      setChecklist(prev => ({ ...prev, leadApproved: true }));
-      toast.success('Release Approved!');
-    } catch (err) {
-      console.error('Final approval error:', err);
-      toast.error('Approval failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (approvalDoc) {
-    return (
-      <div className="p-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase tracking-tighter italic">Release Authorized</h1>
-            <p className="text-green-500 font-bold uppercase tracking-widest text-[10px]">The secure release gate is now open.</p>
-          </div>
-          <button 
-            onClick={() => { setApprovalDoc(null); setSelectedRepo(null); }}
-            className="btn-premium px-6 py-2 text-xs"
-          >
-            New Approval
-          </button>
-        </div>
+    const checkGate = async (repoId: string, repoName: string) => {
+        setChecking(true);
+        setGateResult(null);
+        setSelectedRepo({ id: repoId, name: repoName });
         
-        <Certificate 
-          repoName={selectedRepo?.name || 'Unknown'}
-          version={approvalDoc.version}
-          approvalDate={new Date(approvalDoc.approved_at).toLocaleDateString()}
-          approvedBy={approvalDoc.approved_by}
-          scanId={stats.scanId}
-          stats={stats}
-        />
-      </div>
-    );
-  }
+        try {
+            const token = await getJWT();
+            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const res = await fetch(`${apiBase}/api/gates/release/${repoId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setGateResult(data);
+        } catch (err) {
+            console.error('Gate check failed:', err);
+            toast.error('Security gate check failed');
+        } finally {
+            setChecking(false);
+        }
+    };
 
-  return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-orange-500/10 rounded-2xl flex items-center justify-center border border-orange-500/20 shadow-[0_0_20px_rgba(249,115,22,0.1)]">
-            <Rocket className="text-orange-500 w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase tracking-tighter italic">Release Gate</h1>
-            <p className="text-[var(--text-secondary)] font-bold uppercase tracking-[0.2em] text-[10px]">Final security authorization before production.</p>
-          </div>
-        </div>
-      </div>
-
-      {!selectedRepo ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {repos.length === 0 && !loading && (
-            <div className="col-span-full py-20 text-center premium-card">
-              <Shield className="w-12 h-12 text-[var(--text-secondary)]/20 mx-auto mb-4" />
-              <p className="text-[var(--text-secondary)] font-bold uppercase tracking-widest text-xs">No repositories detected</p>
-            </div>
-          )}
-          {repos.map(repo => (
-            <div 
-              key={repo.$id}
-              onClick={() => { setSelectedRepo(repo); verifyReleaseCriteria(repo); }}
-              className="premium-card group cursor-pointer hover:border-orange-500/50 transition-all p-6"
-            >
-              <div className="flex justify-between items-start mb-6">
-                <div className="p-3 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-subtle)] group-hover:bg-orange-500/10 group-hover:border-orange-500/20 transition-all">
-                  <Shield className="text-[var(--text-primary)] group-hover:text-orange-500 w-5 h-5" />
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[var(--bg-primary)] p-8 flex flex-col items-center justify-center">
+                <Rocket className="w-12 h-12 text-orange-500 animate-pulse mb-4" />
+                <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-[var(--text-secondary)]" />
+                    <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.3em] italic">Initializing Release Sequence...</p>
                 </div>
-                <ChevronRight className="text-[var(--text-secondary)]/40 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
-              </div>
-              <h3 className="text-lg font-black text-[var(--text-primary)] mb-2 uppercase italic tracking-tight">{repo.name || 'Unnamed Repository'}</h3>
-              <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)]">
-                <AlertTriangle className={(repo.vulnerability_count || 0) > 0 ? "text-orange-500" : "text-green-500"} size={12} />
-                {(repo.vulnerability_count || 0)} Potential Issues
-              </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="premium-card p-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-6">
-                 {checking && <RefreshCw className="w-5 h-5 text-orange-500 animate-spin" />}
-              </div>
+        );
+    }
 
-              <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-tighter mb-8 flex items-center gap-3 italic">
-                <ClipboardCheck className="text-orange-500" />
-                Security Check-off List
-              </h2>
+    try {
+        return (
+            <div className="min-h-screen bg-[var(--bg-primary)] p-8">
+                <div className="max-w-7xl mx-auto space-y-12">
+                    
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                        <div className="flex items-center gap-5">
+                            <div className="w-16 h-16 bg-orange-500 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-orange-500/20">
+                                <Rocket size={32} />
+                            </div>
+                            <div>
+                                <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-[var(--text-primary)]">Release Gate</h1>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-2">Automated Security Policy Enforcement</p>
+                            </div>
+                        </div>
+                    </div>
 
-              <div className={`space-y-4 transition-opacity ${checking ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                <CheckItem 
-                  title="Zero Critical Vulnerabilities" 
-                  description={checklist.noCriticals ? "Clean: 0 critical vulnerabilities found." : "FAILED: Critical vulnerabilities must be resolved."} 
-                  status={checklist.noCriticals} 
-                />
-                <CheckItem 
-                  title="Build & Tests Successful" 
-                  description={checklist.testsPassing ? "Success: Latest test run passed." : "FAILED: No passing test runs detected for this repo."} 
-                  status={checklist.testsPassing} 
-                />
-                <CheckItem 
-                  title="Compliance Report Generated" 
-                  description={checklist.reportGenerated ? "Available: Scan telemetry is present." : "FAILED: No scan history found for this repository."} 
-                  status={checklist.reportGenerated} 
-                />
-                <CheckItem 
-                  title="Lead Approval" 
-                  description={role === 'security_lead' ? "Final sign-off from the Security Team Lead." : "REQUIRED: A Security Lead must authorize this release."} 
-                  status={checklist.leadApproved}
-                  interactive={checklist.noCriticals && checklist.testsPassing && role === 'security_lead'}
-                  onCheck={() => setChecklist(prev => ({ ...prev, leadApproved: !prev.leadApproved }))}
-                />
-              </div>
+                    {error ? (
+                        <div className="premium-card p-24 text-center border-red-500/20">
+                            <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-6 opacity-40" />
+                            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">Gate Uplink Disrupted</h3>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">{error}</p>
+                            <button onClick={fetchRepos} className="mt-6 btn-premium bg-orange-600">Reconnect to Fleet</button>
+                        </div>
+                    ) : !selectedRepo ? (
+                        repos.length === 0 ? (
+                            <div className="premium-card p-32 text-center border-dashed">
+                                <Database size={48} className="mx-auto mb-6 opacity-20 text-[var(--text-secondary)]" />
+                                <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Secure Repositories Found</h3>
+                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">Connect a repository to the Scorpion mesh to enable release gating.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {repos.map((repo, idx) => (
+                                    <div key={idx} className="premium-card p-8 group hover:border-orange-500/50 transition-all cursor-pointer" onClick={() => checkGate(repo.repo_id, repo.repo_name)}>
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-500 border border-orange-500/20 group-hover:bg-orange-500 group-hover:text-white transition-all">
+                                                <Shield size={24} />
+                                            </div>
+                                            <ChevronRight className="text-[var(--text-secondary)] group-hover:translate-x-1 transition-transform" />
+                                        </div>
+                                        <h3 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{repo.repo_name}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest">{repo.count} Total Findings</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )
+                    ) : (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <button onClick={() => setSelectedRepo(null)} className="text-[10px] font-black text-[var(--text-secondary)] uppercase italic tracking-widest hover:text-orange-500 transition-colors flex items-center gap-2">
+                                <RefreshCw size={12} /> Back to Repository Index
+                            </button>
 
-              <div className="mt-12 pt-8 border-t border-[var(--border-subtle)] flex justify-between items-center">
-                <button 
-                  onClick={() => setSelectedRepo(null)}
-                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-black uppercase tracking-widest text-[9px] transition-colors italic"
-                >
-                  [ CANCEL ]
-                </button>
-                
-                <button 
-                  disabled={!Object.values(checklist).every(v => v) || loading}
-                  onClick={handleFinalApproval}
-                  className={`
-                    flex items-center gap-3 px-8 py-4 rounded-2xl font-black uppercase tracking-tighter transition-all italic text-sm
-                    ${Object.values(checklist).every(v => v) 
-                      ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:scale-[1.02]' 
-                      : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border border-[var(--border-subtle)] cursor-not-allowed opacity-50'
-                    }
-                  `}
-                >
-                  {loading ? <RefreshCw className="animate-spin" /> : <Award />}
-                  Authorize Release
-                </button>
-              </div>
-            </div>
-          </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                
+                                {/* Gate Status Card */}
+                                <div className="lg:col-span-2 space-y-6">
+                                    <div className={`premium-card p-10 border-2 ${checking ? 'border-[var(--border-subtle)]' : gateResult?.allowed ? 'border-green-500/50' : 'border-red-500/50'}`}>
+                                        <div className="flex items-center justify-between mb-10">
+                                            <div className="flex items-center gap-5">
+                                                <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl transition-all
+                                                    ${checking ? 'bg-[var(--bg-primary)] text-[var(--text-secondary)] animate-pulse' : 
+                                                      gateResult?.allowed ? 'bg-green-500 text-white shadow-green-500/20' : 'bg-red-500 text-white shadow-red-500/20'}`}>
+                                                    {checking ? <RefreshCw className="animate-spin" /> : gateResult?.allowed ? <CheckCircle2 size={32} /> : <ShieldAlert size={32} />}
+                                                </div>
+                                                <div>
+                                                    <h2 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">
+                                                        {checking ? 'Analyzing Perimeter...' : gateResult?.allowed ? 'Authorization: CLEAR' : 'Authorization: BLOCKED'}
+                                                    </h2>
+                                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">
+                                                        Target: {selectedRepo.name}
+                                                    </p>
+                                                </div>
+                                            </div>
 
-          <div className="space-y-6">
-            <div className="premium-card p-6">
-              <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-6 italic">Target Repository</h3>
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-[var(--bg-primary)] rounded-xl flex items-center justify-center border border-[var(--border-subtle)]">
-                  <Shield className="text-[var(--text-primary)] w-5 h-5" />
+                                            {!checking && gateResult?.allowed && (
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[9px] font-black text-green-500 uppercase tracking-widest italic mb-1">Status: Operational</span>
+                                                    <div className="px-4 py-1 bg-green-500/10 text-green-500 rounded-full text-[8px] font-black uppercase">Zero Blockers</div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {!checking && !gateResult?.allowed && (
+                                            <div className="space-y-6">
+                                                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-4">
+                                                    <AlertTriangle className="text-red-500" />
+                                                    <p className="text-[10px] font-black text-red-500 uppercase italic">
+                                                        Gate restricted: {gateResult?.blocker_count} critical/high severity blockers detected in active mesh.
+                                                    </p>
+                                                </div>
+
+                                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
+                                                    {gateResult?.blockers.map((blocker) => (
+                                                        <div key={blocker.$id} className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl flex items-center justify-between group hover:border-red-500/30 transition-all">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center text-red-500 text-xs font-black">
+                                                                    !
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">{blocker.title}</h4>
+                                                                    <p className="text-[9px] text-[var(--text-secondary)] uppercase italic">{blocker.type} • {blocker.file_path}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className="px-3 py-1 bg-red-500/10 text-red-500 rounded-lg text-[8px] font-black uppercase">{blocker.severity}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {!checking && gateResult?.allowed && (
+                                            <div className="flex flex-col items-center py-10 space-y-6">
+                                                <Award size={64} className="text-green-500 opacity-20" />
+                                                <p className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest text-center max-w-sm">
+                                                    All security protocols verified. The repository meets the minimum safety threshold for deployment.
+                                                </p>
+                                                <button className="btn-premium bg-green-600 shadow-green-500/20 px-12 py-4">Confirm Authorization</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Info Panel */}
+                                <div className="space-y-6">
+                                    <div className="premium-card p-8">
+                                        <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-6 italic">Gate Protocol Info</h3>
+                                        <div className="space-y-6">
+                                            <div className="flex gap-4">
+                                                <div className="w-1 h-8 bg-orange-500 rounded-full" />
+                                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed italic">
+                                                    The release gate is an automated enforcement point that prevents vulnerable code from entering production environments.
+                                                </p>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center text-[9px] font-black uppercase italic">
+                                                    <span className="text-[var(--text-secondary)]">Blocking Severity</span>
+                                                    <span className="text-red-500">Critical / High</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-[9px] font-black uppercase italic">
+                                                    <span className="text-[var(--text-secondary)]">Exemption Protocol</span>
+                                                    <span className="text-[var(--text-primary)]">Security Lead Only</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-[9px] font-black uppercase italic">
+                                                    <span className="text-[var(--text-secondary)]">Audit Log</span>
+                                                    <span className="text-green-500">Enabled</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <div>
-                  <p className="text-[var(--text-primary)] font-black uppercase italic tracking-tight">{selectedRepo.name || 'Unnamed'}</p>
-                  <p className="text-[9px] text-[var(--text-secondary)] font-mono truncate max-w-[150px] opacity-60 uppercase">{selectedRepo.$id}</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3">
-                 <StatRow label="Resolved Criticals" value={stats.criticalResolved} color={stats.criticalResolved > 0 ? "text-green-500" : "text-[var(--text-secondary)]/40"} />
-                 <StatRow label="Latest Test Success" value={`${stats.testsPassed}%`} color={stats.testsPassed === 100 ? "text-green-500" : "text-blue-500"} />
-                 <StatRow label="Code Coverage" value={`${stats.coverage}%`} color="text-purple-500" />
-              </div>
             </div>
-
-            <div className="p-6 rounded-2xl border border-orange-500/20 bg-orange-500/5">
-              <div className="flex gap-4">
-                <AlertTriangle className="text-orange-500 flex-shrink-0 w-5 h-5" />
-                <p className="text-[10px] text-orange-200/60 leading-relaxed font-bold uppercase tracking-tight italic">
-                  <span className="text-orange-500">WARNING:</span> Authorization will be recorded in the immutable audit log.
-                </p>
-              </div>
+        );
+    } catch (renderError: any) {
+        console.error('[ReleaseGate] Render crash:', renderError);
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] text-orange-500 font-black uppercase italic p-8 text-center">
+                Critical Render Failure in Release Gate Module.<br/>Check Console for Trace.
             </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+        );
+    }
 }
-
-function CheckItem({ title, description, status, interactive, onCheck }: any) {
-  return (
-    <div 
-      className={`
-        p-4 rounded-2xl border transition-all flex items-center justify-between gap-4
-        ${status ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/10'}
-        ${interactive ? 'cursor-pointer hover:border-[var(--accent-primary)]/30' : ''}
-      `}
-      onClick={interactive ? onCheck : undefined}
-    >
-      <div className="flex gap-4 items-center">
-        <div className={`p-2 rounded-xl ${status ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-          {status ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
-        </div>
-        <div>
-          <h4 className={`text-xs font-black uppercase italic ${status ? 'text-[var(--text-primary)]' : 'text-[var(--text-primary)]/60'}`}>{title}</h4>
-          <p className="text-[9px] text-[var(--text-secondary)] font-bold uppercase tracking-widest italic">{description}</p>
-        </div>
-      </div>
-      {interactive && !status && <ArrowRight className="text-[var(--text-secondary)]/40 w-4 h-4" />}
-    </div>
-  );
-}
-
-function StatRow({ label, value, color }: any) {
-  return (
-    <div className="flex justify-between items-center text-[10px]">
-      <span className="text-[var(--text-secondary)] font-black uppercase tracking-widest italic">{label}</span>
-      <span className={`font-black italic ${color}`}>{value}</span>
-    </div>
-  );
-}
-

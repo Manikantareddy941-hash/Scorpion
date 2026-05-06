@@ -1,66 +1,110 @@
-import { Router, Response, Request, NextFunction } from 'express';
-import { Models, ID } from 'node-appwrite';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from '../services/reportingService';
-
-interface AuthenticatedRequest extends Request {
-    user?: Models.User<Models.Preferences>;
-}
+import { Router, Response, Request } from 'express';
+import { databases, DB_ID, Query } from '../lib/appwrite';
+import { verifyUser } from '../middleware/auth';
+import { logAuditEvent } from '../utils/auditLogger';
+import PDFDocument from 'pdfkit';
+import { Parser } from 'json2csv';
 
 const router = Router();
 
-router.get('/stats', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/export', verifyUser, async (req: Request, res: Response) => {
+    const { repo_id, format, from, to } = req.body;
+    if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
+
     try {
-        const { scope, id } = req.query;
-        const stats = await getSecurityPostureStats(req.user!.$id, (scope as any) || 'global', id as string);
+        // 1. Fetch Repository Details
+        const repo = await databases.getDocument(DB_ID, 'repositories', repo_id);
 
-        if (!stats) return res.status(404).json({ error: 'No data found for the given scope' });
+        // 2. Fetch Findings
+        const queries = [Query.equal('repo_id', repo_id)];
+        if (from) queries.push(Query.greaterThanEqual('$createdAt', from));
+        if (to) queries.push(Query.lessThanEqual('$createdAt', to));
+        queries.push(Query.limit(5000));
 
-        const reposDocs = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.equal('user_id', req.user!.$id)
-        ]);
+        const findingsResponse = await databases.listDocuments(DB_ID, 'findings', queries);
+        const findings = findingsResponse.documents;
 
-        const trend = await getTrendData(req.user!.$id, reposDocs.documents.map(r => r.$id));
+        const userId = (req as any).user?.$id;
+        await logAuditEvent('REPORT_EXPORTED', `Security report generated as ${format.toUpperCase()} for ${repo.name}`, userId, repo_id);
 
-        res.json({ stats, trend });
-    } catch (err) {
-        next(err);
-    }
-});
+        if (format === 'csv') {
+            const fields = ['title', 'severity', 'type', 'file_path', 'cve_id', 'status', '$createdAt'];
+            const opts = { fields };
+            const parser = new Parser(opts);
+            const csv = parser.parse(findings);
 
-router.post('/generate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-        const { scope, id, title } = req.body;
-        const stats = await getSecurityPostureStats(req.user!.$id, (scope as any) || 'global', id as string);
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', 'attachment; filename="scorpion-report.csv"');
+            return res.status(200).send(csv);
+        }
 
-        if (!stats) return res.status(404).json({ error: 'No data found for report generation' });
+        if (format === 'pdf') {
+            const doc = new PDFDocument({ margin: 50 });
+            const filename = `scorpion-report-${repo.name}-${Date.now()}.pdf`;
 
-        const reposDocs = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.equal('user_id', req.user!.$id)
-        ]);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-        const trend = await getTrendData(req.user!.$id, reposDocs.documents.map(r => r.$id));
+            doc.pipe(res);
 
-        const buffer = await generatePDFReportBuffer({
-            title: title || `Security Report - ${scope}`,
-            stats,
-            trend
-        });
+            // Header
+            doc.fontSize(25).text('SCORPION SECURITY REPORT', { align: 'center' });
+            doc.moveDown();
+            doc.fontSize(16).text(`Repository: ${repo.name}`, { align: 'left' });
+            doc.fontSize(10).text(`Generated: ${new Date().toLocaleString()}`, { align: 'left' });
+            doc.moveDown();
 
-        await databases.createDocument(DB_ID, COLLECTIONS.SECURITY_REPORTS, ID.unique(), {
-            user_id: req.user!.$id,
-            scope,
-            name: title || `Report ${new Date().toLocaleDateString()}`,
-            stats_snapshot: JSON.stringify(stats),
-            repo_id: scope === 'project' ? id : null,
-            team_id: scope === 'team' ? id : null
-        });
+            // Summary
+            const summary = {
+                critical: findings.filter(f => f.severity.toLowerCase() === 'critical').length,
+                high: findings.filter(f => f.severity.toLowerCase() === 'high').length,
+                medium: findings.filter(f => f.severity.toLowerCase() === 'medium').length,
+                low: findings.filter(f => f.severity.toLowerCase() === 'low').length
+            };
 
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=StackPilot_Report_${scope}.pdf`);
-        res.send(buffer);
-    } catch (err) {
-        next(err);
+            doc.fontSize(14).text('Executive Summary', { underline: true });
+            doc.fontSize(12).text(`Total Findings: ${findings.length}`);
+            doc.fillColor('red').text(`Critical: ${summary.critical}`);
+            doc.fillColor('orange').text(`High: ${summary.high}`);
+            doc.fillColor('yellow').text(`Medium: ${summary.medium}`);
+            doc.fillColor('green').text(`Low: ${summary.low}`);
+            doc.fillColor('black');
+            doc.moveDown();
+
+            // Findings Table
+            doc.fontSize(14).text('Findings Detail', { underline: true });
+            doc.moveDown();
+
+            findings.forEach((f, i) => {
+                if (doc.y > 700) doc.addPage();
+                doc.fontSize(10).font('Helvetica-Bold').text(`${i + 1}. ${f.title}`);
+                doc.font('Helvetica').fontSize(8)
+                    .text(`Severity: ${f.severity.toUpperCase()} | Type: ${f.type.toUpperCase()}`)
+                    .text(`Path: ${f.file_path}`)
+                    .text(`Detected: ${new Date(f.$createdAt).toLocaleString()}`);
+                doc.moveDown(0.5);
+            });
+
+            // Footer
+            const range = doc.bufferedPageRange();
+            for (let i = range.start; i < range.start + range.count; i++) {
+                doc.switchToPage(i);
+                doc.fontSize(8).text(
+                    `Generated by Scorpion at ${new Date().toISOString()}`,
+                    50,
+                    doc.page.height - 50,
+                    { align: 'center' }
+                );
+            }
+
+            doc.end();
+            return;
+        }
+
+        res.status(400).json({ error: 'Invalid format. Use pdf or csv.' });
+    } catch (err: any) {
+        console.error('[Report API Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
