@@ -23,7 +23,7 @@ export default function Settings() {
     const [updating, setUpdating] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>((user?.prefs as any)?.profilePic || null);
-    
+
     const [profile, setProfile] = useState<any>({
         name: user?.name || '',
         email: user?.email || '',
@@ -67,7 +67,7 @@ export default function Settings() {
                 'notification_preferences',
                 [Query.equal('user_id', user?.$id || '')]
             );
-            
+
             if (prefResponse.total > 0) {
                 const prefs = prefResponse.documents;
                 setPrefEmail(prefs.some(p => p.channel === 'email' && p.enabled));
@@ -121,7 +121,7 @@ export default function Settings() {
             const bucketId = COLLECTIONS.AVATARS_BUCKET_ID;
             const fileId = ID.unique();
             const response = await storage.createFile(bucketId, fileId, file);
-            
+
             const url = `${import.meta.env.VITE_APPWRITE_ENDPOINT}/storage/buckets/${bucketId}/files/${response.$id}/view?project=${import.meta.env.VITE_APPWRITE_PROJECT_ID}`;
             await account.updatePrefs({
                 ...user?.prefs,
@@ -144,7 +144,7 @@ export default function Settings() {
         try {
             const token = await getJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            
+
             await fetch(`${apiBase}/api/notifications/preferences`, {
                 method: 'PUT',
                 headers: {
@@ -153,11 +153,11 @@ export default function Settings() {
                 },
                 body: JSON.stringify({
                     preferences: [
-                        { channel: 'email',   enabled: prefEmail,                        event_type: 'scan_completed' },
-                        { channel: 'email',   enabled: prefEmail,                        event_type: 'critical_detected' },
-                        { channel: 'slack',   enabled: prefSlack && !!prefSlackWebhook,   event_type: 'scan_completed',    target_value: prefSlackWebhook },
-                        { channel: 'slack',   enabled: prefSlack && !!prefSlackWebhook,   event_type: 'critical_detected', target_value: prefSlackWebhook },
-                        { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'scan_completed',  target_value: prefDiscordWebhook },
+                        { channel: 'email', enabled: prefEmail, event_type: 'scan_completed' },
+                        { channel: 'email', enabled: prefEmail, event_type: 'critical_detected' },
+                        { channel: 'slack', enabled: prefSlack && !!prefSlackWebhook, event_type: 'scan_completed', target_value: prefSlackWebhook },
+                        { channel: 'slack', enabled: prefSlack && !!prefSlackWebhook, event_type: 'critical_detected', target_value: prefSlackWebhook },
+                        { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'scan_completed', target_value: prefDiscordWebhook },
                         { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'critical_detected', target_value: prefDiscordWebhook },
                     ]
                 })
@@ -177,7 +177,7 @@ export default function Settings() {
         try {
             const token = await getJWT();
             const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            
+
             const response = await fetch(`${apiBase}/api/auth/api-key`, {
                 method: 'POST',
                 headers: {
@@ -333,7 +333,7 @@ export default function Settings() {
                                     {t('settings.neural_link_desc', 'Synchronize your biological appearance with the Scorpion neural mesh. Recommended format: PNG/JPG @ 512px.')}
                                 </p>
                                 <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-4">
-                                    <button 
+                                    <button
                                         onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}
                                         className="text-[10px] font-black uppercase tracking-widest text-[var(--accent-primary)] flex items-center gap-2 hover:opacity-70 transition-opacity"
                                     >
@@ -388,7 +388,7 @@ export default function Settings() {
                                     <div>
                                         <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">{t('settings.institutional_access', 'Institutional Mesh Access')}</h4>
                                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
-                                            {(user?.prefs as any)?.github_installation_id 
+                                            {(user?.prefs as any)?.github_installation_id
                                                 ? t('settings.mesh_active', { id: (user?.prefs as any)?.github_installation_id, defaultValue: `Neural Mesh Integrated (Installation ID: ${(user?.prefs as any)?.github_installation_id})` })
                                                 : t('settings.mesh_description', 'Connect the ScorpApp to your organization for full spectrum scanning.')}
                                         </p>
@@ -470,7 +470,7 @@ export default function Settings() {
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 bg-[#4A154B]/40 rounded-xl flex items-center justify-center">
                                             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                                                <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#E01E5A"/>
+                                                <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#E01E5A" />
                                             </svg>
                                         </div>
                                         <div>
@@ -510,7 +510,7 @@ export default function Settings() {
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 bg-[#5865F2]/20 rounded-xl flex items-center justify-center">
                                             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#5865F2">
-                                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.015.04.037.05A19.9 19.9 0 0 0 6.204 21a.077.077 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.074.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+                                                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.015.04.037.05A19.9 19.9 0 0 0 6.204 21a.077.077 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.074.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
                                             </svg>
                                         </div>
                                         <div>
@@ -606,7 +606,7 @@ export default function Settings() {
                         <h3 className="text-xs font-black text-[var(--status-success)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
                             <Key className="w-4 h-4 text-[var(--status-success)]" /> {t('settings.api_keys_heading', 'Secure API Vectors')}
                         </h3>
-                        
+
                         {generatedKey && (
                             <div className="mb-8 p-6 bg-[var(--status-success)]/10 border border-[var(--status-success)]/20 rounded-2xl">
                                 <p className="text-[10px] font-black text-[var(--status-success)] uppercase tracking-widest mb-3 animate-pulse">{t('settings.new_key_linked', 'New neural key linked successfully.')}</p>
@@ -676,21 +676,21 @@ export default function Settings() {
                                         </span>
                                     </div>
                                     <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed italic">
-                                        {echoMovementEnabled 
-                                            ? t('settings.echo_explanation_active', 'Echo is currently navigating your workspace, providing real-time security intuition.') 
+                                        {echoMovementEnabled
+                                            ? t('settings.echo_explanation_active', 'Echo is currently navigating your workspace, providing real-time security intuition.')
                                             : t('settings.echo_explanation_standby', 'Echo is in standby mode. Movement protocols are temporarily suspended.')}
                                     </p>
                                 </div>
 
                                 <div className="flex gap-4">
-                                    <button 
+                                    <button
                                         onClick={() => setEchoMovementEnabled(true)}
                                         className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${echoMovementEnabled ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/20 opacity-40 cursor-not-allowed' : 'bg-cyan-500 text-black hover:scale-[1.02] active:scale-[0.98]'}`}
                                         disabled={echoMovementEnabled}
                                     >
                                         {t('settings.init_movement', 'Initialize Movement')}
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => setEchoMovementEnabled(false)}
                                         className={`flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!echoMovementEnabled ? 'bg-white/5 border border-white/10 text-[var(--text-secondary)] opacity-40 cursor-not-allowed' : 'bg-white/5 border border-white/10 text-[var(--text-primary)] hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]'}`}
                                         disabled={!echoMovementEnabled}
@@ -702,7 +702,7 @@ export default function Settings() {
 
                             <div className="relative aspect-video rounded-3xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] overflow-hidden flex items-center justify-center group">
                                 <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_50%_50%,_var(--accent-primary)_0%,_transparent_70%)]" />
-                                
+
                                 <div className={`relative transition-all duration-1000 ${echoMovementEnabled ? 'animate-[floating_4s_ease-in-out_infinite]' : ''}`}>
                                     <div className="w-20 h-20 relative">
                                         <img src={robotMascot} alt="Echo Preview" className="w-full h-full object-contain relative z-10" />
