@@ -3,7 +3,7 @@ import { databases, DB_ID, ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { 
     Github, Globe, Clock, Play, Trash2, Plus, 
-    Shield, AlertCircle, CheckCircle, Search, 
+    Shield, AlertCircle, CheckCircle, 
     MoreVertical, Settings, ExternalLink, RefreshCw, Loader2 
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

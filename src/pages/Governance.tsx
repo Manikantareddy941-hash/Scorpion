@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
     Shield, Scale, FileText, AlertTriangle, CheckCircle, 
     Plus, Trash2, Edit3, Save, X, ToggleLeft, ToggleRight,
-    Search, Filter, Layout, List, ChevronRight, Loader2,
+    Filter, Layout, List, ChevronRight, Loader2,
     Lock, Globe, Zap, Settings
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
     Clock, Shield, User as UserIcon, Activity, 
-    Filter, Search, ArrowDown, ChevronRight, 
+    Filter, ArrowDown, ChevronRight, 
     Loader2, AlertCircle, CheckCircle, FileText, 
     Lock, Terminal, Play, Save, RefreshCw, AlertTriangle
 } from 'lucide-react';
@@ -25,7 +25,6 @@ export default function AuditLog() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filterAction, setFilterAction] = useState('all');
-    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         console.log('[AuditLog] Component mounted');
@@ -36,17 +35,23 @@ export default function AuditLog() {
         setLoading(true);
         setError(null);
         try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const res = await fetch(`${apiBase}/api/audit`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
+            const res = await databases.listDocuments(DB_ID, COLLECTIONS.AUDIT_LOGS, [
+                Query.limit(100),
+                Query.orderDesc('$createdAt')
+            ]);
             
-            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-            
-            const data = await res.json();
-            setLogs(Array.isArray(data) ? data : []);
-            console.log(`[AuditLog] Successfully fetched ${data?.length || 0} logs`);
+            const mappedLogs = res.documents.map((doc: any) => ({
+                $id: doc.$id,
+                action: doc.action || 'UNKNOWN',
+                details: doc.details || 'No details provided',
+                user_id: doc.userId || doc.user_id || 'system',
+                repo_id: doc.resourceId || doc.repo_id || 'N/A',
+                created_at: doc.timestamp || doc.$createdAt
+            }));
+
+            setLogs(mappedLogs);
+            console.log(`[AuditLog] Successfully fetched ${res.total} logs`);
         } catch (err: any) {
             console.error('[AuditLog] Fetch error:', err.message);
             setError(err.message);
@@ -82,7 +87,6 @@ export default function AuditLog() {
     const filteredLogs = logs.filter(log => {
         if (!log) return false;
         if (filterAction !== 'all' && log.action !== filterAction) return false;
-        if (searchQuery && !log.details?.toLowerCase().includes(searchQuery.toLowerCase()) && !log.action?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         return true;
     });
 
@@ -117,16 +121,6 @@ export default function AuditLog() {
 
                     {/* Filters */}
                     <div className="premium-card p-4 mb-8 flex flex-wrap items-center gap-4">
-                        <div className="flex-1 min-w-[300px] relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={16} />
-                            <input 
-                                type="text" 
-                                placeholder="Search in ledger details..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs font-black italic outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)]"
-                            />
-                        </div>
 
                         <div className="flex items-center gap-2">
                             <Filter size={14} className="text-[var(--text-secondary)]" />

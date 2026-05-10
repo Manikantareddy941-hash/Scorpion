@@ -1,217 +1,247 @@
 import React, { useEffect, useState } from 'react';
 import { 
-    AlertCircle, GitBranch, Shield, Zap, Search, Lock, 
-    Bell, CheckCircle, AlertTriangle, Play,
-    Cpu, Globe, Terminal, Activity, Server,
-    ArrowRight, ChevronRight, Loader2, Database,
-    Github, Layers, Eye
+    GitBranch, Code, Key, Package, FileCode, 
+    Box, Globe, Wrench, Beaker, Rocket, Activity, ShieldCheck, Database,
+    Loader2, ShieldAlert
 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
-interface PipelineStep {
+interface NodeConfig {
     id: string;
-    title: string;
-    description: string;
-    status: 'idle' | 'active' | 'completed' | 'error';
-    icon: React.ReactNode;
-    details: string[];
+    label: string;
+    icon: React.ElementType;
+    color: string;
+    x: number;
+    y: number;
+    statKey?: string;
+    scannerKey?: string;
+    path: string;
 }
 
 export default function JourneyMap() {
-    const { t } = useTranslation();
+    const { theme } = useTheme();
+    const isMatrix = theme === 'matrix';
+    const navigate = useNavigate();
     const { getJWT } = useAuth();
+    
     const [health, setHealth] = useState<any>(null);
-    const [activePulse, setActivePulse] = useState(0);
+    const [dashboard, setDashboard] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchHealth();
-        const interval = setInterval(() => {
-            setActivePulse(prev => (prev + 1) % 5);
-        }, 3000);
-        return () => clearInterval(interval);
-    }, []);
+        const fetchData = async () => {
+            try {
+                const token = await getJWT();
+                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                
+                const [healthRes, dashRes] = await Promise.all([
+                    fetch(`${apiBase}/api/health`).catch(() => ({ json: () => ({}) })),
+                    fetch(`${apiBase}/api/dashboard/security`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).catch(() => ({ json: () => ({}) }))
+                ]);
 
-    const fetchHealth = async () => {
-        try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const res = await fetch(`${apiBase}/api/health`);
-            const data = await res.json();
-            setHealth(data);
-        } catch (err) {}
+                const healthData = await (healthRes as any).json();
+                const dashData = await (dashRes as any).json();
+
+                setHealth(healthData);
+                setDashboard(dashData);
+            } catch (err) {
+                console.error('Failed to fetch pipeline data:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+        const interval = setInterval(fetchData, 30000);
+        return () => clearInterval(interval);
+    }, [getJWT]);
+
+    const getStatus = (node: NodeConfig) => {
+        if (!health || !dashboard) return 'pending';
+        if (node.scannerKey) return health.services?.[node.scannerKey] ? 'passing' : 'blocked';
+        if (node.id === 'monitor') return health.workerActive ? 'passing' : 'warning';
+        if (node.id === 'release') return dashboard.by_severity?.critical > 0 ? 'blocked' : 'passing';
+        return 'passing';
     };
 
-    const pipelineSteps: PipelineStep[] = [
-        {
-            id: 'ingestion',
-            title: 'Ingestion Engine',
-            description: 'Source code & container image capture',
-            status: 'completed',
-            icon: <Github className="text-blue-500" />,
-            details: ['GitHub Webhook Listener', 'Oci Artifact Puller', 'Branch Tracking']
-        },
-        {
-            id: 'analysis',
-            title: 'Hfidelity Analysis',
-            description: 'Multi-scanner orchestration layer',
-            status: activePulse === 1 ? 'active' : 'completed',
-            icon: <Search className="text-[var(--accent-primary)]" />,
-            details: ['SAST (Semgrep)', 'SCA (OSV.dev)', 'Secret Scanning', 'IaC (Checkov)']
-        },
-        {
-            id: 'governance',
-            title: 'Governance Gate',
-            description: 'Automated policy enforcement',
-            status: activePulse === 2 ? 'active' : 'completed',
-            icon: <Shield className="text-purple-500" />,
-            details: ['Risk Score Evaluation', 'Threshold Verification', 'Release Blocking']
-        },
-        {
-            id: 'intelligence',
-            title: 'Security Intelligence',
-            description: 'AI-driven remediation & enrichment',
-            status: activePulse === 3 ? 'active' : 'idle',
-            icon: <Cpu className="text-orange-500" />,
-            details: ['CVE Prioritization', 'Fix Generation', 'Audit Persistence']
-        },
-        {
-            id: 'alerting',
-            title: 'Alert Propagation',
-            description: 'Real-time incident notification',
-            status: activePulse === 4 ? 'active' : 'idle',
-            icon: <Bell className="text-[var(--status-warning)]" />,
-            details: ['Slack/Discord Sync', 'PagerDuty Trigger', 'OpsGenie Dispatch']
-        }
+    const getStat = (node: NodeConfig) => {
+        if (!dashboard) return '...';
+        if (node.id === 'repo') return `${dashboard.by_repo?.length || 0} Repos`;
+        if (node.statKey) return `${dashboard.by_type?.[node.statKey] || 0} Findings`;
+        if (node.id === 'audit') return `${dashboard.total || 0} Logs`;
+        return 'Active';
+    };
+
+    const nodeConfigs: NodeConfig[] = [
+        { id: 'repo', label: 'CONNECT REPO', icon: GitBranch, color: '#00d4ff', x: 120, y: 150, path: '/repositories' },
+        { id: 'code', label: 'CODE SCAN', icon: Code, color: '#7c3aed', x: 300, y: 150, scannerKey: 'semgrep', path: '/scans' },
+        { id: 'secret', label: 'SECRET DETECT', icon: Key, color: '#ef4444', x: 480, y: 150, scannerKey: 'gitleaks', path: '/scans' },
+        { id: 'dep', label: 'DEPENDENCY', icon: Package, color: '#f59e0b', x: 660, y: 150, scannerKey: 'trivy', path: '/scans' },
+        { id: 'sast', label: 'SAST', icon: ShieldCheck, color: '#10b981', x: 840, y: 150, statKey: 'sast', path: '/findings' },
+        { id: 'iac', label: 'IAC SCAN', icon: FileCode, color: '#6366f1', x: 1020, y: 150, scannerKey: 'checkov', path: '/scans' },
+        { id: 'test', label: 'TEST GATE', icon: Beaker, color: '#14b8a6', x: 1020, y: 350, path: '/repositories' },
+        { id: 'build', label: 'BUILD CI', icon: Wrench, color: '#8b5cf6', x: 840, y: 350, path: '/repositories' },
+        { id: 'dast', label: 'DAST', icon: Globe, color: '#ec4899', x: 660, y: 350, statKey: 'dast', path: '/scans' },
+        { id: 'docker', label: 'DOCKER SCAN', icon: Box, color: '#0ea5e9', x: 480, y: 350, statKey: 'container', path: '/findings' },
+        { id: 'release', label: 'RELEASE GATE', icon: Rocket, color: '#22c55e', x: 300, y: 350, path: '/release-gate' },
+        { id: 'monitor', label: 'MONITOR', icon: Activity, color: '#f97316', x: 120, y: 350, path: '/monitor' },
+        { id: 'comply', label: 'COMPLY', icon: ShieldCheck, color: '#eab308', x: 120, y: 520, path: '/governance' },
+        { id: 'audit', label: 'AUDIT', icon: Database, color: '#94a3b8', x: 300, y: 520, path: '/audit-log' }
     ];
 
+    const passingNodes = nodeConfigs.filter(n => getStatus(n) === 'passing').length;
+    const score = Math.round((passingNodes / nodeConfigs.length) * 100);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'transparent' }}>
+                <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin" />
+            </div>
+        );
+    }
+
+    const liquidGlassStyle = {
+        background: 'rgba(255, 255, 255, 0.05)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '16px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.1)'
+    };
+
     return (
-        <div className="min-h-screen bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8 overflow-hidden">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-16">
-                    <div>
-                        <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Security JourneyMap</h1>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Live telemetry of the security pipeline architecture</p>
+        <div className="flex flex-col items-start min-h-screen pb-20 p-6">
+            {/* The Pipeline Map Area */}
+            <div className="relative w-full h-[600px] overflow-hidden font-sans rounded-3xl" style={{ background: 'transparent' }}>
+                
+                {/* Top Bar: Title & Score */}
+                <div className="absolute top-6 left-6 right-6 z-20 flex justify-between items-start pointer-events-none">
+                    <div className="pointer-events-auto">
+                        <h1 className="text-2xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">
+                            Security JourneyMap
+                        </h1>
+                        <p className="text-[10px] font-bold text-[var(--accent-primary)] uppercase tracking-widest mt-1">
+                            DevSecOps Telemetry Grid
+                        </p>
                     </div>
 
-                    <div className="flex gap-4">
-                        <div className="premium-card px-6 py-3 flex items-center gap-4">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <p className="text-[10px] font-black text-[var(--text-primary)] uppercase italic">Worker Node: ONLINE</p>
+                    <div className="p-3 flex items-center gap-4 shadow-lg pointer-events-auto" style={liquidGlassStyle}>
+                        <div className="relative w-10 h-10">
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle cx="50%" cy="50%" r="40%" fill="transparent" stroke="var(--bg-primary)" strokeWidth="3" />
+                                <circle cx="50%" cy="50%" r="40%" fill="transparent" stroke="var(--accent-primary)" strokeWidth="3" 
+                                    className="transition-all duration-1000"
+                                    strokeDasharray="251.2"
+                                    strokeDashoffset={251.2 - (251.2 * score / 100)}
+                                />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black italic text-[var(--accent-primary)]">
+                                {score}%
+                            </span>
                         </div>
-                    </div>
-                </div>
-
-                {/* Pipeline Visualization */}
-                <div className="relative mb-24">
-                    {/* Connection Line Background */}
-                    <div className="absolute top-1/2 left-0 w-full h-px bg-[var(--border-subtle)] -translate-y-1/2 hidden lg:block" />
-                    
-                    {/* Animated Pulse Path */}
-                    <div className="absolute top-1/2 left-0 h-1 bg-gradient-to-r from-[var(--accent-primary)] to-transparent -translate-y-1/2 hidden lg:block transition-all duration-1000"
-                        style={{ width: `${(activePulse + 1) * 20}%` }}
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 relative z-10">
-                        {pipelineSteps.map((step, idx) => (
-                            <div key={step.id} className="flex flex-col items-center group">
-                                <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center transition-all duration-500 border-2 mb-6 
-                                    ${step.status === 'active' 
-                                        ? 'bg-[var(--accent-primary)]/20 border-[var(--accent-primary)] shadow-[0_0_30px_rgba(var(--accent-primary-rgb),0.3)] scale-110' 
-                                        : step.status === 'completed'
-                                        ? 'bg-[var(--bg-card)] border-[var(--border-subtle)] text-[var(--accent-primary)]'
-                                        : 'bg-[var(--bg-primary)] border-[var(--border-subtle)] text-[var(--text-secondary)] opacity-40'
-                                    }`}>
-                                    {React.cloneElement(step.icon as React.ReactElement, { size: 32 })}
-                                </div>
-                                
-                                <div className="text-center px-4">
-                                    <h3 className={`text-sm font-black uppercase italic tracking-tight mb-1 transition-colors ${step.status === 'active' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
-                                        {step.title}
-                                    </h3>
-                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic leading-tight mb-4">
-                                        {step.description}
-                                    </p>
-                                    
-                                    <div className="space-y-1 hidden group-hover:block animate-in fade-in slide-in-from-top-2 duration-300">
-                                        {step.details.map((detail, i) => (
-                                            <p key={i} className="text-[8px] font-black text-[var(--accent-primary)] uppercase italic bg-[var(--accent-primary)]/5 px-2 py-1 rounded border border-[var(--accent-primary)]/10">
-                                                {detail}
-                                            </p>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Infrastructure Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Live Telemetry */}
-                    <div className="lg:col-span-2 premium-card p-8">
-                        <div className="flex justify-between items-center mb-8">
-                            <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-widest flex items-center gap-2">
-                                <Activity size={16} className="text-[var(--accent-primary)]" />
-                                Runtime Telemetry
+                        <div>
+                            <h3 className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest leading-none">
+                                Posture Score
                             </h3>
-                            <div className="px-3 py-1 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-[8px] font-black text-[var(--text-secondary)] uppercase italic">
-                                Real-time Stream
+                        </div>
+                    </div>
+                </div>
+
+                {/* SVG Lines Connector */}
+                <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                    <line x1="120" y1="150" x2="300" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="300" y1="150" x2="480" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="480" y1="150" x2="660" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="660" y1="150" x2="840" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="840" y1="150" x2="1020" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <path d="M 1020,150 C 1120,150 1120,350 1020,350" fill="none" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="1020" y1="350" x2="840" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="840" y1="350" x2="660" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="660" y1="350" x2="480" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="480" y1="350" x2="300" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="300" y1="350" x2="120" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <path d="M 120,350 C 20,350 20,520 120,520" fill="none" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                    <line x1="120" y1="520" x2="300" y2="520" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" />
+                </svg>
+
+                {/* Nodes */}
+                {nodeConfigs.map((node) => {
+                    const status = getStatus(node);
+                    const statusColor = status === 'passing' ? '#22c55e' : 
+                                        status === 'warning' ? '#f97316' : 
+                                        status === 'blocked' ? '#ef4444' : '#6b7280';
+
+                    return (
+                        <div key={node.id}>
+                            <div 
+                                className="absolute flex items-center justify-center cursor-pointer transition-all hover:scale-110 active:scale-95 group"
+                                style={{ 
+                                    left: node.x - 30, 
+                                    top: node.y - 30, 
+                                    width: 60, 
+                                    height: 60,
+                                    borderRadius: '50%',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    zIndex: 10,
+                                    backdropFilter: 'blur(16px)',
+                                    WebkitBackdropFilter: 'blur(16px)',
+                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)'
+                                }}
+                                onClick={() => navigate(node.path)}
+                            >
+                                <node.icon size={22} color={node.color} />
+                                <div 
+                                    className="absolute bottom-0 right-0 w-[10px] h-[10px] rounded-full border-2 border-[var(--bg-primary)]"
+                                    style={{ backgroundColor: statusColor }}
+                                />
+                            </div>
+
+                            <div 
+                                className="absolute w-32 text-center pointer-events-none"
+                                style={{ 
+                                    left: node.x - 64, 
+                                    top: node.y + 35,
+                                    fontSize: '10px',
+                                    color: 'var(--text-secondary)',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 'bold'
+                                }}
+                            >
+                                <span className="text-[var(--text-primary)]">{node.label}</span>
+                                <div className="opacity-60 text-[9px] uppercase tracking-tighter">{getStat(node)}</div>
                             </div>
                         </div>
+                    );
+                })}
+            </div>
 
-                        <div className="space-y-6">
-                            {['Appwrite Database', 'Security Worker Node', 'API Gateway', 'Alert Dispatcher'].map((svc, i) => (
-                                <div key={svc} className="flex items-center justify-between p-4 bg-[var(--bg-primary)]/50 border border-[var(--border-subtle)] rounded-2xl group hover:border-[var(--accent-primary)]/30 transition-all">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] flex items-center justify-center">
-                                            <Server size={18} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)] transition-colors" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-black text-[var(--text-primary)] uppercase italic">{svc}</p>
-                                            <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase italic">Latency: {Math.floor(Math.random() * 50) + 10}ms</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-500" />
-                                        <span className="text-[9px] font-black text-green-500 uppercase italic">Active</span>
-                                    </div>
+            {/* Separated Threat Intel Feed (Below Map) */}
+            <div className="mt-4 p-4 w-[280px] shadow-lg" style={liquidGlassStyle}>
+                <div className="flex items-center gap-2 mb-3">
+                    <ShieldAlert size={14} className="text-[var(--accent-primary)]" />
+                    <h3 className="text-[10px] font-black uppercase italic text-[var(--text-primary)] tracking-widest">
+                        Threat Intel Feed
+                    </h3>
+                </div>
+                <div className="space-y-2">
+                    {dashboard?.findings?.documents?.length > 0 ? (
+                        dashboard.findings.documents.slice(0, 3).map((finding: any) => (
+                            <div key={finding.$id} className="flex gap-2 items-center p-1.5 rounded border border-[rgba(255,255,255,0.1)]">
+                                <div className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                     style={{ backgroundColor: finding.severity === 'critical' ? '#ef4444' : '#f97316' }} />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[9px] font-bold text-[var(--text-primary)] truncate uppercase">{finding.title}</p>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Scanner Health */}
-                    <div className="premium-card p-8">
-                        <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-widest mb-8 flex items-center gap-2">
-                            <Layers size={16} className="text-purple-500" />
-                            Scanner Fleet
-                        </h3>
-                        
-                        <div className="space-y-4">
-                            {health?.services ? Object.entries(health.services).map(([name, status]) => (
-                                <div key={name} className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <p className="text-[10px] font-black text-[var(--text-primary)] uppercase italic">{name}</p>
-                                        <CheckCircle size={12} className={status ? 'text-green-500' : 'text-red-500'} />
-                                    </div>
-                                    <div className="w-full h-1 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
-                                        <div className={`h-full ${status ? 'bg-green-500' : 'bg-red-500'} transition-all duration-1000`} style={{ width: status ? '100%' : '0%' }} />
-                                    </div>
-                                </div>
-                            )) : (
-                                <div className="py-12 text-center opacity-30 italic text-[10px] uppercase font-black">
-                                    Awaiting Sensor Data...
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="mt-8 p-4 bg-orange-500/5 border border-orange-500/10 rounded-2xl flex items-start gap-3">
-                            <AlertCircle size={14} className="text-orange-500 shrink-0 mt-0.5" />
-                            <p className="text-[8px] font-bold text-orange-500 uppercase italic leading-tight">
-                                Autonomous agent is currently monitoring 5 core scanners. Any service degradation will trigger immediate escalation.
-                            </p>
-                        </div>
-                    </div>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">No active threats</p>
+                    )}
                 </div>
             </div>
         </div>

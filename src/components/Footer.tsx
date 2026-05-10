@@ -1,10 +1,16 @@
+import { useTheme } from '../contexts/ThemeContext';
+
 export default function Footer() {
+  const { theme } = useTheme();
   return (
     <footer 
       className="w-full py-24 px-12 lg:px-24 flex flex-col font-sans transition-all duration-300 relative overflow-hidden"
       style={{ 
-        background: 'var(--bg-primary)',
-        borderTop: '1px solid var(--border-subtle)'
+        background: theme === 'liquid-glass' ? 'var(--glass-bg)' : theme === 'underwater' ? '#002855' : 'var(--bg-primary)',
+        borderTop: theme === 'liquid-glass' ? '1px solid var(--glass-border)' : '1px solid var(--border-subtle)',
+        backdropFilter: theme === 'liquid-glass' ? 'var(--glass-blur)' : 'none',
+        WebkitBackdropFilter: theme === 'liquid-glass' ? 'var(--glass-blur)' : 'none',
+        zIndex: 10
       }}
     >
       {/* Top Section: Tagline & Nav Grid */}
@@ -29,7 +35,7 @@ export default function Footer() {
             {['Blog', 'Pricing', 'Use Cases'].map((link) => (
               <span 
                 key={link} 
-                className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 cursor-pointer hover:text-white hover:opacity-100 transition-all whitespace-nowrap"
+                className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-50 cursor-pointer hover:text-[var(--text-primary)] hover:opacity-100 transition-all whitespace-nowrap"
               >
                 {link}
               </span>

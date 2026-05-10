@@ -8,6 +8,10 @@ export default defineConfig({
     react(),
     basicSsl()
   ],
+  assetsInclude: ['**/*.jpg', '**/*.jpeg', '**/*.png', '**/*.webp'],
+  build: {
+    assetsInlineLimit: 0, // never inline images as base64
+  },
   optimizeDeps: {
     exclude: ['lucide-react'],
   },

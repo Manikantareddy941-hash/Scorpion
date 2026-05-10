@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
     Users, UserPlus, Shield, Star, 
     Trash2, LogOut, Settings, MoreVertical,
-    Search, Filter, Plus, ChevronRight,
+    Filter, Plus, ChevronRight,
     Loader2, Mail, Lock, CheckCircle, X,
     Activity, Globe, UserCheck
 } from 'lucide-react';
@@ -193,16 +193,6 @@ export default function Teams() {
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     {/* Team List Sidebar */}
                     <div className="lg:col-span-1 space-y-4">
-                        <div className="premium-card p-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={14} />
-                                <input 
-                                    type="text" 
-                                    placeholder="Find team..."
-                                    className="w-full pl-9 pr-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-[10px] font-black italic outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)]"
-                                />
-                            </div>
-                        </div>
 
                         {loading ? (
                             Array(3).fill(0).map((_, i) => (
@@ -222,7 +212,7 @@ export default function Teams() {
                                 >
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">{team.name}</h3>
+                                            <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic tracking-tight">{team.name || (team as any).title || 'Unnamed Battalion'}</h3>
                                             <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase italic mt-1">{team.role || 'Member'}</p>
                                         </div>
                                         <ChevronRight size={14} className={activeTeam?.$id === team.$id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'} />
@@ -244,7 +234,7 @@ export default function Teams() {
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-3">
-                                                    <h2 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{activeTeam.name}</h2>
+                                                    <h2 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">{activeTeam.name || (activeTeam as any).title || 'Unnamed Battalion'}</h2>
                                                     {getRoleBadge(activeTeam.role || 'viewer')}
                                                 </div>
                                                 <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase italic mt-2 leading-relaxed max-w-xl">

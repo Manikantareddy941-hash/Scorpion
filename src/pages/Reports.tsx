@@ -19,28 +19,46 @@ export default function Reports() {
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
 
+    const [recentReports, setRecentReports] = useState<any[]>([]);
+    const { user } = useAuth();
+
     useEffect(() => {
         fetchInitialData();
+        fetchRecentReports();
     }, []);
 
     const fetchInitialData = async () => {
         setLoading(true);
         try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const res = await fetch(`${apiBase}/api/dashboard/security`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            setRepos(data.by_repo || []);
-            if (data.by_repo && data.by_repo.length > 0) {
-                setSelectedRepo(data.by_repo[0].repo_id);
+            const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
+            const res = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES);
+            const mappedRepos = res.documents.map((doc: any) => ({
+                repo_id: doc.$id,
+                repo_name: doc.name || doc.url?.split('/').pop()?.replace('.git', '') || 'Unknown Repo',
+                count: doc.vulnerabilityCount || 0
+            }));
+            setRepos(mappedRepos);
+            if (mappedRepos.length > 0) {
+                setSelectedRepo(mappedRepos[0].repo_id);
             }
         } catch (err) {
             console.error('Failed to load repositories:', err);
             toast.error('Failed to load repositories');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchRecentReports = async () => {
+        try {
+            const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
+            const res = await databases.listDocuments(DB_ID, COLLECTIONS.REPORTS, [
+                Query.limit(5),
+                Query.orderDesc('$createdAt')
+            ]);
+            setRecentReports(res.documents);
+        } catch (err) {
+            console.error('Failed to fetch recent reports:', err);
         }
     };
 
@@ -75,10 +93,27 @@ export default function Reports() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `scorpion-report-${selectedRepo}.${format}`;
+            const repoName = repos.find(r => r.repo_id === selectedRepo)?.repo_name || 'repo';
+            a.download = `scorpion-report-${repoName}.${format}`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
+            
+            // Record in Appwrite
+            const { databases, DB_ID, COLLECTIONS, ID } = await import('../lib/appwrite');
+            if (user?.$id) {
+                await databases.createDocument(DB_ID, COLLECTIONS.REPORTS, ID.unique(), {
+                    userId: user.$id,
+                    title: `Security Audit: ${repoName}`,
+                    type: format,
+                    repositoryId: selectedRepo,
+                    status: 'completed',
+                    createdAt: new Date().toISOString(),
+                    data: JSON.stringify({ range: { from: dateFrom, to: dateTo } })
+                });
+                fetchRecentReports();
+            }
+
             toast.success('Security report exported successfully');
         } catch (err: any) {
             console.error('Export Error:', err);
@@ -198,6 +233,31 @@ export default function Reports() {
                             </button>
 
                         </div>
+
+                        {/* Recent Reports List */}
+                        <div className="premium-card p-10">
+                            <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-8 italic">Recently Generated Reports</h3>
+                            <div className="space-y-4">
+                                {recentReports.length > 0 ? recentReports.map((report) => (
+                                    <div key={report.$id} className="flex items-center justify-between p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl group hover:border-[var(--accent-primary)]/40 transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent-primary)] group-hover:scale-110 transition-transform">
+                                                <FileText size={18} />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">{report.title}</h4>
+                                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
+                                                    {new Date(report.createdAt || report.$createdAt).toLocaleString()} • {report.type}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <CheckCircle2 size={16} className="text-[var(--status-success)] opacity-40" />
+                                    </div>
+                                )) : (
+                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic text-center py-4">No recent reports found</p>
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     {/* Report Preview / Info */}
@@ -247,3 +307,4 @@ function SpecRow({ icon, title, desc }: { icon: any, title: string, desc: string
         </div>
     );
 }
+
