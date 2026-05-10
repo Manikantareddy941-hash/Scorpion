@@ -61,7 +61,7 @@ export default function SecurityDashboard() {
                 <Shield className="w-12 h-12 text-[var(--accent-primary)] animate-pulse" />
                 <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 text-[var(--text-secondary)] animate-spin" />
-                    <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.3em] italic animate-pulse">
+                    <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] animate-pulse mono">
                         Synchronizing Neural Intelligence...
                     </p>
                 </div>
@@ -94,13 +94,13 @@ export default function SecurityDashboard() {
                             <Shield size={32} />
                         </div>
                         <div>
-                            <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none">{t('dashboard.security_nexus', 'Security Nexus')}</h1>
+                            <h1 className="text-4xl font-bold tracking-tight uppercase leading-none">Security Nexus</h1>
                             <div className="flex items-center gap-3 mt-2">
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">{t('dashboard.global_defense', 'Global Defense Perimeter Analytics')}</p>
+                                <p className="text-[11px] font-medium text-[var(--text-secondary)] uppercase tracking-widest mono">Global Defense Perimeter Analytics</p>
                                 <div className="h-px w-8 bg-[var(--border-subtle)]" />
                                 <div className="flex items-center gap-2">
                                     <div className="w-1.5 h-1.5 rounded-full bg-[var(--status-success)] animate-pulse" />
-                                    <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-tighter">Live Link Active</span>
+                                    <span className="text-[10px] font-bold text-[var(--status-success)] uppercase tracking-wide mono">Live Link Active</span>
                                 </div>
                             </div>
                         </div>
@@ -165,8 +165,8 @@ export default function SecurityDashboard() {
                                 <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('dashboard.findings_per_repo', 'Findings concentration across repository infrastructure')}</p>
                             </div>
                         </div>
-                        <div className="flex-1 w-full mt-4">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="flex-1 w-full mt-4 min-h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <BarChart data={data?.by_repo || []} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                                     <XAxis 
@@ -201,8 +201,8 @@ export default function SecurityDashboard() {
                                 <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('dashboard.temporal_velocity', 'Temporal velocity of new vulnerability detections')}</p>
                             </div>
                         </div>
-                        <div className="flex-1 w-full mt-4">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="flex-1 w-full mt-4 min-h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <AreaChart data={data?.trend || []} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
@@ -263,9 +263,9 @@ export default function SecurityDashboard() {
                                 </p>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <span className="text-5xl font-black italic tracking-tighter text-[var(--accent-primary)]">94.2%</span>
-                            <p className="text-[10px] font-black text-[var(--status-success)] uppercase italic mt-1">Ready for Deployment</p>
+                        <div className="text-right mono">
+                            <span className="text-5xl font-bold tracking-tighter text-[var(--accent-primary)]">94.2%</span>
+                            <p className="text-[11px] font-bold text-[var(--status-success)] uppercase mt-1">Ready for Deployment</p>
                         </div>
                     </div>
                 </div>
@@ -285,8 +285,8 @@ function SeverityCard({ label, count, color, bgColor, icon }: { label: string, c
                     {icon}
                 </div>
                 <div>
-                    <p className={`text-[11px] font-black uppercase tracking-widest italic ${color}`}>{label}</p>
-                    <p className="text-3xl font-black text-[var(--text-primary)] tracking-tighter italic mt-1">{count}</p>
+                    <p className={`text-[11px] font-bold uppercase tracking-widest mono ${color}`}>{label}</p>
+                    <p className="text-3xl font-bold text-[var(--text-primary)] tracking-tight mt-1 mono">{count}</p>
                 </div>
                 <div className="w-full h-1 bg-[var(--border-subtle)] rounded-full overflow-hidden">
                     <div className={`h-full ${bgColor.replace('/10', '')} transition-all duration-1000`} style={{ width: `${count > 0 ? 100 : 0}%` }} />
@@ -319,9 +319,9 @@ function TypeDistribution({ types }: { types: DashboardData['by_type'] }) {
                             <div className={`w-6 h-6 ${item.color}/10 ${item.color.replace('bg-', 'text-')} rounded-lg flex items-center justify-center`}>
                                 {item.icon}
                             </div>
-                            <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic group-hover:text-[var(--text-primary)] transition-colors">{item.label}</span>
+                            <span className="text-[11px] font-medium text-[var(--text-secondary)] uppercase group-hover:text-[var(--text-primary)] transition-colors mono">{item.label}</span>
                         </div>
-                        <span className="text-xs font-black text-[var(--text-primary)] italic">{item.count}</span>
+                        <span className="text-xs font-bold text-[var(--text-primary)] mono">{item.count}</span>
                     </div>
                 ))}
             </div>

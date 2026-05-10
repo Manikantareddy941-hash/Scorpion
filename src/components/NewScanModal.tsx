@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Github, Upload, FolderOpen, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +6,8 @@ import UVScanOverlay from './UVScanOverlay';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
+import { useScan } from '../contexts/ScanContext';
+import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 
 interface Props {
   onClose: () => void;
@@ -23,17 +25,29 @@ export default function NewScanModal({ onClose, onScan }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // UV Scan State
-  const [isScanning, setIsScanning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [scanId, setScanId] = useState<string | null>(null);
+  const { activeScan, startScan, updateScan, addLog, completeScan, failScan, clearScan } = useScan();
   
   const { user, getJWT } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    let interval: any;
+    if (activeScan?.isScanning && activeScan.stats.status !== 'COMPLETE') {
+      const startTime = Date.now();
+      interval = setInterval(() => {
+        const diff = Math.floor((Date.now() - startTime) / 1000);
+        const mins = Math.floor(diff / 60).toString().padStart(2, '0');
+        const secs = (diff % 60).toString().padStart(2, '0');
+        updateScan({ duration: `${mins}:${secs}` });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [activeScan?.isScanning, activeScan?.stats.status]);
+
   const pollScanStatus = async (id: string, token: string) => {
     const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     let pollCount = 0;
+    let lastStatus = "";
     
     const interval = setInterval(async () => {
       try {
@@ -43,26 +57,55 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         });
         const data = await res.json();
         
-        // Progress mapping based on status
+        if (data.status !== lastStatus) {
+            lastStatus = data.status;
+            switch(data.status) {
+                case 'queued': addLog('Initializing scanner...', 'progress'); break;
+                case 'cloning': addLog(`Connecting to repository: ${repoUrl.split('/').pop()}`, 'success'); addLog('Fetching source files...', 'progress'); break;
+                case 'scanning': addLog('Analyzing code quality...', 'progress'); break;
+                case 'analyzing': addLog('Running vulnerability detection...', 'progress'); addLog('Checking security policies...', 'progress'); break;
+            }
+        }
+
+        updateScan({
+            stats: {
+                filesScanned: data.files_scanned || Math.min(100 + pollCount * 5, 250),
+                issuesFound: data.vulnerabilities || data.critical + data.high + data.medium + data.low || 0,
+                status: data.status === 'completed' ? 'COMPLETE' : data.status === 'failed' ? 'FAILED' : 'RUNNING'
+            }
+        });
+
         if (data.status === 'completed') {
-          setProgress(100);
           clearInterval(interval);
-          setTimeout(() => {
-            setIsScanning(false);
-            onClose();
-          }, 1000);
+          addLog('Scan complete.', 'success');
+          
+          completeScan({
+            critical: data.critical || 0, high: data.high || 0, medium: data.medium || 0, low: data.low || 0, score: data.security_score || 100, policy: data.gateStatus === 'failed' ? 'FAIL' : 'PASS'
+          });
+
+          await createNotification(
+            'Scan Completed',
+            `Scan for ${repoUrl.split('/').pop() || 'repository'} finished successfully.`,
+            'info',
+            id
+          );
         } else if (data.status === 'failed') {
           clearInterval(interval);
-          setIsScanning(false);
-          setError(data.error || t('dashboard.modal.scan_execution_failed', 'Scan execution failed'));
+          failScan(data.error || t('dashboard.modal.scan_execution_failed', 'Scan execution failed'));
+
+          await createNotification(
+            'Scan Failed',
+            `Scan for ${repoUrl.split('/').pop() || 'repository'} failed: ${data.error}`,
+            'critical',
+            id
+          );
         } else {
-          // Dynamic progress based on status strings from backend
           switch(data.status) {
-            case 'queued': setProgress(Math.min(15 + pollCount, 25)); break;
-            case 'cloning': setProgress(Math.min(30 + pollCount, 45)); break;
-            case 'scanning': setProgress(Math.min(50 + pollCount, 75)); break;
-            case 'analyzing': setProgress(Math.min(80 + pollCount, 95)); break;
-            default: setProgress(prev => Math.min(prev + 1, 90));
+            case 'queued': updateScan({ progress: Math.min(15 + pollCount, 25) }); break;
+            case 'cloning': updateScan({ progress: Math.min(30 + pollCount, 45) }); break;
+            case 'scanning': updateScan({ progress: Math.min(50 + pollCount, 75) }); break;
+            case 'analyzing': updateScan({ progress: Math.min(80 + pollCount, 95) }); break;
+            default: updateScan({ progress: Math.min((activeScan?.progress || 0) + 1, 90) });
           }
         }
       } catch (err) {
@@ -80,8 +123,6 @@ export default function NewScanModal({ onClose, onScan }: Props) {
     if (!repoUrl.trim()) return;
 
     setLoading(true);
-    setIsScanning(true);
-    setProgress(5);
     setError(null);
 
     try {
@@ -112,18 +153,45 @@ export default function NewScanModal({ onClose, onScan }: Props) {
       });
       const scanData = await scanRes.json();
       
+      const { auditLogger } = await import("../lib/auditLogger");
+      auditLogger.log({
+        userId: user.$id,
+        action: 'trigger_scan',
+        resource: 'repository',
+        resourceId: repo.$id,
+        details: `Triggered scan for repo: ${repoUrl}`,
+        status: 'success'
+      });
+      
       if (scanData.scanId) {
-        setScanId(scanData.scanId);
-        setProgress(15);
+        startScan(repoUrl.split('/').pop() || 'Repository', scanData.scanId);
         pollScanStatus(scanData.scanId, token);
       } else {
         throw new Error(scanData.error || t('dashboard.modal.scan_initiate_failed', 'Failed to initiate scan'));
       }
     } catch (err: any) {
       setError(err.message || t('dashboard.modal.scan_start_failed', 'Failed to start scan'));
-      setIsScanning(false);
+      addLog(`Initialization failed: ${err.message}`, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createNotification = async (title: string, message: string, severity: string, scanId?: string) => {
+    if (!user?.$id) return;
+    try {
+      await databases.createDocument(DB_ID, COLLECTIONS.NOTIFICATIONS, ID.unique(), {
+        userId: user.$id,
+        title,
+        message,
+        severity,
+        isRead: false,
+        type: 'scan',
+        relatedScanId: scanId || '',
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Failed to create notification:', err);
     }
   };
 
@@ -131,7 +199,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '16px', width: '520px', maxWidth: '95vw', padding: '32px', position: 'relative' }}>
+      <div className={theme === 'liquid-glass' ? 'liquid-glass' : ''} style={{ background: theme === 'liquid-glass' ? 'transparent' : 'var(--bg-card)', border: theme === 'liquid-glass' ? 'none' : '1px solid var(--border-subtle)', borderRadius: '16px', width: '520px', maxWidth: '95vw', padding: '32px', position: 'relative' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -242,7 +310,33 @@ export default function NewScanModal({ onClose, onScan }: Props) {
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       
       {/* UV Scan Progress Overlay */}
-      <UVScanOverlay isScanning={isScanning} progress={progress} />
+      <UVScanOverlay 
+        isScanning={activeScan?.isScanning || false} 
+        progress={activeScan?.progress || 0} 
+        repoName={activeScan?.repoName || 'Repository'}
+        scanId={activeScan?.scanId || ''}
+        logs={activeScan?.logs || []}
+        stats={activeScan?.stats || { filesScanned: 0, issuesFound: 0, status: 'PENDING', duration: '00:00' }}
+        resultsSummary={activeScan?.resultsSummary}
+        onClose={() => {
+            clearScan();
+            onClose();
+        }}
+        onRunInBackground={() => {
+            updateScan({ isScanning: false });
+            toast.success('Scan continuing in background. Check notifications for completion.', {
+                icon: '🚀',
+                duration: 5000
+            });
+            onClose();
+        }}
+        onCancel={() => {
+            if (window.confirm('Are you sure you want to abort the current security scan?')) {
+                failScan('Scan aborted by user.');
+                toast.error('Scan protocol terminated.');
+            }
+        }}
+      />
     </div>
   );
 }

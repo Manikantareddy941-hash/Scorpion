@@ -29,7 +29,7 @@ export const ScanHistory: React.FC<ScanHistoryProps> = ({ scans }) => {
                 {scans.map(scan => (
                     <div key={scan.id} className="p-5 hover:bg-[var(--text-primary)]/5 transition-all flex items-center justify-between group">
                         <div className="flex items-center gap-4">
-                            <div className={`p-2 rounded-xl ${scan.status === 'completed' ? 'bg-[var(--status-success)]/10' :
+                            <div className={`p-2 rounded-2xl ${scan.status === 'completed' ? 'bg-[var(--status-success)]/10' :
                                 scan.status === 'failed' ? 'bg-[var(--status-error)]/10' : 'bg-[var(--accent-primary)]/10 animate-pulse'
                                 }`}>
                                 {scan.status === 'completed' ? <CheckCircle className="w-4 h-4 text-[var(--status-success)]" /> :
@@ -39,7 +39,7 @@ export const ScanHistory: React.FC<ScanHistoryProps> = ({ scans }) => {
                             <div>
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="font-black text-xs text-[var(--text-primary)] uppercase tracking-tighter">Audit #{scan.id.slice(0, 6)}</span>
-                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${scan.status === 'completed' ? 'text-[var(--status-success)] bg-[var(--status-success)]/10' :
+                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-2xl ${scan.status === 'completed' ? 'text-[var(--status-success)] bg-[var(--status-success)]/10' :
                                             scan.status === 'failed' ? 'text-[var(--status-error)] bg-[var(--status-error)]/10' : 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10'
                                         }`}>{scan.status}</span>
                                 </div>

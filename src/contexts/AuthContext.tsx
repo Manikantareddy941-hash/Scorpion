@@ -79,6 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await account.createEmailPasswordSession(email, password);
       const currentUser = await account.get();
       setUser(currentUser);
+      
+      const { auditLogger } = await import("../lib/auditLogger");
+      auditLogger.log({
+        userId: currentUser.$id,
+        action: 'sign_up',
+        resource: 'user',
+        details: `User signed up with email: ${email}`,
+        status: 'success'
+      });
+
       return { error: null };
     } catch (error: any) {
       return { error };
@@ -90,6 +100,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await account.createEmailPasswordSession(email, password);
       const currentUser = await account.get();
       setUser(currentUser);
+
+      const { auditLogger } = await import("../lib/auditLogger");
+      auditLogger.log({
+        userId: currentUser.$id,
+        action: 'login',
+        resource: 'user',
+        details: `User logged in with email: ${email}`,
+        status: 'success'
+      });
+
       return { error: null };
     } catch (error: any) {
       return { error };
@@ -121,9 +141,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!user) return;
+    const userId = user.$id;
     try {
       await account.deleteSession("current");
       setUser(null);
+      
+      const { auditLogger } = await import("../lib/auditLogger");
+      auditLogger.log({
+        userId,
+        action: 'logout',
+        resource: 'user',
+        details: 'User logged out',
+        status: 'success'
+      });
     } catch (error) {
       console.error("Logout error:", error);
     }

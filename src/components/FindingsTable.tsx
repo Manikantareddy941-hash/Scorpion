@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next';
 import type { AppwriteFinding } from '../pages/ScanResults';
 
 const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  CRITICAL: { bg: 'rgba(239,68,68,0.08)',   text: '#ef4444', border: 'rgba(239,68,68,0.25)' },
-  HIGH:     { bg: 'rgba(249,115,22,0.08)',  text: '#f97316', border: 'rgba(249,115,22,0.25)' },
-  MEDIUM:   { bg: 'rgba(234,179,8,0.08)',   text: '#eab308', border: 'rgba(234,179,8,0.25)'  },
-  LOW:      { bg: 'rgba(148,163,184,0.08)', text: '#94a3b8', border: 'rgba(148,163,184,0.25)' },
+  CRITICAL: { bg: 'rgba(229,115,115,0.08)', text: 'var(--status-error)',   border: 'var(--status-error)'   },
+  HIGH:     { bg: 'rgba(255,138,128,0.08)', text: 'var(--severity-high)',  border: 'var(--severity-high)'  },
+  MEDIUM:   { bg: 'rgba(255,183,77,0.08)',  text: 'var(--status-warning)', border: 'var(--status-warning)' },
+  LOW:      { bg: 'rgba(123,198,126,0.08)', text: 'var(--status-success)', border: 'var(--status-success)' },
 };
 
 const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
@@ -96,11 +96,11 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                       {/* Package + version pill row */}
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
                         {finding.type === 'policy_violation' ? (
-                          <span style={{ fontSize: '0.7rem', color: '#c084fc', background: 'rgba(192,132,252,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(192,132,252,0.25)', fontWeight: 800, letterSpacing: '0.05em' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--accent-secondary)', background: 'var(--accent-secondary)/0.08', padding: '2px 8px', borderRadius: '16px', border: '1px solid var(--accent-secondary)', fontWeight: 800, letterSpacing: '0.05em' }}>
                             {t('findings_table.policy_violation', 'POLICY VIOLATION')}
                           </span>
                         ) : (
-                          <span style={{ fontSize: '0.7rem', color: '#60a5fa', background: 'rgba(96,165,250,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(96,165,250,0.25)', fontWeight: 800, letterSpacing: '0.05em' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--severity-info)', background: 'var(--severity-info)/0.08', padding: '2px 8px', borderRadius: '16px', border: '1px solid var(--severity-info)', fontWeight: 800, letterSpacing: '0.05em' }}>
                             {t('findings_table.vulnerability', 'VULNERABILITY')}
                           </span>
                         )}
@@ -109,17 +109,17 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                         </span>
                         
                         {finding.type !== 'policy_violation' && (
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '16px', border: '1px solid var(--border-subtle)' }}>
                             {t('findings_table.installed', 'installed')}: {finding.installedVersion}
                           </span>
                         )}
                         {finding.type !== 'policy_violation' && finding.fixedVersion && (
-                          <span style={{ fontSize: '0.7rem', color: '#4ade80', background: 'rgba(74,222,128,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(74,222,128,0.2)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--status-success)', background: 'var(--status-success)/0.08', padding: '2px 8px', borderRadius: '16px', border: '1px solid var(--status-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <Wrench size={10} /> {t('findings_table.fix', 'fix')}: {finding.fixedVersion}
                           </span>
                         )}
                         {finding.type !== 'policy_violation' && !finding.fixedVersion && (
-                          <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: 'rgba(148,163,184,0.08)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(148,163,184,0.2)' }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '16px', border: '1px solid var(--border-subtle)' }}>
                             {t('findings_table.no_fix', 'no fix available')}
                           </span>
                         )}
@@ -131,7 +131,7 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                               if (!finding.$id) console.error('[ERROR] Finding ID is missing in FindingsTable:', finding);
                               onRemediate(finding.$id); 
                             }}
-                            className="flex items-center gap-1 px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 rounded text-[9px] font-black uppercase italic hover:bg-[var(--accent-primary)] hover:text-black transition-all ml-2"
+                            className="flex items-center gap-1 px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-[var(--accent-primary)] hover:text-black transition-all ml-2"
                           >
                             <Zap size={10} /> {t('findings_table.remediate', 'Remediate')}
                           </button>
@@ -147,7 +147,7 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                   {/* Expanded description */}
                   {isExpanded && finding.description && (
                     <div style={{ padding: '0 24px 18px 24px' }}>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-primary)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)', whiteSpace: 'pre-wrap' }}>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-primary)', padding: '12px 14px', borderRadius: '20px', border: '1px solid var(--border-subtle)', whiteSpace: 'pre-wrap' }}>
                         {finding.description}
                       </p>
                     </div>

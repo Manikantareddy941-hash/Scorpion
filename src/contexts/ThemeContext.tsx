@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import bg3 from '../assets/liquid-glass-backgrounds/3.jpg';
+import bg4 from '../assets/liquid-glass-backgrounds/4.jpg';
+import bg5 from '../assets/liquid-glass-backgrounds/5.jpg';
+import bg6 from '../assets/liquid-glass-backgrounds/6.jpg';
+import bg7 from '../assets/liquid-glass-backgrounds/7.jpg';
+import bg8 from '../assets/liquid-glass-backgrounds/8.jpg';
+import bg9 from '../assets/liquid-glass-backgrounds/9.jpg';
+import bg10 from '../assets/liquid-glass-backgrounds/10.jpg';
+import bg11 from '../assets/liquid-glass-backgrounds/11.jpg';
+import bg12 from '../assets/liquid-glass-backgrounds/12.jpg';
+import bg13 from '../assets/liquid-glass-backgrounds/13.jpg';
 
-export type Theme = 'light' | 'dark' | 'eye-protection' | 'snow-light' | 'snow-dark' | 'underwater' | 'matrix';
+const liquidGlassBgs = [bg3, bg4, bg5, bg6, bg7, bg8, bg9, bg10, bg11, bg12, bg13];
+
+export type Theme = 'light' | 'dark' | 'eye-protection' | 'underwater' | 'matrix' | 'liquid-glass';
 
 interface ThemeContextType {
     theme: Theme;
@@ -13,9 +26,7 @@ interface ThemeContextType {
 
 export const getLogoBlendMode = (theme: Theme): 'screen' | 'multiply' => {
     switch (theme) {
-        case 'light':
         case 'eye-protection':
-        case 'snow-light':
             return 'multiply';
         default:
             return 'screen';
@@ -25,13 +36,11 @@ export const getLogoBlendMode = (theme: Theme): 'screen' | 'multiply' => {
 export const getLogoFilter = (theme: Theme): string => {
     switch (theme) {
         case 'light':
-        case 'snow-light':
-            return 'brightness(0)'; // Dark gray/black
         case 'dark':
-        case 'snow-dark':
         case 'underwater':
         case 'matrix':
-            return 'brightness(0) invert(1)'; // White
+        case 'liquid-glass':
+            return 'brightness(0) invert(1)'; // White for dark backgrounds
         case 'eye-protection':
             return 'brightness(0) sepia(1) saturate(5) hue-rotate(-20deg) brightness(0.6)'; // Warm brown/amber
         default:
@@ -39,12 +48,19 @@ export const getLogoFilter = (theme: Theme): string => {
     }
 };
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const ThemeContext = createContext<ThemeContextType>({
+    theme: 'dark',
+    setTheme: () => {},
+    echoMovementEnabled: true,
+    setEchoMovementEnabled: () => {},
+    getLogoFilter: () => 'brightness(0) invert(1)',
+    getLogoBlendMode: () => 'screen'
+});
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [theme, setThemeState] = useState<Theme>(() => {
       const saved = localStorage.getItem('theme') as Theme;
-      if (['light', 'dark', 'eye-protection', 'snow-light', 'snow-dark', 'underwater', 'matrix'].includes(saved)) {
+      if (['light', 'dark', 'eye-protection', 'underwater', 'matrix', 'liquid-glass'].includes(saved)) {
         return saved;
       }
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -61,39 +77,36 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setEchoMovementEnabledState(enabled);
     };
 
-    const setTheme = (newTheme: Theme) => {
-        const root = document.documentElement;
+    const setTheme = (theme: Theme) => {
+        setThemeState(theme);
+        localStorage.setItem('theme', theme);
         
-        // Remove all theme classes
-        root.classList.remove('dark', 'eye-protection', 'snow-light', 'snow-dark', 'underwater', 'matrix');
+        // Remove all theme classes from html
+        const themes: Theme[] = ['light', 'dark', 'eye-protection', 'underwater', 'matrix', 'liquid-glass'];
+        document.documentElement.classList.remove(...themes);
         
-        // Add new theme class (except for light which is default)
-        if (newTheme !== 'light') {
-            root.classList.add(newTheme);
-        }
+        // Add current theme class
+        document.documentElement.classList.add(theme);
         
-        localStorage.setItem('theme', newTheme);
-        setThemeState(newTheme);
+        // Set data-theme attribute for CSS selectors
+        document.documentElement.setAttribute('data-theme', theme);
     };
 
-    // Initial load
+    // Initialize theme on mount
     useEffect(() => {
         setTheme(theme);
     }, []);
 
-    // Listen for OS theme changes
+    // Clean up body styles if theme changes
     useEffect(() => {
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handler = (e: MediaQueryListEvent) => {
-            // Only auto-switch if user hasn't manually set a theme (no saved theme)
-            const saved = localStorage.getItem('theme');
-            if (!saved) {
-                setTheme(e.matches ? 'dark' : 'light');
-            }
-        };
-        mediaQuery.addEventListener('change', handler);
-        return () => mediaQuery.removeEventListener('change', handler);
-    }, []);
+        if (theme !== 'liquid-glass') {
+            document.body.style.backgroundImage = '';
+            document.body.style.backgroundSize = '';
+            document.body.style.backgroundPosition = '';
+            document.body.style.backgroundAttachment = '';
+            document.body.style.backgroundRepeat = '';
+        }
+    }, [theme]);
 
     return (
         <ThemeContext.Provider value={{ 
@@ -105,75 +118,76 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             getLogoBlendMode: () => getLogoBlendMode(theme)
         }}>
             {children}
-            { (theme === 'snow-light' || theme === 'snow-dark') && <Snowfall /> }
-            { (theme === 'dark' || theme === 'snow-light' || theme === 'snow-dark') && <BackgroundParticles /> }
+            { theme === 'dark' && <BackgroundParticles /> }
             { theme === 'underwater' && <UnderwaterBubbles /> }
             { theme === 'matrix' && <MatrixGlobe /> }
+            { theme === 'liquid-glass' && <LiquidGlassSlideshow /> }
         </ThemeContext.Provider>
     );
 };
 
 const UnderwaterBubbles = () => {
   return (
-    <div className="bg-particles">
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
       {[...Array(20)].map((_, i) => (
         <div 
           key={i} 
-          className="underwater-bubble"
           style={{
+            position: 'absolute',
+            background: 'rgba(255, 255, 255, 0.2)',
+            borderRadius: '50%',
             left: `${Math.random() * 100}%`,
             width: `${Math.random() * 15 + 5}px`,
             height: `${Math.random() * 15 + 5}px`,
-            animationDuration: `${Math.random() * 4 + 4}s`,
+            bottom: '-20px',
+            animation: `underwater-bubble-up ${Math.random() * 4 + 4}s linear infinite`,
             animationDelay: `${Math.random() * 8}s`,
           }}
         />
       ))}
+      <style>{`
+        @keyframes underwater-bubble-up {
+          0% { transform: translateY(0) scale(1); opacity: 0; }
+          10% { opacity: 0.3; }
+          90% { opacity: 0.3; }
+          100% { transform: translateY(-100vh) scale(1.5); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 };
 
 const BackgroundParticles = () => {
   return (
-    <div className="bg-particles">
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
       {[...Array(10)].map((_, i) => (
         <div 
           key={i} 
-          className="particle"
           style={{
+            position: 'absolute',
+            background: 'var(--accent-primary)',
+            borderRadius: '50%',
             left: `${Math.random() * 100}%`,
             width: `${Math.random() * 2 + 2}px`,
             height: `${Math.random() * 2 + 2}px`,
-            animationDuration: `${Math.random() * 10 + 10}s`,
+            top: `${Math.random() * 100}%`,
+            animation: `float-particle ${Math.random() * 10 + 10}s linear infinite`,
             animationDelay: `${Math.random() * 15}s`,
             opacity: Math.random() * 0.15 + 0.15
           }}
         />
       ))}
+      <style>{`
+        @keyframes float-particle {
+          0% { transform: translate(0, 0); }
+          50% { transform: translate(${Math.random() * 20 - 10}px, ${Math.random() * 20 - 10}px); }
+          100% { transform: translate(0, 0); }
+        }
+      `}</style>
     </div>
   );
 };
 
-const Snowfall = () => {
-  return (
-    <div className="snow-container">
-      {[...Array(50)].map((_, i) => (
-        <div 
-          key={i} 
-          className="snowflake"
-          style={{
-            left: `${Math.random() * 100}%`,
-            width: `${Math.random() * 6 + 2}px`,
-            height: `${Math.random() * 6 + 2}px`,
-            animationDuration: `${Math.random() * 3 + 2}s`,
-            animationDelay: `${Math.random() * 5}s`,
-            opacity: Math.random()
-          }}
-        />
-      ))}
-    </div>
-  );
-};
 const MatrixGlobe = () => {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
@@ -283,10 +297,56 @@ const MatrixGlobe = () => {
   );
 };
 
+const LiquidGlassSlideshow = () => {
+  const [currentBgIndex, setCurrentBgIndex] = useState(0);
+
+  // Preload all images
+  useEffect(() => {
+    console.log('LiquidGlass Backgrounds:', liquidGlassBgs);
+    liquidGlassBgs.forEach(src => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentBgIndex(prev => (prev + 1) % liquidGlassBgs.length);
+    }, 120000); // 2 minutes
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <>
+      <img
+        src={liquidGlassBgs[currentBgIndex]}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          zIndex: -2,
+          transition: 'opacity 2s ease-in-out',
+          imageRendering: 'high-quality',
+        } as React.CSSProperties}
+        alt=""
+      />
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.15)',
+        zIndex: -1,
+        pointerEvents: 'none'
+      }} />
+    </>
+  );
+};
+
 export const useTheme = () => {
     const context = useContext(ThemeContext);
-    if (context === undefined) {
-        throw new Error('useTheme must be used within a ThemeProvider');
-    }
+    // If context is still the default (which might happen during early HMR cycles),
+    // we return it instead of throwing, to prevent the app from crashing.
     return context;
 };

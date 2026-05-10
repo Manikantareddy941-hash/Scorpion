@@ -165,9 +165,9 @@ export default function ScanResults() {
 
   const stats = [
     { label: 'CRITICAL', value: scan.criticalCount, color: 'var(--severity-critical)', icon: Shield },
-    { label: 'HIGH',     value: scan.highCount,     color: 'var(--severity-high)',     icon: AlertTriangle },
-    { label: 'MEDIUM',   value: scan.mediumCount,   color: 'var(--severity-medium)',   icon: Bug },
-    { label: 'LOW',      value: scan.lowCount,       color: 'var(--severity-low)',      icon: Wind },
+    { label: 'HIGH', value: scan.highCount, color: 'var(--severity-high)', icon: AlertTriangle },
+    { label: 'MEDIUM', value: scan.mediumCount, color: 'var(--severity-medium)', icon: Bug },
+    { label: 'LOW', value: scan.lowCount, color: 'var(--severity-low)', icon: Wind },
   ];
 
   return (
@@ -205,14 +205,14 @@ export default function ScanResults() {
               {isRunning ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : null}
               {t(`dashboard.status_${scan.status}`, scan.status).toUpperCase()}
             </span>
-            
-            <SBOMExportButton 
-                repoId={scan.repo_id} 
-                repoName={scan.repoUrl.split('/').pop() || 'repository'} 
+
+            <SBOMExportButton
+              repoId={scan.repo_id}
+              repoName={scan.repoUrl.split('/').pop() || 'repository'}
             />
 
             <Link to="/" className="btn-premium flex items-center gap-2">
-               <ArrowLeft className="w-4 h-4" /> {t('scan_results.back_to_control', 'Back to Control')}
+              <ArrowLeft className="w-4 h-4" /> {t('scan_results.back_to_control', 'Back to Control')}
             </Link>
           </div>
         </div>
@@ -221,9 +221,9 @@ export default function ScanResults() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {[
             { label: 'Total Findings', value: total, icon: Bug, key: 'total_findings' },
-            { label: 'Visibility',     value: scan.visibility || t('common.not_available', 'N/A'), icon: Shield, key: 'visibility' },
-            { label: 'Scanner',        value: scan.scannerVersion || t('common.not_available', 'N/A'), icon: Activity, key: 'scanner' },
-            { label: 'Scanned At',     value: scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('common.not_available', 'N/A'), icon: Clock, key: 'scanned_at' },
+            { label: 'Visibility', value: scan.visibility || t('common.not_available', 'N/A'), icon: Shield, key: 'visibility' },
+            { label: 'Scanner', value: scan.scannerVersion || t('common.not_available', 'N/A'), icon: Activity, key: 'scanner' },
+            { label: 'Scanned At', value: scan.timestamp ? new Date(scan.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : t('common.not_available', 'N/A'), icon: Clock, key: 'scanned_at' },
           ].map(({ label, value, icon: Icon, key }) => (
             <div key={label} className="premium-card p-6 group">
               <div className="flex items-center gap-3 mb-2">

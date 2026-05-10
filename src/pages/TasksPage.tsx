@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
     CheckCircle2, AlertTriangle, Bug, Activity, Shield, Cpu, Globe, 
-    Filter, Search, ArrowUpDown, Clock, LayoutGrid, List, ChevronRight,
+    Filter, ArrowUpDown, Clock, LayoutGrid, List, ChevronRight,
     CheckCircle, XCircle, Loader2, RefreshCw
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +27,6 @@ export default function TasksPage() {
     const [filterSeverity, setFilterSeverity] = useState('all');
     const [filterType, setFilterType] = useState('all');
     const [filterStatus, setFilterStatus] = useState('open');
-    const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('date');
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
@@ -38,25 +37,26 @@ export default function TasksPage() {
     const fetchFindings = async () => {
         setLoading(true);
         try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const res = await fetch(`${apiBase}/api/dashboard/security`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
+            const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+                Query.limit(100),
+                Query.orderDesc('$createdAt')
+            ]);
             
-            // Note: dashboard/security returns aggregated data, we need the raw findings
-            // If the dashboard API doesn't return full findings list, we might need a dedicated endpoint
-            // Assuming for now it returns a list or we fetch from a findings endpoint
-            const findingsRes = await fetch(`${apiBase}/api/dashboard/security`, { // Re-using as fallback, ideally GET /api/findings
-                 headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const findingsData = await findingsRes.json();
-            
-            // For this demo/implementation, we'll assume findings are part of the data or fetch separately
-            // If not available, we'll fetch them from Appwrite directly if needed, but let's assume the API provides them
-            setFindings(findingsData.findings || []);
+            const mappedFindings = res.documents.map((doc: any) => ({
+                $id: doc.$id,
+                title: doc.title || doc.name || 'Untitled Finding',
+                repo_name: doc.repositoryName || doc.repo_name || 'Unknown Repository',
+                type: doc.type || 'sast',
+                severity: doc.severity || 'low',
+                file_path: doc.filePath || doc.file_path || 'unknown',
+                created_at: doc.$createdAt,
+                status: doc.status || 'open'
+            }));
+
+            setFindings(mappedFindings);
         } catch (err: any) {
+            console.error('Fetch findings error:', err);
             toast.error('Failed to fetch findings');
         } finally {
             setLoading(false);
@@ -65,22 +65,15 @@ export default function TasksPage() {
 
     const handleResolve = async (id: string) => {
         try {
-            const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-            const res = await fetch(`${apiBase}/api/findings/${id}`, {
-                method: 'PATCH',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ status: 'resolved' })
+            const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
+            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, {
+                status: 'resolved'
             });
             
-            if (res.ok) {
-                setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
-                toast.success('Issue marked as resolved');
-            }
+            setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
+            toast.success('Issue marked as resolved');
         } catch (err) {
+            console.error('Resolve error:', err);
             toast.error('Failed to update status');
         }
     };
@@ -90,7 +83,6 @@ export default function TasksPage() {
             if (filterSeverity !== 'all' && f.severity.toLowerCase() !== filterSeverity) return false;
             if (filterType !== 'all' && f.type.toLowerCase() !== filterType) return false;
             if (filterStatus !== 'all' && f.status.toLowerCase() !== filterStatus) return false;
-            if (searchQuery && !f.title.toLowerCase().includes(searchQuery.toLowerCase()) && !f.repo_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
             return true;
         })
         .sort((a, b) => {
@@ -168,16 +160,6 @@ export default function TasksPage() {
 
                 {/* Filters Bar */}
                 <div className="premium-card p-4 mb-8 flex flex-wrap items-center gap-4">
-                    <div className="flex-1 min-w-[200px] relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={16} />
-                        <input 
-                            type="text" 
-                            placeholder="Search by title or repository..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-12 pr-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs font-black italic outline-none focus:border-[var(--accent-primary)] text-[var(--text-primary)]"
-                        />
-                    </div>
 
                     <div className="flex items-center gap-2">
                         <Filter size={14} className="text-[var(--text-secondary)]" />

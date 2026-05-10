@@ -236,7 +236,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-secondary)]/50">
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-[var(--accent-primary)]/10 flex items-center justify-center text-[var(--accent-primary)] border border-[var(--accent-primary)]/20">
+                        <div className="w-10 h-10 rounded-2xl bg-[var(--accent-primary)]/10 flex items-center justify-center text-[var(--accent-primary)] border border-[var(--accent-primary)]/20">
                             <Zap size={20} />
                         </div>
                         <div>
@@ -272,7 +272,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             {/* Analysis Section */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative group">
-                                    <div className="absolute -top-3 -left-3 px-3 py-1 bg-[var(--accent-primary)] text-black text-[9px] font-black uppercase italic rounded-lg flex items-center gap-2">
+                                    <div className="absolute -top-3 -left-3 px-3 py-1 bg-[var(--accent-primary)] text-black text-[9px] font-black uppercase italic rounded-2xl flex items-center gap-2">
                                         <Sparkles size={10} /> {t('remediation.ai_recommendation', 'AI Recommendation')}
                                     </div>
                                     <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">{t('remediation.technical_breakdown', 'Technical Breakdown')}</h4>
@@ -283,13 +283,13 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         <div className="flex items-center gap-4">
                                             <button 
                                                 onClick={() => { setFeedbackSent(true); trackEvent('accepted', fix?.$id, fix?.confidence); }}
-                                                className={`p-2 rounded-lg transition-all ${feedbackSent ? 'bg-[var(--status-success)]/20 text-[var(--status-success)]' : 'hover:bg-white/5 text-[var(--text-secondary)]'}`}
+                                                className={`p-2 rounded-2xl transition-all ${feedbackSent ? 'bg-[var(--status-success)]/20 text-[var(--status-success)]' : 'hover:bg-white/5 text-[var(--text-secondary)]'}`}
                                             >
                                                 <ThumbsUp size={16} />
                                             </button>
                                             <button 
                                                 onClick={() => { setFeedbackSent(true); trackEvent('ignored', fix?.$id, fix?.confidence); }}
-                                                className="p-2 hover:bg-white/5 rounded-lg transition-all text-[var(--text-secondary)]"
+                                                className="p-2 hover:bg-white/5 rounded-2xl transition-all text-[var(--text-secondary)]"
                                             >
                                                 <ThumbsDown size={16} />
                                             </button>
@@ -329,7 +329,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         {finding?.file_path || finding?.location || 'package.json'}
                                     </span>
                                 </div>
-                                <pre className="text-[11px] font-mono leading-relaxed text-gray-300 overflow-x-auto p-4 bg-black/30 rounded-xl">
+                                <pre className="text-[11px] font-mono leading-relaxed text-gray-300 overflow-x-auto p-4 bg-black/30 rounded-2xl">
                                     {fix?.diff || fix?.code_diff || t('remediation.generating_diff', 'Generating structural patch representation...')}
                                 </pre>
                             </div>
@@ -339,7 +339,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                     <button
                                         onClick={handleCreatePR}
                                         disabled={!fix}
-                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-primary)] text-black rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-xs font-black uppercase italic tracking-widest shadow-xl shadow-[var(--accent-primary)]/20"
+                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-primary)] text-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-xs font-black uppercase italic tracking-widest shadow-xl shadow-[var(--accent-primary)]/20"
                                     >
                                         <GitPullRequest size={18} /> {t('remediation.apply_path_pr', 'Apply Remediation Path (GitHub PR)')}
                                     </button>
@@ -357,7 +357,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         href={prState.prUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)] text-white rounded-xl hover:opacity-90 transition-all text-xs font-black uppercase italic tracking-widest shadow-lg shadow-[var(--status-success)]/20"
+                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)] text-white rounded-2xl hover:opacity-90 transition-all text-xs font-black uppercase italic tracking-widest shadow-lg shadow-[var(--status-success)]/20"
                                     >
                                         {t('remediation.view_pr_github', 'View PR on GitHub →')}
                                     </a>
@@ -390,7 +390,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             href={prResult.url} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)]/10 text-[var(--status-success)] border border-[var(--status-success)]/20 rounded-xl text-xs font-black uppercase italic tracking-widest hover:bg-[var(--status-success)]/20 transition-all shadow-lg shadow-[var(--status-success)]/5"
+                            className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)]/10 text-[var(--status-success)] border border-[var(--status-success)]/20 rounded-2xl text-xs font-black uppercase italic tracking-widest hover:bg-[var(--status-success)]/20 transition-all shadow-lg shadow-[var(--status-success)]/5"
                         >
                             <ExternalLink size={16} /> {t('remediation.view_pr', 'View Pull Request')}
                         </a>
@@ -399,14 +399,14 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                              <button
                                 onClick={fetchFix}
                                 disabled={loading || prLoading}
-                                className="p-3 bg-white/5 border border-white/10 rounded-xl text-[var(--text-secondary)] hover:bg-white/10 transition-all"
+                                className="p-3 bg-white/5 border border-white/10 rounded-2xl text-[var(--text-secondary)] hover:bg-white/10 transition-all"
                             >
                                 <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                             </button>
                             <button 
                                 onClick={handleFixVulnerability}
                                 disabled={loading || prLoading || !fix}
-                                className="flex items-center gap-3 px-8 py-3 bg-[var(--accent-primary)] text-black rounded-xl text-xs font-black uppercase italic tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-[var(--accent-primary)]/20"
+                                className="flex items-center gap-3 px-8 py-3 bg-[var(--accent-primary)] text-black rounded-2xl text-xs font-black uppercase italic tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-[var(--accent-primary)]/20"
                             >
                                 {prLoading ? (
                                     <>
