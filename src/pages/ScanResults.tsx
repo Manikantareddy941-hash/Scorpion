@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import {
   Shield, AlertTriangle, Bug, Wind,
   CheckCircle2, ArrowLeft, Clock, Activity, Loader2
@@ -43,9 +43,10 @@ const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2
 /* ─── Component ──────────────────────────────────────── */
 export default function ScanResults() {
   const { t } = useTranslation();
+  const { scanId: urlScanId } = useParams();
   const location = useLocation();
-  const scanId: string | undefined = location.state?.scanId;
-  const scanTarget: string = location.state?.scanTarget || t('common.unknown', 'Unknown');
+  const scanId = urlScanId || location.state?.scanId;
+  const scanTarget = location.state?.scanTarget || t('common.unknown', 'Unknown');
 
   const [scan, setScan] = useState<Scan | null>(null);
   const [findings, setFindings] = useState<AppwriteFinding[]>([]);
@@ -89,13 +90,8 @@ export default function ScanResults() {
   useEffect(() => {
     if (!scanId) return;
 
-    const client = new Client()
-      .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
-      .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
-
     const channel = `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents.${scanId}`;
-
-    const unsub = client.subscribe(channel, (response: any) => {
+    const unsubscribe = client.subscribe(channel, (response: any) => {
       if (
         response.events?.some((e: string) => e.includes('update')) &&
         response.payload
@@ -117,8 +113,9 @@ export default function ScanResults() {
       }
     });
 
-    unsubRef.current = unsub;
-    return () => unsub();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [scanId]);
 
   /* ── Loading ── */
@@ -163,11 +160,29 @@ export default function ScanResults() {
   const total = findings.length;
   const isRunning = scan.status === 'scanning' || scan.status === 'running';
 
+  // Extract counts from scan doc or details JSON
+  let crit = scan.criticalCount || 0;
+  let high = scan.highCount || 0;
+  let med = scan.mediumCount || 0;
+  let low = scan.lowCount || 0;
+
+  if (scan.details && typeof scan.details === 'string' && (crit + high + med + low === 0)) {
+    try {
+      const d = JSON.parse(scan.details);
+      if (d.critical_count !== undefined) crit = Number(d.critical_count);
+      if (d.high_count !== undefined) high = Number(d.high_count);
+      if (d.medium_count !== undefined) med = Number(d.medium_count);
+      if (d.low_count !== undefined) low = Number(d.low_count);
+    } catch (e) {
+      console.error("Failed to parse scan details:", e);
+    }
+  }
+
   const stats = [
-    { label: 'CRITICAL', value: scan.criticalCount, color: 'var(--severity-critical)', icon: Shield },
-    { label: 'HIGH', value: scan.highCount, color: 'var(--severity-high)', icon: AlertTriangle },
-    { label: 'MEDIUM', value: scan.mediumCount, color: 'var(--severity-medium)', icon: Bug },
-    { label: 'LOW', value: scan.lowCount, color: 'var(--severity-low)', icon: Wind },
+    { label: 'CRITICAL', value: crit, color: 'var(--severity-critical)', icon: Shield },
+    { label: 'HIGH', value: high, color: 'var(--severity-high)', icon: AlertTriangle },
+    { label: 'MEDIUM', value: med, color: 'var(--severity-medium)', icon: Bug },
+    { label: 'LOW', value: low, color: 'var(--severity-low)', icon: Wind },
   ];
 
   return (

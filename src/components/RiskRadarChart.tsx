@@ -12,11 +12,26 @@ const data = [
   { subject: 'Privilege Use', A: 80, fullMark: 100 },
 ];
 
-export default function RadarChart() {
+interface RadarData {
+  subject: string;
+  A: number;
+  fullMark: number;
+}
+
+export default function RadarChart({ data: propData }: { data?: RadarData[] }) {
+  const chartData = propData || [
+    { subject: 'Authentication', A: 85, fullMark: 100 },
+    { subject: 'Network Access', A: 72, fullMark: 100 },
+    { subject: 'Defense Evasion', A: 90, fullMark: 100 },
+    { subject: 'Data Exfiltration', A: 65, fullMark: 100 },
+    { subject: 'Asset Exposure', A: 45, fullMark: 100 },
+    { subject: 'Privilege Use', A: 80, fullMark: 100 },
+  ];
+
   return (
     <div className="h-full w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ReRadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
+      <ResponsiveContainer width="100%" height="100%" minHeight={250}>
+        <ReRadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
           <PolarGrid stroke="var(--border-subtle)" />
           <PolarAngleAxis 
             dataKey="subject" 

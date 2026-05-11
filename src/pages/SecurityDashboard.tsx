@@ -166,7 +166,7 @@ export default function SecurityDashboard() {
                             </div>
                         </div>
                         <div className="flex-1 w-full mt-4 min-h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={300}>
                                 <BarChart data={data?.by_repo || []} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                                     <XAxis 
@@ -202,7 +202,7 @@ export default function SecurityDashboard() {
                             </div>
                         </div>
                         <div className="flex-1 w-full mt-4 min-h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={300}>
                                 <AreaChart data={data?.trend || []} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">

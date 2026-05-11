@@ -120,7 +120,7 @@ export default function Compliance() {
 
                     <div className="premium-card px-8 py-4 flex items-center gap-6">
                         <div className="w-20 h-20 relative">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minHeight={80}>
                                 <PieChart>
                                     <Pie
                                         data={chartData}
