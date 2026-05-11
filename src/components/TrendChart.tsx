@@ -108,7 +108,7 @@ export default function TrendChart() {
                             <Loader2 className="w-6 h-6 text-[var(--text-secondary)] animate-spin" />
                         </div>
                     ) : (
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorCritical" x1="0" y1="0" x2="0" y2="1">

@@ -79,8 +79,8 @@ export default function Monitor() {
     const interval = setInterval(fetchData, 300000); 
     
     return () => {
-      unsubscribeFindings();
-      unsubscribeScans();
+      if (unsubscribeFindings) unsubscribeFindings();
+      if (unsubscribeScans) unsubscribeScans();
       clearInterval(interval);
     };
   }, []);
@@ -126,7 +126,7 @@ export default function Monitor() {
             </h2>
           </div>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
               <AreaChart data={trends}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">

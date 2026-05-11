@@ -19,7 +19,9 @@ export default function NewScanModal({ onClose, onScan }: Props) {
   const { theme } = useTheme();
   const [tab, setTab] = useState<'github' | 'upload'>('github');
   const [repoUrl, setRepoUrl] = useState('');
-  const [visibility, setVisibility] = useState<'public' | 'private'>('public');
+  const [scanType, setScanType] = useState<'full' | 'security' | 'deps' | 'quick'>('full');
+  const [branch, setBranch] = useState('main');
+  const [scanDepth, setScanDepth] = useState<'standard' | 'deep'>('standard');
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -137,7 +139,13 @@ export default function NewScanModal({ onClose, onScan }: Props) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ url: repoUrl.trim(), visibility })
+        body: JSON.stringify({ 
+          url: repoUrl.trim(), 
+          scanType,
+          branch,
+          scanDepth,
+          visibility: 'public'
+        })
       });
       const repo = await repoRes.json();
       if (!repo.$id) throw new Error(repo.error || t('dashboard.modal.repo_register_failed', 'Failed to register repository'));
@@ -149,7 +157,12 @@ export default function NewScanModal({ onClose, onScan }: Props) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ visibility })
+        body: JSON.stringify({ 
+          scanType,
+          branch,
+          scanDepth,
+          visibility: 'public'
+        })
       });
       const scanData = await scanRes.json();
       
@@ -243,15 +256,61 @@ export default function NewScanModal({ onClose, onScan }: Props) {
             </div>
             <div>
               <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
-                {t('dashboard.modal.visibility_label', 'VISIBILITY')}
+                SCAN TYPE
               </label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {(['public', 'private'] as const).map(v => (
-                  <button key={v} onClick={() => setVisibility(v)} disabled={loading}
-                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${visibility === v ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: visibility === v ? 'var(--accent-primary)0D' : 'transparent', color: visibility === v ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase' }}>
-                    {t(`dashboard.modal.visibility_${v}`, v)}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {[
+                  { id: 'sast', label: 'SAST', desc: 'Code' },
+                  { id: 'sca', label: 'SCA', desc: 'Deps' },
+                  { id: 'secrets', label: 'SECRETS', desc: 'Keys' },
+                  { id: 'full', label: 'FULL', desc: 'All' }
+                ].map(type => (
+                  <button key={type.id} onClick={() => setScanType(type.id as any)} disabled={loading}
+                    style={{ 
+                      padding: '10px', 
+                      borderRadius: '8px', 
+                      border: `1px solid ${scanType === type.id ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, 
+                      background: scanType === type.id ? 'var(--accent-primary)0D' : 'transparent', 
+                      color: scanType === type.id ? 'var(--accent-primary)' : 'var(--text-secondary)', 
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '2px'
+                    }}>
+                    <span style={{ fontWeight: 800, fontSize: '0.7rem', letterSpacing: '0.05em' }}>{type.label}</span>
+                    <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{type.desc}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
+                  BRANCH
+                </label>
+                <input
+                  type="text"
+                  placeholder="main"
+                  value={branch}
+                  onChange={e => setBranch(e.target.value)}
+                  disabled={loading}
+                  style={{ width: '100%', background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px', color: 'var(--text-primary)', fontSize: '0.85rem', outline: 'none' }}
+                />
+              </div>
+              <div>
+                <label style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: '0.1em', display: 'block', marginBottom: '8px' }}>
+                  SCAN DEPTH
+                </label>
+                <div style={{ display: 'flex', gap: '8px', height: '44px' }}>
+                  {(['standard', 'deep'] as const).map(d => (
+                    <button key={d} onClick={() => setScanDepth(d)} disabled={loading}
+                      style={{ flex: 1, borderRadius: '8px', border: `1px solid ${scanDepth === d ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: scanDepth === d ? 'var(--accent-primary)0D' : 'transparent', color: scanDepth === d ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase' }}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

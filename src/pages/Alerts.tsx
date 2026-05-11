@@ -69,7 +69,7 @@ export default function Alerts() {
             const unsubscribe = client.subscribe(
                 `databases.${DB_ID}.collections.${COLLECTIONS.FINDINGS}.documents`,
                 (response: RealtimeResponseEvent<any>) => {
-                    if (response.events.includes('databases.*.collections.*.documents.*.create')) {
+                    if (response.events.some(e => e.includes('.create'))) {
                         const newDoc = response.payload;
                         if (activeSeverities.includes(newDoc.severity?.toLowerCase())) {
                             setFindings(prev => [newDoc, ...prev].slice(0, 100));
@@ -78,7 +78,9 @@ export default function Alerts() {
                 }
             );
 
-            return () => unsubscribe();
+            return () => {
+                if (unsubscribe) unsubscribe();
+            };
         }
     }, [activeTab, activeSeverities]);
 

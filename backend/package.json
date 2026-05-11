@@ -9,7 +9,9 @@
         "build": "tsc",
         "lint": "eslint \"{src,scripts}/**/*.{ts,js}\"",
         "test": "jest",
-        "setup:teams": "ts-node src/scripts/setup-teams.ts"
+        "setup:teams": "ts-node src/scripts/setup-teams.ts",
+        "setup-tools": "bash setup-tools.sh",
+        "postinstall": "bash setup-tools.sh"
     },
     "keywords": [],
     "author": "",

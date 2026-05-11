@@ -34,7 +34,7 @@ export const getEffectivePolicy = async (repoId: string) => {
         policy_name: 'balanced',
         max_critical: 0,
         max_high: 5,
-        min_risk_score: 80
+        min_risk_score: 50
     };
 };
 

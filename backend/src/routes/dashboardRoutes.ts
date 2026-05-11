@@ -59,22 +59,40 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
             return res.json(emptyData);
         }
 
-        // 2. Get findings for these repos
-        // Note: Appwrite may have a limit of 100 per page, we might need multiple pages or just a large limit for dashboard
+        // 3. Get recent scans to map findings that might miss repo_id
+        const scansResponse = await databases.listDocuments(
+            DB_ID,
+            'scans',
+            [
+                Query.or([
+                    Query.equal('repo_id', repoIds),
+                    Query.equal('repoUrl', reposResponse.documents.map(r => r.url).filter(Boolean))
+                ]),
+                Query.orderDesc('$createdAt'),
+                Query.limit(50)
+            ]
+        );
+        const scanIds = scansResponse.documents.map(s => s.$id);
+
+        // 4. Get findings for these repos/scans
+        // We use OR to find findings either by repo_id OR scanId
         const findingsResponse = await databases.listDocuments(
             DB_ID,
             'findings',
             [
-                Query.equal('repo_id', repoIds),
-                Query.limit(5000) // Adjust based on expected volume
+                Query.or([
+                    Query.equal('repo_id', repoIds),
+                    Query.equal('scanId', scanIds)
+                ]),
+                Query.limit(5000)
             ]
         );
 
         const findings = findingsResponse.documents;
 
-        // 3. Aggregate Data
+        // 5. Aggregate Data
         const stats = {
-            total: findings.total,
+            total: findingsResponse.total,
             by_severity: { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>,
             by_type: { secret: 0, dependency: 0, sast: 0, docker: 0 } as Record<string, number>,
             by_type_severity: {
@@ -83,15 +101,21 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
                 sast: { critical: 0, high: 0, medium: 0, low: 0 },
                 docker: { critical: 0, high: 0, medium: 0, low: 0 }
             } as Record<string, Record<string, number>>,
-            by_repo: [] as { repo_name: string, count: number }[],
+            by_repo: [] as { repo_name: string, count: number, repo_id: string }[],
             trend: [] as { date: string, count: number }[],
             open_count: 0,
             resolved_count: 0,
-            findings: findings // Include full findings list
+            findings: findings
         };
 
         const repoCounts: Record<string, number> = {};
         const trendCounts: Record<string, number> = {};
+
+        // Map scanId to repoId for fallback
+        const scanToRepo: Record<string, string> = {};
+        scansResponse.documents.forEach(s => {
+            scanToRepo[s.$id] = s.repo_id || s.repoUrl;
+        });
 
         // Initialize trend for last 30 days
         const now = new Date();
@@ -103,25 +127,35 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
         }
 
         for (const finding of findings) {
-            // Severity
+            // Severity normalization
             const severity = (finding.severity || 'low').toLowerCase();
-            if (stats.by_severity.hasOwnProperty(severity)) {
-                stats.by_severity[severity]++;
+            const normalizedSeverity = severity === 'crit' ? 'critical' : severity;
+            
+            if (stats.by_severity.hasOwnProperty(normalizedSeverity)) {
+                stats.by_severity[normalizedSeverity]++;
             }
 
-            // Type
-            const type = (finding.type || 'dependency').toLowerCase();
+            // Type normalization (mapping tools to types)
+            let type = (finding.type || 'dependency').toLowerCase();
+            const tool = (finding.tool || '').toLowerCase();
+            if (tool.includes('gitleaks') || tool.includes('secret')) type = 'secret';
+            if (tool.includes('semgrep') || tool.includes('sast')) type = 'sast';
+            if (tool.includes('trivy') && finding.title?.includes('image')) type = 'docker';
+            if (tool.includes('trivy') && !type) type = 'dependency';
+
             if (stats.by_type.hasOwnProperty(type)) {
                 stats.by_type[type]++;
                 
-                // Detailed breakdown for compliance
                 if (stats.by_type_severity[type]) {
-                    stats.by_type_severity[type][severity] = (stats.by_type_severity[type][severity] || 0) + 1;
+                    stats.by_type_severity[type][normalizedSeverity] = (stats.by_type_severity[type][normalizedSeverity] || 0) + 1;
                 }
             }
 
-            // Repo
-            repoCounts[finding.repo_id] = (repoCounts[finding.repo_id] || 0) + 1;
+            // Repo identification (with fallback)
+            const repoId = finding.repo_id || scanToRepo[finding.scanId];
+            if (repoId) {
+                repoCounts[repoId] = (repoCounts[repoId] || 0) + 1;
+            }
 
             // Trend
             const dateStr = finding.$createdAt.split('T')[0];
@@ -140,7 +174,7 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
         // Format by_repo
         stats.by_repo = Object.entries(repoCounts).map(([id, count]) => ({
             repo_id: id,
-            repo_name: repoNames[id] || 'Unknown',
+            repo_name: repoNames[id] || (id.includes('/') ? id.split('/').pop()?.replace('.git', '') : 'Unknown'),
             count
         }));
 
