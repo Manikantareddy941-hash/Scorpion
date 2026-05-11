@@ -50,14 +50,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await account.get();
         setUser(currentUser);
         
-        // Fetch role
-        const { databases, DB_ID } = await import("../lib/appwrite");
-        const roleRes = await databases.listDocuments(DB_ID, 'roles', [
-          (await import("appwrite")).Query.equal('userId', currentUser.$id)
-        ]).catch(() => ({ documents: [] }));
-        
-        if (roleRes.documents.length > 0) {
-          setRole((roleRes.documents[0] as any).role);
+        // Fetch role from backend instead of direct Appwrite query to avoid 401
+        const jwt = await account.createJWT();
+        const roleResponse = await fetch(`${BACKEND_URL}/api/user/role`, {
+          headers: { 'Authorization': `Bearer ${jwt.jwt}` }
+        }).catch(() => null);
+
+        if (roleResponse && roleResponse.ok) {
+          const { role } = await roleResponse.json();
+          setRole(role);
         }
       } catch (error: any) {
         if (error?.code === 401) {

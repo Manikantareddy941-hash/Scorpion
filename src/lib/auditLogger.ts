@@ -1,7 +1,7 @@
-import { databases, DB_ID, COLLECTIONS, ID } from './appwrite';
+import { apiFetch } from './apiClient';
 
 export interface AuditLogEntry {
-  userId: string;
+  userId?: string;
   action: string;
   resource: string;
   resourceId?: string;
@@ -9,35 +9,18 @@ export interface AuditLogEntry {
   ipAddress?: string;
   userAgent?: string;
   status: 'success' | 'failure';
-  timestamp: string;
+  timestamp?: string;
 }
 
 export const auditLogger = {
-  async log(entry: Omit<AuditLogEntry, 'timestamp'>) {
+  async log(entry: Omit<AuditLogEntry, 'timestamp' | 'ipAddress' | 'userAgent'>) {
     try {
-      // Basic IP fetch (client-side only)
-      let ip = 'unknown';
-      try {
-        const ipRes = await fetch('https://api.ipify.org?format=json').catch(() => null);
-        const ipData = await ipRes?.json();
-        ip = ipData?.ip || 'unknown';
-      } catch (e) {
-        console.warn('Could not fetch IP for audit log');
-      }
-
-      await databases.createDocument(
-        DB_ID,
-        COLLECTIONS.AUDIT_LOGS,
-        ID.unique(),
-        {
-          ...entry,
-          ipAddress: ip,
-          userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString()
-        }
-      );
+      await apiFetch('/api/audit', {
+        method: 'POST',
+        body: JSON.stringify(entry)
+      });
     } catch (err) {
-      console.error('[AuditLogger] Failed to save log:', err);
+      console.error('[AuditLogger] Failed to save log server-side:', err);
     }
   }
 };

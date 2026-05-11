@@ -70,15 +70,11 @@ requiredEnv.forEach(env => {
     else console.log(`✅ [Startup] Environment variable "${env}" is configured`);
 });
 
+import { validateTools } from './services/scan/orchestrator';
+
 (async () => {
-    const tools = [
-        { name: "SEMGREP", cmd: "semgrep" },
-        { name: "GITLEAKS", cmd: "gitleaks" },
-        { name: "TRIVY", cmd: "trivy" },
-        { name: "CHECKOV", cmd: "C:/Users/manik/AppData/Local/Programs/Python/Python313/Scripts/checkov.CMD" }
-    ];
     console.log("🛡️  Security Tool Chain Diagnostic:");
-    tools.forEach(t => console.log(`${checkTool(t.cmd) ? "✅" : "❌"} ${t.name}`));
+    await validateTools();
 
     // --- Recovery Mechanism ---
     try {

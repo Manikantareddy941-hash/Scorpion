@@ -20,6 +20,15 @@ import MultiRepoDashboard from './pages/MultiRepoDashboard';
 import Repositories from './pages/Repositories';
 import Profile from './pages/Profile';
 import ScanResults from './pages/ScanResults';
+import SastDetail from './pages/SastDetail';
+import SecretsDetail from './pages/SecretsDetail';
+import InfraDetail from './pages/InfraDetail';
+import ScaDetail from './pages/ScaDetail';
+import SbomDetail from './pages/SbomDetail';
+import AntipatternsDetail from './pages/AntipatternsDetail';
+import DuplicatesDetail from './pages/DuplicatesDetail';
+import DeadCodeDetail from './pages/DeadCodeDetail';
+import QualityDetail from './pages/QualityDetail';
 import AIChat from './components/AIChat';
 import JourneyMap from './pages/JourneyMap';
 import CodeActivity from './pages/CodeActivity';
@@ -145,7 +154,17 @@ function App() {
               <Route path="/repos" element={<ProtectedRoute><Repositories /></ProtectedRoute>} />
               <Route path="/insights" element={<ProtectedRoute><CodeInsights /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-              <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />
+               <Route path="/scan-results" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />
+              <Route path="/scans/:scanId" element={<ProtectedRoute><ScanResults /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/sast" element={<ProtectedRoute><SastDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/secrets" element={<ProtectedRoute><SecretsDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/infra" element={<ProtectedRoute><InfraDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/sca" element={<ProtectedRoute><ScaDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/sbom" element={<ProtectedRoute><SbomDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/antipatterns" element={<ProtectedRoute><AntipatternsDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/duplicates" element={<ProtectedRoute><DuplicatesDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/deadcode" element={<ProtectedRoute><DeadCodeDetail /></ProtectedRoute>} />
+              <Route path="/scans/:scanId/quality" element={<ProtectedRoute><QualityDetail /></ProtectedRoute>} />
               <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
               <Route path="/map" element={<ProtectedRoute><JourneyMap /></ProtectedRoute>} />
               <Route path="/code" element={<ProtectedRoute><CodeActivity /></ProtectedRoute>} />

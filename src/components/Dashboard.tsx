@@ -1,4 +1,4 @@
-import React, { useEffect, useState, memo, useCallback } from 'react';
+import React, { useEffect, useState, memo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -6,7 +6,7 @@ import { client, databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
   Shield, Activity, AlertCircle, Eye, Calendar, Clock, GitBranch,
   CheckCircle, FileText, XCircle, Layout, TrendingUp, ShieldX,
-  ShieldCheck, ShieldAlert, Zap, Bug, Wind
+  ShieldCheck, ShieldAlert, Zap, Bug
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip as RechartsTooltip,
@@ -16,43 +16,56 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
 
-const SecurityRadarChart = memo(({ data }: { data: any[] }) => (
-  <div style={{ background: 'var(--chart-bg)', width: '100%', height: '100%', borderRadius: 'inherit' }}>
-    <ResponsiveContainer width="100%" height="100%" minHeight={100}>
-      <RadarChart cx="50%" cy="50%" outerRadius="75%" data={data}>
-        <PolarGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
-        <PolarAngleAxis
-          dataKey="axis"
-          tick={{ fill: 'var(--chart-label)', fontSize: 11, fontWeight: 'bold' }}
-        />
-        <PolarRadiusAxis
-          angle={30}
-          domain={[0, 100]}
-          tick={false}
-        />
-        <Radar
-          name="Observed"
-          dataKey="Observed"
-          stroke="var(--chart-fill)"
-          fill="var(--chart-fill)"
-          fillOpacity={parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--chart-fill-opacity')) || 0.4}
-          isAnimationActive={false}
-        />
-        <RechartsTooltip
-          contentStyle={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '12px',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            color: 'var(--text-primary)'
-          }}
-        />
-      </RadarChart>
-    </ResponsiveContainer>
-  </div>
-));
+const SecurityRadarChart = memo(({ data }: { data: any[] }) => {
+  // Normalize data for the radar chart to ensure it doesn't appear flat
+  // Score is already 0-100, but counts need to be scaled
+  const maxCount = Math.max(...data.filter(d => d.axis !== 'Security').map(d => d.Observed), 10);
+  const normalizedData = data.map(d => ({
+    ...d,
+    // Scale counts to 0-100 range for visual consistency, while keeping Security as is
+    fullValue: d.axis === 'Security' ? d.Observed : (d.Observed / maxCount) * 100,
+    actualValue: d.Observed
+  }));
+
+  return (
+    <div style={{ background: 'var(--chart-bg)', width: '100%', height: '100%', borderRadius: 'inherit' }}>
+      <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+        <RadarChart cx="50%" cy="50%" outerRadius="75%" data={normalizedData}>
+          <PolarGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+          <PolarAngleAxis
+            dataKey="axis"
+            tick={{ fill: 'var(--chart-label)', fontSize: 11, fontWeight: 'bold' }}
+          />
+          <PolarRadiusAxis
+            angle={30}
+            domain={[0, 100]}
+            tick={false}
+          />
+          <Radar
+            name="Observed"
+            dataKey="fullValue"
+            stroke="var(--chart-fill)"
+            fill="var(--chart-fill)"
+            fillOpacity={0.4}
+            isAnimationActive={true}
+          />
+          <RechartsTooltip
+            formatter={(value: any, name: any, props: any) => [props.payload.actualValue, name]}
+            contentStyle={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '12px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              textTransform: 'uppercase',
+              color: 'var(--text-primary)'
+            }}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
 
 export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: boolean }) {
   const { t } = useTranslation();
@@ -71,14 +84,20 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   const [policyPassRate, setPolicyPassRate] = useState(100);
   
   const [vulnStats, setVulnStats] = useState({
-    critical: 0, high: 0, medium: 0, low: 0, bugs: 0, codeSmells: 0, total: 0, score: 100
+    critical: 0, high: 0, medium: 0, low: 0, bugs: 0, 
+    codeSmells: 0, total: 0, score: 100, linesScanned: 0
   });
 
   const [scanActivity, setScanActivity] = useState<any[]>([]);
   const [topRepos, setTopRepos] = useState<any[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<any[]>([]);
+  const [latestScanId, setLatestScanId] = useState<string | null>(null);
+  const isFetchingRef = useRef(false);
 
   const fetchDashboardData = useCallback(async (isAuto = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     // Only show global skeleton on initial load, not on auto-refresh or manual refresh
     if (!isAuto && loading && !isRefreshing) setLoading(true);
     
@@ -89,15 +108,27 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
     }, 5000);
 
     try {
-      // 1. Fetch Latest Scans
+      // 1. Fetch User's Repositories first to filter scans
+      const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.orderDesc('$createdAt'),
+        Query.limit(100)
+      ]);
+      const repoIds = reposRes.documents.map(r => r.$id);
+      const repoUrls = reposRes.documents.map(r => r.url).filter(Boolean);
+
+      // 2. Fetch Latest Scans for these repos
       const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        Query.or([
+          Query.equal('repo_id', repoIds),
+          Query.equal('repoUrl', repoUrls)
+        ]),
         Query.orderDesc('$createdAt'),
         Query.limit(100)
       ]);
       const scans = scansRes.documents;
       
       let passed = 0; let blocked = 0; let active = 0;
-      let aggCrit = 0, aggHigh = 0, aggMed = 0, aggLow = 0, aggBugs = 0, aggSmells = 0, aggTotal = 0, aggScoreTotal = 0;
+      let aggCrit = 0, aggHigh = 0, aggMed = 0, aggLow = 0, aggBugs = 0, aggSmells = 0, aggTotal = 0, aggScoreTotal = 0, aggLines = 0;
       let countWithScore = 0;
       const latestScanPerRepo: Record<string, any> = {};
       const daysActivity = { 'Su': 0, 'Mo': 0, 'Tu': 0, 'We': 0, 'Th': 0, 'Fr': 0, 'Sa': 0 };
@@ -105,23 +136,61 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
       scans.forEach(s => {
-        if (s.repositoryId && !latestScanPerRepo[s.repositoryId]) {
-          latestScanPerRepo[s.repositoryId] = s;
-          aggCrit += (s.critical || 0);
-          aggHigh += (s.high || 0);
-          aggMed += (s.medium || 0);
-          aggLow += (s.low || 0);
-          aggBugs += (s.bugs || 0);
-          aggSmells += (s.code_smells || s.codeSmells || 0);
-          aggTotal += (s.vulnerabilities || (s.critical + s.high + s.medium + s.low) || 0);
-          if (s.security_score !== undefined || s.security_rating !== undefined) {
-            aggScoreTotal += (s.security_score || s.security_rating || 0);
-            countWithScore++;
+        const repoKey = s.repo_id || s.repoUrl || s.$id;
+        
+        // Extract stats from top-level fields or nested details JSON
+        let crit = Number(s.criticalCount ?? s.critical ?? 0);
+        let high = Number(s.highCount ?? s.high ?? 0);
+        let med = Number(s.mediumCount ?? s.medium ?? 0);
+        let low = Number(s.lowCount ?? s.low ?? 0);
+        let bugs = Number(s.bugs ?? 0);
+        let smells = Number(s.code_smells ?? s.codeSmells ?? 0);
+        let total = Number(s.vulnerabilities ?? 0);
+        let score = s.security_score ?? s.security_rating;
+        let gate = s.gateStatus || s.gate_status;
+
+        if (s.details && typeof s.details === 'string') {
+          try {
+            const d = JSON.parse(s.details);
+            if (d.critical_count !== undefined) crit = Math.max(crit, Number(d.critical_count));
+            if (d.high_count !== undefined) high = Math.max(high, Number(d.high_count));
+            if (d.medium_count !== undefined) med = Math.max(med, Number(d.medium_count));
+            if (d.low_count !== undefined) low = Math.max(low, Number(d.low_count));
+            if (d.total_vulnerabilities !== undefined) total = Math.max(total, Number(d.total_vulnerabilities));
+            if (d.security_score !== undefined) score = d.security_score;
+            if (d.bugs !== undefined) bugs = Math.max(bugs, Number(d.bugs));
+            if (d.code_smells !== undefined) smells = Math.max(smells, Number(d.code_smells));
+
+            if (d.gate_status) gate = d.gate_status;
+          } catch (e) {
+            console.error("Failed to parse scan details:", e);
           }
         }
-        if (s.gateStatus === 'passed') passed++;
-        if (s.gateStatus === 'failed' || s.gateStatus === 'blocked') blocked++;
+
+        if (total === 0) total = crit + high + med + low;
+
+        if (repoKey && !latestScanPerRepo[repoKey]) {
+          latestScanPerRepo[repoKey] = s;
+          if (!latestScanId) setLatestScanId(s.$id);
+          aggCrit += crit;
+          aggHigh += high;
+          aggMed += med;
+          aggLow += low;
+          aggBugs += bugs;
+          aggSmells += smells;
+          aggTotal += total;
+          
+          if (score !== undefined && score !== null) {
+            aggScoreTotal += Number(score);
+            countWithScore++;
+          }
+          aggLines += Number(s.details && typeof s.details === 'string' ? JSON.parse(s.details).total_lines : 0) || 0;
+        }
+
+        if (gate === 'passed') passed++;
+        if (gate === 'failed' || gate === 'blocked') blocked++;
         if (s.status === 'running' || s.status === 'pending') active++;
+        
         const d = new Date(s.$createdAt);
         if (d >= weekAgo) {
           const dayStr = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.getDay()];
@@ -133,17 +202,49 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       setActiveScansCount(active);
       setScanActivity(['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => ({ name: d, scans: daysActivity[d as keyof typeof daysActivity] || 0 })));
 
-      // 2. Fetch Repos
-      const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.orderDesc('$createdAt'), Query.limit(50)]);
-      setTotalAssets({ count: reposRes.total, isNew: reposRes.documents.some(r => (now.getTime() - new Date(r.$createdAt).getTime()) < 24 * 60 * 60 * 1000) });
-      setTopRepos([...reposRes.documents].sort((a, b) => (b.vulnerabilityCount || 0) - (a.vulnerabilityCount || 0)).slice(0, 5));
+      // 3. Finalize Repo Stats & Top Repos (Enriched with latest scan data)
+      const enrichedRepos = reposRes.documents.map(repo => {
+        const latestScan = latestScanPerRepo[repo.$id] || latestScanPerRepo[repo.url];
+        if (latestScan) {
+          let count = Number(latestScan.vulnerabilities ?? 0);
+          if (latestScan.details && typeof latestScan.details === 'string') {
+            try {
+              const d = JSON.parse(latestScan.details);
+              if (d.total_vulnerabilities !== undefined) count = Number(d.total_vulnerabilities);
+              else if (d.critical_count !== undefined) count = Number(d.critical_count) + Number(d.high_count || 0) + Number(d.medium_count || 0) + Number(d.low_count || 0);
+            } catch (e) {}
+          }
+          return { ...repo, vulnerabilityCount: count };
+        }
+        return repo;
+      });
 
-      // 3. Finalize Stats
-      const score = countWithScore > 0 ? Math.round(aggScoreTotal / countWithScore) : Math.max(0, 100 - (aggCrit * 10) - (aggHigh * 5));
-      setVulnStats({ critical: aggCrit, high: aggHigh, medium: aggMed, low: aggLow, bugs: aggBugs, codeSmells: aggSmells, total: aggTotal, score });
-      setPolicyPassRate(score > 80 ? 100 : score > 50 ? 80 : 40);
+      setTotalAssets({ 
+        count: reposRes.total, 
+        isNew: reposRes.documents.some(r => (now.getTime() - new Date(r.$createdAt).getTime()) < 24 * 60 * 60 * 1000) 
+      });
+      setTopRepos([...enrichedRepos].sort((a, b) => (b.vulnerabilityCount || 0) - (a.vulnerabilityCount || 0)).slice(0, 5));
 
-      // 4. Alerts
+      // 4. Finalize Vulnerability Stats
+      const derivedScore = Math.max(0, Math.round(
+        100 - (aggCrit * 10) - (aggHigh * 4) - (aggMed * 1) - (aggLow * 0.25)
+      ));
+      const finalScore = countWithScore > 0 ? Math.round(aggScoreTotal / countWithScore) : derivedScore;
+      
+      setVulnStats({ 
+        critical: aggCrit, 
+        high: aggHigh, 
+        medium: aggMed, 
+        low: aggLow, 
+        bugs: aggBugs, 
+        codeSmells: aggSmells, 
+        total: aggTotal, 
+        score: finalScore,
+        linesScanned: aggLines
+      });
+      setPolicyPassRate(score > 85 ? 100 : score > 65 ? 80 : score > 40 ? 60 : 30);
+
+      // 5. Alerts
       const notifsRes = await databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [Query.orderDesc('$createdAt'), Query.limit(10)]).catch(() => ({ documents: [] }));
       setRecentAlerts(notifsRes.documents);
 
@@ -153,6 +254,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       console.error('[Dashboard] Fetch error:', err);
     } finally {
       clearTimeout(timeout);
+      isFetchingRef.current = false;
       setLoading(false);
       setIsRefreshing(false);
     }
@@ -161,26 +263,34 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   useEffect(() => {
     fetchDashboardData();
     
-    // Real-time subscription
+    // Manual refresh listener for external triggers (e.g. Scan Modal)
+    const handleManualRefresh = () => fetchDashboardData(true);
+    window.addEventListener('refresh-dashboard', handleManualRefresh);
+
+    // Simplified Realtime Subscription (Relying on SDK internal reconnect + polling fallback)
     const unsubscribe = client.subscribe(
       [
         `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`,
         `databases.${DB_ID}.collections.${COLLECTIONS.NOTIFICATIONS}.documents`
       ],
       (response) => {
-        // Trigger a background refresh when a new document is created or updated
         if (response.events.some(e => e.includes('.create') || e.includes('.update'))) {
-          fetchDashboardData(true);
+          // Only refresh if it's a notification OR a completed scan
+          const payload = response.payload as any;
+          if (payload?.status === 'completed' || response.events.some(e => e.includes('notifications'))) {
+            fetchDashboardData(true);
+          }
         }
       }
     );
 
     const interval = setInterval(() => {
       fetchDashboardData(true);
-    }, 10000);
+    }, 30000); // 30s interval as fallback
 
     return () => {
-      unsubscribe();
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('refresh-dashboard', handleManualRefresh);
       clearInterval(interval);
     };
   }, [fetchDashboardData]);
@@ -192,19 +302,19 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
     { axis: 'Low', Observed: vulnStats.low },
     { axis: 'Bugs', Observed: vulnStats.bugs },
     { axis: 'Vulnerabilities', Observed: vulnStats.total },
-    { axis: 'Code Smells', Observed: vulnStats.codeSmells },
+    { axis: 'Lines', Observed: Math.min(Math.round(vulnStats.linesScanned / 100), 100) },
     { axis: 'Security', Observed: vulnStats.score },
   ];
 
   const metrics = [
-    { label: 'Critical Vulnerabilities', value: vulnStats.critical, icon: ShieldX, color: 'var(--status-error)' },
-    { label: 'High Vulnerabilities', value: vulnStats.high, icon: ShieldAlert, color: 'var(--severity-high)' },
-    { label: 'Medium Vulnerabilities', value: vulnStats.medium, icon: AlertCircle, color: 'var(--status-warning)' },
-    { label: 'Low Risk', value: vulnStats.low, icon: ShieldCheck, color: 'var(--status-success)' },
-    { label: 'Bugs', value: vulnStats.bugs, icon: Bug, color: 'var(--severity-info)' },
-    { label: 'Vulnerabilities', value: vulnStats.total, icon: Activity, color: 'var(--accent-primary)' },
-    { label: 'Code Smells', value: vulnStats.codeSmells, icon: Wind, color: 'var(--status-warning)' },
-    { label: 'Security Posture', value: `${vulnStats.score}%`, icon: Zap, color: 'var(--status-success)' },
+    { id: 'critical', label: 'Critical Vulnerabilities', value: vulnStats.critical, icon: ShieldX, color: 'var(--status-error)', path: `/scans/${latestScanId}/sast?filter=critical` },
+    { id: 'high', label: 'High Vulnerabilities', value: vulnStats.high, icon: ShieldAlert, color: 'var(--severity-high)', path: `/scans/${latestScanId}/sast?filter=high` },
+    { id: 'medium', label: 'Medium Vulnerabilities', value: vulnStats.medium, icon: AlertCircle, color: 'var(--status-warning)', path: `/scans/${latestScanId}/sast?filter=medium` },
+    { id: 'low', label: 'Low Risk', value: vulnStats.low, icon: ShieldCheck, color: 'var(--status-success)', path: `/scans/${latestScanId}/sast?filter=low` },
+    { id: 'bugs', label: vulnStats.bugs > 0 ? 'Bugs (Bandit)' : 'Bugs (Python only)', value: vulnStats.bugs, icon: Bug, color: 'var(--severity-info)', path: `/scans/${latestScanId}/antipatterns` },
+    { id: 'vulns', label: 'Vulnerabilities', value: vulnStats.total, icon: Activity, color: 'var(--accent-primary)', path: `/scans/${latestScanId}/sast` },
+    { id: 'lines', label: 'Lines Scanned', value: vulnStats.linesScanned?.toLocaleString() || '0', icon: FileText, color: 'var(--accent-primary)' },
+    { id: 'posture', label: 'Security Posture', value: `${vulnStats.score}%`, icon: Zap, color: 'var(--status-success)', path: `/scans/${latestScanId}/sast` },
   ];
 
   const handleRefresh = async () => {
@@ -247,11 +357,13 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
           { id: 'policy', label: 'Policy Pass', value: `${policyPassRate}%`, trend: 'Compliance', color: 'var(--status-success)' }
         ].map((stat, i) => (
           loading ? <SkeletonCard key={i} h="h-32" /> :
-          <div key={i} className="bg-[var(--bg-card)] rounded-[16px] p-6 relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between h-32">
+          <div key={i} 
+               className={`bg-[var(--bg-card)] rounded-[16px] p-6 relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between h-32 transition-all`}
+          >
             <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: stat.color }}></div>
             
             <div className="flex justify-between items-start">
-              <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">{stat.label}</h3>
+              <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider group-hover:text-[var(--accent-primary)] transition-colors">{stat.label}</h3>
               {individualErrors[stat.id] ? (
                 <div className="px-2 py-0.5 rounded-full bg-red-50 border border-red-100 text-[8px] font-black text-red-600 uppercase">Error</div>
               ) : (
@@ -311,12 +423,18 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
         <div className="xl:col-span-5 grid grid-cols-2 gap-4">
           {metrics.map((m, i) => (
             loading ? <SkeletonCard key={i} h="h-32" /> :
-            <div key={i} className="bg-[var(--bg-card)] rounded-[16px] p-5 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between">
+            <div key={i} 
+                 onClick={() => {
+                   if (m.path?.includes('null')) return;
+                   m.path && navigate(m.path);
+                 }}
+                 className={`bg-[var(--bg-card)] rounded-[16px] p-5 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:scale-[1.02]'} transition-all`}
+            >
               <div className="flex justify-between items-start mb-3">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${m.color}15`, color: m.color }}>
                   <m.icon size={14} />
                 </div>
-                {individualErrors[m.label] ? (
+                {individualErrors[m.id] ? (
                   <div className="px-2 py-0.5 rounded-full bg-red-50 border border-red-100 text-[8px] font-black text-red-600 uppercase">Failed</div>
                 ) : (
                   <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 border border-green-100">
@@ -325,7 +443,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
                   </div>
                 )}
               </div>
-              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">{m.label}</p>
+              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1 group-hover:text-[var(--accent-primary)] transition-colors">{m.label}</p>
               <div className="flex justify-between items-end mt-auto">
                 <span className="text-[28px] font-black text-[var(--text-primary)] leading-none">{m.value}</span>
                 <TrendingUp size={16} className="text-gray-300" />
@@ -344,7 +462,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
           <div className="bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] h-full">
             <h3 className="text-[13px] font-black text-[var(--text-primary)] uppercase tracking-wider mb-6">Scan Activity</h3>
             <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={180}>
                 <BarChart data={scanActivity} barSize={16}>
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} dy={10} />
                   <RechartsTooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '10px', fontWeight: 'bold' }} />
