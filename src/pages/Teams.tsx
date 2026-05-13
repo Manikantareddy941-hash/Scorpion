@@ -56,7 +56,7 @@ export default function Teams() {
         setLoading(true);
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const res = await fetch(`${apiBase}/api/teams`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -76,7 +76,7 @@ export default function Teams() {
         setMembersLoading(true);
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const res = await fetch(`${apiBase}/api/teams/${teamId}/members`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -93,7 +93,7 @@ export default function Teams() {
         e.preventDefault();
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const res = await fetch(`${apiBase}/api/teams`, {
                 method: 'POST',
                 headers: {
@@ -120,7 +120,7 @@ export default function Teams() {
         if (!activeTeam) return;
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const res = await fetch(`${apiBase}/api/teams/${activeTeam.$id}/invite`, {
                 method: 'POST',
                 headers: {
@@ -150,7 +150,7 @@ export default function Teams() {
         
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             await fetch(`${apiBase}/api/teams/${activeTeam.$id}/members/${memberUserId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }

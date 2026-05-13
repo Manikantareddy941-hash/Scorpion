@@ -71,7 +71,7 @@ router.post('/github', async (req: Request, res: Response) => {
                 }
 
                 if (status === 'success') {
-                    triggerScan(repo.$id, 'public').catch(err => {
+                    triggerScan(repo.$id, {}).catch(err => {
                         console.error(`[Webhook] Failed to trigger scan for ${repo.$id}:`, err);
                     });
                 }
@@ -133,7 +133,7 @@ router.post('/github', async (req: Request, res: Response) => {
                 }
             }
 
-            triggerScan(repo.$id, 'public').catch(err => {
+            triggerScan(repo.$id, {}).catch(err => {
                 console.error(`[Webhook] Failed to trigger scan for ${repo.$id}:`, err);
             });
         }
@@ -244,7 +244,7 @@ router.post('/tests/report', async (req: Request, res: Response) => {
             });
 
             if (!hasFailed) {
-               triggerScan(repo.$id, 'public').catch(e => console.error(e));
+               triggerScan(repo.$id, {}).catch(e => console.error(e));
             } else {
                console.warn(`[Test Webhook] Skipping scan for ${repo.$id} due to failed tests`);
             }

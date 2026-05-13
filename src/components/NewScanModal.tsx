@@ -47,7 +47,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
   }, [activeScan?.isScanning, activeScan?.stats.status]);
 
   const pollScanStatus = async (id: string, token: string) => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiBase = '';
     let pollCount = 0;
     let lastStatus = "";
     
@@ -128,7 +128,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
     setError(null);
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiBase = '';
       const token = await getJWT();
       if (!token) throw new Error(t('common.auth_required', 'Authentication required'));
 
@@ -378,8 +378,8 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         stats={activeScan?.stats || { filesScanned: 0, issuesFound: 0, status: 'PENDING', duration: '00:00' }}
         resultsSummary={activeScan?.resultsSummary}
         onClose={() => {
-            clearScan();
             onClose();
+            setTimeout(() => clearScan(), 300); // delay so scanId survives navigation
         }}
         onRunInBackground={() => {
             updateScan({ isScanning: false });

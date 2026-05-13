@@ -34,7 +34,7 @@ export default function JourneyMap() {
         const fetchData = async () => {
             try {
                 const token = await getJWT();
-                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                const apiBase = '';
                 
                 const [healthRes, dashRes] = await Promise.all([
                     fetch(`${apiBase}/api/health`).catch(() => ({ json: () => ({}) })),

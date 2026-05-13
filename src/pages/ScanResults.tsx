@@ -5,7 +5,12 @@ import {
   CheckCircle2, ArrowLeft, Clock, Activity, Loader2
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
-import { Query, Client } from 'appwrite';
+import { Query } from 'appwrite';
+import { Client } from 'appwrite';
+
+const client = new Client()
+    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 import FindingsTable from '../components/FindingsTable';
 import SBOMExportButton from '../components/SBOMExportButton';
 import { useTranslation } from 'react-i18next';
