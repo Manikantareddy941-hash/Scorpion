@@ -1,6 +1,6 @@
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = '';
 
 export const verifyService = {
   async triggerReScan(repoId: string, token: string) {

@@ -1,4 +1,4 @@
-import { Shield, ArrowUpRight } from 'lucide-react';
+grep -n "gitleaks\|semgrep" src/services/orchestrator.ts | head -20import { Shield, ArrowUpRight } from 'lucide-react';
 
 interface SecurityPulseProps {
     healthScore: number;

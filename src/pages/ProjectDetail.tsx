@@ -72,7 +72,7 @@ export default function ProjectDetail() {
             ]);
             setVulnerabilities(vulnerabilitiesData.documents as any[]);
 
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const token = localStorage.getItem('appwrite_jwt');
             // Fetch Policy
             const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`, {
@@ -98,7 +98,7 @@ export default function ProjectDetail() {
         setTriggering(true);
         const toastId = toast.loading('Initiating scan perimeter...');
         try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
                 method: 'POST',
@@ -135,7 +135,7 @@ export default function ProjectDetail() {
         setConverting(vulnId);
         const toastId = toast.loading('Configuring tracker remediation...');
         try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
                 method: 'POST',
@@ -278,7 +278,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
     const updatePolicy = async (profile: string) => {
         setUpdating(true);
         try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
                 method: 'PUT',
@@ -327,7 +327,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
 function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: string, onUpdate: () => void }) {
     const revokeAccess = async (teamId: string) => {
         try {
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const token = localStorage.getItem('appwrite_jwt');
             const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
                 method: 'PUT',

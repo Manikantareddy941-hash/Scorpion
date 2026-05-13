@@ -116,7 +116,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                             </button>
                             <button 
                                 onClick={() => setShowThemeMenu(!showThemeMenu)}
-                                className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-all"
+                                className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-all"
                             >
                                 <ChevronDown size={14} className={`transition-transform ${showThemeMenu ? 'rotate-180' : ''}`} />
                             </button>
@@ -125,7 +125,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                         {showThemeMenu && (
                             <>
                                 <div className="fixed inset-0 z-[9998]" onClick={() => setShowThemeMenu(false)} />
-                                <div className="absolute right-0 mt-2 p-3 bg-[var(--bg-card)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-[var(--border-subtle)] z-[9999] animate-in fade-in zoom-in duration-200 grid grid-cols-3 gap-2 min-w-[180px]" style={{ backgroundColor: 'var(--bg-card)', opacity: 1 }}>
+                                <div className="absolute right-0 mt-2 p-3 bg-[var(--bg-card)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-[var(--border-subtle)] z-[9999] animate-in fade-in zoom-in duration-200 grid grid-cols-3 gap-2 min-w-[180px]">
                                 {
                                     [
                                         { id: 'light', icon: Sun },
@@ -161,7 +161,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                         className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors relative"
                     >
                         <Bell size={18} />
-                        {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--status-error)] rounded-full border-2 border-[var(--bg-card)]"></span>}
+                        {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--status-error)] rounded-full border-2 border-transparent"></span>}
                     </button>
                     
                     {showNotifications && (
@@ -181,7 +181,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                                 </div>
                                 <div className="max-h-[300px] overflow-y-auto custom-scrollbar flex flex-col">
                                     {notifications.length > 0 ? notifications.map((n, i) => (
-                                        <div key={i} className={`p-4 border-b border-[var(--border-subtle)] last:border-none hover:bg-white/5 transition-colors cursor-pointer ${!n.read ? 'bg-[var(--accent-primary)]/5' : ''}`}>
+                                        <div key={i} className={`p-4 border-b border-[var(--border-subtle)] last:border-none hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer ${!n.read ? 'bg-[var(--accent-primary)]/5' : ''}`}>
                                             <div className="flex gap-3">
                                                 <div className="mt-1 shrink-0">
                                                     <div className={`w-2 h-2 rounded-full ${n.severity === 'high' || n.severity === 'critical' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
@@ -236,7 +236,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                                     <button
                                         key={item.label}
                                         onClick={() => { navigate(item.path); setIsNavOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-colors"
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
                                     >
                                         <item.icon className="w-4 h-4" />
                                         {item.label}

@@ -20,7 +20,7 @@ export default function SBOMExportButton({ repoId, repoName }: SBOMExportButtonP
         setShowMenu(false);
         try {
             const jwt = await getJWT();
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/sbom/${repoId}?format=${format}`, {
+            const response = await fetch(`${''}/api/sbom/${repoId}?format=${format}`, {
                 headers: {
                     'Authorization': `Bearer ${jwt}`
                 }

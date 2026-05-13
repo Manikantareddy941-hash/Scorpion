@@ -23,7 +23,7 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
   }, []);
 
   const pollScanStatus = async (id: string, token: string) => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiBase = '';
     let pollCount = 0;
     
     const interval = setInterval(async () => {
@@ -90,7 +90,7 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
     setError(null);
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiBase = '';
       const token = await getJWT();
       if (!token) throw new Error("Authentication required");
 

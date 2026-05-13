@@ -1,4 +1,4 @@
-import { runSemgrep, runGitleaks, runTrivy } from '../services/scan/orchestrator';
+import { orchestrateScan } from '../services/scan/orchestrator';
 import { cloneRepo } from '../utils/git';
 import fs from 'fs/promises';
 import path from 'path';

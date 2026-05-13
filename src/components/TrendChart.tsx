@@ -21,7 +21,7 @@ export default function TrendChart() {
             setLoading(true);
             try {
                 const token = await getJWT();
-                const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                const apiBase = '';
                 
                 const response = await fetch(`${apiBase}/api/analytics/trends?days=${days}`, {
                     headers: {

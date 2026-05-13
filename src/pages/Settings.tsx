@@ -149,7 +149,7 @@ export default function Settings() {
         setUpdating(true);
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
 
             await fetch(`${apiBase}/api/notifications/preferences`, {
                 method: 'PUT',
@@ -182,7 +182,7 @@ export default function Settings() {
         setUpdating(true);
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
 
             const response = await fetch(`${apiBase}/api/auth/api-key`, {
                 method: 'POST',

@@ -84,7 +84,7 @@ export const orchestrateScan = async (targetPath: string, options: ScanOptions =
 
     // 2. Secrets (Gitleaks)
     if (options.scanType === 'full' || options.scanType === 'secrets') {
-        tasks.push(runTool(`gitleaks detect --source "${targetPath}" --format json --report-path -`, 'gitleaks'));
+        tasks.push(runTool(`gitleaks detect --source "${targetPath}" -f json -r -`, 'gitleaks'));
     }
 
     // 3. SCA / Config / Secrets (Trivy)

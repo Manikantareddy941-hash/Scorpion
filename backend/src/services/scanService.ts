@@ -18,24 +18,13 @@ const computeSecurityScore = (critical: number, high: number, medium: number, lo
 
 export const triggerScan = async (
     repoId: string,
-    options: { scanType?: any; scanDepth?: any; branch?: string } = {}
+    options: { scanType?: any; scanDepth?: any; branch?: string } = {},
+    existingScanId?: string   // ← ADD THIS PARAMETER
 ): Promise<{ scanId: string | null; error: string | null }> => {
-    let scanId: string | null = null;
+    let scanId: string | null = existingScanId || null;
     const scanStartedAt = new Date().toISOString();
     
     try {
-        // Pre-check: Duplicate Scan Prevention
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
-        if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
-        const activeScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-            Query.equal('repo_id', repoId),
-            Query.equal('status', ['pending', 'running']),
-            Query.limit(1)
-        ]);
-        if (activeScans.total > 0) {
-            return { scanId: null, error: 'A scan is already in progress for this repository' };
-        }
-
         // 1️⃣ Validate repo
         if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
@@ -50,28 +39,40 @@ export const triggerScan = async (
             if (!targetPath) return { scanId: null, error: 'Local path missing' };
         }
 
-        // 3️⃣ Create scan record (status: pending)
-        const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
-            repo_id: repoId,
-            status: 'pending',
-            scan_type: options.scanType || 'full',
-            repoUrl: repo.url,
-            startedAt: scanStartedAt,
-            timestamp: scanStartedAt,
-            scannerVersion: '1.0.0',
-            visibility: 'public',
-            criticalCount: 0,
-            highCount: 0,
-            mediumCount: 0,
-            lowCount: 0,
-            details: JSON.stringify({
-                started_at: scanStartedAt,
-                target: targetPath,
-                branch: options.branch || 'main',
-                depth: options.scanDepth || 'standard'
-            })
-        });
-        scanId = scan.$id;
+        // 3️⃣ Create scan record ONLY if not already created by the route
+        if (!scanId) {
+            // (duplicate scan check only needed when scanId not pre-created)
+            const activeScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                Query.equal('repo_id', repoId),
+                Query.equal('status', ['pending', 'running']),
+                Query.limit(1)
+            ]);
+            if (activeScans.total > 0) {
+                return { scanId: null, error: 'A scan is already in progress for this repository' };
+            }
+
+            const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
+                repo_id: repoId,
+                status: 'pending',
+                scan_type: options.scanType || 'full',
+                repoUrl: repo.url,
+                startedAt: scanStartedAt,
+                timestamp: scanStartedAt,
+                scannerVersion: '1.0.0',
+                visibility: 'public',
+                criticalCount: 0,
+                highCount: 0,
+                mediumCount: 0,
+                lowCount: 0,
+                details: JSON.stringify({
+                    started_at: scanStartedAt,
+                    target: targetPath,
+                    branch: options.branch || 'main',
+                    depth: options.scanDepth || 'standard'
+                })
+            });
+            scanId = scan.$id;
+        }
 
         // 4️⃣ Update to running
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId!, { status: 'running' });

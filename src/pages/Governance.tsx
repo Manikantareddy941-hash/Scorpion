@@ -45,7 +45,7 @@ export default function Governance() {
         setError(null);
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const res = await fetch(`${apiBase}/api/policies`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -68,7 +68,7 @@ export default function Governance() {
         e.preventDefault();
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const method = editingPolicy ? 'PATCH' : 'POST';
             const url = editingPolicy ? `${apiBase}/api/policies/${editingPolicy.$id}` : `${apiBase}/api/policies`;
             
@@ -96,7 +96,7 @@ export default function Governance() {
     const handleTogglePolicy = async (policy: Policy) => {
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             await fetch(`${apiBase}/api/policies/${policy.$id}`, {
                 method: 'PATCH',
                 headers: {
@@ -116,7 +116,7 @@ export default function Governance() {
         if (!window.confirm('Are you sure you want to delete this policy?')) return;
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             await fetch(`${apiBase}/api/policies/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }

@@ -30,7 +30,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
 
             await fetch(`${apiBase}/api/ai/metrics/event`, {
                 method: 'POST',
@@ -88,7 +88,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
 
             // 3. Get AI Analysis / Fixed Version
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
 
             try {
                 const response = await fetch(`${apiBase}/api/vulns/${documentId}/remediate`, {
@@ -192,7 +192,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
         setPrState({ status: 'loading' });
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             
             const res = await fetch(`${apiBase}/api/remediation/create-pr`, {
                 method: 'POST',

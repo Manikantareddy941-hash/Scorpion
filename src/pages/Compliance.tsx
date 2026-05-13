@@ -46,7 +46,7 @@ export default function Compliance() {
         setLoading(true);
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const res = await fetch(`${apiBase}/api/dashboard/security`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

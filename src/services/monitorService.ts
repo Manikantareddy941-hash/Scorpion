@@ -13,7 +13,7 @@ export const monitorService = {
   // New backend-driven monitor data
   async getMonitorData(getJWT: () => Promise<string>) {
     const token = await getJWT();
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiBase = '';
     const res = await fetch(`${apiBase}/api/monitor`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });

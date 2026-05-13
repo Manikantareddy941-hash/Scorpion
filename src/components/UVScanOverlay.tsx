@@ -210,6 +210,7 @@ export default function UVScanOverlay({
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('refresh-dashboard'));
                   onClose?.();
+                  navigate('/');
                 }}
                 style={{ background: "transparent", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", borderRadius: "8px", padding: "8px 16px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
               >
@@ -217,8 +218,14 @@ export default function UVScanOverlay({
               </button>
               <button 
                 onClick={() => {
+                  const id = scanId; // capture before onClose wipes state
                   window.dispatchEvent(new CustomEvent('refresh-dashboard'));
-                  if (scanId) navigate(`/scans/${scanId}`);
+                  if (id) {
+                    onClose?.();
+                    navigate(`/scans/${id}`);
+                  } else {
+                    console.warn('scanId is missing!', scanId);
+                  }
                 }}
                 style={{ background: "#00ff41", border: "none", color: "white", borderRadius: "8px", padding: "10px 24px", fontSize: "13px", fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
               >

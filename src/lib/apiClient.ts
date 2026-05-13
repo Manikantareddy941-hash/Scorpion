@@ -1,6 +1,6 @@
 import { account } from './appwrite';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = '';
 
 interface ApiFetchOptions extends RequestInit {
     token?: string | null;

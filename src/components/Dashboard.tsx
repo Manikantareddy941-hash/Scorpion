@@ -95,20 +95,20 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   const isFetchingRef = useRef(false);
 
   const fetchDashboardData = useCallback(async (isAuto = false) => {
-    if (isFetchingRef.current) return;
+    // Note: handleRefresh may set isFetchingRef.current to true before calling this
+    if (isFetchingRef.current && !isRefreshing) return;
     isFetchingRef.current = true;
 
-    // Only show global skeleton on initial load, not on auto-refresh or manual refresh
     if (!isAuto && loading && !isRefreshing) setLoading(true);
     
-    // 5-second safety fallback to prevent stuck skeletons
     const timeout = setTimeout(() => {
       setLoading(false);
       setIsRefreshing(false);
-    }, 5000);
+      isFetchingRef.current = false;
+    }, 8000);
 
     try {
-      // 1. Fetch User's Repositories first to filter scans
+      // 1. Fetch User's Repositories
       const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
         Query.orderDesc('$createdAt'),
         Query.limit(100)
@@ -116,75 +116,60 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       const repoIds = reposRes.documents.map(r => r.$id);
       const repoUrls = reposRes.documents.map(r => r.url).filter(Boolean);
 
-      // 2. Fetch Latest Scans for these repos
+      if (repoIds.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fetch Latest Completed Scan (The Source of Truth for Stats)
       const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
         Query.or([
           Query.equal('repo_id', repoIds),
           Query.equal('repoUrl', repoUrls)
         ]),
+        Query.equal('status', 'completed'),
         Query.orderDesc('$createdAt'),
-        Query.limit(100)
+        Query.limit(1)
       ]);
-      const scans = scansRes.documents;
+      const latestCompletedScan = scansRes.documents[0] || null;
+
+      // --- DIAGNOSTIC LOGGING ---
+      console.log('Latest scan ID:', latestCompletedScan?.$id);
+      console.log('Latest scan data:', {
+        status: latestCompletedScan?.status,
+        critical: latestCompletedScan?.criticalCount || latestCompletedScan?.critical,
+        high: latestCompletedScan?.highCount || latestCompletedScan?.high,
+        medium: latestCompletedScan?.mediumCount || latestCompletedScan?.medium,
+        low: latestCompletedScan?.lowCount || latestCompletedScan?.low,
+        total: latestCompletedScan?.vulnerabilities,
+        createdAt: latestCompletedScan?.$createdAt
+      });
+      // -------------------------
+
+      // 3. Fetch Recent Scans for Charts/Activity (Separate query to avoid interference)
+      const activityRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        Query.or([
+          Query.equal('repo_id', repoIds),
+          Query.equal('repoUrl', repoUrls)
+        ]),
+        Query.orderDesc('$createdAt'),
+        Query.limit(50)
+      ]);
+      const scans = activityRes.documents;
       
       let passed = 0; let blocked = 0; let active = 0;
-      let aggCrit = 0, aggHigh = 0, aggMed = 0, aggLow = 0, aggBugs = 0, aggSmells = 0, aggTotal = 0, aggScoreTotal = 0, aggLines = 0;
-      let countWithScore = 0;
-      const latestScanPerRepo: Record<string, any> = {};
       const daysActivity = { 'Su': 0, 'Mo': 0, 'Tu': 0, 'We': 0, 'Th': 0, 'Fr': 0, 'Sa': 0 };
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
+      // Process scans for activity and gate stats (Global)
       scans.forEach(s => {
-        const repoKey = s.repo_id || s.repoUrl || s.$id;
-        
-        // Extract stats from top-level fields or nested details JSON
-        let crit = Number(s.criticalCount ?? s.critical ?? 0);
-        let high = Number(s.highCount ?? s.high ?? 0);
-        let med = Number(s.mediumCount ?? s.medium ?? 0);
-        let low = Number(s.lowCount ?? s.low ?? 0);
-        let bugs = Number(s.bugs ?? 0);
-        let smells = Number(s.code_smells ?? s.codeSmells ?? 0);
-        let total = Number(s.vulnerabilities ?? 0);
-        let score = s.security_score ?? s.security_rating;
         let gate = s.gateStatus || s.gate_status;
-
         if (s.details && typeof s.details === 'string') {
           try {
             const d = JSON.parse(s.details);
-            if (d.critical_count !== undefined) crit = Math.max(crit, Number(d.critical_count));
-            if (d.high_count !== undefined) high = Math.max(high, Number(d.high_count));
-            if (d.medium_count !== undefined) med = Math.max(med, Number(d.medium_count));
-            if (d.low_count !== undefined) low = Math.max(low, Number(d.low_count));
-            if (d.total_vulnerabilities !== undefined) total = Math.max(total, Number(d.total_vulnerabilities));
-            if (d.security_score !== undefined) score = d.security_score;
-            if (d.bugs !== undefined) bugs = Math.max(bugs, Number(d.bugs));
-            if (d.code_smells !== undefined) smells = Math.max(smells, Number(d.code_smells));
-
             if (d.gate_status) gate = d.gate_status;
-          } catch (e) {
-            console.error("Failed to parse scan details:", e);
-          }
-        }
-
-        if (total === 0) total = crit + high + med + low;
-
-        if (repoKey && !latestScanPerRepo[repoKey]) {
-          latestScanPerRepo[repoKey] = s;
-          if (!latestScanId) setLatestScanId(s.$id);
-          aggCrit += crit;
-          aggHigh += high;
-          aggMed += med;
-          aggLow += low;
-          aggBugs += bugs;
-          aggSmells += smells;
-          aggTotal += total;
-          
-          if (score !== undefined && score !== null) {
-            aggScoreTotal += Number(score);
-            countWithScore++;
-          }
-          aggLines += Number(s.details && typeof s.details === 'string' ? JSON.parse(s.details).total_lines : 0) || 0;
+          } catch (e) {}
         }
 
         if (gate === 'passed') passed++;
@@ -202,49 +187,68 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       setActiveScansCount(active);
       setScanActivity(['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => ({ name: d, scans: daysActivity[d as keyof typeof daysActivity] || 0 })));
 
-      // 3. Finalize Repo Stats & Top Repos (Enriched with latest scan data)
-      const enrichedRepos = reposRes.documents.map(repo => {
-        const latestScan = latestScanPerRepo[repo.$id] || latestScanPerRepo[repo.url];
-        if (latestScan) {
-          let count = Number(latestScan.vulnerabilities ?? 0);
-          if (latestScan.details && typeof latestScan.details === 'string') {
+      // 4. Extract Stats from LATEST COMPLETED scan only
+      if (latestCompletedScan) {
+        setLatestScanId(latestCompletedScan.$id);
+        
+        // Appwrite fields use camelCase: criticalCount, highCount, etc.
+        let crit = Number(latestCompletedScan.criticalCount ?? 0);
+        let high = Number(latestCompletedScan.highCount ?? 0);
+        let med = Number(latestCompletedScan.mediumCount ?? 0);
+        let low = Number(latestCompletedScan.lowCount ?? 0);
+        let bugs = Number(latestCompletedScan.bugs ?? 0);
+        let total = Number(latestCompletedScan.vulnerabilities ?? 0);
+        let score = latestCompletedScan.security_score ?? latestCompletedScan.security_rating;
+        let lines = 0;
+
+        // Diagnostic log fix: Use ?? to see 0 values
+        console.log('Processed Scan Metrics:', { crit, high, med, low, score, total });
+
+        if (latestCompletedScan.details && typeof latestCompletedScan.details === 'string') {
+          try {
+            const d = JSON.parse(latestCompletedScan.details);
+            if (d.critical_count !== undefined) crit = Math.max(crit, Number(d.critical_count));
+            if (d.high_count !== undefined) high = Math.max(high, Number(d.high_count));
+            if (d.medium_count !== undefined) med = Math.max(med, Number(d.medium_count));
+            if (d.low_count !== undefined) low = Math.max(low, Number(d.low_count));
+            if (d.total_vulnerabilities !== undefined) total = Math.max(total, Number(d.total_vulnerabilities));
+            if (d.security_score !== undefined) score = d.security_score;
+            if (d.bugs !== undefined) bugs = Math.max(bugs, Number(d.bugs));
+            if (d.total_lines !== undefined) lines = Number(d.total_lines);
+          } catch (e) {}
+        }
+
+        if (total === 0) total = crit + high + med + low;
+        const finalScore = score !== undefined && score !== null ? Math.round(Number(score)) : Math.max(0, Math.round(100 - (crit * 10) - (high * 4) - (med * 1) - (low * 0.25)));
+
+        setVulnStats({
+          critical: crit, high, medium: med, low, bugs, total, score: finalScore, linesScanned: lines, codeSmells: 0
+        });
+        setPolicyPassRate(finalScore > 85 ? 100 : finalScore > 65 ? 80 : finalScore > 40 ? 60 : 30);
+      } else {
+        setVulnStats({ critical: 0, high: 0, medium: 0, low: 0, bugs: 0, total: 0, score: 0, linesScanned: 0, codeSmells: 0 });
+        setPolicyPassRate(0);
+      }
+
+      // 5. Enriched Top Repositories
+      const topReposList = reposRes.documents.map(repo => {
+        const latestRepoScan = scans.find(s => s.repo_id === repo.$id || s.repoUrl === repo.url);
+        let count = 0;
+        if (latestRepoScan) {
+          count = Number(latestRepoScan.vulnerabilities ?? 0);
+          if (latestRepoScan.details && typeof latestRepoScan.details === 'string') {
             try {
-              const d = JSON.parse(latestScan.details);
-              if (d.total_vulnerabilities !== undefined) count = Number(d.total_vulnerabilities);
-              else if (d.critical_count !== undefined) count = Number(d.critical_count) + Number(d.high_count || 0) + Number(d.medium_count || 0) + Number(d.low_count || 0);
+              const d = JSON.parse(latestRepoScan.details);
+              count = d.total_vulnerabilities ?? (Number(d.critical_count || 0) + Number(d.high_count || 0));
             } catch (e) {}
           }
-          return { ...repo, vulnerabilityCount: count };
         }
-        return repo;
-      });
+        return { ...repo, vulnerabilityCount: count };
+      }).sort((a, b) => (b.vulnerabilityCount || 0) - (a.vulnerabilityCount || 0)).slice(0, 5);
 
-      setTotalAssets({ 
-        count: reposRes.total, 
-        isNew: reposRes.documents.some(r => (now.getTime() - new Date(r.$createdAt).getTime()) < 24 * 60 * 60 * 1000) 
-      });
-      setTopRepos([...enrichedRepos].sort((a, b) => (b.vulnerabilityCount || 0) - (a.vulnerabilityCount || 0)).slice(0, 5));
+      setTotalAssets({ count: reposRes.total, isNew: reposRes.documents.some(r => (now.getTime() - new Date(r.$createdAt).getTime()) < 24 * 60 * 60 * 1000) });
+      setTopRepos(topReposList);
 
-      // 4. Finalize Vulnerability Stats
-      const derivedScore = Math.max(0, Math.round(
-        100 - (aggCrit * 10) - (aggHigh * 4) - (aggMed * 1) - (aggLow * 0.25)
-      ));
-      const finalScore = countWithScore > 0 ? Math.round(aggScoreTotal / countWithScore) : derivedScore;
-      
-      setVulnStats({ 
-        critical: aggCrit, 
-        high: aggHigh, 
-        medium: aggMed, 
-        low: aggLow, 
-        bugs: aggBugs, 
-        codeSmells: aggSmells, 
-        total: aggTotal, 
-        score: finalScore,
-        linesScanned: aggLines
-      });
-      setPolicyPassRate(score > 85 ? 100 : score > 65 ? 80 : score > 40 ? 60 : 30);
-
-      // 5. Alerts
       const notifsRes = await databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [Query.orderDesc('$createdAt'), Query.limit(10)]).catch(() => ({ documents: [] }));
       setRecentAlerts(notifsRes.documents);
 
@@ -258,7 +262,7 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, []); // Empty deps to prevent re-fetch on theme change
+  }, [loading, isRefreshing]); // Empty deps to prevent re-fetch on theme change
 
   useEffect(() => {
     fetchDashboardData();
@@ -319,8 +323,14 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Keep data visible, don't reset to zero or skeletons
+    setVulnStats({ critical: 0, high: 0, medium: 0, low: 0, bugs: 0, total: 0, score: 0, linesScanned: 0, codeSmells: 0 });
+    setPolicyPassRate(0);
+    
+    // Block auto-triggered fetches during manual refresh
+    isFetchingRef.current = true;
+    
     await fetchDashboardData();
+    // isFetchingRef.current is reset to false inside fetchDashboardData's finally block
   };
 
   if (error) {
