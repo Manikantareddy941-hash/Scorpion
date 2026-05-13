@@ -52,7 +52,7 @@ export default function CodeInsights() {
     const fetchData = async () => {
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             const headers = { 'Authorization': `Bearer ${token}` };
 
             const [summaryRes, trendsRes] = await Promise.all([

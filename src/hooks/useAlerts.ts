@@ -7,7 +7,7 @@ export function useAlerts() {
     const dispatchScanAlerts = useCallback(async (scanId: string, repoName: string) => {
         try {
             const token = await getJWT();
-            const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+            const apiBase = '';
             
             // Assume we fetch the user's active severities from their settings or local storage
             // In a real scenario, this might come from the user profile or the DB
