@@ -154,6 +154,7 @@ router.get('/scans/:scanId', async (req: AuthenticatedRequest, res: Response, ne
             started_at:    details.started_at    || scan.$createdAt,
             completed_at:  details.completed_at  || null,
             error:         details.error         || null,
+            logs:          scan.logs             || [],
         });
     } catch (err) {
         next(err);

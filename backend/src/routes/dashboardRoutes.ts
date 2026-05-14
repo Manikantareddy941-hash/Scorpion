@@ -195,4 +195,61 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
     }
 });
 
+router.get('/posture-breakdown', verifyUser, async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user?.$id;
+        
+        const reposResponse = await databases.listDocuments(DB_ID, 'repositories', [Query.equal('user_id', userId)]);
+        const repos = reposResponse.documents;
+        
+        if (repos.length === 0) {
+            return res.json({ score: 0, breakdown: [], recommendations: ["Add a repository to begin monitoring."] });
+        }
+
+        const repoIds = repos.map(r => r.$id);
+        
+        const findings = await databases.listDocuments(DB_ID, 'findings', [
+            Query.equal('repo_id', repoIds),
+            Query.equal('status', 'open'),
+            Query.limit(5000)
+        ]);
+
+        const critical = findings.documents.filter(f => f.severity === 'critical').length;
+        const high = findings.documents.filter(f => f.severity === 'high').length;
+        const medium = findings.documents.filter(f => f.severity === 'medium').length;
+
+        const criticalPenalty = critical * 5;
+        const highPenalty = high * 2;
+        const mediumPenalty = medium * 0.5;
+        
+        const passCount = repos.filter(r => r.gate_status === 'passed' || r.security_score >= 70).length;
+        const passRate = (passCount / repos.length) * 100;
+        const gatePenalty = (100 - passRate) * 0.3;
+
+        const totalPenalty = criticalPenalty + highPenalty + mediumPenalty + gatePenalty;
+        const score = Math.max(0, Math.min(100, Math.round(100 - totalPenalty)));
+
+        const breakdown = [
+            { category: 'Critical Vulnerabilities', impact: Math.round(criticalPenalty), count: critical },
+            { category: 'High Vulnerabilities', impact: Math.round(highPenalty), count: high },
+            { category: 'Medium Vulnerabilities', impact: Math.round(mediumPenalty), count: medium },
+            { category: 'CI Gate Compliance', impact: Math.round(gatePenalty), rate: `${Math.round(passRate)}%` }
+        ];
+
+        const recommendations = [];
+        if (critical > 0) recommendations.push(`Remediate ${critical} critical findings immediately to boost score by ~${Math.round(criticalPenalty)}%.`);
+        if (high > 0) recommendations.push(`Address ${high} high severity issues to improve posture by ~${Math.round(highPenalty)}%.`);
+        if (passRate < 90) recommendations.push(`Improve CI gate pass rate (currently ${Math.round(passRate)}%) by fixing policy blockers.`);
+
+        res.json({
+            score,
+            breakdown,
+            recommendations: recommendations.slice(0, 3)
+        });
+    } catch (err: any) {
+        console.error('[Posture API Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 export default router;

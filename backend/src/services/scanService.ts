@@ -16,6 +16,18 @@ const computeSecurityScore = (critical: number, high: number, medium: number, lo
     return Math.max(0, Math.round(100 - penalty));
 };
 
+const addScanLog = async (scanId: string, log: string) => {
+    try {
+        const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        const currentLogs = Array.isArray(scan.logs) ? scan.logs : [];
+        await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
+            logs: [...currentLogs, `[${new Date().toLocaleTimeString()}] ${log}`]
+        });
+    } catch (err) {
+        console.error('[ScanService] Failed to add log:', err);
+    }
+};
+
 export const triggerScan = async (
     repoId: string,
     options: { scanType?: any; scanDepth?: any; branch?: string } = {},
@@ -93,11 +105,18 @@ export const triggerScan = async (
                 fs.mkdirSync(path.join(process.cwd(), 'tmp'), { recursive: true });
             }
             try {
-                const { exec } = await import('child_process');
-                const { promisify } = await import('util');
-                const execAsync = promisify(exec);
-                const branchFlag = options.branch ? `--branch "${options.branch}"` : '';
-                await execAsync(`git clone --depth 1 ${branchFlag} "${targetPath}" "${tempDir}"`, { timeout: 60000 });
+                const { spawn } = await import('child_process');
+                const branchArgs = options.branch ? ['--branch', options.branch] : [];
+                const cloneArgs = ['clone', '--depth', '1', ...branchArgs, targetPath, tempDir];
+                
+                await new Promise((resolve, reject) => {
+                    const child = spawn('git', cloneArgs, { timeout: 60000 });
+                    child.on('error', reject);
+                    child.on('close', (code) => {
+                        if (code === 0) resolve(true);
+                        else reject(new Error(`Git clone exited with code ${code}`));
+                    });
+                });
                 scanPath = tempDir;
                 isTemporary = true;
             } catch (cloneErr: any) {
@@ -107,10 +126,15 @@ export const triggerScan = async (
         }
 
         // 6️⃣ Run scans
+        await addScanLog(scanId!, "Initiating multi-engine security audit...");
         const timeoutPromise = new Promise<any[]>((_, reject) =>
             setTimeout(() => reject(new Error('Scan Orchestrator Timeout (5m)')), 5 * 60 * 1000)
         );
-        const rawResults = await Promise.race([orchestrateScan(scanPath, options), timeoutPromise]);
+        const rawResults = await Promise.race([
+            orchestrateScan(scanPath, options, (log) => addScanLog(scanId!, log)), 
+            timeoutPromise
+        ]);
+        await addScanLog(scanId!, "All security engines finalized.");
 
         // 7️⃣ Walk repo for file/line stats
         const languageCounts: Record<string, number> = {};
@@ -154,11 +178,15 @@ export const triggerScan = async (
         // 8️⃣ Parse findings
         const findings: Finding[] = [];
         rawResults.forEach(res => {
-            if (res.tool === 'semgrep')   findings.push(...parseSemgrep(res.stdout));
-            if (res.tool === 'gitleaks')  findings.push(...parseGitleaks(res.stdout));
-            if (res.tool === 'trivy')     findings.push(...parseTrivy(res.stdout));
-            if (res.tool === 'checkov')   findings.push(...parseCheckov(res.stdout));
-            if (res.tool === 'bandit')    findings.push(...parseBandit(res.stdout));
+            let toolFindings: Finding[] = [];
+            if (res.tool === 'semgrep')   toolFindings = parseSemgrep(res.stdout);
+            if (res.tool === 'gitleaks')  toolFindings = parseGitleaks(res.stdout);
+            if (res.tool === 'trivy')     toolFindings = parseTrivy(res.stdout);
+            if (res.tool === 'checkov')   toolFindings = parseCheckov(res.stdout);
+            if (res.tool === 'bandit')    toolFindings = parseBandit(res.stdout);
+            
+            findings.push(...toolFindings);
+            addScanLog(scanId!, `[${res.tool.toUpperCase()}] Analysis complete: ${toolFindings.length} issues detected.`);
         });
 
         console.log(`[STRICT DEBUG] Total Parsed Vulnerabilities: ${findings.length}`);
