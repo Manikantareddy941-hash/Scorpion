@@ -56,6 +56,6 @@
         "ts-node-dev": "^2.0.0",
         "typescript": "^5.5.3",
         "typescript-eslint": "^8.56.1",
-        "vite": "^5.4.2"
+        "vite": "^8.0.12"
     }
 }

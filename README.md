@@ -47,5 +47,18 @@ A high-fidelity dashboard powered by **Appwrite Realtime** featuring:
 2. `npm install`
 3. Open in VS Code and press **F5** to run.
 
+### 🔧 Troubleshooting
+If you encounter a `listen EADDRINUSE: address already in use :::3001` error on Windows:
+
+**Using Git Bash:**
+```bash
+taskkill //IM node.exe //F
+```
+
+**Using PowerShell:**
+```powershell
+taskkill /IM node.exe /F
+```
+
 ---
 *Built for modern DevSecOps teams who want to move fast without breaking security.*

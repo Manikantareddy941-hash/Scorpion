@@ -15,6 +15,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import logoImg from '../assets/pre-final_logo-removebg-preview.png';
+import PostureRoadmap from './PostureRoadmap';
 
 const SecurityRadarChart = memo(({ data }: { data: any[] }) => {
   // Normalize data for the radar chart to ensure it doesn't appear flat
@@ -92,6 +93,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
   const [topRepos, setTopRepos] = useState<any[]>([]);
   const [recentAlerts, setRecentAlerts] = useState<any[]>([]);
   const [latestScanId, setLatestScanId] = useState<string | null>(null);
+  const [gateSummary, setGateSummary] = useState<any[]>([]);
+  const [showGateSummary, setShowGateSummary] = useState(false);
   const isFetchingRef = useRef(false);
 
   const fetchDashboardData = useCallback(async (isAuto = false) => {
@@ -108,6 +111,15 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
     }, 8000);
 
     try {
+      const token = await getJWT();
+      
+      // Fetch Gate Summary
+      const gateRes = await fetch('/api/gates/summary', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const gateData = await gateRes.json();
+      setGateSummary(gateData.failedRepos || []);
+
       // 1. Fetch User's Repositories
       const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
         Query.orderDesc('$createdAt'),
@@ -368,7 +380,8 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
         ].map((stat, i) => (
           loading ? <SkeletonCard key={i} h="h-32" /> :
           <div key={i} 
-               className={`bg-[var(--bg-card)] rounded-[16px] p-6 relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between h-32 transition-all`}
+               onClick={() => stat.id === 'ci' && setShowGateSummary(true)}
+               className={`bg-[var(--bg-card)] rounded-[16px] p-6 relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between h-32 transition-all ${stat.id === 'ci' ? 'cursor-pointer hover:scale-[1.02]' : ''}`}
           >
             <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: stat.color }}></div>
             
@@ -394,39 +407,45 @@ export default function Dashboard({ isSidebarCollapsed }: { isSidebarCollapsed: 
         ))}
       </div>
 
+      {/* Gate Summary Modal */}
+      {showGateSummary && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[var(--bg-card)] w-full max-w-lg rounded-2xl p-8 border border-[var(--border-subtle)] shadow-2xl">
+            <h2 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-wider mb-6 flex items-center gap-2">
+              <ShieldAlert className="text-[var(--status-error)]" size={20} /> Policy Blocking Summary
+            </h2>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+              {gateSummary.length > 0 ? gateSummary.map((repo, i) => (
+                <div key={i} className="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)]">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[12px] font-bold text-[var(--text-primary)]">{repo.name}</span>
+                    <span className="text-[10px] font-black text-[var(--status-error)] uppercase">Blocked</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{repo.reason}</p>
+                </div>
+              )) : (
+                <div className="text-center py-12">
+                  <ShieldCheck className="mx-auto text-[var(--status-success)] mb-3" size={32} />
+                  <p className="text-[13px] font-bold text-[var(--text-primary)]">All monitored assets are compliant.</p>
+                </div>
+              )}
+            </div>
+            <button 
+              onClick={() => setShowGateSummary(false)}
+              className="w-full mt-8 py-3 bg-[var(--accent-primary)] text-white font-black uppercase tracking-widest rounded-xl hover:brightness-110 transition-all"
+            >
+              Acknowledge
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Middle Section: Pulse & Vulnerability Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-8">
         
         {/* Security Pulse */}
         <div className="xl:col-span-7 flex flex-col min-h-[400px]">
-          {loading ? <SkeletonCard h="h-full w-full" /> : 
-          <div className="bg-[var(--bg-card)] rounded-[16px] p-8 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col flex-1">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic">Security Pulse</h2>
-                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1">Real-time Anomaly Vectors</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-medium text-[var(--text-secondary)] italic">Updated at {new Date().toLocaleTimeString()}</span>
-                <button 
-                  onClick={handleRefresh}
-                  disabled={loading || isRefreshing}
-                  className={`text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 ${
-                    theme === 'dark' 
-                      ? 'bg-[#1e1e1e] text-[#7bc67e] border border-[#2a2a2a] hover:bg-[#252525]' 
-                      : 'text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/5'
-                  }`}
-                >
-                  <Activity size={12} className={isRefreshing ? "animate-spin" : ""} />
-                  ⟳ REFRESH
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 w-full relative">
-               <SecurityRadarChart data={threatData} />
-            </div>
-          </div>
-          }
+          <PostureRoadmap />
         </div>
 
         {/* Right Vulnerability Grid */}

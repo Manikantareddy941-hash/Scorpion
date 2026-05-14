@@ -70,7 +70,7 @@ export const parseTrivy = (stdout: string): Finding[] => {
                 findings.push({
                     tool: 'trivy',
                     severity: mapTrivySeverity(v.Severity),
-                    message: `[VULN] ${v.PkgName}: ${v.Title || v.Description}`,
+                    message: `[VULN] ${v.PkgName}: ${v.Title || v.Description}${v.FixedVersion ? ` (Fix available in ${v.FixedVersion})` : ' (No fix available)'}`,
                     file_path: res.Target,
                     line_number: undefined, 
                     package: v.PkgName || undefined,
