@@ -1,28 +1,32 @@
-import { execSync } from "child_process";
-import path from "path";
+import { spawnSync } from "child_process";
 
-// Paths to local portable binaries (relative to project root)
-// Backend runs from project/backend/, so we step up one level to reach project/tools/
-const toolPaths: Record<string, string> = {
-    semgrep: "C:\\Users\\LENOVO\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\semgrep.exe",
-    gitleaks: "c:\\Users\\LENOVO\\Stackpilot\\tools\\gitleaks\\gitleaks.exe",
-    trivy: "c:\\Users\\LENOVO\\Stackpilot\\tools\\trivy\\trivy.exe",
-    checkov: "C:\\Users\\manik\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\checkov.CMD"
+const isWin = process.platform === 'win32';
+const resolveTool = (name: string): { cmd: string, prefixArgs: string[] } => {
+    if (!isWin) return { cmd: name, prefixArgs: [] };
+    
+    if (name === 'checkov') {
+        // Windows limitation: .cmd files require a shell.
+        // Calling 'cmd /c checkov' satisfies DEP0190 as args are passed via array.
+        return { cmd: 'cmd', prefixArgs: ['/c', 'checkov'] };
+    }
+    
+    const mapping: Record<string, string> = {
+        'semgrep': 'semgrep.exe',
+        'bandit': 'bandit.exe',
+        'gitleaks': 'gitleaks.exe',
+        'trivy': 'trivy.exe'
+    };
+    
+    return { cmd: mapping[name] || name, prefixArgs: [] };
 };
 
 export const checkTool = (cmd: string): boolean => {
-    const resolvedCmd = toolPaths[cmd] ?? cmd;
+    const tool = resolveTool(cmd);
     const versionFlag = cmd === "gitleaks" ? "version" : "--version";
     try {
-        execSync(`"${resolvedCmd}" ${versionFlag}`, { stdio: "ignore" });
-        return true;
+        const res = spawnSync(tool.cmd, [...tool.prefixArgs, versionFlag], { stdio: "ignore" });
+        return res.status === 0;
     } catch {
-        // Fallback: try the raw system command (in case it is on PATH)
-        try {
-            execSync(`${cmd} ${versionFlag}`, { stdio: "ignore" });
-            return true;
-        } catch {
-            return false;
-        }
+        return false;
     }
 };

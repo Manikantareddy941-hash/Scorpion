@@ -55,4 +55,31 @@ router.get('/release/:repo_id', verifyUser, async (req: Request, res: Response) 
     }
 });
 
+router.get('/summary', verifyUser, async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user?.$id;
+        const reposResponse = await databases.listDocuments(
+            DB_ID,
+            'repositories',
+            [Query.equal('user_id', userId)]
+        );
+
+        const summary = await Promise.all(reposResponse.documents.map(async (repo) => {
+            const gateResult = await checkReleaseGate(repo.$id);
+            return {
+                repo_id: repo.$id,
+                repo_name: repo.name,
+                allowed: gateResult.allowed,
+                blocker_count: gateResult.blocker_count,
+                reasons: gateResult.blockers.map((b: any) => `${b.severity.toUpperCase()} ${b.type.toUpperCase()}: ${b.title}`)
+            };
+        }));
+
+        res.json(summary);
+    } catch (err: any) {
+        console.error('[Gate Summary API Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 export default router;

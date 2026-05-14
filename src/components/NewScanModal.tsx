@@ -50,6 +50,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
     const apiBase = '';
     let pollCount = 0;
     let lastStatus = "";
+    let lastLogCount = 0;
     
     const interval = setInterval(async () => {
       try {
@@ -69,11 +70,30 @@ export default function NewScanModal({ onClose, onScan }: Props) {
             }
         }
 
+        // Synchronize tool-level logs from backend
+        if (data.logs && Array.isArray(data.logs) && data.logs.length > lastLogCount) {
+            const newLogs = data.logs.slice(lastLogCount);
+            newLogs.forEach((logStr: string) => {
+                // Parse "[HH:MM:SS] Message"
+                const match = logStr.match(/^\[(.*?)\] (.*)$/);
+                if (match) {
+                    const [, timestamp, message] = match;
+                    const type = message.includes('complete') || message.includes('Engine completed') ? 'success' : 
+                                 message.includes('Protocol initiated') || message.includes('audit') ? 'progress' : 'info';
+                    addLog(message, type);
+                } else {
+                    addLog(logStr, 'info');
+                }
+            });
+            lastLogCount = data.logs.length;
+        }
+
         updateScan({
             stats: {
-                filesScanned: data.files_scanned || Math.min(100 + pollCount * 5, 250),
-                issuesFound: data.vulnerabilities || data.critical + data.high + data.medium + data.low || 0,
-                status: data.status === 'completed' ? 'COMPLETE' : data.status === 'failed' ? 'FAILED' : 'RUNNING'
+                filesScanned: data.total_files || Math.min(100 + pollCount * 5, 250),
+                issuesFound: data.total_vulnerabilities || data.critical + data.high + data.medium + data.low || 0,
+                status: data.status === 'completed' ? 'COMPLETE' : data.status === 'failed' ? 'FAILED' : 'RUNNING',
+                duration: activeScan?.stats.duration || '00:00'
             }
         });
 

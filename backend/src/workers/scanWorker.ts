@@ -10,6 +10,26 @@ import cronParser from 'cron-parser';
 import { sendFindingAlert } from '../utils/alertDispatcher';
 import { logAuditEvent } from '../utils/auditLogger';
 
+const isWin = process.platform === 'win32';
+const resolveTool = (name: string): { cmd: string, prefixArgs: string[] } => {
+    if (!isWin) return { cmd: name, prefixArgs: [] };
+    
+    if (name === 'checkov') {
+        // Windows limitation: .cmd files require a shell.
+        // Calling 'cmd /c checkov' satisfies DEP0190 as args are passed via array.
+        return { cmd: 'cmd', prefixArgs: ['/c', 'checkov'] };
+    }
+    
+    const mapping: Record<string, string> = {
+        'semgrep': 'semgrep.exe',
+        'bandit': 'bandit.exe',
+        'gitleaks': 'gitleaks.exe',
+        'trivy': 'trivy.exe'
+    };
+    
+    return { cmd: mapping[name] || name, prefixArgs: [] };
+};
+
 // Environment Variables
 export let isWorkerRunning = false;
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1';
@@ -48,7 +68,9 @@ function runGitleaks(repoPath: string, repo: any): Finding[] {
     const reportId = ID.unique();
     const reportPath = path.join(os.tmpdir(), `gitleaks-${reportId}.json`);
     
-    spawnSync('gitleaks', [
+    const tool = resolveTool('gitleaks');
+    spawnSync(tool.cmd, [
+        ...tool.prefixArgs,
         'detect',
         '--source', repoPath,
         '--report-format', 'json',
@@ -149,7 +171,9 @@ function runSastScan(repoPath: string, repo: any): Finding[] {
     const findings: Finding[] = [];
 
     try {
-        const result = spawnSync('semgrep', [
+        const tool = resolveTool('semgrep');
+        const result = spawnSync(tool.cmd, [
+            ...tool.prefixArgs,
             '--config=auto',
             repoPath,
             '--json',
@@ -201,13 +225,15 @@ function runIacScan(repoPath: string, repo: any): Finding[] {
     const findings: Finding[] = [];
 
     try {
-        const result = spawnSync('C:/Users/manik/AppData/Local/Programs/Python/Python313/Scripts/checkov.CMD', [
+        const tool = resolveTool('checkov');
+        const result = spawnSync(tool.cmd, [
+            ...tool.prefixArgs,
             '-d', repoPath,
             '--quiet',
             '--no-guide',
             '--soft-fail',
             '--output', 'json'
-        ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024, shell: true });
+        ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
 
         if (result.status !== 0 && result.error) {
             console.warn(`[IaC Warning] Checkov execution failed: ${result.error.message}`);
@@ -302,21 +328,22 @@ export function initScanWorker() {
 
     // Startup check for tools
     try {
-        const semgrepCheck = spawnSync('semgrep', ['--version']);
-        if (semgrepCheck.status !== 0) {
-            console.warn('⚠️  [Scan Worker] WARN: semgrep not found, SAST disabled');
-        } else {
-            console.log('✅ [Scan Worker] Semgrep detected and active');
-        }
-
-        const checkovCheck = spawnSync('C:/Users/manik/AppData/Local/Programs/Python/Python313/Scripts/checkov.CMD', ['--version'], { shell: true });
-        if (checkovCheck.status !== 0) {
-            console.warn('⚠️  [Scan Worker] WARN: checkov not found, IaC scanning disabled');
-        } else {
-            console.log('✅ [Scan Worker] Checkov detected and active');
+        const tools = ['semgrep', 'checkov', 'gitleaks', 'trivy', 'bandit'];
+        
+        for (const toolName of tools) {
+            const tool = resolveTool(toolName);
+            const versionFlag = toolName === 'gitleaks' ? 'version' : '--version';
+            const check = spawnSync(tool.cmd, [...tool.prefixArgs, versionFlag]);
+            
+            const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+            if (check.status !== 0) {
+                console.warn(`❌ [Scan Worker] ${displayName} NOT found`);
+            } else {
+                console.log(`✅ [Scan Worker] ${displayName} detected and active`);
+            }
         }
     } catch (err) {
-        console.warn('⚠️  [Scan Worker] WARN: semgrep not found, SAST disabled');
+        console.warn('⚠️  [Scan Worker] WARN: tool check failed');
     }
 
     cron.schedule('* * * * *', async () => {
