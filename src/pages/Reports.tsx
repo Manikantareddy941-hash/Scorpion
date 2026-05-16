@@ -2,14 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { 
     FileDown, FileText, Database, Calendar, 
     ArrowRight, Loader2, Shield, Download,
-    CheckCircle2, AlertTriangle, Filter
+    CheckCircle2, AlertTriangle, Filter, Zap, RefreshCw,
+    Search, Cpu, Activity, Scale
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function Reports() {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const { getJWT } = useAuth();
     const [repos, setRepos] = useState<any[]>([]);
     const [selectedRepo, setSelectedRepo] = useState<string>('');
@@ -20,7 +24,10 @@ export default function Reports() {
     const [exporting, setExporting] = useState(false);
 
     const [recentReports, setRecentReports] = useState<any[]>([]);
+    const [aiSummary, setAiSummary] = useState<string>('');
+    const [isAiLoading, setIsAiLoading] = useState(false);
     const { user } = useAuth();
+    const [activeTab, setActiveTab] = useState<'infrastructure' | 'security' | 'ai' | 'compliance'>('security');
 
     useEffect(() => {
         fetchInitialData();
@@ -61,6 +68,30 @@ export default function Reports() {
             console.error('Failed to fetch recent reports:', err);
         }
     };
+
+    const generateAiSummary = async () => {
+        setIsAiLoading(true);
+        try {
+            const token = await getJWT();
+            const response = await fetch('/api/reports/ai-summary?range=24h', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('AI generation failed');
+            const data = await response.json();
+            setAiSummary(data.summary);
+            toast.success('AI Security Briefing generated');
+        } catch (err: any) {
+            toast.error('Failed to generate AI briefing');
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'ai' && !aiSummary) {
+            generateAiSummary();
+        }
+    }, [activeTab, aiSummary]);
 
     const handleExport = async () => {
         if (!selectedRepo) {
@@ -135,21 +166,79 @@ export default function Reports() {
         );
     }
 
+    const headerDetails = {
+        infrastructure: { title: 'Infrastructure', desc: 'System & Architecture Reports', icon: <Activity size={32} /> },
+        security: { title: 'Security Audits', desc: 'Enterprise-Grade Evidence Generation', icon: <Shield size={32} /> },
+        ai: { title: 'AI Security Briefing', desc: 'Automated Posture Assessment', icon: <Zap size={32} /> },
+        compliance: { title: 'Compliance Audit', desc: 'Regulatory & Standard Checks', icon: <Scale size={32} /> }
+    };
+    
+    const currentHeader = headerDetails[activeTab];
+
+    const auditSpecsMap = {
+        infrastructure: {
+            title: "Infrastructure Topology Specs",
+            footer: "Infrastructure maps are generated from active network scans and cloud provider APIs.",
+            items: [
+                { icon: <Activity size={16} className="text-blue-500" />, title: "Network Architecture", desc: "Detailed mapping of VPCs, subnets, and routing tables." },
+                { icon: <Cpu size={16} className="text-emerald-500" />, title: "Compute Resources", desc: "Analysis of EC2, Lambda, and container orchestration." },
+                { icon: <Database size={16} className="text-purple-500" />, title: "Data Persistence", desc: "Storage configurations, backups, and encryption status." }
+            ]
+        },
+        security: {
+            title: "Audit Intelligence Specs",
+            footer: "Reports are generated in real-time by analyzing the current findings mesh. Data integrity is verified via Appwrite immutable logs.",
+            items: [
+                { icon: <Shield size={16} className="text-green-500" />, title: "Security Summary", desc: "Overview of critical, high, and medium risk factors." },
+                { icon: <AlertTriangle size={16} className="text-orange-500" />, title: "Vulnerability Matrix", desc: "Detailed mapping of every detected finding with file paths." },
+                { icon: <CheckCircle2 size={16} className="text-blue-500" />, title: "Remediation Path", desc: "Recommended upgrade paths and CVE identifiers." }
+            ]
+        },
+        ai: {
+            title: "AI Analysis Parameters",
+            footer: "AI summaries are generated dynamically via large language models assessing the security state.",
+            items: [
+                { icon: <Zap size={16} className="text-yellow-500" />, title: "Threat Modeling", desc: "Predictive analysis of attack vectors and surface area." },
+                { icon: <Cpu size={16} className="text-indigo-500" />, title: "Anomaly Detection", desc: "Pattern recognition for unusual commit or build behaviors." },
+                { icon: <FileText size={16} className="text-rose-500" />, title: "Executive Summary", desc: "High-level risk communication tailored for stakeholders." }
+            ]
+        },
+        compliance: {
+            title: "Compliance Standard Specs",
+            footer: "Compliance evidence is mapped against latest SOC2, ISO 27001, and HIPAA frameworks.",
+            items: [
+                { icon: <Scale size={16} className="text-indigo-500" />, title: "Framework Mapping", desc: "Direct alignment of controls to regulatory requirements." },
+                { icon: <CheckCircle2 size={16} className="text-emerald-500" />, title: "Policy Enforcement", desc: "Status of mandatory security policies and guardrails." },
+                { icon: <FileDown size={16} className="text-cyan-500" />, title: "Auditor Evidence", desc: "Pre-formatted artifacts ready for external compliance audits." }
+            ]
+        }
+    };
+    
+    const activeTabSpecs = auditSpecsMap[activeTab];
+
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] p-8">
-            <div className="max-w-5xl mx-auto space-y-12">
+            <div className="max-w-6xl mx-auto space-y-8">
                 
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div className="flex items-center gap-5">
                         <div className="w-16 h-16 bg-[var(--accent-primary)] rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-[var(--accent-primary)]/20">
-                            <FileText size={32} />
+                            {currentHeader.icon}
                         </div>
                         <div>
-                            <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-[var(--text-primary)]">Security Audits</h1>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-2">Enterprise-Grade Evidence Generation</p>
+                            <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-[var(--text-primary)]">{currentHeader.title}</h1>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-2">{currentHeader.desc}</p>
                         </div>
                     </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex flex-wrap items-center gap-2 bg-[var(--bg-card)] border border-[var(--border-subtle)] p-2 rounded-2xl">
+                    <TabButton active={activeTab === 'infrastructure'} onClick={() => setActiveTab('infrastructure')} icon={<Activity size={14} />} label="Infrastructure" />
+                    <TabButton active={activeTab === 'security'} onClick={() => setActiveTab('security')} icon={<Shield size={14} />} label="Security Audit" />
+                    <TabButton active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} icon={<Zap size={14} />} label="AI Briefing" />
+                    <TabButton active={activeTab === 'compliance'} onClick={() => setActiveTab('compliance')} icon={<Scale size={14} />} label="Compliance" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -260,31 +349,84 @@ export default function Reports() {
                         </div>
                     </div>
 
-                    {/* Report Preview / Info */}
+                    {/* Report Preview / Info / AI Summary */}
                     <div className="space-y-6">
-                        <div className="premium-card p-8">
-                            <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-8 italic">Audit Intelligence Specs</h3>
-                            
-                            <div className="space-y-8">
-                                <SpecRow icon={<Shield size={16} className="text-green-500" />} title="Security Summary" desc="Overview of critical, high, and medium risk factors." />
-                                <SpecRow icon={<AlertTriangle size={16} className="text-orange-500" />} title="Vulnerability Matrix" desc="Detailed mapping of every detected finding with file paths." />
-                                <SpecRow icon={<CheckCircle2 size={16} className="text-blue-500" />} title="Remediation Path" desc="Recommended upgrade paths and CVE identifiers." />
-                            </div>
-
-                            <div className="mt-12 pt-8 border-t border-[var(--border-subtle)]">
-                                <div className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl italic">
-                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed">
-                                        Reports are generated in real-time by analyzing the current findings mesh. Data integrity is verified via Appwrite immutable logs.
-                                    </p>
+                        {activeTab === 'ai' ? (
+                            <div className="premium-card p-10 min-h-[500px] flex flex-col">
+                                <div className="flex items-center justify-between mb-10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white">
+                                            <Zap size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black uppercase italic text-[var(--text-primary)]">AI Security Briefing</h3>
+                                            <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em]">Automated Posture Assessment</p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={generateAiSummary}
+                                        disabled={isAiLoading}
+                                        className="p-3 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-all disabled:opacity-50"
+                                    >
+                                        <RefreshCw size={16} className={isAiLoading ? 'animate-spin' : ''} />
+                                    </button>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="p-8 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 text-white relative overflow-hidden group">
-                            <h3 className="text-lg font-black uppercase italic leading-tight">SOC2 / ISO 27001 <br /> Compliance Ready</h3>
-                            <p className="text-[10px] font-bold uppercase text-white/70 mt-4">Evidence generated here meets standard auditor requirements for continuous security monitoring.</p>
-                            <Shield className="absolute -right-8 -bottom-8 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
-                        </div>
+                                {isAiLoading ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center space-y-4">
+                                        <Loader2 className="animate-spin text-indigo-400" size={32} />
+                                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic animate-pulse">Echo is analyzing your security mesh...</p>
+                                    </div>
+                                ) : aiSummary ? (
+                                    <div className="prose prose-invert prose-sm max-w-none">
+                                        <ReactMarkdown
+                                            components={{
+                                                h1: ({node, ...props}) => <h1 className="text-xl font-black uppercase italic text-indigo-400 mt-6 mb-4" {...props} />,
+                                                h2: ({node, ...props}) => <h2 className="text-lg font-black uppercase italic text-indigo-300 mt-5 mb-3" {...props} />,
+                                                h3: ({node, ...props}) => <h3 className="text-md font-black uppercase italic text-indigo-200 mt-4 mb-2" {...props} />,
+                                                p: ({node, ...props}) => <p className="text-zinc-400 leading-relaxed mb-4 text-[11px] font-medium" {...props} />,
+                                                ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-4 space-y-2" {...props} />,
+                                                li: ({node, ...props}) => <li className="text-zinc-300 text-[11px]" {...props} />,
+                                                strong: ({node, ...props}) => <strong className="text-indigo-200 font-black uppercase" {...props} />,
+                                            }}
+                                        >
+                                            {aiSummary}
+                                        </ReactMarkdown>
+                                    </div>
+                                ) : (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4">
+                                        <Zap size={48} className="text-zinc-700" />
+                                        <p className="text-xs font-bold text-zinc-500 uppercase italic">No AI Briefing available for this period. <br /> Click refresh to generate.</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="premium-card p-8">
+                                    <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-8 italic">{activeTabSpecs.title}</h3>
+                                    
+                                    <div className="space-y-8">
+                                        {activeTabSpecs.items.map((item, idx) => (
+                                            <SpecRow key={idx} icon={item.icon} title={item.title} desc={item.desc} />
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-12 pt-8 border-t border-[var(--border-subtle)]">
+                                        <div className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl italic">
+                                            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed">
+                                                {activeTabSpecs.footer}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-8 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 text-white relative overflow-hidden group cursor-pointer" onClick={() => setActiveTab('ai')}>
+                                    <h3 className="text-lg font-black uppercase italic leading-tight">SOC2 / ISO 27001 <br /> Compliance Ready</h3>
+                                    <p className="text-[10px] font-bold uppercase text-white/70 mt-4">Evidence generated here meets standard auditor requirements for continuous security monitoring.</p>
+                                    <Shield className="absolute -right-8 -bottom-8 w-32 h-32 opacity-10 group-hover:scale-110 transition-transform" />
+                                </div>
+                            </>
+                        )}
                     </div>
 
                 </div>
@@ -305,6 +447,20 @@ function SpecRow({ icon, title, desc }: { icon: any, title: string, desc: string
                 <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 leading-relaxed">{desc}</p>
             </div>
         </div>
+    );
+}
+
+function TabButton({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) {
+    return (
+        <button 
+            onClick={onClick}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex-1 justify-center ${
+                active ? 'bg-[var(--accent-primary)] text-white shadow-lg shadow-[var(--accent-primary)]/20' : 'text-[var(--text-secondary)] hover:bg-[var(--accent-primary)]/10 hover:text-[var(--text-primary)]'
+            }`}
+        >
+            {icon}
+            {label}
+        </button>
     );
 }
 

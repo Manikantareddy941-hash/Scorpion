@@ -1,5 +1,6 @@
 import React from 'react';
 import { Clock, CheckCircle, XCircle, RefreshCw, Zap } from 'lucide-react';
+import { GradeBadge } from './QualityGate';
 
 interface Scan {
     id: string;
@@ -46,19 +47,22 @@ export const ScanHistory: React.FC<ScanHistoryProps> = ({ scans }) => {
                                 <div className="flex items-center gap-3 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
                                     <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {new Date(scan.created_at).toLocaleString()}</span>
                                 </div>
-                            </div>
-                        </div>
-
-                        {scan.status === 'completed' && (
-                            <div className="text-right">
-                                <div className="flex items-center gap-1 justify-end">
-                                    <Zap className="w-3 h-3 text-[var(--status-warning)] fill-[var(--status-warning)]" />
-                                    <span className="text-sm font-black text-[var(--text-primary)] italic tracking-tighter">{scan.details?.security_score || 0}%</span>
                                 </div>
-                                <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Score</p>
                             </div>
-                        )}
-                    </div>
+
+                            {scan.status === 'completed' && (
+                                <div className="flex items-center gap-6">
+                                    <GradeBadge grade={(scan as any).qualityGrade ?? '—'} size="sm" />
+                                    <div className="text-right">
+                                        <div className="flex items-center gap-1 justify-end">
+                                            <Zap className="w-3 h-3 text-[var(--status-warning)] fill-[var(--status-warning)]" />
+                                            <span className="text-sm font-black text-[var(--text-primary)] italic tracking-tighter">{scan.details?.security_score || 0}%</span>
+                                        </div>
+                                        <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Score</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                 ))}
             </div>
         </div>

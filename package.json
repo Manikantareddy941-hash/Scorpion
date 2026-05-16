@@ -12,6 +12,7 @@
         "install": "node -e \"process.platform === 'win32' ? require('child_process').execSync('powershell -ExecutionPolicy Bypass -File scripts/install-security-tools.ps1', {stdio: 'inherit'}) : require('child_process').execSync('bash scripts/install-security-tools.sh', {stdio: 'inherit'})\""
     },
     "dependencies": {
+        "@google/generative-ai": "^0.24.1",
         "@monaco-editor/react": "^4.7.0",
         "appwrite": "^23.0.0",
         "axios": "^1.13.5",

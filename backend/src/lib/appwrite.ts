@@ -41,6 +41,11 @@ export const COLLECTIONS = {
   BUILDS: 'builds',
   TEST_RUNS: 'test_runs',
   RELEASES: 'releases',
+  REPORTS_SCHEDULE: 'reports_schedule',
+  FINDINGS: 'vulnerabilities',
+  INTEGRATIONS: 'integrations',
+  PROJECT_POLICIES: 'project_policies',
+  RBAC_AUDIT_LOGS: 'rbac_audit_log',
 };
 
 export { ID, Query };

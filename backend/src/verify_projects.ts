@@ -15,27 +15,27 @@ async function runVerification() {
             'Test Project ' + Date.now(),
             'Verification testing'
         );
-        if (createError) throw new Error(`Create Project failed: ${createError.message}`);
-        console.log('✅ Project created:', project.name, 'ID:', project.id);
-        testProjectId = project.id;
+        if (createError) throw new Error(`Create Project failed: ${(createError as any).message}`);
+        console.log('✅ Project created:', project?.name, 'ID:', project?.id);
+        testProjectId = project?.id || '';
 
         // 2. List Projects
         console.log('\n--- 2. List Projects ---');
         const { data: projects, error: listError } = await getProjects(testUserId);
-        if (listError) throw new Error(`List Projects failed: ${listError.message}`);
+        if (listError) throw new Error(`List Projects failed: ${(listError as any).message}`);
         console.log('✅ Projects found:', projects?.length);
 
         // 3. Import Repo
         console.log('\n--- 3. Import Repository ---');
         const testRepoUrl = 'https://github.com/stackpilot/test-repo-' + Date.now();
         const { data: repo, error: importError } = await importRepoToProject(testProjectId, testUserId, testRepoUrl);
-        if (importError) throw new Error(`Import Repo failed: ${typeof importError === 'string' ? importError : importError.message}`);
-        console.log('✅ Repository imported:', repo.name, 'Link to Project:', repo.project_id);
+        if (importError) throw new Error(`Import Repo failed: ${typeof importError === 'string' ? importError : (importError as any).message}`);
+        console.log('✅ Repository imported:', repo?.name, 'Link to Project:', repo?.project_id);
 
         // 4. Project Dashboard
         console.log('\n--- 4. Project Dashboard ---');
         const { data: dashboard, error: dashError } = await getProjectDashboard(testProjectId, testUserId);
-        if (dashError) throw new Error(`Dashboard failed: ${typeof dashError === 'string' ? dashError : dashError.message}`);
+        if (dashError) throw new Error(`Dashboard failed: ${typeof dashError === 'string' ? dashError : (dashError as any).message}`);
         console.log('✅ Dashboard Data:');
         console.log('   Repos:', dashboard?.stats.totalRepos);
         console.log('   Vulns:', dashboard?.stats.totalVulns);

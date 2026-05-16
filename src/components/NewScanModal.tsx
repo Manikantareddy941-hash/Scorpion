@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, Github, Upload, FolderOpen, Loader2 } from 'lucide-react';
+import { X, Github, Upload, FolderOpen, Loader2, ExternalLink, Globe, Cloud } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import UVScanOverlay from './UVScanOverlay';
+import ConnectRepoModal from './ConnectRepoModal';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../contexts/ThemeContext';
@@ -17,7 +18,7 @@ interface Props {
 export default function NewScanModal({ onClose, onScan }: Props) {
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const [tab, setTab] = useState<'github' | 'upload'>('github');
+  const [tab, setTab] = useState<'github' | 'upload' | 'cloud'>('github');
   const [repoUrl, setRepoUrl] = useState('');
   const [scanType, setScanType] = useState<'full' | 'security' | 'deps' | 'quick'>('full');
   const [branch, setBranch] = useState('main');
@@ -249,11 +250,13 @@ export default function NewScanModal({ onClose, onScan }: Props) {
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-          {(['github', 'upload'] as const).map(t_val => (
+          {(['github', 'upload', 'cloud'] as const).map(t_val => (
             <button key={t_val} onClick={() => { setTab(t_val); setError(null); }}
               disabled={loading}
               style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${tab === t_val ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: tab === t_val ? 'var(--accent-primary)0D' : 'transparent', color: tab === t_val ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.8rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {t_val === 'github' ? <><Github size={16} /> {t('dashboard.modal.tab_github', 'GITHUB REPO')}</> : <><Upload size={16} /> {t('dashboard.modal.tab_upload', 'LOCAL FILES')}</>}
+              {t_val === 'github' ? <><Github size={16} /> {t('dashboard.modal.tab_github', 'GITHUB')}</> : 
+               t_val === 'upload' ? <><Upload size={16} /> {t('dashboard.modal.tab_upload', 'LOCAL')}</> :
+               <><Cloud size={16} /> {t('dashboard.modal.tab_cloud', 'CLOUD')}</>}
             </button>
           ))}
         </div>
@@ -356,6 +359,28 @@ export default function NewScanModal({ onClose, onScan }: Props) {
           </div>
         )}
 
+        {/* Cloud Tab */}
+        {tab === 'cloud' && (
+           <div className="flex flex-col items-center justify-center py-8 text-center space-y-6">
+                <div className="p-6 rounded-full bg-[var(--accent-primary)]/5 border border-[var(--accent-primary)]/20 shadow-inner">
+                    <Cloud size={48} className="text-[var(--accent-primary)] animate-pulse" />
+                </div>
+                <div>
+                    <h3 className="text-sm font-black uppercase italic tracking-wider text-[var(--text-primary)] mb-2">Connect External Cloud</h3>
+                    <p className="text-[10px] text-[var(--text-secondary)] uppercase tracking-widest leading-relaxed max-w-[280px] mx-auto">
+                        Authorize GitLab, Bitbucket, or Azure DevOps to audit private cloud infrastructure.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => {}} // This will be handled by the rendered component
+                    className="flex items-center gap-2 px-8 py-3 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] text-[10px] font-black uppercase tracking-widest rounded-xl border border-[var(--accent-primary)]/30 hover:bg-[var(--accent-primary)]/20 transition-all"
+                >
+                    <ExternalLink size={14} />
+                    Open Provider Connector
+                </button>
+           </div>
+        )}
+
         {/* Selected files list */}
         {tab === 'upload' && files.length > 0 && (
           <div style={{ marginTop: '12px', maxHeight: '100px', overflowY: 'auto' }}>
@@ -386,7 +411,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         </button>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }` }} />
       
       {/* UV Scan Progress Overlay */}
       <UVScanOverlay 
@@ -416,6 +441,8 @@ export default function NewScanModal({ onClose, onScan }: Props) {
             }
         }}
       />
+
+      {tab === 'cloud' && <ConnectRepoModal onClose={() => { setTab('github'); onClose(); }} />}
     </div>
   );
 }

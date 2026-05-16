@@ -43,11 +43,9 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import gateRoutes from './routes/gateRoutes';
 import dockerScanRoutes from './routes/dockerScanRoutes';
 import dastRoutes from './routes/dastRoutes';
-import findingRoutes from './routes/findingRoutes';
 import scanRoutes from './routes/scanRoutes';
-import auditRoutes from './routes/auditRoutes';
-import policyRoutes from './routes/policyRoutes';
 import monitorRoutes from './routes/monitorRoutes';
+import issuesRoutes from './routes/issuesRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 import { createNodeMiddleware } from "@octokit/webhooks";
@@ -212,14 +210,15 @@ app.use('/api/gates', gateRoutes);
 app.use('/api/scan', dockerScanRoutes);
 app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with /scan/docker
 app.use('/api/scan/dast', dastRoutes);
-app.use('/api/findings', findingRoutes);
-app.use('/api/audit', auditRoutes);
-app.use('/api/policies', policyRoutes);
 app.use('/api/monitor', monitorRoutes);
+app.use('/api/issues', authenticate, issuesRoutes);
 app.use('/metrics', metricsRoutes);
+
+import { initReportScheduler } from './services/scheduleService';
 
 // --- Initialization ---
 initScheduler();
+initReportScheduler();
 initScanWorker();
 
 // --- Error Handler ---

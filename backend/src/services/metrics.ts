@@ -1,7 +1,9 @@
 import { Registry, Counter, Histogram, Gauge } from 'prom-client';
+import os from 'os';
 
 export const register = new Registry();
 
+// --- Existing Metrics ---
 export const scansTotal = new Counter({
   name: 'scorpion_scans_total',
   help: 'Total scans run',
@@ -49,3 +51,63 @@ export const activeScans = new Gauge({
   help: 'Currently running scans',
   registers: [register]
 });
+
+// --- New Metrics ---
+export const cpuUsage = new Gauge({
+  name: 'scorpion_cpu_usage_percent',
+  help: 'Current CPU usage in percentage',
+  registers: [register]
+});
+
+export const memoryUsage = new Gauge({
+  name: 'scorpion_memory_usage_bytes',
+  help: 'Current memory usage in bytes',
+  registers: [register]
+});
+
+export const blockedCves = new Counter({
+  name: 'scorpion_blocked_cves_total',
+  help: 'Total CVEs blocked by policy',
+  registers: [register]
+});
+
+// --- Rolling Buffer Logic ---
+export interface TelemetrySnapshot {
+  timestamp: number;
+  cpu: number;
+  mem: number;
+}
+
+const TELEMETRY_BUFFER_SIZE = 100;
+export const telemetryBuffer: TelemetrySnapshot[] = [];
+
+const updateMetrics = () => {
+  // Memory
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const memUsed = totalMem - freeMem;
+  const memPercent = (memUsed / totalMem) * 100;
+  memoryUsage.set(memUsed);
+
+  // CPU (Simplified using loadavg as a proxy for this environment)
+  const load = os.loadavg()[0]; 
+  const cpuPercent = Math.min(100, Math.round(load * 10)); // Scale load to percentage
+  cpuUsage.set(cpuPercent);
+
+  // Update Buffer
+  const snapshot: TelemetrySnapshot = {
+    timestamp: Date.now(),
+    cpu: cpuPercent,
+    mem: Math.round(memPercent)
+  };
+
+  telemetryBuffer.push(snapshot);
+  if (telemetryBuffer.length > TELEMETRY_BUFFER_SIZE) {
+    telemetryBuffer.shift();
+  }
+};
+
+// Start background task
+setInterval(updateMetrics, 15000);
+// Initial call
+updateMetrics();

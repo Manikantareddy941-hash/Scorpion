@@ -33,7 +33,7 @@ router.post('/scan', async (req: AuthenticatedRequest, res: Response, next: Next
         if (scanErr) return res.status(400).json({ error: scanErr });
 
         if (commit_hash) {
-            await linkCommitToScan(scanId, repo.$id, { commit_hash, branch, pr_number });
+            await linkCommitToScan(scanId as string, repo.$id, { commit_hash, branch, pr_number });
         }
 
         res.json({ scanId, message: 'CI scan triggered successfully' });

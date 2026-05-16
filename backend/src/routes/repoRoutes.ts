@@ -2,6 +2,12 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { triggerScan } from '../services/scanService';
+import { getProvider } from '../services/repoProviders';
+import { runScanPipeline } from '../scanners/pipeline';
+import { cloneRepo } from '../utils/git';
+import { randomBytes } from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -60,6 +66,61 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
 
         res.json(ownedRepos.documents);
     } catch (error: unknown) {
+        next(error);
+    }
+});
+
+// List repos from any provider (GitLab, Bitbucket, Azure)
+router.get('/external', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const provider = req.query.provider as string;
+    const token = req.headers['x-provider-token'] as string;
+    
+    if (!provider || !token) return res.status(400).json({ error: 'Provider and x-provider-token header are required' });
+    
+    try {
+        const p = getProvider(provider);
+        const repos = await p.listRepos(token);
+        res.json({ repos });
+    } catch (error: any) {
+        console.error(`[RepoRoutes] Failed to list ${provider} repos:`, error.message);
+        res.status(500).json({ error: `Failed to list ${provider} repositories` });
+    }
+});
+
+// Trigger scan on any provider repo (Directly)
+router.post('/external/scan', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { provider, repoFullName, cloneUrl, branch = 'main' } = req.body;
+    const token = req.headers['x-provider-token'] as string;
+    
+    if (!provider || !token || !repoFullName || !cloneUrl) {
+        return res.status(400).json({ error: 'Missing required parameters or x-provider-token header' });
+    }
+
+    try {
+        const p = getProvider(provider);
+        const authenticatedUrl = p.cloneUrl({ cloneUrl, fullName: repoFullName } as any, token);
+        const workDir = path.join(process.cwd(), 'tmp', 'scorpion-scans', randomBytes(6).toString('hex'));
+
+        // Respond immediately (Accepted)
+        res.status(202).json({ message: 'Scan triggered', workDir: workDir.split(/[\\/]/).pop() });
+
+        // Background execution
+        (async () => {
+            try {
+                await fs.mkdir(path.dirname(workDir), { recursive: true });
+                await cloneRepo({ cloneUrl: authenticatedUrl, branch, destination: workDir });
+                
+                console.log(`[RepoRoutes] Starting scan for ${repoFullName} at ${workDir}`);
+                await runScanPipeline({ localPath: workDir,  });
+                
+            } catch (err: any) {
+                console.error(`[RepoRoutes] External scan failed for ${repoFullName}:`, err.message);
+            } finally {
+                await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+            }
+        })();
+
+    } catch (error: any) {
         next(error);
     }
 });

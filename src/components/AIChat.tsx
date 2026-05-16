@@ -8,6 +8,7 @@ import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 
 import { useTranslation } from 'react-i18next';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -244,7 +245,17 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
         return;
       }
 
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const context = location.pathname.includes('/reports')
+        ? t('aichat.system_note_reports', " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]")
+        : location.pathname.includes('/governance')
+          ? t('aichat.system_note_governance', " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]")
+          : "";
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ 
+        model: "gemma-3-27b-it",
+        systemInstruction: `[CURRENT_TIME: ${new Date().toLocaleTimeString()}] ` + SYSTEM_PROMPT + context
+      });
 
       const firstUserIndex = messages.findIndex(m => m.role === 'user');
       const validHistory = firstUserIndex === -1 ? [] : messages.slice(firstUserIndex);
@@ -254,39 +265,13 @@ export default function AIChat({ open, setOpen }: AIChatProps) {
         parts: [{ text: msg.content }],
       }));
 
-      const context = location.pathname.includes('/reports')
-        ? t('aichat.system_note_reports', " [SYSTEM NOTE: The user is currently viewing the Reports page. Analyze latest scan contextual data if requested.]")
-        : location.pathname.includes('/governance')
-          ? t('aichat.system_note_governance', " [SYSTEM NOTE: The user is currently on the Governance page managing infrastructure policies.]")
-          : "";
-
-      const response = await fetch(geminiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: `[CURRENT_TIME: ${new Date().toLocaleTimeString()}] ` + SYSTEM_PROMPT + context }],
-          },
-          contents: [
-            ...geminiHistory,
-            { role: 'user', parts: [{ text: userMsg }] },
-          ],
-          generationConfig: {
-            maxOutputTokens: 1000,
-          },
-        }),
+      const chat = model.startChat({
+        history: geminiHistory,
       });
 
-      if (!response.ok) {
-        const errBody = await response.text();
-        console.error(`Gemini API Error (${response.status}):`, errBody);
-        throw new Error(`API error ${response.status}: ${errBody}`);
-      }
-
-      const data = await response.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || t('aichat.no_response', 'No response received.');
+      const result = await chat.sendMessage(userMsg);
+      const response = await result.response;
+      const reply = response.text();
 
       const finalMessages = [...newMessages, { role: 'assistant' as const, content: reply.trim() }];
       setMessages(finalMessages);
