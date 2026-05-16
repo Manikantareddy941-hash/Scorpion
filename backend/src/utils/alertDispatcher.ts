@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Databases, Query, Models } from 'node-appwrite';
-import { client, DB_ID } from '../lib/appwrite';
+import client, { DB_ID } from '../lib/appwrite';
 
 const databases = new Databases(client);
 

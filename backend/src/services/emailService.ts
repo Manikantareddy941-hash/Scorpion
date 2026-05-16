@@ -101,3 +101,31 @@ export const sendScanCompletionEmail = async (email: string, repoName: string, s
   }
 };
 
+export const sendAiReportEmail = async (email: string, reportHtml: string, range: string) => {
+  const fromEmail = process.env.EMAIL_FROM || 'reports@resend.dev';
+
+  try {
+    await resend.emails.send({
+      from: `Scorpion AI <${fromEmail}>`,
+      to: [email],
+      subject: `Automated AI Security Briefing (${range})`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #0f172a; color: #f8fafc;">
+          <h2 style="color: #818cf8; text-align: center; font-style: italic; text-transform: uppercase;">Scorpion AI Security Briefing</h2>
+          <div style="background-color: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #334155;">
+            ${reportHtml}
+          </div>
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/reports" style="background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Live Dashboard</a>
+          </div>
+          <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;" />
+          <p style="color: #64748b; font-size: 12px; text-align: center;">© 2026 Scorpion DevSecOps Engine</p>
+        </div>
+      `,
+    });
+    console.log(`[Email] AI Report sent to ${email}`);
+  } catch (err) {
+    console.error(`[Email] Failed to send AI Report:`, err);
+    throw err;
+  }
+};

@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useTheme } from './contexts/ThemeContext';
 // import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
+import Issues from './pages/Issues';
 import ResetPassword from './pages/ResetPassword';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyOtp from './pages/VerifyOtp';
@@ -145,6 +146,7 @@ function App() {
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><Dashboard isSidebarCollapsed={isSidebarCollapsed} /></ProtectedRoute>} />
+              <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
               <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
