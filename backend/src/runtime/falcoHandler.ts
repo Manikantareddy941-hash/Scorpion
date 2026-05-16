@@ -5,6 +5,7 @@ import { runtimeThreats } from '../services/metrics';
 import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
 import { auditLog } from '../services/auditService';
+import { sendSlackNotification } from '../services/slackService';
 
 export interface FalcoEvent {
   rule: string;
@@ -26,8 +27,9 @@ export async function handleFalcoEvent(event: FalcoEvent) {
 
   try {
     // 1. Correlate with existing scan data
-    // Find the latest scan for this image
     let correlatedScanId = '';
+    let ownerUserId = '';
+    
     if (containerImage !== 'unknown') {
       correlatedScanId = await withSpan(
         'runtime.correlate',
@@ -41,7 +43,17 @@ export async function handleFalcoEvent(event: FalcoEvent) {
           
           if (latestScans.documents.length > 0) {
             console.log(`[Falco Handler] Correlated with scan: ${latestScans.documents[0].$id}`);
-            return latestScans.documents[0].$id;
+            // Extract user_id from scan or repository to route the alert later
+            const scanDoc = latestScans.documents[0];
+            if (scanDoc.user_id) {
+               ownerUserId = scanDoc.user_id;
+            } else if (scanDoc.repo_id) {
+               try {
+                  const repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scanDoc.repo_id);
+                  ownerUserId = repoDoc.user_id;
+               } catch (e) {}
+            }
+            return scanDoc.$id;
           }
           return '';
         }
@@ -49,7 +61,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     }
 
     // 2. Persist incident to Appwrite
-    await databases.createDocument(DB_ID, COLLECTIONS.INCIDENTS, ID.unique(), {
+    const incidentDoc = await databases.createDocument(DB_ID, COLLECTIONS.INCIDENTS, ID.unique(), {
       rule: event.rule,
       priority: event.priority,
       output: event.output,
@@ -87,14 +99,27 @@ export async function handleFalcoEvent(event: FalcoEvent) {
         relatedScanId: correlatedScanId,
         description: event.output
       });
-    }
 
-    // 3. Trigger Slack Alert
-    if (process.env.SLACK_WEBHOOK_URL) {
-      const priorityEmoji = event.priority === 'Critical' ? '🚨' : '⚠️';
-      await axios.post(process.env.SLACK_WEBHOOK_URL, {
-        text: `${priorityEmoji} *SCORPION Runtime Security Incident*\n\n*Rule*: ${event.rule}\n*Priority*: ${event.priority}\n*Container*: \`${containerId}\`\n*Image*: \`${containerImage}\`\n*Output*: \`${event.output}\`\n\n${correlatedScanId ? `🔍 *Correlated Scan Found*: [View in Dashboard](${process.env.FRONTEND_URL}/scans/${correlatedScanId})` : '❓ *No Correlation*: Image has not been pre-scanned.'}`
-      });
+      // 3. Trigger Slack Alert dynamically via INTEGRATIONS collection
+      if (ownerUserId) {
+         const integrationsRes = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [
+            Query.equal('userId', ownerUserId)
+         ]);
+
+         if (integrationsRes.total > 0) {
+             const integration = integrationsRes.documents[0] as any;
+             if (integration.isEnabled && integration.slack_webhook) {
+                 await sendSlackNotification(integration.slack_webhook, {
+                     title: `Runtime threat: ${event.rule}`,
+                     repository: containerImage,
+                     severity: event.priority,
+                     rule: event.rule,
+                     incidentId: incidentDoc.$id
+                 });
+                 console.log('[Falco Handler] Dynamic Slack notification dispatched successfully.');
+             }
+         }
+      }
     }
 
   } catch (error) {

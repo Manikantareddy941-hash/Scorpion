@@ -1,6 +1,11 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, ChevronLeft, ChevronRight, Layout, Clock, Map, GitCommit, Hammer, TestTube2, Activity, Rocket, Cpu, Shield, GitBranch } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { 
+  LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, 
+  ChevronLeft, ChevronRight, Layout, Clock, Map, GitCommit, Hammer, 
+  TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug, Lock, 
+  RefreshCw, Search, FileText, Zap, ChevronDown
+} from 'lucide-react';
 import NewScanModal from './NewScanModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,34 +17,78 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
   const location = useLocation();
   const [showScan, setShowScan] = useState(false);
   const { theme } = useTheme();
+  const { role, getJWT } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const searchInputRef = useState<HTMLInputElement | null>(null);
+
+  // Keyboard Shortcut: Ctrl+K to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('report-search-input');
+        input?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const reportItems = [
+    { id: 'infra', icon: Activity, label: 'Infrastructure', path: '/reports/infra' },
+    { id: 'security', icon: Shield, label: 'Security Audit', path: '/reports/security' },
+    { id: 'ai-summary', icon: Zap, label: 'AI Security Briefing', path: '/reports/ai-summary' },
+    { id: 'compliance', icon: Scale, label: 'Compliance Audit', path: '/reports/compliance', requiredRole: 'admin' },
+  ];
+
+  const filteredReports = reportItems.filter(item => 
+    item.label.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const navSections = [
     {
-      title: 'MAIN',
+      title: 'OVERVIEW',
       items: [
         { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' },
+        { 
+          icon: BarChart2, 
+          label: t('sidebar.reports'), 
+          path: '/reports',
+          subItems: filteredReports
+        },
+        { icon: Activity, label: 'MONITOR', path: '/monitor' },
+      ]
+    },
+    {
+      title: 'DEVELOP',
+      items: [
+        { icon: GitBranch, label: t('sidebar.repositories'), path: '/repos' },
         { icon: ListTodo, label: t('sidebar.tasks'), path: '/tasks' },
-        { icon: BarChart2, label: t('sidebar.reports'), path: '/reports' },
+      ]
+    },
+    {
+      title: 'SECURE',
+      items: [
+        { icon: Cpu, label: 'ANALYZE', path: '/analyze' },
+        { icon: Bug, label: 'ISSUES', path: '/issues' },
+        { icon: TestTube2, label: 'TEST', path: '/tests' },
+      ]
+    },
+    {
+      title: 'OPERATE',
+      items: [
+        { icon: Rocket, label: 'RELEASE', path: '/release' },
+        { icon: Scale, label: t('sidebar.governance'), path: '/governance' },
         { icon: Map, label: 'MAP', path: '/map' },
       ]
     },
     {
-      title: 'PIPELINE',
+      title: 'SYSTEM',
       items: [
-        { icon: GitBranch, label: t('sidebar.repositories'), path: '/repos' },
-        { icon: TestTube2, label: 'TEST', path: '/tests' },
-        { icon: Cpu, label: 'ANALYZE', path: '/analyze' },
-        { icon: Rocket, label: 'RELEASE', path: '/release' },
-      ]
-    },
-    {
-      title: 'OPS',
-      items: [
-        { icon: Activity, label: 'MONITOR', path: '/monitor' },
-        { icon: Scale, label: t('sidebar.governance'), path: '/governance' },
-        { icon: Users, label: t('sidebar.teams'), path: '/teams' },
         { icon: Bell, label: t('sidebar.alerts'), path: '/alerts' },
         { icon: Clock, label: t('sidebar.audit_log'), path: '/audit' },
+        { icon: Users, label: t('sidebar.teams'), path: '/teams' },
         { icon: Settings, label: 'SETTINGS', path: '/settings' },
       ]
     }
@@ -166,7 +215,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
     <>
       <aside style={{ 
         height: '100vh', 
-        width: isCollapsed ? '70px' : '280px', 
+        width: isCollapsed ? '60px' : '200px', 
         background: s.sidebarBg,
         borderRight: s.sidebarBorder,
         display: 'flex', 
@@ -183,14 +232,15 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
 
         {/* Header / Logo Area */}
         <div className={`p-4 flex ${isCollapsed ? 'flex-col gap-4' : 'items-center justify-between'} shrink-0 relative pt-6`}>
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center shadow-sm" style={{ background: theme === 'underwater' || theme === 'liquid-glass' ? 'rgba(255,255,255,0.05)' : '#eef8ef', border: `1px solid ${s.logoRing}44` }}>
-              <Shield size={20} style={{ color: s.logoRing }} />
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center justify-center rounded-lg transition-all ${isCollapsed ? 'w-10 h-10' : 'w-7 h-7'}`}
+              style={{ background: s.newScanBg, color: 'white' }}>
+              <Shield size={isCollapsed ? 20 : 14} strokeWidth={3} />
             </div>
             {!isCollapsed && (
-              <div className="flex flex-col min-w-0 transition-opacity duration-300">
-                <h1 className="text-[14px] font-black uppercase tracking-wider leading-none mb-1 truncate serif" style={{ color: s.logoText }}>Scorpion</h1>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] leading-none truncate mono" style={{ color: s.logoSubtext }}>SecOps Platform</p>
+              <div className="flex flex-col">
+                <h1 className="text-[12px] font-black tracking-tighter leading-none italic" style={{ color: s.text }}>SCORPION</h1>
+                <span className="text-[7px] font-bold tracking-[0.2em] uppercase opacity-60" style={{ color: s.text }}>SECops Platform</span>
               </div>
             )}
           </div>
@@ -211,18 +261,19 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
         </div>
 
         {/* New Scan Button */}
-        <div className="px-4 py-2 shrink-0">
+        <div className="px-3 mb-2">
           <button 
-            onClick={() => setShowScan(true)} 
-            className="w-full text-white flex items-center justify-center gap-2 border-none shadow-lg hover:brightness-110 hover:scale-[1.02] active:scale-95 transition-all" 
+            onClick={() => setShowScan(true)}
+            className="w-full flex items-center justify-center gap-2 group relative overflow-hidden transition-all duration-300 shadow-sm"
             style={{ 
-              background: s.newScanBg,
-              borderRadius: '12px', 
-              padding: isCollapsed ? '10px 0' : '12px 16px' 
+              background: s.newScanBg, 
+              color: 'white', 
+              borderRadius: '8px', 
+              padding: isCollapsed ? '8px 0' : '10px 12px' 
             }}
           >
-            <span className="text-lg font-black leading-none">+</span>
-            {!isCollapsed && <span className="text-[11px] font-black uppercase tracking-widest">{t('sidebar.new_scan', 'NEW SCAN')}</span>}
+            <span className="text-md font-black leading-none">+</span>
+            {!isCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">{t('sidebar.new_scan', 'NEW SCAN')}</span>}
           </button>
           {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
         </div>
@@ -230,33 +281,25 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
         {/* Nav Sections */}
         <div className="flex-1 overflow-hidden px-3 flex flex-col pb-4 mt-2">
           {navSections.map((section, idx) => (
-            <div key={idx} className="flex flex-col mb-6">
+            <div key={idx} className="flex flex-col mb-4">
               {/* Section Header */}
-              <div className="px-3" style={{ margin: '8px 0 4px 0' }}>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-center md:text-left transition-all mono" style={{ color: s.sectionLabel }}>
-                  {isCollapsed ? section.title.substring(0, 3) : section.title}
+              <div className="px-2" style={{ margin: '2px 0 2px 0' }}>
+                <p className="text-[7px] font-bold uppercase tracking-widest text-center md:text-left transition-all mono" style={{ color: s.sectionLabel }}>
+                  {isCollapsed ? section.title.substring(0, 1) : section.title}
                 </p>
               </div>
               
               {/* Items */}
               <div className="flex flex-col gap-[2px]">
-                {section.items.map(({ icon: Icon, label, path }) => {
+                {section.items.map((item) => {
+                  const { icon: Icon, label, path, subItems } = item as any;
                   const active = location.pathname === path;
                   return (
-                    <div 
-                      key={path}
-                      onClick={() => navigate(path)}
+                    <div key={path} className="flex flex-col">
+                      <Link
+                        to={path}
+                      className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100 hover:bg-[rgba(123,198,126,0.1)]'}`}
                       style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '12px', 
-                        padding: isCollapsed ? '8px 0' : '8px 12px', 
-                        justifyContent: isCollapsed ? 'center' : 'flex-start',
-                        cursor: 'pointer', 
-                        background: active ? s.activeBg : 'transparent', 
-                        color: active ? s.activeText : s.navText, 
-                        border: active && theme === 'liquid-glass' ? s.activeBorder : '1px solid transparent',
-                        borderRadius: '10px',
                         transition: 'all 0.2s ease',
                         boxShadow: active && theme !== 'liquid-glass' && theme !== 'underwater' ? '0 4px 12px rgba(123,198,126,0.3)' : 'none',
                         margin: '0 4px',
@@ -269,13 +312,15 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
                       {active && theme === 'liquid-glass' && (
                         <div style={{ position: 'absolute', left: 0, top: '20%', bottom: '20%', width: '3px', background: s.accentBar, borderRadius: '0 4px 4px 0' }} />
                       )}
-                      <Icon size={18} style={{ color: active ? s.activeText : 'inherit' }} className="transition-colors" />
+                      <Icon size={16} style={{ color: active ? s.activeText : 'inherit' }} className="transition-colors" />
                       {!isCollapsed && (
-                        <span className={`truncate text-[11px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
+                        <span className={`truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
                           {label}
                         </span>
                       )}
-                    </div>
+                    </Link>
+
+                  </div>
                   );
                 })}
               </div>

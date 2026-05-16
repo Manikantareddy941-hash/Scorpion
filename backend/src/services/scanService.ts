@@ -2,6 +2,8 @@ import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
 import { orchestrateScan } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, parseCheckov, parseBandit, Finding } from './scan/parsers';
+import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks } from '../scanners/normalizer';
+import { evaluateQualityGate } from './qualityGateService';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
 import * as path from 'path';
@@ -175,84 +177,55 @@ export const triggerScan = async (
 
         console.log(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}, Checkov: ${rawResults.find(r => r.tool === 'checkov')?.stdout.length || 0}, Bandit: ${rawResults.find(r => r.tool === 'bandit')?.stdout.length || 0}`);
 
-        // 8️⃣ Parse findings
-        const findings: Finding[] = [];
-        rawResults.forEach(res => {
-            let toolFindings: Finding[] = [];
-            if (res.tool === 'semgrep')   toolFindings = parseSemgrep(res.stdout);
-            if (res.tool === 'gitleaks')  toolFindings = parseGitleaks(res.stdout);
-            if (res.tool === 'trivy')     toolFindings = parseTrivy(res.stdout);
-            if (res.tool === 'checkov')   toolFindings = parseCheckov(res.stdout);
-            if (res.tool === 'bandit')    toolFindings = parseBandit(res.stdout);
-            
-            findings.push(...toolFindings);
-            addScanLog(scanId!, `[${res.tool.toUpperCase()}] Analysis complete: ${toolFindings.length} issues detected.`);
+        // 8️⃣ Parse findings (Normalized)
+        const scanResults: any = {};
+        rawResults.forEach(r => {
+            try {
+                scanResults[r.tool] = JSON.parse(r.stdout);
+            } catch (e) {
+                scanResults[r.tool] = r.tool === 'gitleaks' ? [] : {};
+            }
         });
 
-        console.log(`[STRICT DEBUG] Total Parsed Vulnerabilities: ${findings.length}`);
+        const issues = [
+            ...normalizeTrivy(scanResults.trivy || {}, scanPath),
+            ...normalizeSemgrep(scanResults.semgrep || {}, scanPath),
+            ...normalizeGitleaks(scanResults.gitleaks || [], scanPath)
+        ];
 
-        // 9️⃣ Count by severity
-        const criticalCount = findings.filter(f => f.severity === 'critical').length;
-        const highCount     = findings.filter(f => f.severity === 'high').length;
-        const mediumCount   = findings.filter(f => f.severity === 'medium').length;
-        const lowCount      = findings.filter(f => f.severity === 'low').length;
-        const infoCount     = findings.filter(f => f.severity === 'info').length;
-        const totalVulns    = findings.length;
+        // 9️⃣ Count by severity (Adjusted for uppercase)
+        const criticalCount = issues.filter(i => i.severity === 'CRITICAL').length;
+        const highCount     = issues.filter(i => i.severity === 'HIGH').length;
+        const mediumCount   = issues.filter(i => i.severity === 'MEDIUM').length;
+        const lowCount      = issues.filter(i => i.severity === 'LOW').length;
+        const infoCount     = issues.filter(i => i.severity === 'INFO').length;
+        const totalVulns    = issues.length;
 
         // Semantic Mappings for Dashboard
-        const banditCount = findings.filter(f => f.tool === 'bandit').length;
-        const codeSmellCount = findings.filter(f => f.tool === 'semgrep' && (f.severity === 'info' || f.severity === 'low')).length;
+        const banditCount = issues.filter(i => i.tool === 'bandit').length;
+        const codeSmellCount = issues.filter(i => i.tool === 'semgrep' && (i.severity === 'INFO' || i.severity === 'LOW')).length;
 
         // FIX: single consistent score formula matching Dashboard fallback
         const score    = computeSecurityScore(criticalCount, highCount, mediumCount, lowCount);
         const riskScore = 100 - score;
 
-        // 🔟 Store vulnerabilities
-        const savedFindings: any[] = [];
-        if (findings.length > 0) {
-            for (const f of findings) {
-                try {
-                    const safeTool       = (f.tool       || 'unknown').substring(0, 50);
-                    const safeSeverity   = (f.severity   || 'low').substring(0, 50);
-                    const safeMessage    = (f.message    || '').substring(0, 4000);
-                    const safeFile       = (f.file_path  || '').substring(0, 2000);
-                    const safePackage    = (f.package    || '').substring(0, 255);
-                    const safeVersion    = (f.version    || '').substring(0, 255);
-                    const safeFixVersion = (f.fixVersion || '').substring(0, 255);
-
-                    let safeLine = parseInt(f.line_number as any, 10);
-                    if (isNaN(safeLine)) safeLine = 0;
-
-                    const rawFingerprint = generateFingerprint({ tool: safeTool, file_path: safeFile, message: safeMessage });
-                    const safeFingerprint = rawFingerprint.substring(0, 255);
-
-                    if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
-                    const doc = await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
-                        repo_id: repoId,
-                        scanId: scanId,
-                        scan_result_id: scanId,
-                        tool: safeTool,
-                        severity: safeSeverity,
-                        message: safeMessage,
-                        file_path: safeFile,
-                        line_number: safeLine,
-                        package: safePackage,
-                        version: safeVersion,
-                        fixVersion: safeFixVersion,
-                        status: 'open',
-                        resolution_status: 'open',
-                        fingerprint: safeFingerprint,
-                        detected_at: new Date().toISOString(),
-                        cvss_score: f.cvss_score ?? null
-                    });
-                    savedFindings.push(doc);
-                } catch (saveError: any) {
-                    console.error(`[STRICT DEBUG] Failed to save vulnerability record:`, saveError?.response || saveError);
-                }
+        // 🔟 Store vulnerabilities (Normalized)
+        for (const issue of issues) {
+            try {
+                await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
+                    repo_id: repoId,
+                    scanId: scanId,
+                    ...issue,
+                    code: issue.code.slice(0, 4999), // Appwrite field size limit
+                    detected_at: new Date().toISOString(),
+                    status: 'open'
+                });
+            } catch (saveError: any) {
+                console.error(`[ScanService] Failed to save vulnerability:`, saveError?.response || saveError);
             }
         }
 
-        console.log(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: savedFindings.length }));
+        console.log(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: issues.length }));
 
         // 1️⃣1️⃣ Evaluate policy gate BEFORE writing completed details
         let gateStatus: 'passed' | 'failed' = score >= 50 ? 'passed' : 'failed';
@@ -283,8 +256,8 @@ export const triggerScan = async (
                 low_count: lowCount,
                 info_count: infoCount,
                 total_vulnerabilities: totalVulns,
-                bugs: findings.filter(f => f.tool === 'bandit').length,
-                code_smells: findings.filter(f => f.tool === 'semgrep' && (f.severity === 'info' || f.severity === 'low')).length,
+                bugs: issues.filter(i => i.tool === 'bandit').length,
+                code_smells: issues.filter(i => i.tool === 'semgrep' && (i.severity === 'INFO' || i.severity === 'LOW')).length,
                 security_score: score,
                 gate_status: gateStatus,
                 language: detectedLanguage,
@@ -292,16 +265,19 @@ export const triggerScan = async (
                 total_files: totalFiles,
                 total_lines: totalLines,
                 tool_counts: {
-                    semgrep:  findings.filter(f => f.tool === 'semgrep').length,
-                    gitleaks: findings.filter(f => f.tool === 'gitleaks').length,
-                    trivy:    findings.filter(f => f.tool === 'trivy').length,
-                    checkov:  findings.filter(f => f.tool === 'checkov').length,
-                    bandit:   findings.filter(f => f.tool === 'bandit').length,
+                    semgrep:  issues.filter(i => i.tool === 'semgrep').length,
+                    gitleaks: issues.filter(i => i.tool === 'gitleaks').length,
+                    trivy:    issues.filter(i => i.tool === 'trivy').length,
+                    checkov:  issues.filter(i => i.tool === 'checkov').length,
+                    bandit:   issues.filter(i => i.tool === 'bandit').length,
                 }
             })
         };
 
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId!, scanCompletePayload);
+
+        // 🔟 Evaluate Quality Gate (A/B/C/D/F)
+        const gateResult = await evaluateQualityGate(scanId!);
 
         // Update repo document with security_score for dashboard fallbacks
         await databases.updateDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {

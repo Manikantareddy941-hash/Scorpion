@@ -10,7 +10,8 @@ webhooks.on('pull_request.opened', handlePR);
 webhooks.on('pull_request.synchronize', handlePR);
 
 async function handlePR({ payload }: EmitterWebhookEvent<'pull_request'>) {
-  const { pull_request, repository, installation } = payload;
+  const { pull_request, repository } = payload;
+  const installation = (payload as any).installation;
 
   if (!installation) {
     console.error('[GitHub Webhook] No installation ID found in payload');

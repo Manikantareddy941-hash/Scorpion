@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
-import { notifySlack } from './notificationService';
+const notifySlack = async (payload: any) => { console.log('Mock notifySlack', payload); };
 import { logger } from './logger';
 
 export interface Incident {
