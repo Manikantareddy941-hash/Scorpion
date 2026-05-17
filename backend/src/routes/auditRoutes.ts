@@ -7,19 +7,36 @@ const router = Router();
 // Get audit logs
 router.get('/', verifyUser, async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user?.$id;
-        
-        const response = await databases.listDocuments(
-            DB_ID,
-            'audit_logs',
-            [
-                Query.equal('actor', userId),
-                Query.orderDesc('$createdAt'),
-                Query.limit(100)
-            ]
-        );
+        let docs: any[] = [];
+        try {
+            const response = await databases.listDocuments(
+                DB_ID,
+                'audit_logs_v2',
+                [
+                    Query.orderDesc('timestamp'),
+                    Query.limit(100)
+                ]
+            );
+            docs = response.documents;
+        } catch (err: any) {
+            console.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy:', err.message);
+            // Fallback to legacy audit_logs
+            const legacyResponse = await databases.listDocuments(
+                DB_ID,
+                'audit_logs',
+                [
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(100)
+                ]
+            );
+            docs = legacyResponse.documents.map((d: any) => ({
+                ...d,
+                repo_id: d.resourceId || 'system',
+                tamper_hash: 'LEGACY_UNHASHED'
+            }));
+        }
 
-        res.json(response.documents);
+        res.json(docs);
     } catch (err: any) {
         console.error('[Audit API Error]', err.message, err.stack);
         res.status(500).json({ error: 'Internal server error', message: err.message });
