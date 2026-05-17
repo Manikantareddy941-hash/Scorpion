@@ -8,6 +8,7 @@ import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
 import * as path from 'path';
 import * as fs from 'fs';
+import crypto from 'crypto';
 
 /**
  * Consistent security score formula — used here and must match Dashboard fallback.
@@ -16,6 +17,137 @@ import * as fs from 'fs';
 const computeSecurityScore = (critical: number, high: number, medium: number, low: number): number => {
     const penalty = (critical * 10) + (high * 4) + (medium * 1) + (low * 0.25);
     return Math.max(0, Math.round(100 - penalty));
+};
+
+export const ingestVulnerabilitiesDelta = async (
+    repoId: string,
+    scanId: string,
+    issues: any[]
+) => {
+    try {
+        console.log(`[Delta Ingestion] Starting delta ingestion for repo: ${repoId}, scan: ${scanId}`);
+
+        // Helper to compute a consistent SHA-256 fingerprint for a vulnerability
+        const computeHash = (rId: string, fPath: string, cveOrTitle: string, sev: string): string => {
+            const data = `${rId}|${fPath || ''}|${cveOrTitle || ''}|${(sev || '').toUpperCase()}`;
+            return crypto.createHash('sha256').update(data).digest('hex');
+        };
+
+        // 1. Fetch active (open) vulnerabilities currently stored in Appwrite for this repo
+        const activeDocsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('repo_id', repoId),
+            Query.equal('status', 'open'),
+            Query.limit(500)
+        ]);
+        const activeDocs = activeDocsResponse.documents || [];
+
+        // 2. Map existing documents to their computed hashes
+        const activeHashMap = new Map<string, any>();
+        activeDocs.forEach(doc => {
+            const hash = computeHash(
+                doc.repo_id, 
+                doc.filePath || doc.file_path, 
+                doc.cveId || doc.title, 
+                doc.severity
+            );
+            activeHashMap.set(hash, doc);
+        });
+
+        // 3. Compute hashes for incoming issues
+        const incomingHashMap = new Map<string, any>();
+        issues.forEach(issue => {
+            const hash = computeHash(
+                repoId, 
+                issue.filePath || issue.file_path, 
+                issue.cveId || issue.title, 
+                issue.severity
+            );
+            incomingHashMap.set(hash, issue);
+        });
+
+        // 4. Calculate deltas
+        const newOrModifiedIssues: any[] = [];
+        const resolvedDocs: any[] = [];
+
+        // Find new/modified (in incoming, but not in existing Appwrite)
+        for (const [hash, issue] of incomingHashMap.entries()) {
+            if (!activeHashMap.has(hash)) {
+                newOrModifiedIssues.push(issue);
+            }
+        }
+
+        // Find resolved (in existing Appwrite, but missing from incoming)
+        for (const [hash, doc] of activeHashMap.entries()) {
+            if (!incomingHashMap.has(hash)) {
+                resolvedDocs.push(doc);
+            }
+        }
+
+        console.log(`[Delta Ingestion] Ingestion results for ${repoId}:` + 
+            ` Total Incoming: ${issues.length},` +
+            ` Active in DB: ${activeDocs.length},` +
+            ` New/Modified to Create: ${newOrModifiedIssues.length},` +
+            ` Resolved to Update: ${resolvedDocs.length}`
+        );
+
+        // 5. Batch writes using parallel execution (using Promise.all on chunks to limit concurrent connections)
+        const CHUNK_SIZE = 15;
+
+        // A. Insert New/Modified findings
+        for (let i = 0; i < newOrModifiedIssues.length; i += CHUNK_SIZE) {
+            const chunk = newOrModifiedIssues.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async (issue) => {
+                try {
+                    await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
+                        repo_id: repoId,
+                        scanId: scanId,
+                        ...issue,
+                        code: (issue.code || '').slice(0, 4999),
+                        detected_at: new Date().toISOString(),
+                        status: 'open'
+                    });
+                } catch (saveErr: any) {
+                    console.error(`[Delta Ingestion] Failed to create vulnerability document:`, saveErr.message);
+                }
+            }));
+        }
+
+        // B. Mark missing vulnerabilities as Resolved
+        for (let i = 0; i < resolvedDocs.length; i += CHUNK_SIZE) {
+            const chunk = resolvedDocs.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async (doc) => {
+                try {
+                    await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, doc.$id, {
+                        status: 'resolved',
+                        resolvedAt: new Date().toISOString()
+                    });
+                    console.log(`[Delta Ingestion] Marked vulnerability ${doc.$id} as RESOLVED.`);
+                } catch (updateErr: any) {
+                    console.error(`[Delta Ingestion] Failed to update resolved document status:`, updateErr.message);
+                }
+            }));
+        }
+
+    } catch (err: any) {
+        console.error(`[Delta Ingestion Error] Failed to compute or ingest scan deltas:`, err.message);
+        
+        // Fallback: if delta logic fails, fallback to standard insertion so telemetry is never lost
+        console.log(`[Delta Ingestion] Falling back to standard bulk creation...`);
+        for (const issue of issues) {
+            try {
+                await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
+                    repo_id: repoId,
+                    scanId: scanId,
+                    ...issue,
+                    code: (issue.code || '').slice(0, 4999),
+                    detected_at: new Date().toISOString(),
+                    status: 'open'
+                });
+            } catch (fallbackErr: any) {
+                console.error(`[Delta Ingestion Fallback] Save failed:`, fallbackErr.message);
+            }
+        }
+    }
 };
 
 const addScanLog = async (scanId: string, log: string) => {
@@ -209,21 +341,8 @@ export const triggerScan = async (
         const score    = computeSecurityScore(criticalCount, highCount, mediumCount, lowCount);
         const riskScore = 100 - score;
 
-        // 🔟 Store vulnerabilities (Normalized)
-        for (const issue of issues) {
-            try {
-                await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
-                    repo_id: repoId,
-                    scanId: scanId,
-                    ...issue,
-                    code: issue.code.slice(0, 4999), // Appwrite field size limit
-                    detected_at: new Date().toISOString(),
-                    status: 'open'
-                });
-            } catch (saveError: any) {
-                console.error(`[ScanService] Failed to save vulnerability:`, saveError?.response || saveError);
-            }
-        }
+        // 🔟 Store vulnerabilities (Normalized) via Delta Ingestion (Delta Scans)
+        await ingestVulnerabilitiesDelta(repoId, scanId!, issues);
 
         console.log(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: issues.length }));
 

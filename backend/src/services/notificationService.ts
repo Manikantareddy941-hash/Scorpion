@@ -1,89 +1,173 @@
-import { enqueueNotification } from './notificationQueue';
-import { formatSlackScanResult } from './webhookService';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
-export const dispatchNotification = async (repoId: string, eventType: string, metadata: any) => {
-    try {
-        // 1. Get repo info
-        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
-        if (!repo) return;
+export interface SecurityEvent {
+  type: 'threat' | 'gate_blocked';
+  title: string;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  details: string;
+  repo_id: string;
+  repo_name?: string;
+  meta?: Record<string, any>;
+}
 
-        const userId = repo.user_id;
+export async function sendSecurityAlert(event: SecurityEvent) {
+  const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
+  const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
 
-        // 2. Fetch notification preferences
-        // Find enabled preferences for this event type that are either repository-specific or global (repo_id is null)
-        const prefsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATION_PREFERENCES, [
-            Query.equal('user_id', userId),
-            Query.equal('event_type', eventType),
-            Query.equal('enabled', true),
-            Query.or([
-                Query.equal('repo_id', repoId),
-                Query.equal('repo_id', 'global'), // Or Query.isNull('repo_id') if supported/used
-            ])
-        ]);
+  console.log(`[Notification Router] Event Dispatched: ${event.title} (Severity: ${event.severity})`);
 
-        const prefs = prefsResponse.documents;
-
-        if (prefs.length === 0) {
-            // Default behavior if no preferences set?
-            if (eventType === 'scan_completed') {
-                // assume default logic here if needed
-            }
-            return;
-        }
-
-        // 3. Enqueue for each enabled channel
-        for (const pref of prefs) {
-            let payload = {};
-
-            if (pref.channel === 'slack' || pref.channel === 'discord') {
-                payload = {
-                    webhook_url: pref.target_value,
-                    message: formatSlackScanResult(repo.name, metadata.score, metadata.vulns, `${process.env.FRONTEND_URL}/project/${repoId}`)
-                };
-            } else if (pref.channel === 'email') {
-                // payload for email
-            }
-
-            await enqueueNotification({
-                user_id: userId,
-                repo_id: repoId,
-                event_type: eventType,
-                channel: pref.channel,
-                data: payload
-            });
-        }
-    } catch (err) {
-        console.error('[NotificationService] Error dispatching notification:', err);
+  // Fetch Repository Name if not provided
+  let repoName = event.repo_name || event.repo_id;
+  try {
+    if (event.repo_id && event.repo_id !== 'system') {
+      const repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, event.repo_id);
+      if (repoDoc && repoDoc.name) {
+        repoName = repoDoc.name;
+      }
     }
-};
+  } catch (err: any) {
+    console.warn(`[Notification Router] Failed to resolve repo name for ${event.repo_id}:`, err.message);
+  }
 
-export const notifyScanCompletion = async (scanId: string) => {
-    try {
-        const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
-        if (!scan) return;
-
-        const details = typeof scan.details === 'string' ? JSON.parse(scan.details) : scan.details;
-        const score = details?.security_score || 0;
-        const vulns = details?.total_vulnerabilities || 0;
-
-        await dispatchNotification(scan.repo_id, 'scan_completed', { score, vulns });
-
-        // Additional event if critical
-        if (details?.critical_count > 0) {
-            await dispatchNotification(scan.repo_id, 'critical_detected', { score, vulns, critical: details.critical_count });
+  // 1. Structure Slack Block Kit Payload
+  const slackPayload = {
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `🚨 SCORPION SECURITY EVENT: ${event.type === 'threat' ? 'INTRUSION DETECTED' : 'RELEASE GATE BLOCKED'}`,
+          emoji: true
         }
-    } catch (err) {
-        console.error('[NotificationService] Error in notifyScanCompletion:', err);
-    }
-};
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Repository:* \`${repoName}\`\n*Event Vector:* ${event.title}\n*Threat Severity:* \`${event.severity}\`\n\n*Diagnostic Details:*\n> ${event.details}`
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '🚨 View Dashboard',
+              emoji: true
+            },
+            url: `http://localhost:5173/journey?repo_id=${event.repo_id}`,
+            style: 'primary'
+          },
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '💥 Trigger TONY Remediate',
+              emoji: true
+            },
+            url: `http://localhost:5173/analysis?repo_id=${event.repo_id}`,
+            style: 'danger'
+          }
+        ]
+      }
+    ]
+  };
 
-export const notifyPolicyFailure = async (repoId: string, scanId: string, result: string, reason: string) => {
-    if (result === 'FAIL') {
-        await dispatchNotification(repoId, 'policy_failure', { scanId, reason });
-    }
-};
+  // 2. Structure Discord Rich Embed Markdown Payload
+  const colorHex = (event.severity === 'CRITICAL' || event.severity === 'HIGH') ? 16711765 : 61951; // crimson red vs neon cyan
+  const discordPayload = {
+    embeds: [
+      {
+        title: `🚨 SCORPION SECURITY SIGNAL: ${event.type === 'threat' ? 'PRODUCTION INTRUSION' : 'CD GATE BLOCKED'}`,
+        description: `**Vector Alert:** ${event.title}\n**Severity Rating:** ${event.severity}\n**Target Repo:** ${repoName}\n\n**Payload Context:**\n\`\`\`\n${event.details}\n\`\`\``,
+        color: colorHex,
+        fields: [
+          {
+            name: '🔗 Actionable Triage Controls',
+            value: `[🚨 View in SCORPION Dashboard](http://localhost:5173/journey?repo_id=${event.repo_id})\n[💥 Trigger TONY Auto-Remediation](http://localhost:5173/analysis?repo_id=${event.repo_id})`
+          }
+        ],
+        timestamp: new Date().toISOString(),
+        footer: {
+          text: 'SCORPION Security Compliance Gatekeeper'
+        }
+      }
+    ]
+  };
 
-export const checkOverdueTasks = async () => {
-    console.log('[NotificationService] Checking for overdue tasks...');
-};
+  // 3. Dispatch to Slack Webhook (Fail-safe, async with AbortController)
+  if (SLACK_WEBHOOK_URL) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    fetch(SLACK_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(slackPayload),
+      signal: controller.signal
+    })
+      .then(res => {
+        clearTimeout(timeout);
+        console.log(`[Notification Router] Slack dispatch result status: ${res.status}`);
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        console.error('[Notification Router] Slack dispatch aborted or failed:', err.message);
+      });
+  } else {
+    console.log('[Notification Router] SLACK_WEBHOOK_URL not configured. Skipping Slack dispatch.');
+  }
+
+  // 4. Dispatch to Discord Webhook (Fail-safe, async with AbortController)
+  if (DISCORD_WEBHOOK_URL) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    fetch(DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(discordPayload),
+      signal: controller.signal
+    })
+      .then(res => {
+        clearTimeout(timeout);
+        console.log(`[Notification Router] Discord dispatch result status: ${res.status}`);
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        console.error('[Notification Router] Discord dispatch aborted or failed:', err.message);
+      });
+  } else {
+    console.log('[Notification Router] DISCORD_WEBHOOK_URL not configured. Skipping Discord dispatch.');
+  }
+}
+
+// Support for other backend modules' notification requirements
+export async function checkOverdueTasks() {
+  console.log('[Notification Router] Running hourly check for overdue tasks...');
+  try {
+    const response = await databases.listDocuments(DB_ID, COLLECTIONS.TASKS, [
+      Query.equal('status', 'todo'),
+      Query.limit(50)
+    ]);
+    const overdue = response.documents.filter(doc => doc.due_date && new Date(doc.due_date) < new Date());
+    console.log(`[Notification Router] Found ${overdue.length} overdue tasks.`);
+  } catch (err: any) {
+    console.error('[Notification Router] Failed to check overdue tasks:', err.message);
+  }
+}
+
+export async function notifyPolicyFailure(repoId: string, scanId: string, result: string, reason: string) {
+  console.log(`[Notification Router] Policy evaluation failed for repo: ${repoId}`);
+  await sendSecurityAlert({
+    type: 'gate_blocked',
+    title: 'Policy Evaluation Failure',
+    severity: 'HIGH',
+    details: `Scan ID: ${scanId}\nResult: ${result}\nReason: ${reason}`,
+    repo_id: repoId
+  });
+}
+
+export async function notifyScanCompletion(scanId: string, repoId?: string, status?: string) {
+  console.log(`[Notification Router] Scan completion event triggered for scan: ${scanId}, repo: ${repoId || 'N/A'}, status: ${status || 'N/A'}`);
+}

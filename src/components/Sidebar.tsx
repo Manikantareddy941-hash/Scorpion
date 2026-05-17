@@ -1,26 +1,19 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, 
-  ChevronLeft, ChevronRight, Layout, Clock, Map, GitCommit, Hammer, 
-  TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug, Lock, 
-  RefreshCw, Search, FileText, Zap, ChevronDown
+  ChevronLeft, ChevronRight, Layout, Clock, Map, 
+  TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug, 
+  Zap
 } from 'lucide-react';
-import NewScanModal from './NewScanModal';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 
 export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean, setIsCollapsed: (c: boolean) => void }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const location = useLocation();
-  const [showScan, setShowScan] = useState(false);
   const { theme } = useTheme();
-  const { role, getJWT } = useAuth();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [exportingId, setExportingId] = useState<string | null>(null);
-  const searchInputRef = useState<HTMLInputElement | null>(null);
+  const [searchQuery] = useState('');
 
   // Keyboard Shortcut: Ctrl+K to focus search
   useEffect(() => {
@@ -93,8 +86,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
       ]
     }
   ];
-
-  const handleScan = () => setShowScan(false);
 
   const getThemeStyles = () => {
     switch (theme) {
@@ -239,8 +230,8 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
-                <h1 className="text-[12px] font-black tracking-tighter leading-none italic" style={{ color: s.text }}>SCORPION</h1>
-                <span className="text-[7px] font-bold tracking-[0.2em] uppercase opacity-60" style={{ color: s.text }}>SECops Platform</span>
+                <h1 className="text-[12px] font-black tracking-tighter leading-none italic" style={{ color: s.logoText || s.navText }}>SCORPION</h1>
+                <span className="text-[7px] font-bold tracking-[0.2em] uppercase opacity-60" style={{ color: s.logoSubtext || s.navText }}>SECops Platform</span>
               </div>
             )}
           </div>
@@ -260,24 +251,6 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
           </button>
         </div>
 
-        {/* New Scan Button */}
-        <div className="px-3 mb-2">
-          <button 
-            onClick={() => setShowScan(true)}
-            className="w-full flex items-center justify-center gap-2 group relative overflow-hidden transition-all duration-300 shadow-sm"
-            style={{ 
-              background: s.newScanBg, 
-              color: 'white', 
-              borderRadius: '8px', 
-              padding: isCollapsed ? '8px 0' : '10px 12px' 
-            }}
-          >
-            <span className="text-md font-black leading-none">+</span>
-            {!isCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">{t('sidebar.new_scan', 'NEW SCAN')}</span>}
-          </button>
-          {showScan && <NewScanModal onClose={() => setShowScan(false)} onScan={handleScan} />}
-        </div>
-
         {/* Nav Sections */}
         <div className="flex-1 overflow-hidden px-3 flex flex-col pb-4 mt-2">
           {navSections.map((section, idx) => (
@@ -292,7 +265,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
               {/* Items */}
               <div className="flex flex-col gap-[2px]">
                 {section.items.map((item) => {
-                  const { icon: Icon, label, path, subItems } = item as any;
+                  const { icon: Icon, label, path } = item as any;
                   const active = location.pathname === path;
                   return (
                     <div key={path} className="flex flex-col">

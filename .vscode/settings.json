@@ -1,3 +1,6 @@
 {
-    "diffEditor.codeLens": true
+    "diffEditor.codeLens": true,
+    "geminicodeassist.agentDebugMode": true,
+    "geminicodeassist.agentYoloMode": true,
+    "files.autoSave": "onWindowChange"
 }
