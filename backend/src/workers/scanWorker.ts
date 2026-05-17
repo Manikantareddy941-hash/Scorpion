@@ -9,6 +9,7 @@ import os from 'os';
 import cronParser from 'cron-parser';
 import { sendFindingAlert } from '../utils/alertDispatcher';
 import { logAuditEvent } from '../utils/auditLogger';
+import crypto from 'crypto';
 
 const isWin = process.platform === 'win32';
 const resolveTool = (name: string): { cmd: string, prefixArgs: string[] } => {
@@ -269,6 +270,139 @@ function runIacScan(repoPath: string, repo: any): Finding[] {
     return findings;
 }
 
+// Helper to compute a consistent SHA-256 fingerprint for worker findings
+const computeFindingHash = (repoId: string, filePath: string, cveOrTitle: string, severity: string): string => {
+    const data = `${repoId}|${filePath || ''}|${cveOrTitle || ''}|${(severity || '').toUpperCase()}`;
+    return crypto.createHash('sha256').update(data).digest('hex');
+};
+
+async function processFindingsDelta(repoId: string, scanId: string, findings: Finding[], userId: string) {
+    try {
+        console.log(`[Worker Delta Ingestion] Starting delta ingestion for repo: ${repoId}`);
+
+        // 1. Fetch active open findings in Appwrite
+        const activeDocsResponse = await databases.listDocuments(
+            APPWRITE_DATABASE_ID,
+            'findings',
+            [
+                Query.equal('repo_id', repoId),
+                Query.equal('status', 'open'),
+                Query.limit(500)
+            ]
+        );
+        const activeDocs = activeDocsResponse.documents || [];
+
+        // 2. Map existing documents to their computed hashes
+        const activeHashMap = new Map<string, any>();
+        activeDocs.forEach(doc => {
+            const hash = computeFindingHash(
+                doc.repo_id,
+                doc.file_path || doc.filePath,
+                doc.cve_id || doc.cveId || doc.title,
+                doc.severity
+            );
+            activeHashMap.set(hash, doc);
+        });
+
+        // 3. Compute hashes for incoming findings
+        const incomingHashMap = new Map<string, Finding>();
+        findings.forEach(f => {
+            const hash = computeFindingHash(
+                repoId,
+                f.file_path,
+                f.cve_id || f.title,
+                f.severity
+            );
+            incomingHashMap.set(hash, f);
+        });
+
+        // 4. Calculate deltas
+        const newFindings: Finding[] = [];
+        const resolvedDocs: any[] = [];
+
+        for (const [hash, f] of incomingHashMap.entries()) {
+            if (!activeHashMap.has(hash)) {
+                newFindings.push(f);
+            }
+        }
+
+        for (const [hash, doc] of activeHashMap.entries()) {
+            if (!incomingHashMap.has(hash)) {
+                resolvedDocs.push(doc);
+            }
+        }
+
+        console.log(`[Worker Delta Ingestion] Ingestion results for ${repoId}:` +
+            ` Total Incoming: ${findings.length},` +
+            ` Active in DB: ${activeDocs.length},` +
+            ` New to Create: ${newFindings.length},` +
+            ` Resolved to Update: ${resolvedDocs.length}`
+        );
+
+        // 5. Batch writes using parallel execution (using Promise.all on chunks)
+        const CHUNK_SIZE = 15;
+
+        // A. Insert New/Modified findings
+        for (let i = 0; i < newFindings.length; i += CHUNK_SIZE) {
+            const chunk = newFindings.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async (finding) => {
+                try {
+                    const createdFinding = await databases.createDocument(
+                        APPWRITE_DATABASE_ID,
+                        'findings',
+                        ID.unique(),
+                        finding
+                    );
+                    // Dispatch alert if necessary
+                    await sendFindingAlert(createdFinding as any, userId);
+                } catch (saveErr: any) {
+                    console.error(`[Worker Delta Ingestion] Failed to create finding document:`, saveErr.message);
+                }
+            }));
+        }
+
+        // B. Mark resolved findings
+        for (let i = 0; i < resolvedDocs.length; i += CHUNK_SIZE) {
+            const chunk = resolvedDocs.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async (doc) => {
+                try {
+                    await databases.updateDocument(
+                        APPWRITE_DATABASE_ID,
+                        'findings',
+                        doc.$id,
+                        {
+                            status: 'resolved',
+                            resolvedAt: new Date().toISOString()
+                        }
+                    );
+                    console.log(`[Worker Delta Ingestion] Marked finding ${doc.$id} as RESOLVED.`);
+                } catch (updateErr: any) {
+                    console.error(`[Worker Delta Ingestion] Failed to resolve finding document:`, updateErr.message);
+                }
+            }));
+        }
+
+    } catch (err: any) {
+        console.error(`[Worker Delta Ingestion Error] Failed:`, err.message);
+        
+        // Fallback: normal loop
+        console.log(`[Worker Delta Ingestion] Falling back to standard creation...`);
+        for (const finding of findings) {
+            try {
+                const createdFinding = await databases.createDocument(
+                    APPWRITE_DATABASE_ID,
+                    'findings',
+                    ID.unique(),
+                    finding
+                );
+                await sendFindingAlert(createdFinding as any, userId);
+            } catch (fallbackErr: any) {
+                console.error(`[Worker Delta Ingestion Fallback] Save failed:`, fallbackErr.message);
+            }
+        }
+    }
+}
+
 /**
  * Main scan function
  */
@@ -291,21 +425,8 @@ export async function processRepo(repo: any) {
             scanId: scanId
         }));
 
-        for (const finding of allFindings) {
-            try {
-                const createdFinding = await databases.createDocument(
-                    APPWRITE_DATABASE_ID,
-                    'findings',
-                    ID.unique(),
-                    finding
-                );
-                
-                // Dispatch alert if necessary
-                await sendFindingAlert(createdFinding as any, repo.user_id);
-            } catch (err: any) {
-                console.error(`[Appwrite Save Error]`, err.message);
-            }
-        }
+        // Store findings using Differential Ingestion (Delta Scans)
+        await processFindingsDelta(repo.$id, scanId, allFindings, repo.user_id);
 
         console.log(`[Worker] Scan completed for ${repo.name}. Found ${allFindings.length} issues.`);
         await logAuditEvent('SCAN_COMPLETED', `Scan completed. Found ${allFindings.length} security vectors.`, repo.user_id, repo.$id);

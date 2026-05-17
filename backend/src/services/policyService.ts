@@ -1,6 +1,77 @@
 import { notifyPolicyFailure } from './notificationService';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 
+export interface PolicyConfig {
+  minSecurityScore: number;
+  blockOnCritical: boolean;
+  allowedSnoozeDays: number;
+  blockedFalcoRules: string[];
+}
+
+export const DEFAULT_POLICY: PolicyConfig = {
+  minSecurityScore: 80,
+  blockOnCritical: true,
+  allowedSnoozeDays: 14,
+  blockedFalcoRules: [
+    'Terminal shell opened in container',
+    'Write below etc',
+    'Unexpected process spawned'
+  ]
+};
+
+interface CacheEntry {
+  data: PolicyConfig;
+  expiresAt: number;
+}
+
+const policyCache: { [key: string]: CacheEntry } = {};
+const CACHE_TTL_MS = 60000; // 60-second TTL Caching
+
+export const getDynamicPolicy = async (repoId: string): Promise<PolicyConfig> => {
+  const now = Date.now();
+  const cached = policyCache[repoId];
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
+  }
+
+  let fetchedPolicy: PolicyConfig = { ...DEFAULT_POLICY };
+  try {
+    const response = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_POLICIES, [
+      Query.equal('repo_id', repoId),
+      Query.limit(1)
+    ]);
+
+    if (response.total > 0) {
+      const doc = response.documents[0];
+      fetchedPolicy = {
+        minSecurityScore: typeof doc.minSecurityScore === 'number' ? doc.minSecurityScore : (doc.min_risk_score || 80),
+        blockOnCritical: typeof doc.blockOnCritical === 'boolean' ? doc.blockOnCritical : true,
+        allowedSnoozeDays: typeof doc.allowedSnoozeDays === 'number' ? doc.allowedSnoozeDays : 14,
+        blockedFalcoRules: doc.blockedFalcoRules 
+          ? (typeof doc.blockedFalcoRules === 'string' ? JSON.parse(doc.blockedFalcoRules) : doc.blockedFalcoRules) 
+          : DEFAULT_POLICY.blockedFalcoRules
+      };
+    }
+  } catch (err: any) {
+    console.warn(`[Policy Engine] Failed to load dynamic policy for ${repoId}:`, err.message);
+  }
+
+  // Cache policy entry
+  policyCache[repoId] = {
+    data: fetchedPolicy,
+    expiresAt: now + CACHE_TTL_MS
+  };
+
+  return fetchedPolicy;
+};
+
+export const isFalcoRuleBlocked = async (repoId: string, ruleName: string): Promise<boolean> => {
+  const policy = await getDynamicPolicy(repoId);
+  const normalizedRule = ruleName.toLowerCase().trim();
+  return policy.blockedFalcoRules.some(r => normalizedRule.includes(r.toLowerCase().trim()) || r.toLowerCase().trim().includes(normalizedRule));
+};
+
+
 export interface PolicyEvaluation {
     result: 'PASS' | 'WARN' | 'FAIL';
     policyName: string;
@@ -95,4 +166,72 @@ export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> =>
     }
 
     return { result, policyName: policy.policy_name, reason, details };
+};
+
+export interface IAMStatement {
+  Effect: 'Allow' | 'Deny';
+  Actions: string[];
+  Resources: string[];
+}
+
+export const DEFAULT_IAM_POLICY: IAMStatement[] = [
+  {
+    Effect: 'Allow',
+    Actions: ['repo:read', 'repo:scan', 'tasks:read', 'tasks:create', 'tasks:triage', 'threats:read'],
+    Resources: ['*']
+  },
+  {
+    Effect: 'Deny',
+    Actions: ['gate:bypass', 'policy:edit'],
+    Resources: ['*']
+  }
+];
+
+export const ADMIN_IAM_POLICY: IAMStatement[] = [
+  {
+    Effect: 'Allow',
+    Actions: ['*'],
+    Resources: ['*']
+  }
+];
+
+export const evaluateIAM = (statements: IAMStatement[], action: string, resourceId: string): boolean => {
+  let allowed = false;
+
+  for (const statement of statements) {
+    const effect = statement.Effect;
+    const actions = statement.Actions;
+    const resources = statement.Resources;
+
+    // Action matching (supports wildcards * and trailing wildcards like repo:*)
+    const actionMatch = actions.some(act => {
+      if (act === '*') return true;
+      if (act.endsWith('*')) {
+        const prefix = act.slice(0, -1);
+        return action.startsWith(prefix);
+      }
+      return act === action;
+    });
+
+    // Resource matching (supports wildcards * and trailing wildcards like repo-*)
+    const resourceMatch = resources.some(res => {
+      if (res === '*') return true;
+      if (res.endsWith('*')) {
+        const prefix = res.slice(0, -1);
+        return resourceId.startsWith(prefix);
+      }
+      return res === resourceId;
+    });
+
+    if (actionMatch && resourceMatch) {
+      if (effect === 'Deny') {
+        return false; // Explicit Deny overrides all
+      }
+      if (effect === 'Allow') {
+        allowed = true;
+      }
+    }
+  }
+
+  return allowed;
 };

@@ -29,7 +29,8 @@ export const COLLECTIONS = {
   TEST_RUNS:                'test_runs',
   RELEASES:                 'releases',
   AUDIT_LOGS:               'audit_logs',
-  CERTIFICATES:             'certificates'
+  CERTIFICATES:             'certificates',
+  THREATS:                  'threats'
 };
 
 export const FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_ID;
