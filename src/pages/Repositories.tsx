@@ -105,13 +105,14 @@ export default function Repositories() {
         }
     };
 
-    const handleToggleCron = async (repo: Repository) => {
+    const handleUpdateCron = async (repo: Repository, newSchedule: string, newEnabled: boolean) => {
         try {
             await databases.updateDocument(DB_ID, COLLECTIONS.REPOSITORIES, repo.$id, {
-                cron_enabled: !repo.cron_enabled
+                cron_schedule: newSchedule,
+                cron_enabled: newEnabled
             });
-            setRepos(prev => prev.map(r => r.$id === repo.$id ? { ...r, cron_enabled: !r.cron_enabled } : r));
-            toast.success(`Scan schedule ${!repo.cron_enabled ? 'enabled' : 'disabled'}`);
+            setRepos(prev => prev.map(r => r.$id === repo.$id ? { ...r, cron_schedule: newSchedule, cron_enabled: newEnabled } : r));
+            toast.success('Scan schedule updated');
         } catch (err) {
             toast.error('Failed to update schedule');
         }
@@ -176,19 +177,82 @@ export default function Repositories() {
                                 <p className="text-[10px] font-mono text-[var(--text-secondary)] mb-6 truncate opacity-60 italic">{repo.url}</p>
 
                                 <div className="space-y-4 mb-8">
-                                    <div className="flex items-center justify-between p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                        <div className="flex items-center gap-3">
-                                            <Clock size={14} className="text-[var(--accent-primary)]" />
-                                            <span className="text-[9px] font-black uppercase italic text-[var(--text-primary)]">Scan Schedule</span>
+                                    <div className="flex items-center justify-between w-full p-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
+                                        <div className="flex flex-col gap-0.5 min-w-[90px] shrink-0">
+                                            <div className="flex items-center gap-2">
+                                                <Clock size={12} className="text-[var(--accent-primary)]" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)]">Scan Schedule</span>
+                                            </div>
+                                            <span className="text-xs font-mono text-white/50">
+                                                {repo.cron_enabled ? repo.cron_schedule : 'Manual'}
+                                            </span>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-[9px] font-mono text-[var(--text-secondary)]">{repo.cron_schedule}</span>
-                                            <button 
-                                                onClick={() => handleToggleCron(repo)}
-                                                className={`w-8 h-4 rounded-full p-0.5 transition-colors ${repo.cron_enabled ? 'bg-[var(--status-success)]' : 'bg-[var(--bg-card)] border border-[var(--border-subtle)]'}`}
+                                        
+                                        <div className="flex flex-wrap items-center justify-end gap-1.5 max-w-[70%]">
+                                            <select 
+                                                value={repo.cron_enabled ? (repo.cron_schedule.endsWith('* * *') ? 'daily' : 'weekly') : 'manual'}
+                                                onChange={(e) => {
+                                                    const freq = e.target.value;
+                                                    if (freq === 'manual') {
+                                                        handleUpdateCron(repo, repo.cron_schedule, false);
+                                                    } else {
+                                                        const parts = repo.cron_schedule.split(' ');
+                                                        const min = parts.length === 5 ? parts[0] : '0';
+                                                        const hr = parts.length === 5 ? parts[1] : '0';
+                                                        const day = freq === 'weekly' ? '1' : '*';
+                                                        const newCron = `${min} ${hr} * * ${day}`;
+                                                        handleUpdateCron(repo, newCron, true);
+                                                    }
+                                                }}
+                                                className="bg-white/10 text-zinc-800 font-semibold text-[11px] rounded-lg px-2 py-1 border border-white/10 focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer backdrop-blur-sm"
                                             >
-                                                <div className={`w-3 h-3 rounded-full bg-white transition-transform ${repo.cron_enabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                                            </button>
+                                                <option value="daily" className="bg-white text-zinc-800">Daily</option>
+                                                <option value="weekly" className="bg-white text-zinc-800">Weekly</option>
+                                                <option value="manual" className="bg-white text-zinc-800">Manual</option>
+                                            </select>
+
+                                            {repo.cron_enabled && !repo.cron_schedule.endsWith('* * *') && (
+                                                <select
+                                                    value={repo.cron_schedule.split(' ')[4] || '1'}
+                                                    onChange={(e) => {
+                                                        const parts = repo.cron_schedule.split(' ');
+                                                        const min = parts.length === 5 ? parts[0] : '0';
+                                                        const hr = parts.length === 5 ? parts[1] : '0';
+                                                        const newCron = `${min} ${hr} * * ${e.target.value}`;
+                                                        handleUpdateCron(repo, newCron, true);
+                                                    }}
+                                                    className="bg-white/10 text-zinc-800 font-semibold text-[11px] rounded-lg px-2 py-1 border border-white/10 focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer backdrop-blur-sm animate-in fade-in zoom-in duration-200"
+                                                >
+                                                    <option value="1" className="bg-white text-zinc-800">Monday</option>
+                                                    <option value="2" className="bg-white text-zinc-800">Tuesday</option>
+                                                    <option value="3" className="bg-white text-zinc-800">Wednesday</option>
+                                                    <option value="4" className="bg-white text-zinc-800">Thursday</option>
+                                                    <option value="5" className="bg-white text-zinc-800">Friday</option>
+                                                    <option value="6" className="bg-white text-zinc-800">Saturday</option>
+                                                    <option value="0" className="bg-white text-zinc-800">Sunday</option>
+                                                </select>
+                                            )}
+
+                                            {repo.cron_enabled && (
+                                                <input 
+                                                    type="time" 
+                                                    value={(() => {
+                                                        const parts = repo.cron_schedule.split(' ');
+                                                        if (parts.length === 5) {
+                                                            return `${parts[1].padStart(2, '0')}:${parts[0].padStart(2, '0')}`;
+                                                        }
+                                                        return '00:00';
+                                                    })()}
+                                                    onChange={(e) => {
+                                                        const [hour, minute] = e.target.value.split(':');
+                                                        const parts = repo.cron_schedule.split(' ');
+                                                        const day = parts.length === 5 ? parts[4] : '*';
+                                                        const newCron = `${parseInt(minute)} ${parseInt(hour)} * * ${day}`;
+                                                        handleUpdateCron(repo, newCron, true);
+                                                    }}
+                                                    className="bg-white/10 text-zinc-800 font-semibold text-[11px] rounded-lg px-1.5 py-0.5 border border-white/10 focus:outline-none focus:border-[var(--accent-primary)] cursor-pointer backdrop-blur-sm dynamic-time-picker"
+                                                />
+                                            )}
                                         </div>
                                     </div>
 

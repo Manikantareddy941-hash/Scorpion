@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-    CheckCircle2, AlertTriangle, Bug, Activity, Shield, Cpu, Globe, 
+import {
+    CheckCircle2, AlertTriangle, Bug, Activity, Shield, Cpu, Globe,
     Filter, ArrowUpDown, Clock, LayoutGrid, List, ChevronRight,
     CheckCircle, XCircle, Loader2, RefreshCw, Sparkles, Github, X
 } from 'lucide-react';
@@ -46,7 +46,7 @@ export default function TasksPage() {
                 Query.limit(100),
                 Query.orderDesc('$createdAt')
             ]);
-            
+
             const mappedFindings = res.documents.map((doc: any) => ({
                 $id: doc.$id,
                 title: doc.title || doc.name || 'Untitled Finding',
@@ -73,7 +73,7 @@ export default function TasksPage() {
             await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, {
                 status: 'resolved'
             });
-            
+
             setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
             toast.success('Issue marked as resolved');
         } catch (err) {
@@ -93,7 +93,7 @@ export default function TasksPage() {
         const toastId = toast.loading(`Acknowledging ${selectedTasks.size} tasks...`);
         try {
             const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
-            await Promise.all(Array.from(selectedTasks).map(id => 
+            await Promise.all(Array.from(selectedTasks).map(id =>
                 databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved' })
             ));
             setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status: 'resolved' } : f));
@@ -109,7 +109,7 @@ export default function TasksPage() {
         const toastId = toast.loading(`Dismissing ${selectedTasks.size} tasks...`);
         try {
             const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
-            await Promise.all(Array.from(selectedTasks).map(id => 
+            await Promise.all(Array.from(selectedTasks).map(id =>
                 databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'dismissed' })
             ));
             setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status: 'dismissed' } : f));
@@ -125,7 +125,7 @@ export default function TasksPage() {
         setAiModalOpen(true);
         setAiBlueprintLoading(true);
         setAiBlueprintContent('');
-        
+
         try {
             const token = await getJWT();
             const res = await fetch(`/api/dashboard/tasks/${id}/ai-blueprint`, {
@@ -173,15 +173,15 @@ export default function TasksPage() {
 
     const getSLA = (createdAt: string, severity: string) => {
         const created = new Date(createdAt).getTime();
-        let hoursAllowed = 30 * 24; 
+        let hoursAllowed = 30 * 24;
         if (severity.toLowerCase() === 'critical') hoursAllowed = 24;
         else if (severity.toLowerCase() === 'high') hoursAllowed = 7 * 24;
         else if (severity.toLowerCase() === 'medium') hoursAllowed = 14 * 24;
-        
+
         const deadline = created + (hoursAllowed * 60 * 60 * 1000);
         const now = Date.now();
         const remainingHours = (deadline - now) / (1000 * 60 * 60);
-        
+
         return remainingHours;
     };
 
@@ -270,7 +270,7 @@ export default function TasksPage() {
 
                     <div className="flex items-center gap-2">
                         <Filter size={14} className="text-[var(--text-secondary)]" />
-                        <select 
+                        <select
                             value={filterSeverity}
                             onChange={(e) => setFilterSeverity(e.target.value)}
                             className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
@@ -282,7 +282,7 @@ export default function TasksPage() {
                             <option value="low">Low</option>
                         </select>
 
-                        <select 
+                        <select
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
                             className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
@@ -295,7 +295,7 @@ export default function TasksPage() {
                             <option value="dast">DAST</option>
                         </select>
 
-                        <select 
+                        <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
                             className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
@@ -305,7 +305,7 @@ export default function TasksPage() {
                             <option value="resolved">Resolved</option>
                         </select>
 
-                        <select 
+                        <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
                             className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
@@ -317,13 +317,13 @@ export default function TasksPage() {
                     </div>
 
                     <div className="flex bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl p-1">
-                        <button 
+                        <button
                             onClick={() => setViewMode('list')}
                             className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                         >
                             <List size={16} />
                         </button>
-                        <button 
+                        <button
                             onClick={() => setViewMode('grid')}
                             className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                         >
@@ -352,86 +352,85 @@ export default function TasksPage() {
                             const isOverdue = remainingHours <= 0;
 
                             return (
-                            <div key={finding.$id} className="premium-card group hover:border-[var(--accent-primary)]/40 transition-all relative">
-                                <div className={`p-6 ${viewMode === 'list' ? 'flex items-center gap-6' : 'flex flex-col gap-4'}`}>
-                                    
-                                    <div className="flex items-center gap-3">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={selectedTasks.has(finding.$id)} 
-                                            onChange={() => toggleSelection(finding.$id)}
-                                            className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] cursor-pointer"
-                                        />
-                                    </div>
+                                <div key={finding.$id} className="premium-card group hover:border-[var(--accent-primary)]/40 transition-all relative">
+                                    <div className={`p-6 ${viewMode === 'list' ? 'flex items-center gap-6' : 'flex flex-col gap-4'}`}>
 
-                                    {/* Action Box */}
-                                    <button 
-                                        title="Resolve"
-                                        onClick={() => finding.status === 'open' && handleResolve(finding.$id)}
-                                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0
-                                            ${finding.status === 'resolved' 
-                                                ? 'bg-[var(--status-success)]/10 text-[var(--status-success)] cursor-default' 
-                                                : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--status-success)] hover:text-[var(--status-success)] hover:bg-[var(--status-success)]/5'}`}
-                                    >
-                                        {finding.status === 'resolved' ? <CheckCircle size={20} /> : <div className="w-5 h-5 rounded-full border-2 border-current" />}
-                                    </button>
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedTasks.has(finding.$id)}
+                                                onChange={() => toggleSelection(finding.$id)}
+                                                className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] cursor-pointer"
+                                            />
+                                        </div>
 
-                                    <button 
-                                        title="AI Blueprint"
-                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-yellow-500 hover:border-yellow-500 hover:bg-yellow-500/10 transition-all flex-shrink-0"
-                                        onClick={() => handleAIBlueprint(finding.$id)}
-                                    >
-                                        <Sparkles size={16} />
-                                    </button>
+                                        {/* Action Box */}
+                                        <button
+                                            title="Resolve"
+                                            onClick={() => finding.status === 'open' && handleResolve(finding.$id)}
+                                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0
+                                            ${finding.status === 'resolved'
+                                                    ? 'bg-[var(--status-success)]/10 text-[var(--status-success)] cursor-default'
+                                                    : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--status-success)] hover:text-[var(--status-success)] hover:bg-[var(--status-success)]/5'}`}
+                                        >
+                                            {finding.status === 'resolved' ? <CheckCircle size={20} /> : <div className="w-5 h-5 rounded-full border-2 border-current" />}
+                                        </button>
 
-                                    <button 
-                                        title="Export to GitHub"
-                                        className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-white hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
-                                        onClick={() => handleGithubSync(finding.$id)}
-                                    >
-                                        <Github size={16} />
-                                    </button>
+                                        <button
+                                            title="AI Blueprint"
+                                            className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-yellow-500 hover:border-yellow-500 hover:bg-yellow-500/10 transition-all flex-shrink-0"
+                                            onClick={() => handleAIBlueprint(finding.$id)}
+                                        >
+                                            <Sparkles size={16} />
+                                        </button>
 
-                                    {/* Content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <SeverityBadge severity={finding.severity} />
-                                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase italic border ${
-                                                isOverdue ? 'bg-red-500/20 text-red-500 border-red-500 animate-pulse' :
-                                                isEmergency ? 'bg-orange-500/20 text-orange-500 border-orange-500 animate-pulse' :
-                                                'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
-                                            }`}>
-                                                {isOverdue ? 'SLA Overdue' : `${Math.floor(remainingHours)}h Remaining`}
-                                            </span>
-                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded text-[9px] font-black uppercase italic text-[var(--text-secondary)]">
-                                                <TypeIcon type={finding.type} />
-                                                {finding.type}
+                                        <button
+                                            title="Export to GitHub"
+                                            className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-white hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                                            onClick={() => handleGithubSync(finding.$id)}
+                                        >
+                                            <Github size={16} />
+                                        </button>
+
+                                        {/* Content */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <SeverityBadge severity={finding.severity} />
+                                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase italic border ${isOverdue ? 'bg-red-500/20 text-red-500 border-red-500 animate-pulse' :
+                                                        isEmergency ? 'bg-orange-500/20 text-orange-500 border-orange-500 animate-pulse' :
+                                                            'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                                                    }`}>
+                                                    {isOverdue ? 'SLA Overdue' : `${Math.floor(remainingHours)}h Remaining`}
+                                                </span>
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded text-[9px] font-black uppercase italic text-[var(--text-secondary)]">
+                                                    <TypeIcon type={finding.type} />
+                                                    {finding.type}
+                                                </div>
+                                                <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase ml-auto font-mono flex items-center gap-1">
+                                                    <Clock size={10} />
+                                                    {new Date(finding.created_at).toLocaleDateString()}
+                                                </span>
                                             </div>
-                                            <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase ml-auto font-mono flex items-center gap-1">
-                                                <Clock size={10} />
-                                                {new Date(finding.created_at).toLocaleDateString()}
-                                            </span>
+                                            <h4 className={`text-sm font-black uppercase italic truncate ${finding.status === 'resolved' ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'}`}>
+                                                {finding.title}
+                                            </h4>
+                                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 flex items-center gap-2">
+                                                <Globe size={12} className="text-[var(--accent-primary)]" />
+                                                {finding.repo_name}
+                                                <span className="opacity-30">•</span>
+                                                <span className="truncate">{finding.file_path}</span>
+                                            </p>
                                         </div>
-                                        <h4 className={`text-sm font-black uppercase italic truncate ${finding.status === 'resolved' ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'}`}>
-                                            {finding.title}
-                                        </h4>
-                                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 flex items-center gap-2">
-                                            <Globe size={12} className="text-[var(--accent-primary)]" />
-                                            {finding.repo_name}
-                                            <span className="opacity-30">•</span>
-                                            <span className="truncate">{finding.file_path}</span>
-                                        </p>
-                                    </div>
 
-                                    {viewMode === 'list' && (
-                                        <div className="flex items-center gap-2">
-                                            <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors">
-                                                <ChevronRight size={20} />
-                                            </button>
-                                        </div>
-                                    )}
+                                        {viewMode === 'list' && (
+                                            <div className="flex items-center gap-2">
+                                                <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors">
+                                                    <ChevronRight size={20} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
                             );
                         })}
                     </div>
