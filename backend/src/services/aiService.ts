@@ -120,9 +120,10 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey || apiKey === 'mock-key') {
             return {
-                explanation: "Gemini API Key not configured. This is a simulated response. The finding suggests an issue with: " + vuln.message,
-                code_diff: "// Fix unavailable (API Key restricted)",
-                confidence_score: 0.0
+                technical_analysis: "Gemini API Key not configured. This is a simulated response. The finding suggests an issue with: " + vuln.message,
+                diff: "--- a/" + (vuln.file_path || 'src/App.tsx') + "\n+++ b/" + (vuln.file_path || 'src/App.tsx') + "\n@@ -12,1 +12,1 @@\n-// Fix unavailable (API Key restricted)\n+// Please configure GEMINI_API_KEY in backend/.env",
+                impact_assessment: "Mock assessment: Configure GEMINI_API_KEY in your server backend's configuration to enable live AI-powered patches.",
+                confidence: 0.0
             };
         }
 
@@ -150,8 +151,30 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error('No response from Gemini');
 
-        const result = JSON.parse(text);
-        return result;
+        // Strip ```json fences if Gemini adds them despite instructions
+        const cleaned = text
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/, '')
+            .trim();
+
+        let parsed: any;
+        try {
+            parsed = JSON.parse(cleaned);
+        } catch {
+            throw new Error(`TONY: Gemini returned non-JSON response: ${text.slice(0, 300)}`);
+        }
+
+        // Validate and clamp confidence to [0, 1]
+        const confidence = typeof parsed.confidence === 'number'
+            ? Math.min(1, Math.max(0, parsed.confidence))
+            : 0.5; // safe default if Gemini omits it
+
+        return {
+            technical_analysis: parsed.technical_analysis || 'No analysis provided.',
+            diff: parsed.diff || '',
+            impact_assessment: parsed.impact_assessment || 'No impact assessment provided.',
+            confidence
+        };
     } catch (err) {
         console.error('[AI Service] remediation failed:', err);
         throw err;
