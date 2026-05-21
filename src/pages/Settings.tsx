@@ -12,11 +12,13 @@ import robotMascot from '../assets/tony-ai.png';
 import { Bot, Globe, Droplets } from 'lucide-react';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
+import { useTerminology } from '../contexts/TerminologyContext';
 
 export default function Settings() {
     const { t } = useTranslation();
     const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT } = useAuth();
     const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled } = useTheme();
+    const { uiMode, setUiMode } = useTerminology();
     const [isGithubConnected, setIsGithubConnected] = useState(false);
     const [preferences, setPreferences] = useState({});
     const [loading, setLoading] = useState(true);
@@ -257,6 +259,48 @@ export default function Settings() {
                             </p>
                         </div>
                     </section>
+
+                    <div className="h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent opacity-50" />
+
+                    {/* Terminology Mode Toggle */}
+                    <div className={`premium-card p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                        <div className="flex items-center gap-5 mb-8">
+                            <div className="w-12 h-12 bg-[var(--accent-primary)]/10 rounded-2xl flex items-center justify-center border border-[var(--accent-primary)]/20">
+                                <Terminal className="w-5 h-5 text-[var(--accent-primary)]" />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Interface Mode (Terminology)</h3>
+                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">Toggle between tactical operations and standard engineering terms</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {[
+                                { id: 'tactical', label: 'Tactical Mode', desc: 'Syntax: Tactical Battalions · Battalion Commander · Deploy Force' },
+                                { id: 'standard', label: 'Standard Mode', desc: 'Syntax: Teams · Team Lead · Deploy' },
+                            ].map((modeOption) => (
+                                <button
+                                    key={modeOption.id}
+                                    onClick={() => setUiMode(modeOption.id as any)}
+                                    className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-start gap-4 text-left group
+                                        ${uiMode === modeOption.id ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5 shadow-lg shadow-[var(--accent-primary)]/10' : 'border-[var(--border-subtle)] bg-[var(--bg-primary)] hover:border-[var(--accent-primary)]/30'}`}
+                                >
+                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors
+                                        ${uiMode === modeOption.id ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)]'}`}>
+                                        <Terminal size={20} />
+                                    </div>
+                                    <div>
+                                        <p className={`text-[11px] font-black uppercase italic tracking-wider mb-1 ${uiMode === modeOption.id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
+                                            {modeOption.label}
+                                        </p>
+                                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-tight italic">
+                                            {modeOption.desc}
+                                        </p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
                     <div className="h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent opacity-50" />
 

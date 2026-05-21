@@ -40,14 +40,18 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response, nex
 });
 
 // Create a new team
-router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { name, description } = req.body;
         if (!name) return res.status(400).json({ error: 'Team name is required' });
 
         const userId = req.user!.$id;
         
-        const team = await databases.createDocument(DB_ID, COLLECTIONS.TEAMS, ID.unique(), {
+        // Ensure your Appwrite ID generator helper is explicitly defined here:
+        const teamDocId = ID.unique();
+        const memberDocId = ID.unique();
+
+        const team = await databases.createDocument(DB_ID, COLLECTIONS.TEAMS, teamDocId, {
             name,
             description: description || '',
             owner_id: userId,
@@ -55,7 +59,7 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response, ne
         });
 
         // Add creator as owner
-        await databases.createDocument(DB_ID, COLLECTIONS.TEAM_MEMBERS, ID.unique(), {
+        await databases.createDocument(DB_ID, COLLECTIONS.TEAM_MEMBERS, memberDocId, {
             team_id: team.$id,
             user_id: userId,
             role: 'owner',
@@ -63,8 +67,9 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response, ne
         });
 
         res.json(team);
-    } catch (err) {
-        next(err);
+    } catch (err: any) {
+        console.error("[Backend Team Crash Log]:", err);
+        return res.status(400).json({ error: err.message });
     }
 });
 

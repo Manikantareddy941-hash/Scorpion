@@ -8,7 +8,8 @@ export type AuditAction =
   | 'compliance.evaluated'
   | 'user.login' | 'user.logout'
   | 'gate.blocked' | 'rollback.triggered'
-  | 'evidence.exported';
+  | 'evidence.exported'
+  | 'build.triggered' | 'build.completed' | 'build.cancelled';
 
 export async function auditLog({
   action, actor, actorEmail, resource,

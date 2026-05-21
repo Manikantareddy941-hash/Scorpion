@@ -1,7 +1,7 @@
 import winston from 'winston';
 import LokiTransport from 'winston-loki';
 
-const lokiEnabled = !!process.env.LOKI_URL;
+const lokiEnabled = !!process.env.LOKI_URL && process.env.NODE_ENV === 'production';
 
 export const logger = winston.createLogger({
   level: 'info',
@@ -23,7 +23,10 @@ export const logger = winston.createLogger({
         json: true,
         format: winston.format.json(),
         replaceTimestamp: true,
-        onConnectionError: (err) => console.error('[Loki] Connection error:', err)
+        onConnectionError: (err: any) => {
+          if (process.env.NODE_ENV !== 'production') return; // silent in dev
+          console.error('[Loki] Connection error:', err.message);
+        }
       }) as winston.transport
     ] : [])
   ]
