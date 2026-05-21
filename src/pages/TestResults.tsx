@@ -4,12 +4,15 @@ import {
   TestTube2, CheckCircle2, XCircle, AlertCircle, RefreshCw, BarChart, GitBranch, TerminalSquare, ShieldAlert
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import toast from 'react-hot-toast';
 
 export default function TestResults() {
   const { t } = useTranslation();
   const [metrics, setMetrics] = useState({ testExecutions: 0, codeCoverage: 0, failedTests: 0 });
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedLog, setSelectedLog] = useState<any | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchLivePipelineData = async () => {
     try {
@@ -120,10 +123,13 @@ export default function TestResults() {
               <div className="text-white/40 font-mono text-xs p-4 text-center">No telemetry logs found for the current build phase.</div>
             ) : (
               logs.map((log) => (
-                <div key={log.id} className="flex flex-col sm:flex-row sm:items-center gap-4 p-3 rounded-lg bg-zinc-900/50 border border-white/5 hover:bg-white/5 transition-colors">
+                <div key={log.id} 
+                  onClick={() => { setSelectedLog(log); setCopied(false); }}
+                  className="cursor-pointer flex flex-col sm:flex-row sm:items-center gap-4 p-3 rounded-lg bg-zinc-900/50 border border-white/5 hover:bg-white/5 transition-all hover:scale-[1.01]"
+                >
                   <span className="text-zinc-500 shrink-0 w-20">[{log.timestamp}]</span>
                   <div className="w-24 shrink-0 flex">
-                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest flex items-center justify-center w-full border ${log.status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.15)]' : 'bg-red-500/10 text-red-500 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'}`}>
+                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest flex items-center justify-center w-full border ${log.status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_rgba(109,184,122,0.15)]' : 'bg-red-500/10 text-red-500 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'}`}>
                       {log.status}
                     </span>
                   </div>
@@ -137,6 +143,77 @@ export default function TestResults() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-[var(--bg-card)] w-full max-w-2xl rounded-2xl border border-[var(--border-subtle)] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-[var(--border-subtle)] bg-white/5 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-wider italic flex items-center gap-2">
+                  <TerminalSquare className="text-[var(--accent-primary)]" size={20} /> 
+                  Test Execution Details
+                </h3>
+                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest font-mono mt-1">
+                  Trace ID: {selectedLog.id} // Stage: {selectedLog.stage}
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedLog(null)}
+                className="p-2 hover:bg-white/5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-sm font-mono"
+              >
+                [X] CLOSE
+              </button>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto bg-zinc-950/90 font-mono text-[11px] text-zinc-300">
+              <div className="mb-4 flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                <div>
+                  <span className="text-zinc-500 uppercase tracking-widest text-[8px] font-bold block mb-1">Status Badge:</span>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${
+                    selectedLog.status === 'PASSED' 
+                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30' 
+                      : 'bg-red-500/10 text-red-500 border-red-500/30'
+                  }`}>
+                    {selectedLog.status}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-zinc-500 uppercase tracking-widest text-[8px] font-bold block mb-1">Timestamp:</span>
+                  <span className="text-[10px] text-zinc-300 font-bold">{selectedLog.timestamp}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(selectedLog, null, 2));
+                    setCopied(true);
+                    toast.success('Copied payload to clipboard');
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="px-3 py-1.5 bg-[var(--accent-primary)]/10 hover:bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] text-[9px] font-black uppercase tracking-widest rounded-lg transition-all hover:scale-[1.02]"
+                >
+                  {copied ? 'COPIED!' : 'COPY PAYLOAD'}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-zinc-500 uppercase tracking-widest text-[8px] font-bold block">Raw JSON Trace:</span>
+                <pre className="p-4 bg-black/60 border border-white/5 rounded-xl overflow-x-auto text-zinc-400 select-all leading-relaxed whitespace-pre-wrap max-h-[350px]">
+                  {JSON.stringify(selectedLog, null, 2)}
+                </pre>
+              </div>
+            </div>
+
+            <div className="p-4 bg-white/5 border-t border-[var(--border-subtle)] flex justify-end gap-3">
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="px-5 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] hover:border-zinc-500 text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)] rounded-xl transition-all"
+              >
+                Back to List
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

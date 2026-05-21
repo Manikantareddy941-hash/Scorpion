@@ -48,6 +48,8 @@ import dastRoutes from './routes/dastRoutes';
 import scanRoutes from './routes/scanRoutes';
 import monitorRoutes from './routes/monitorRoutes';
 import issuesRoutes from './routes/issuesRoutes';
+import buildRoutes from './routes/buildRoutes';
+import deployRoutes from './routes/deployRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 import { createNodeMiddleware } from "@octokit/webhooks";
@@ -216,6 +218,8 @@ app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with
 app.use('/api/scan/dast', dastRoutes);
 app.use('/api/monitor', monitorRoutes);
 app.use('/api/issues', authenticate, issuesRoutes);
+app.use('/api/builds', buildRoutes);
+app.use('/api/deployments', deployRoutes);
 app.use('/metrics', metricsRoutes);
 
 import { initReportScheduler } from './services/scheduleService';

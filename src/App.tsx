@@ -33,7 +33,8 @@ import QualityDetail from './pages/QualityDetail';
 import AIChat from './components/AIChat';
 import JourneyMap from './pages/JourneyMap';
 import CodeActivity from './pages/CodeActivity';
-import BuildPipeline from './pages/BuildPipeline';
+import Build from './pages/Build';
+import Deploy from './pages/Deploy';
 import TestResults from './pages/TestResults';
 import DeepAnalysis from './pages/DeepAnalysis';
 import ReleaseGate from './pages/ReleaseGate';
@@ -52,6 +53,7 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ProductTour from './components/ProductTour';
 
 function App() {
   const { user, loading } = useAuth();
@@ -77,6 +79,14 @@ function App() {
       console.warn('Missing Appwrite env vars: VITE_APPWRITE_ENDPOINT and/or VITE_APPWRITE_PROJECT_ID');
     }
   }, []);
+
+  useEffect(() => {
+    if (user && !localStorage.getItem('scorpion_demo_seeded')) {
+      import('./lib/demoData').then(({ seedDemoData }) => {
+        seedDemoData();
+      });
+    }
+  }, [user]);
 
   const checkAppwrite = async () => {
     try {
@@ -121,7 +131,10 @@ function App() {
       <div className="flex flex-1 min-w-0 relative">
         {showSidebar && (
           <div className="sticky top-0 h-screen shrink-0 z-50">
-            <Sidebar isCollapsed={isSidebarCollapsed} setIsCollapsed={handleSidebarCollapse} />
+            <Sidebar 
+              isCollapsed={isSidebarCollapsed} 
+              setIsCollapsed={handleSidebarCollapse} 
+            />
           </div>
         )}
 
@@ -130,7 +143,9 @@ function App() {
           {/* Navbar sticky */}
           {user && !isAuthPage && (
             <div className="sticky top-0 z-40 p-3 pb-0 bg-transparent">
-              <Navbar className="rounded-2xl shrink-0" />
+              <Navbar 
+                className="rounded-2xl shrink-0" 
+              />
             </div>
           )}
 
@@ -170,7 +185,8 @@ function App() {
               <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
               <Route path="/map" element={<ProtectedRoute><JourneyMap /></ProtectedRoute>} />
               <Route path="/code" element={<ProtectedRoute><CodeActivity /></ProtectedRoute>} />
-              <Route path="/builds" element={<ProtectedRoute><BuildPipeline /></ProtectedRoute>} />
+              <Route path="/build" element={<ProtectedRoute><Build /></ProtectedRoute>} />
+              <Route path="/deploy" element={<ProtectedRoute><Deploy /></ProtectedRoute>} />
               <Route path="/tests" element={<ProtectedRoute><TestResults /></ProtectedRoute>} />
               <Route path="/analyze" element={<ProtectedRoute><DeepAnalysis /></ProtectedRoute>} />
               <Route path="/release" element={<ProtectedRoute><ReleaseGate /></ProtectedRoute>} />
@@ -185,6 +201,8 @@ function App() {
       {!isAuthPage && <div className="w-full relative z-10"><Footer /></div>}
       
       {!isAuthPage && <AIChat open={isChatOpen} setOpen={setIsChatOpen} />}
+      
+      {!isAuthPage && user && <ProductTour />}
     </div>
   );
 }

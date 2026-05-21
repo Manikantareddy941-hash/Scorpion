@@ -24,6 +24,7 @@ export default function TasksPage() {
     const { getJWT } = useAuth();
     const [findings, setFindings] = useState<Finding[]>([]);
     const [loading, setLoading] = useState(true);
+    const [hasError, setHasError] = useState(false);
     const [filterSeverity, setFilterSeverity] = useState('all');
     const [filterType, setFilterType] = useState('all');
     const [filterStatus, setFilterStatus] = useState('open');
@@ -40,6 +41,7 @@ export default function TasksPage() {
 
     const fetchFindings = async () => {
         setLoading(true);
+        setHasError(false);
         try {
             const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
             const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
@@ -61,6 +63,7 @@ export default function TasksPage() {
             setFindings(mappedFindings);
         } catch (err: any) {
             console.error('Fetch findings error:', err);
+            setHasError(true);
             toast.error('Failed to fetch findings');
         } finally {
             setLoading(false);
@@ -333,7 +336,21 @@ export default function TasksPage() {
                 </div>
 
                 {/* Tasks List/Grid */}
-                {loading ? (
+                {hasError ? (
+                    <div className="premium-card p-16 text-center border-red-500/20 max-w-xl mx-auto my-12 bg-red-500/[0.02]">
+                        <XCircle className="w-16 h-16 text-red-500 mx-auto mb-6 animate-pulse" />
+                        <h3 className="text-xl font-black text-red-500 uppercase italic">Unable to load findings</h3>
+                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-2 leading-relaxed">
+                            Check your connection or scanner configuration
+                        </p>
+                        <button
+                            onClick={fetchFindings}
+                            className="mt-6 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] cursor-pointer"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                ) : loading ? (
                     <div className="flex flex-col items-center justify-center py-24">
                         <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
                         <p className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Scanning Task Matrix...</p>

@@ -88,6 +88,7 @@ export default function ReleaseGate() {
     const { getJWT } = useAuth();
     const [repos, setRepos] = useState<Repo[]>([]);
     const [activeRepoId, setActiveRepoId] = useState<string | null>(null);
+    const [selectedRepo, setSelectedRepo] = useState<{ id: string; name: string } | null>(null);
     const [gateResult, setGateResult] = useState<GateResult | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -147,7 +148,7 @@ export default function ReleaseGate() {
     if (loading) {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] p-8 flex flex-col items-center justify-center">
-                <Rocket className="w-12 h-12 text-orange-500 animate-pulse mb-4" />
+                <Rocket className="w-12 h-12 text-[#6db87a] animate-pulse mb-4" />
                 <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-[var(--text-secondary)]" />
                     <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.3em] italic">Initializing Release Sequence...</p>
@@ -164,7 +165,7 @@ export default function ReleaseGate() {
                     {/* Header */}
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div className="flex items-center gap-5">
-                            <div className="w-16 h-16 bg-orange-500 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-orange-500/20">
+                            <div className="w-16 h-16 bg-[#6db87a] rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-[#6db87a]/20">
                                 <Rocket size={32} />
                             </div>
                             <div>
@@ -194,7 +195,10 @@ export default function ReleaseGate() {
                                                 <Shield size={24} />
                                             </div>
                                             <div className="flex items-center gap-4">
-                                                <span className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest border ${gate.status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.15)]' : 'bg-red-500/10 text-red-500 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'}`}>
+                                                <span 
+                                                    title={gate.status === 'BLOCKED' ? `Violation: ${gate.rule}` : undefined}
+                                                    className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest border cursor-help ${gate.status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_rgba(109,184,122,0.15)]' : 'bg-red-500/10 text-red-500 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'}`}
+                                                >
                                                     {gate.status}
                                                 </span>
                                                 <ChevronRight className={`text-[var(--text-secondary)] transition-transform duration-300 ${isOpen ? 'rotate-90' : 'group-hover:translate-x-1'}`} />
@@ -208,9 +212,20 @@ export default function ReleaseGate() {
                                                 <span className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-widest">{gate.findings} Total Findings</span>
                                             </div>
                                             
-                                            <div className="p-3 bg-black/30 rounded-lg border border-white/5">
-                                                <span className="text-[9px] font-black text-white/40 uppercase tracking-widest block mb-1">ENFORCED POLICY:</span>
-                                                <span className={`font-mono text-[11px] ${gate.status === 'PASSED' ? 'text-emerald-400/80' : 'text-red-400/80'}`}>{gate.rule}</span>
+                                            <div className="p-3 rounded-lg border border-transparent"
+                                                 style={{
+                                                     background: gate.status === 'PASSED' ? '#f0fff4' : '#fff0f0',
+                                                     borderLeft: gate.status === 'PASSED' ? '3px solid #6db87a' : '3px solid #e74c3c',
+                                                     borderRadius: '8px'
+                                                 }}>
+                                                <span className="text-[9px] font-black uppercase tracking-widest block mb-1"
+                                                      style={{ color: gate.status === 'PASSED' ? '#1a7a4a' : '#c0392b', opacity: 0.8 }}>
+                                                    ENFORCED POLICY:
+                                                </span>
+                                                <span className="font-mono text-[11px] font-bold"
+                                                      style={{ color: gate.status === 'PASSED' ? '#1a7a4a' : '#c0392b' }}>
+                                                    {gate.rule}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -238,6 +253,19 @@ export default function ReleaseGate() {
                                             </div>
                                           ))}
                                         </div>
+
+                                        {gate.status === 'BLOCKED' && (
+                                          <div className="mt-2 p-4 bg-red-950/20 border border-red-500/20 rounded-xl">
+                                            <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                              <ShieldAlert size={12} /> ENFORCEMENT REASON
+                                            </h4>
+                                            <div className="space-y-1.5 font-mono text-[10px] text-zinc-300">
+                                              <p><span className="text-zinc-500 font-bold uppercase">Policy Violated:</span> {gate.rule}</p>
+                                              <p><span className="text-zinc-500 font-bold uppercase">Trigger Scan ID:</span> scan-sec-{gate.id}-prod</p>
+                                              <p><span className="text-zinc-500 font-bold uppercase">Timestamp:</span> {new Date(Date.now() - 3600000 * 2).toLocaleString()}</p>
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                 </div>

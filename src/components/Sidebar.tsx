@@ -4,12 +4,18 @@ import {
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, 
   ChevronLeft, ChevronRight, Layout, Clock, Map, 
   TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug, 
-  Zap
+  Zap, Package, Tag
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: boolean, setIsCollapsed: (c: boolean) => void }) {
+export default function Sidebar({ 
+  isCollapsed, 
+  setIsCollapsed
+}: { 
+  isCollapsed: boolean, 
+  setIsCollapsed: (c: boolean) => void
+}) {
   const { t } = useTranslation();
   const location = useLocation();
   const { theme } = useTheme();
@@ -44,45 +50,72 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
       title: 'OVERVIEW',
       items: [
         { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' },
+        { icon: Activity, label: 'MONITOR', path: '/monitor' }
+      ]
+    },
+    {
+      title: 'PLAN',
+      items: [
+        { icon: ListTodo, label: t('sidebar.tasks'), path: '/tasks' },
+        { icon: Users, label: t('sidebar.teams'), path: '/teams' }
+      ]
+    },
+    {
+      title: 'CODE',
+      items: [
+        { icon: GitBranch, label: t('sidebar.repositories'), path: '/repos' }
+      ]
+    },
+    {
+      title: 'BUILD',
+      items: [
+        { icon: Package, label: 'BUILD', path: '/build' }
+      ]
+    },
+    {
+      title: 'TEST',
+      items: [
+        { icon: Cpu, label: 'ANALYZE', path: '/analyze' },
+        { icon: Bug, label: 'ISSUES', path: '/issues' },
+        { icon: TestTube2, label: 'TEST', path: '/tests' }
+      ]
+    },
+    {
+      title: 'RELEASE',
+      items: [
+        { icon: Tag, label: 'RELEASE', path: '/release' }
+      ]
+    },
+    {
+      title: 'DEPLOY',
+      items: [
+        { icon: Rocket, label: 'DEPLOY', path: '/deploy' }
+      ]
+    },
+    {
+      title: 'OPERATE',
+      items: [
+        { icon: Scale, label: t('sidebar.governance'), path: '/governance' },
+        { icon: Bell, label: t('sidebar.alerts'), path: '/alerts' },
+        { icon: Map, label: 'MAP', path: '/map' }
+      ]
+    },
+    {
+      title: 'MONITOR',
+      items: [
         { 
           icon: BarChart2, 
           label: t('sidebar.reports'), 
           path: '/reports',
           subItems: filteredReports
         },
-        { icon: Activity, label: 'MONITOR', path: '/monitor' },
-      ]
-    },
-    {
-      title: 'DEVELOP',
-      items: [
-        { icon: GitBranch, label: t('sidebar.repositories'), path: '/repos' },
-        { icon: ListTodo, label: t('sidebar.tasks'), path: '/tasks' },
-      ]
-    },
-    {
-      title: 'SECURE',
-      items: [
-        { icon: Cpu, label: 'ANALYZE', path: '/analyze' },
-        { icon: Bug, label: 'ISSUES', path: '/issues' },
-        { icon: TestTube2, label: 'TEST', path: '/tests' },
-      ]
-    },
-    {
-      title: 'OPERATE',
-      items: [
-        { icon: Rocket, label: 'RELEASE', path: '/release' },
-        { icon: Scale, label: t('sidebar.governance'), path: '/governance' },
-        { icon: Map, label: 'MAP', path: '/map' },
+        { icon: Clock, label: t('sidebar.audit_log'), path: '/audit' }
       ]
     },
     {
       title: 'SYSTEM',
       items: [
-        { icon: Bell, label: t('sidebar.alerts'), path: '/alerts' },
-        { icon: Clock, label: t('sidebar.audit_log'), path: '/audit' },
-        { icon: Users, label: t('sidebar.teams'), path: '/teams' },
-        { icon: Settings, label: 'SETTINGS', path: '/settings' },
+        { icon: Settings, label: 'SETTINGS', path: '/settings' }
       ]
     }
   ];
@@ -149,17 +182,17 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
           sidebarBorder: '1px solid #222222',
           sectionLabel: '#555555',
           navText: '#a0a0a0',
-          activeBg: '#7bc67e',
+          activeBg: '#6db87a',
           activeText: '#ffffff',
           hoverBg: '#1e1e1e',
-          newScanBg: '#7bc67e',
+          newScanBg: '#6db87a',
           logoRing: '#eef8ef',
-          logoIcon: '#7bc67e',
+          logoIcon: '#6db87a',
           logoText: '#ffffff',
-          logoSubtext: '#7bc67e',
+          logoSubtext: '#6db87a',
           collapseBtnBg: '#1e1e1e',
           collapseBtnText: '#888888',
-          collapseBtnHover: '#7bc67e'
+          collapseBtnHover: '#6db87a'
         };
       case 'eye-protection':
         return {
@@ -167,17 +200,17 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
           sidebarBorder: '1px solid #d4e6c3',
           sectionLabel: '#8aaa78',
           navText: '#5a7a4a',
-          activeBg: '#7bc67e',
+          activeBg: '#6db87a',
           activeText: '#ffffff',
           hoverBg: '#f8faf5',
-          newScanBg: '#7bc67e',
+          newScanBg: '#6db87a',
           logoRing: '#eef8ef',
-          logoIcon: '#7bc67e',
+          logoIcon: '#6db87a',
           logoText: '#2d4a1e',
-          logoSubtext: '#7bc67e',
+          logoSubtext: '#6db87a',
           collapseBtnBg: '#f8faf5',
           collapseBtnText: '#5a7a4a',
-          collapseBtnHover: '#7bc67e'
+          collapseBtnHover: '#6db87a'
         };
       default:
         return {
@@ -185,17 +218,17 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
           sidebarBorder: 'none',
           sectionLabel: '#9ca3af',
           navText: '#6b7280',
-          activeBg: '#7bc67e',
+          activeBg: '#6db87a',
           activeText: '#ffffff',
           hoverBg: 'rgba(240, 253, 244, 1)',
-          newScanBg: '#7bc67e',
+          newScanBg: '#6db87a',
           logoRing: '#eef8ef',
-          logoIcon: '#7bc67e',
+          logoIcon: '#6db87a',
           logoText: '#111111',
-          logoSubtext: '#7bc67e',
+          logoSubtext: '#6db87a',
           collapseBtnBg: '#f0fdf4',
           collapseBtnText: '#16a34a',
-          collapseBtnHover: '#7bc67e'
+          collapseBtnHover: '#6db87a'
         };
     }
   };
@@ -206,7 +239,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
     <>
       <aside style={{ 
         height: '100vh', 
-        width: isCollapsed ? '60px' : '200px', 
+        width: isCollapsed ? '64px' : '200px', 
         background: s.sidebarBg,
         borderRight: s.sidebarBorder,
         display: 'flex', 
@@ -216,16 +249,16 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
         boxShadow: theme === 'liquid-glass' || theme === 'underwater' ? 'none' : (theme === 'dark' ? 'none' : theme === 'eye-protection' ? '0 2px 12px rgba(100,150,80,0.08)' : '4px 0 24px rgba(0, 0, 0, 0.04)'),
         transition: 'width 0.3s ease',
         overflow: 'hidden',
-        overflowY: 'hidden',
+        overflowY: 'auto',
         flexShrink: 0,
         backdropFilter: theme === 'liquid-glass' ? 'blur(20px)' : 'none'
       }}>
 
         {/* Header / Logo Area */}
-        <div className={`p-4 flex ${isCollapsed ? 'flex-col gap-4' : 'items-center justify-between'} shrink-0 relative pt-6`}>
-          <div className="flex items-center gap-2">
+        <div className={`flex ${isCollapsed ? 'flex-col items-center gap-4 px-0 pb-4 pt-6' : 'p-4 items-center justify-between'} shrink-0 relative`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center w-full' : 'gap-2'}`}>
             <div className={`flex items-center justify-center rounded-lg transition-all ${isCollapsed ? 'w-10 h-10' : 'w-7 h-7'}`}
-              style={{ background: s.newScanBg, color: 'white' }}>
+               style={{ background: s.newScanBg, color: 'white' }}>
               <Shield size={isCollapsed ? 20 : 14} strokeWidth={3} />
             </div>
             {!isCollapsed && (
@@ -238,7 +271,7 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
           
           <button 
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center transition-all z-10 border`}
+            className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center transition-all z-10 border ${isCollapsed ? 'mx-auto' : ''}`}
             style={{ 
               background: s.collapseBtnBg,
               borderColor: 'rgba(255,255,255,0.1)',
@@ -251,49 +284,79 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
           </button>
         </div>
 
+
         {/* Nav Sections */}
-        <div className="flex-1 overflow-hidden px-3 flex flex-col pb-4 mt-2">
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isCollapsed ? 'px-0' : 'px-3'} flex flex-col pb-6 mt-2`}>
           {navSections.map((section, idx) => (
             <div key={idx} className="flex flex-col mb-4">
               {/* Section Header */}
-              <div className="px-2" style={{ margin: '2px 0 2px 0' }}>
-                <p className="text-[7px] font-bold uppercase tracking-widest text-center md:text-left transition-all mono" style={{ color: s.sectionLabel }}>
-                  {isCollapsed ? section.title.substring(0, 1) : section.title}
-                </p>
-              </div>
+              {!isCollapsed && (
+                <div className="px-2" style={{ margin: '2px 0 2px 0' }}>
+                  <p className="text-[7px] font-bold uppercase tracking-widest text-center md:text-left transition-all mono" style={{ color: s.sectionLabel }}>
+                    {section.title}
+                  </p>
+                </div>
+              )}
               
               {/* Items */}
-              <div className="flex flex-col gap-[2px]">
+              <div className={`flex flex-col ${isCollapsed ? 'gap-0' : 'gap-[2px]'}`}>
                 {section.items.map((item) => {
                   const { icon: Icon, label, path } = item as any;
                   const active = location.pathname === path;
+                  const tourId = 
+                    path === '/' ? 'tour-dashboard' :
+                    path === '/repos' ? 'tour-repos' :
+                    path === '/tasks' ? 'tour-tasks' :
+                    path === '/alerts' ? 'tour-alerts' :
+                    path === '/release' ? 'tour-release' :
+                    path === '/settings' ? 'tour-settings' : undefined;
+
                   return (
                     <div key={path} className="flex flex-col">
                       <Link
                         to={path}
-                      className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100 hover:bg-[rgba(123,198,126,0.1)]'}`}
-                      style={{ 
-                        transition: 'all 0.2s ease',
-                        boxShadow: active && theme !== 'liquid-glass' && theme !== 'underwater' ? '0 4px 12px rgba(123,198,126,0.3)' : 'none',
-                        margin: '0 4px',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}
-                      onMouseOver={(e) => { if (!active) e.currentTarget.style.background = s.hoverBg; }}
-                      onMouseOut={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      {active && theme === 'liquid-glass' && (
-                        <div style={{ position: 'absolute', left: 0, top: '20%', bottom: '20%', width: '3px', background: s.accentBar, borderRadius: '0 4px 4px 0' }} />
-                      )}
-                      <Icon size={16} style={{ color: active ? s.activeText : 'inherit' }} className="transition-colors" />
-                      {!isCollapsed && (
-                        <span className={`truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
-                          {label}
-                        </span>
-                      )}
-                    </Link>
+                        id={tourId}
+                        className={isCollapsed 
+                          ? `flex items-center justify-center transition-all relative w-full h-[44px] ${active ? 'opacity-100 bg-[#6db87a]/10 border-l-[3px] border-l-[#6db87a]' : 'opacity-70 hover:opacity-100 hover:bg-[#6db87a]/5 border-l-[3px] border-l-transparent'}`
+                          : `flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100 hover:bg-[rgba(109,184,122,0.1)]'}`
+                        }
+                        style={{ 
+                          transition: 'all 0.2s ease',
+                          margin: isCollapsed ? '0' : '0 4px',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          boxShadow: !isCollapsed && active && theme !== 'liquid-glass' && theme !== 'underwater' ? '0 4px 12px rgba(109,184,122,0.3)' : 'none',
+                        }}
+                        onMouseOver={(e) => { 
+                          if (!active) {
+                            e.currentTarget.style.background = isCollapsed ? 'rgba(109,184,122,0.05)' : s.hoverBg; 
+                          } 
+                        }}
+                        onMouseOut={(e) => { 
+                          if (!active) {
+                            e.currentTarget.style.background = 'transparent'; 
+                          } 
+                        }}
+                      >
+                        {active && !isCollapsed && theme === 'liquid-glass' && (
+                          <div style={{ position: 'absolute', left: 0, top: '20%', bottom: '20%', width: '3px', background: s.accentBar, borderRadius: '0 4px 4px 0' }} />
+                        )}
+                        <Icon 
+                          size={isCollapsed ? 20 : 16} 
+                          style={{ 
+                            color: active ? (isCollapsed ? '#6db87a' : s.activeText) : 'inherit',
+                            margin: isCollapsed ? '0 auto' : '0'
+                          }} 
+                          className="transition-colors" 
+                        />
+                        {!isCollapsed && (
+                          <span className={`truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
+                            {label}
+                          </span>
+                        )}
+                      </Link>
 
-                  </div>
+                    </div>
                   );
                 })}
               </div>
@@ -305,4 +368,3 @@ export default function Sidebar({ isCollapsed, setIsCollapsed }: { isCollapsed: 
     </>
   );
 }
-

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { 
   Activity, BarChart2, ShieldAlert, GitBranch, RefreshCw, AlertTriangle, Cpu
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, Query, ID, account } from '../lib/appwrite';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { Tooltip } from '../components/Tooltip';
 import TonyAgentModal from '../components/TonyAgentModal';
@@ -189,6 +189,17 @@ export default function DeepAnalysis() {
     setProcessingAction('task');
     const loadToast = toast.loading(`Initiating task dispatch for ${v.cveId || v.title}...`);
     try {
+      let userId = '';
+      try {
+        const currentUser = await account.get();
+        userId = currentUser.$id;
+      } catch (err) {
+        toast.error('Session expired. Please log in again.', { id: loadToast });
+        setProcessingId(null);
+        setProcessingAction(null);
+        return;
+      }
+
       const firstOcc = v.occurrences[0];
       const rawVuln = vulns.find(item => (item.$id || item.id) === firstOcc.id);
       const repoId = rawVuln ? rawVuln.repo_id : '';
@@ -200,7 +211,8 @@ export default function DeepAnalysis() {
         status: 'todo',
         priority: v.severity.toLowerCase() === 'critical' || v.severity.toLowerCase() === 'high' ? 'high' : 'medium',
         due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        repo_url: repo ? repo.url : null
+        repo_url: repo ? repo.url : null,
+        user_id: userId
       });
 
       toast.success(`Successfully dispatched security task for ${v.cveId || v.title}`, { id: loadToast });

@@ -1,10 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@700;800;900&display=swap');
 
+:root {
+  --color-primary: #6db87a;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 * {
+  -webkit-backface-visibility: hidden;
   scroll-behavior: smooth;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -17,11 +22,11 @@
 html.dark {
   --background: #111111;
   --card-background: #1a1a1a;
-  --primary: #7bc67e;
+  --primary: var(--color-primary);
   --text-primary: #ffffff;
   --text-secondary: #a0a0a0;
   --border: #2a2a2a;
-  --accent: #7bc67e;
+  --accent: var(--color-primary);
   --danger: #e57373;
   --warning: #ffb74d;
 
@@ -64,11 +69,11 @@ html.dark [class*='panel'] {
 html.light {
   --background: #f5f0e8;
   --card-background: #ffffff;
-  --primary: #7bc67e;
+  --primary: var(--color-primary);
   --text-primary: #1a2018;
   --text-secondary: #5a6359;
   --border: #e0ddd3;
-  --accent: #7bc67e;
+  --accent: var(--color-primary);
   --danger: #e57373;
   --warning: #ffb74d;
 
@@ -80,14 +85,14 @@ html.light {
   --text-on-accent: #ffffff;
   --accent-primary: var(--primary);
   --accent-secondary: #a3d9a5;
-  --status-success: #7bc67e;
+  --status-success: var(--color-primary);
   --status-error: #e57373;
   --status-warning: #ffb74d;
   --severity-critical: #e57373;
   --severity-high: #ff8a80;
   --severity-medium: #ffb74d;
-  --severity-low: #7bc67e;
-  --severity-info: #7bc67e;
+  --severity-low: var(--color-primary);
+  --severity-info: var(--color-primary);
   --chart-bg: transparent;
   --chart-grid: var(--border-subtle);
   --chart-label: var(--text-secondary);
@@ -110,21 +115,21 @@ html.eye-protection {
   --text-secondary: #4a6a35;
   --text-muted: #5a7a4a;
   --text-on-accent: #ffffff;
-  --accent-primary: #7bc67e;
+  --accent-primary: #6db87a;
   --accent-secondary: #8aaa78;
-  --status-success: #7bc67e;
+  --status-success: #6db87a;
   --status-error: #e57373;
   --status-warning: #ffb74d;
   --severity-critical: #e57373;
   --severity-high: #ff8a80;
   --severity-medium: #ffb74d;
-  --severity-low: #7bc67e;
-  --severity-info: #7bc67e;
+  --severity-low: #6db87a;
+  --severity-info: #6db87a;
   --card-shadow: 0 2px 12px rgba(100,150,80,0.08);
   --chart-bg: #f0f7ea;
   --chart-grid: #c8ddb5;
   --chart-label: #5a7a4a;
-  --chart-fill: #7bc67e;
+  --chart-fill: #6db87a;
   --chart-fill-opacity: 0.25;
 }
 
@@ -250,6 +255,12 @@ html.underwater [class*='panel'] {
   border: 1px solid var(--border-color) !important;
   box-shadow: var(--card-shadow) !important;
   color: #ffffff !important;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  isolation: isolate;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 html.underwater .card b, 
@@ -339,6 +350,12 @@ html.liquid-glass [class*="dropdown-panel"] {
   box-shadow: 0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5) !important;
   color: var(--text-primary) !important;
   border-radius: 16px !important;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  isolation: isolate;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 html.liquid-glass .text-gray-900, 
@@ -446,6 +463,12 @@ html.matrix [class*="dropdown-panel"] {
   box-shadow: var(--glass-shadow) !important;
   color: var(--text-primary) !important;
   border-radius: 16px !important;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  isolation: isolate;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 html.matrix * {
@@ -506,6 +529,12 @@ body {
     backdrop-filter: blur(12px);
     border: 1px solid var(--border-subtle);
     border-radius: var(--card-radius);
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    isolation: isolate;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .btn-premium {

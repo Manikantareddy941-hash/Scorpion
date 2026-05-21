@@ -5,6 +5,7 @@ import App from './App.tsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ScanProvider } from './contexts/ScanContext';
+import { TerminologyProvider } from './contexts/TerminologyContext';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -12,7 +13,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <AuthProvider>
         <ScanProvider>
-          <App />
+          <TerminologyProvider>
+            <App />
+          </TerminologyProvider>
         </ScanProvider>
       </AuthProvider>
     </ThemeProvider>

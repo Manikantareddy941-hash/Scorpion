@@ -241,7 +241,7 @@ export default function Monitor() {
               </div>
             </div>
 
-            <div className="premium-card p-4 h-[250px]">
+            <div className="premium-card p-4 h-[250px]" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
               <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
                 <Shield size={14} className="text-[var(--status-success)]" /> Security Events
               </h3>

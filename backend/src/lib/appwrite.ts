@@ -47,6 +47,9 @@ export const COLLECTIONS = {
   PROJECT_POLICIES: 'project_policies',
   RBAC_AUDIT_LOGS: 'rbac_audit_log',
   THREATS: 'threats',
+  BUILD_PIPELINES: 'build_pipelines',
+  DEPLOYMENTS: 'deployments',
+  BUILD_ARTIFACTS: 'build_artifacts',
 };
 
 export { ID, Query };
