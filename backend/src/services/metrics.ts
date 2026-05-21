@@ -25,6 +25,21 @@ export const ciGateDecisions = new Counter({
   registers: [register]
 });
 
+export const buildsTotal = new Counter({
+  name: 'scorpion_builds_total',
+  help: 'Total CI builds executed',
+  labelNames: ['status', 'tool'],
+  registers: [register]
+});
+
+export const buildDuration = new Histogram({
+  name: 'scorpion_build_duration_seconds',
+  help: 'Build pipeline duration in seconds',
+  labelNames: ['tool'],
+  buckets: [10, 30, 60, 120, 300, 600, 1200],
+  registers: [register]
+});
+
 export const deploymentBlocks = new Counter({
   name: 'scorpion_deployment_blocks_total',
   help: 'Deployments blocked by GitOps gate',

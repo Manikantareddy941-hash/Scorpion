@@ -33,9 +33,56 @@ export default function Alerts() {
     const [testing, setTesting] = useState<string | null>(null);
     const [docId, setDocId] = useState<string | null>(null);
 
+    // Discord Specific Configurations
+    const [discordUsername, setDiscordUsername] = useState('Scorpion Operator');
+    const [discordAvatar, setDiscordAvatar] = useState('');
+    const [alertCritical, setAlertCritical] = useState(true);
+    const [alertPolicy, setAlertPolicy] = useState(true);
+    const [alertDeploy, setAlertDeploy] = useState(true);
+    const [discordSaving, setDiscordSaving] = useState(false);
+
     // Feed State
     const [findings, setFindings] = useState<any[]>([]);
     const [feedLoading, setFeedLoading] = useState(false);
+
+    const handleSaveDiscordMesh = async () => {
+        if (!discordWebhook) {
+            toast.error('Webhook URL is required');
+            return;
+        }
+        setDiscordSaving(true);
+        try {
+            const token = await getJWT();
+            const response = await fetch('/api/mesh/discord/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    webhookUrl: discordWebhook,
+                    username: discordUsername,
+                    avatarUrl: discordAvatar,
+                    alerts: {
+                        criticalVulnerabilities: alertCritical,
+                        policyBlocks: alertPolicy,
+                        deploymentSuccess: alertDeploy
+                    }
+                })
+            });
+
+            if (response.ok) {
+                toast.success('Discord Mesh configuration committed successfully.');
+            } else {
+                toast.error(`Save failed: ${response.status}`);
+            }
+        } catch (err: any) {
+            console.error('Discord config save error:', err);
+            toast.error('Failed to commit Discord configuration');
+        } finally {
+            setDiscordSaving(false);
+        }
+    };
 
     useEffect(() => {
         if (!user) return;
@@ -250,16 +297,108 @@ export default function Alerts() {
 
                         {/* Integration Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <IntegrationCard 
-                                icon={<MessageSquare size={24} />} 
-                                color="text-[#5865F2]" 
-                                title="Discord Interceptor" 
-                                value={discordWebhook} 
-                                setValue={setDiscordWebhook} 
-                                onTest={() => handleTest('discord', discordWebhook)}
-                                testing={testing === 'discord'}
-                                placeholder="Webhook URL"
-                            />
+                            {/* Discord Interceptor Detailed Configuration Form */}
+                            <div className="premium-card p-8 group flex flex-col justify-between col-span-1 md:col-span-2 border border-[#5865F2]/20 bg-[#5865F2]/[0.01]">
+                                <div>
+                                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 text-[#5865F2] bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover:scale-105 transition-transform">
+                                                <MessageSquare size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xs font-black text-[#5865F2] uppercase tracking-[0.2em] italic">Discord Mesh Interceptor</h3>
+                                                <p className="text-[9px] text-[var(--text-secondary)] uppercase mt-0.5 font-bold font-mono">Deep Ingress Integration Gateway</p>
+                                            </div>
+                                        </div>
+                                        <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20">Active Node</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[8px] font-black uppercase tracking-widest text-[var(--text-secondary)] font-mono">Discord Webhook URL</label>
+                                            <input 
+                                                type="password" 
+                                                value={discordWebhook} 
+                                                onChange={(e) => setDiscordWebhook(e.target.value)} 
+                                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 text-xs font-black italic text-[var(--text-primary)] outline-none focus:border-[#5865F2]/30 transition-colors"
+                                                placeholder="https://discord.com/api/webhooks/..."
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[8px] font-black uppercase tracking-widest text-[var(--text-secondary)] font-mono">Bot Username Override</label>
+                                            <input 
+                                                type="text" 
+                                                value={discordUsername} 
+                                                onChange={(e) => setDiscordUsername(e.target.value)} 
+                                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 text-xs font-black italic text-[var(--text-primary)] outline-none focus:border-[#5865F2]/30 transition-colors"
+                                                placeholder="Scorpion Operator"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[8px] font-black uppercase tracking-widest text-[var(--text-secondary)] font-mono">Custom Avatar URL</label>
+                                            <input 
+                                                type="text" 
+                                                value={discordAvatar} 
+                                                onChange={(e) => setDiscordAvatar(e.target.value)} 
+                                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-3 text-xs font-black italic text-[var(--text-primary)] outline-none focus:border-[#5865F2]/30 transition-colors"
+                                                placeholder="https://path-to-image.png"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-6">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] block mb-3 font-mono">Alert Trigger Events</span>
+                                        <div className="flex flex-wrap gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
+                                            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={alertCritical} 
+                                                    onChange={(e) => setAlertCritical(e.target.checked)} 
+                                                    className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#5865F2] focus:ring-[#5865F2] bg-[var(--bg-primary)]"
+                                                />
+                                                <span className="text-[10px] font-black uppercase italic text-[var(--text-primary)] pr-2">Critical Vulns</span>
+                                            </label>
+                                            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={alertPolicy} 
+                                                    onChange={(e) => setAlertPolicy(e.target.checked)} 
+                                                    className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#5865F2] focus:ring-[#5865F2] bg-[var(--bg-primary)]"
+                                                />
+                                                <span className="text-[10px] font-black uppercase italic text-[var(--text-primary)] pr-2">Policy Blocks</span>
+                                            </label>
+                                            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={alertDeploy} 
+                                                    onChange={(e) => setAlertDeploy(e.target.checked)} 
+                                                    className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#5865F2] focus:ring-[#5865F2] bg-[var(--bg-primary)]"
+                                                />
+                                                <span className="text-[10px] font-black uppercase italic text-[var(--text-primary)] pr-2">Deployment Success</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-4 border-t border-white/5 pt-4">
+                                    <button 
+                                        onClick={handleSaveDiscordMesh}
+                                        disabled={discordSaving || !discordWebhook}
+                                        className="flex-1 py-3.5 bg-[#5865F2] hover:bg-[#4752c4] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-30 shadow-[0_4px_12px_rgba(88,101,242,0.2)] hover:scale-[1.01]"
+                                    >
+                                        {discordSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save size={12} />}
+                                        Save Discord Configuration
+                                    </button>
+                                    <button 
+                                        onClick={() => handleTest('discord', discordWebhook)}
+                                        disabled={testing === 'discord' || !discordWebhook}
+                                        className="px-6 py-3.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] hover:border-[#5865F2] text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-30 text-[var(--text-primary)]"
+                                    >
+                                        {testing === 'discord' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send size={12} />}
+                                        Dispatch Test Payload
+                                    </button>
+                                </div>
+                            </div>
                             <IntegrationCard 
                                 icon={<Slack size={24} />} 
                                 color="text-[#E01E5A]" 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Shield, TrendingUp, ChevronRight, CheckCircle2, AlertTriangle, Info, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface PostureData {
   score: number;
@@ -15,6 +16,7 @@ interface PostureData {
 
 export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = false }: { compact?: boolean; ciGateRate?: number; hasScans?: boolean }) {
   const { getJWT } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState<PostureData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +37,19 @@ export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = fal
     };
     fetchPosture();
   }, []);
+
+  const handleRecommendationClick = (rec: string) => {
+    const text = rec.toLowerCase();
+    if (text.includes('ci gate') || text.includes('gate')) {
+      navigate('/release');
+    } else if (text.includes('scan') || text.includes('vulnerability')) {
+      navigate('/tests');
+    } else if (text.includes('task') || text.includes('finding')) {
+      navigate('/tasks');
+    } else {
+      navigate('/tasks');
+    }
+  };
 
   if (loading) return <div className="h-64 bg-[var(--bg-card)] animate-pulse rounded-[16px]"></div>;
   if (!data) return null;
@@ -89,7 +104,11 @@ export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = fal
               recs.unshift(`Improve CI gate pass rate (currently 0%) by fixing policy blockers.`);
             }
             return recs.map((rec, i) => (
-              <div key={i} className={`flex gap-2 items-start ${compact ? 'p-1.5' : 'p-3'} rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)] group hover:border-[var(--accent-primary)] transition-all cursor-default`}>
+              <div 
+                key={i} 
+                onClick={() => handleRecommendationClick(rec)}
+                className={`flex gap-2 items-start ${compact ? 'p-1.5' : 'p-3'} rounded-xl bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/40 group transition-all cursor-pointer`}
+              >
                 <div className="w-4 h-4 rounded-lg bg-green-50 text-green-600 flex items-center justify-center shrink-0 mt-0.5">
                   <ChevronRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
                 </div>

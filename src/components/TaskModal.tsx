@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, ID, account } from '../lib/appwrite';
 import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -39,6 +39,16 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
     setLoading(true);
 
     try {
+      let userId = '';
+      try {
+        const currentUser = await account.get();
+        userId = currentUser.$id;
+      } catch (err) {
+        setError(t('common.error_session_expired', 'Session expired. Please log in again.'));
+        setLoading(false);
+        return;
+      }
+
       const taskData = {
         title,
         description,
@@ -49,11 +59,14 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
       };
 
       if (task) {
-        await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, task.$id, taskData);
+        await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, task.$id, {
+          ...taskData,
+          user_id: userId,
+        });
       } else {
         await databases.createDocument(DB_ID, COLLECTIONS.TASKS, ID.unique(), {
           ...taskData,
-          user_id: user?.$id,
+          user_id: userId,
         });
       }
 
