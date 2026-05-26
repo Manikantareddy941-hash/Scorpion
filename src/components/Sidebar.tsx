@@ -49,8 +49,7 @@ export default function Sidebar({
     {
       title: 'OVERVIEW',
       items: [
-        { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' },
-        { icon: Activity, label: 'MONITOR', path: '/monitor' }
+        { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' }
       ]
     },
     {
@@ -67,9 +66,9 @@ export default function Sidebar({
       ]
     },
     {
-      title: 'BUILD',
+      title: 'PIPELINES',
       items: [
-        { icon: Package, label: 'BUILD', path: '/build' }
+        { icon: Package, label: 'PIPELINES', path: '/pipelines' }
       ]
     },
     {
@@ -87,9 +86,9 @@ export default function Sidebar({
       ]
     },
     {
-      title: 'DEPLOY',
+      title: 'DEPLOYMENTS',
       items: [
-        { icon: Rocket, label: 'DEPLOY', path: '/deploy' }
+        { icon: Rocket, label: 'DEPLOYMENTS', path: '/deployments' }
       ]
     },
     {
@@ -103,6 +102,7 @@ export default function Sidebar({
     {
       title: 'MONITOR',
       items: [
+        { icon: Activity, label: 'MONITOR', path: '/monitor' },
         { 
           icon: BarChart2, 
           label: t('sidebar.reports'), 

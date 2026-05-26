@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
+import { resolveToolCommand, validateTools } from '../../utils/toolCheck';
 
 // Safety: 5 minute timeout for any individual tool scan
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -14,40 +15,23 @@ export interface ScanResult {
 }
 
 /**
- * Resolves tool name to executable and args for Windows compatibility (DEP0190 compliant)
- */
-const resolveTool = (name: string): { cmd: string, prefixArgs: string[] } => {
-    if (!isWin) return { cmd: name, prefixArgs: [] };
-    
-    if (name === 'checkov') {
-        // Windows limitation: .cmd files require a shell. 
-        // Calling 'cmd /c checkov' satisfies DEP0190 as args are passed via array.
-        return { cmd: 'cmd', prefixArgs: ['/c', 'checkov'] };
-    }
-    
-    const mapping: Record<string, string> = {
-        'semgrep': 'semgrep.exe',
-        'bandit': 'bandit.exe',
-        'gitleaks': 'gitleaks.exe',
-        'trivy': 'trivy.exe'
-    };
-    
-    return { cmd: mapping[name] || name, prefixArgs: [] };
-};
-
-/**
- * Internal helper to run a CLI tool using spawn (No shell:true, DEP0190 compliant)
+ * Internal helper to run a CLI tool using spawn (No shell:true, DEP0190 compliant unless cmd is wrapped on Windows)
  */
 const executeTool = async (toolId: string, userArgs: string[], toolName: ScanResult['tool']): Promise<ScanResult> => {
+    const tool = await resolveToolCommand(toolId);
     return new Promise((resolve) => {
-        const tool = resolveTool(toolId);
         const finalArgs = [...tool.prefixArgs, ...userArgs];
         let stdout = '';
         let stderr = '';
         
         console.log(`[Orchestrator] Executing: ${tool.cmd} ${finalArgs.join(' ')}`);
         
-        const child = spawn(tool.cmd, finalArgs, { timeout: SCAN_TIMEOUT_MS });
+        const options: any = { timeout: SCAN_TIMEOUT_MS };
+        if (isWin && tool.cmd === 'cmd') {
+            options.shell = true;
+        }
+
+        const child = spawn(tool.cmd, finalArgs, options);
 
         child.stdout?.on('data', (data) => { stdout += data.toString(); });
         child.stderr?.on('data', (data) => { stderr += data.toString(); });
@@ -71,28 +55,7 @@ const executeTool = async (toolId: string, userArgs: string[], toolName: ScanRes
     });
 };
 
-/**
- * Verifies that required security CLI tools are installed and accessible.
- */
-export const validateTools = async (): Promise<{ tool: string, status: 'installed' | 'missing', version?: string }[]> => {
-    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit'];
-
-    const results = await Promise.all(tools.map(async (name) => {
-        try {
-            const res = await executeTool(name, ['--version'], name as any);
-            if (res.stdout || res.status === 0) {
-                console.log(`[Tools] ✅ ${name} found`);
-                return { tool: name, status: 'installed' as const, version: res.stdout.trim().split('\n')[0] };
-            }
-            throw new Error('Not found');
-        } catch (err) {
-            console.error(`[Tools] ❌ ${name} NOT INSTALLED — findings for this engine will be empty`);
-            return { tool: name, status: 'missing' as const };
-        }
-    }));
-
-    return results;
-};
+export { validateTools };
 
 export interface ScanOptions {
     scanType?: 'full' | 'sast' | 'sca' | 'secrets';

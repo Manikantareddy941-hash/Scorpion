@@ -6,25 +6,17 @@ import { Request, Response, NextFunction } from 'express';
  */
 export const verifyUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    let token = '';
     const header = req.headers.authorization;
-    
-    // Secure local loopback check for rapid developer feedback and testing
+    if (header) {
+      token = header.split(" ")[1];
+    } else if (req.query.token) {
+      token = req.query.token as string;
+    }
+
     const ip = req.ip || req.socket.remoteAddress || '';
     const isLocal = ip.includes('127.0.0.1') || ip.includes('::1') || ip.includes('localhost') || process.env.NODE_ENV !== 'production';
 
-    if (!header) {
-      if (isLocal) {
-        (req as any).user = {
-          $id: 'mock-local-developer',
-          userId: 'mock-local-developer',
-          email: 'dev@scorpion.local'
-        };
-        return next();
-      }
-      return res.status(401).json({ error: "No token provided" });
-    }
-
-    const token = header.split(" ")[1];
     if (!token) {
       if (isLocal) {
         (req as any).user = {

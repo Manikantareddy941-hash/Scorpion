@@ -2,7 +2,7 @@ import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
 import { orchestrateScan } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, parseCheckov, parseBandit, Finding } from './scan/parsers';
-import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks } from '../scanners/normalizer';
+import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
@@ -322,7 +322,9 @@ export const triggerScan = async (
         const issues = [
             ...normalizeTrivy(scanResults.trivy || {}, scanPath),
             ...normalizeSemgrep(scanResults.semgrep || {}, scanPath),
-            ...normalizeGitleaks(scanResults.gitleaks || [], scanPath)
+            ...normalizeGitleaks(scanResults.gitleaks || [], scanPath),
+            ...normalizeCheckov(scanResults.checkov || {}, scanPath),
+            ...normalizeBandit(scanResults.bandit || {}, scanPath)
         ];
 
         // 9️⃣ Count by severity (Adjusted for uppercase)

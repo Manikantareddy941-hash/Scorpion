@@ -120,3 +120,77 @@ function classifyType(ruleId: string): NormalizedIssue['type'] {
       id.includes('exception') || id.includes('crash')) return 'reliability';
   return 'maintainability';
 }
+
+export function normalizeCheckov(raw: any, workDir: string): NormalizedIssue[] {
+  const results = Array.isArray(raw) ? raw : [raw];
+  const issues: NormalizedIssue[] = [];
+
+  results.forEach((result: any) => {
+    const failed = result.results?.failed_checks || [];
+    failed.forEach((c: any) => {
+      const relativeFile = c.file_path ?? '';
+      const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
+      const line = c.file_line_range?.[0] ?? 0;
+      const endLine = c.file_line_range?.[1] ?? line;
+
+      issues.push({
+        tool: 'checkov',
+        type: 'security',
+        severity: mapCheckovSeverity(c.severity ?? c.check_severity),
+        title: c.check_id ?? 'Misconfiguration',
+        message: c.check_name ?? '',
+        file: relativeFile,
+        line,
+        endLine,
+        code: extractCodeSnippet(fullPath, line, endLine),
+        effort: '10min',
+        category: 'iac-misconfig',
+        ruleId: c.check_id ?? ''
+      });
+    });
+  });
+
+  return issues;
+}
+
+function mapCheckovSeverity(s?: string): NormalizedIssue['severity'] {
+  switch (s?.toUpperCase()) {
+    case 'CRITICAL': return 'CRITICAL';
+    case 'HIGH':     return 'HIGH';
+    case 'LOW':      return 'LOW';
+    case 'INFO':     return 'INFO';
+    default:         return 'MEDIUM';
+  }
+}
+
+export function normalizeBandit(raw: any, workDir: string): NormalizedIssue[] {
+  return (raw.results ?? []).map((r: any) => {
+    const relativeFile = r.filename ?? '';
+    const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
+    const line = r.line_number ?? 0;
+
+    return {
+      tool: 'bandit',
+      type: 'security',
+      severity: mapBanditSeverity(r.issue_severity),
+      title: r.test_id ?? 'Bandit Issue',
+      message: r.issue_text ?? '',
+      file: relativeFile,
+      line,
+      endLine: line,
+      code: extractCodeSnippet(fullPath, line, line),
+      effort: estimateEffort(r.issue_severity),
+      category: r.test_id ?? '',
+      ruleId: r.test_id ?? ''
+    };
+  });
+}
+
+function mapBanditSeverity(s?: string): NormalizedIssue['severity'] {
+  switch (s?.toUpperCase()) {
+    case 'HIGH': return 'HIGH';
+    case 'MEDIUM': return 'MEDIUM';
+    case 'LOW': return 'LOW';
+    default: return 'INFO';
+  }
+}
