@@ -50,6 +50,7 @@ export const COLLECTIONS = {
   BUILD_PIPELINES: 'build_pipelines',
   DEPLOYMENTS: 'deployments',
   BUILD_ARTIFACTS: 'build_artifacts',
+  ENVIRONMENTS: 'environments',
 };
 
 export { ID, Query };

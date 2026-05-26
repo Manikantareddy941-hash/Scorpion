@@ -186,7 +186,9 @@ function App() {
               <Route path="/map" element={<ProtectedRoute><JourneyMap /></ProtectedRoute>} />
               <Route path="/code" element={<ProtectedRoute><CodeActivity /></ProtectedRoute>} />
               <Route path="/build" element={<ProtectedRoute><Build /></ProtectedRoute>} />
+              <Route path="/pipelines" element={<ProtectedRoute><Build /></ProtectedRoute>} />
               <Route path="/deploy" element={<ProtectedRoute><Deploy /></ProtectedRoute>} />
+              <Route path="/deployments" element={<ProtectedRoute><Deploy /></ProtectedRoute>} />
               <Route path="/tests" element={<ProtectedRoute><TestResults /></ProtectedRoute>} />
               <Route path="/analyze" element={<ProtectedRoute><DeepAnalysis /></ProtectedRoute>} />
               <Route path="/release" element={<ProtectedRoute><ReleaseGate /></ProtectedRoute>} />

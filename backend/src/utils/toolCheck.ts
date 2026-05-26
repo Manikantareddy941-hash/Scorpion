@@ -1,32 +1,158 @@
 import { spawnSync } from "child_process";
 
 const isWin = process.platform === 'win32';
-const resolveTool = (name: string): { cmd: string, prefixArgs: string[] } => {
-    if (!isWin) return { cmd: name, prefixArgs: [] };
-    
-    if (name === 'checkov') {
-        // Windows limitation: .cmd files require a shell.
-        // Calling 'cmd /c checkov' satisfies DEP0190 as args are passed via array.
-        return { cmd: 'cmd', prefixArgs: ['/c', 'checkov'] };
+
+export interface ResolvedCommand {
+    cmd: string;
+    prefixArgs: string[];
+    status: 'installed' | 'missing';
+    version?: string;
+}
+
+const cache = new Map<string, ResolvedCommand>();
+
+const getVersionFlag = (toolName: string): string => {
+    if (toolName === 'gitleaks') {
+        return 'version';
     }
-    
-    const mapping: Record<string, string> = {
-        'semgrep': 'semgrep.exe',
-        'bandit': 'bandit.exe',
-        'gitleaks': 'gitleaks.exe',
-        'trivy': 'trivy.exe'
+    return '--version';
+};
+
+const performResolution = async (toolName: string): Promise<ResolvedCommand> => {
+    const versionFlag = getVersionFlag(toolName);
+
+    if (!isWin) {
+        // Unix-like system resolution
+        try {
+            const checkWhich = spawnSync('which', [toolName]);
+            if (checkWhich.status === 0) {
+                const versionCheck = spawnSync(toolName, [versionFlag]);
+                const version = versionCheck.status === 0 ? versionCheck.stdout.toString().trim().split('\n')[0] : undefined;
+                return {
+                    cmd: toolName,
+                    prefixArgs: [],
+                    status: 'installed',
+                    version
+                };
+            }
+        } catch {
+            // Ignore
+        }
+        return {
+            cmd: toolName,
+            prefixArgs: [],
+            status: 'missing'
+        };
+    }
+
+    // Windows candidates to try in order:
+    // 1. toolName
+    // 2. toolName.exe
+    // 3. python -m toolName
+    // 4. cmd /c toolName
+    const candidates = [
+        { cmd: toolName, prefixArgs: [], checkName: toolName },
+        { cmd: `${toolName}.exe`, prefixArgs: [], checkName: `${toolName}.exe` },
+        { cmd: 'python', prefixArgs: ['-m', toolName], checkName: 'python' },
+        { cmd: 'cmd', prefixArgs: ['/c', toolName], checkName: 'cmd' }
+    ];
+
+    for (const cand of candidates) {
+        try {
+            // 1. Check if the binary exists in PATH using where
+            const checkWhere = spawnSync('where', [cand.checkName]);
+            if (checkWhere.status === 0) {
+                // 2. Verify that running it with the version flag actually succeeds (status === 0)
+                const checkRun = spawnSync(cand.cmd, [...cand.prefixArgs, versionFlag]);
+                if (checkRun.status === 0) {
+                    const version = checkRun.stdout.toString().trim().split('\n')[0] || undefined;
+                    return {
+                        cmd: cand.cmd,
+                        prefixArgs: cand.prefixArgs,
+                        status: 'installed',
+                        version
+                    };
+                }
+            }
+        } catch {
+            // Ignore and try next
+        }
+    }
+
+    // Fallback if none resolved successfully
+    return {
+        cmd: toolName === 'checkov' ? 'cmd' : `${toolName}.exe`,
+        prefixArgs: toolName === 'checkov' ? ['/c', 'checkov'] : [],
+        status: 'missing'
     };
-    
-    return { cmd: mapping[name] || name, prefixArgs: [] };
+};
+
+export const resolveToolCommand = async (toolName: string): Promise<ResolvedCommand> => {
+    if (cache.has(toolName)) {
+        return cache.get(toolName)!;
+    }
+
+    const resolved = await performResolution(toolName);
+    cache.set(toolName, resolved);
+    return resolved;
 };
 
 export const checkTool = (cmd: string): boolean => {
-    const tool = resolveTool(cmd);
-    const versionFlag = cmd === "gitleaks" ? "version" : "--version";
-    try {
-        const res = spawnSync(tool.cmd, [...tool.prefixArgs, versionFlag], { stdio: "ignore" });
-        return res.status === 0;
-    } catch {
-        return false;
+    if (cache.has(cmd)) {
+        return cache.get(cmd)!.status === 'installed';
+    }
+    
+    // Synchronous fallback
+    const versionFlag = getVersionFlag(cmd);
+    if (!isWin) {
+        try {
+            const check = spawnSync('which', [cmd]);
+            return check.status === 0;
+        } catch {
+            return false;
+        }
+    }
+    
+    const candidates = [
+        { cmd, prefixArgs: [] },
+        { cmd: `${cmd}.exe`, prefixArgs: [] },
+        { cmd: 'python', prefixArgs: ['-m', cmd] },
+        { cmd: 'cmd', prefixArgs: ['/c', cmd] }
+    ];
+    for (const cand of candidates) {
+        try {
+            const check = spawnSync(cand.cmd, [...cand.prefixArgs, versionFlag]);
+            if (check.status === 0) {
+                return true;
+            }
+        } catch {
+            // Ignore
+        }
+    }
+    return false;
+};
+
+export const initToolCache = async (): Promise<void> => {
+    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit'];
+    for (const tool of tools) {
+        await resolveToolCommand(tool);
     }
 };
+
+export const validateTools = async (): Promise<{ tool: string, status: 'installed' | 'missing', version?: string }[]> => {
+    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit'];
+    
+    const results = await Promise.all(tools.map(async (name) => {
+        const resolved = await resolveToolCommand(name);
+        if (resolved.status === 'installed') {
+            console.log(`[Tools] ✅ ${name} found`);
+            return { tool: name, status: 'installed' as const, version: resolved.version };
+        } else {
+            console.error(`[Tools] ❌ ${name} NOT INSTALLED — findings for this engine will be empty`);
+            return { tool: name, status: 'missing' as const };
+        }
+    }));
+
+    return results;
+};
+

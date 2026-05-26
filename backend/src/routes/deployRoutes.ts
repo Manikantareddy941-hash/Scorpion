@@ -5,10 +5,10 @@ import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 const router = express.Router();
 
 /**
- * POST /api/deployments/trigger
+ * POST /api/deployments/trigger or POST /api/deploy
  * Trigger a new deployment
  */
-router.post('/trigger', async (req, res) => {
+router.post(['/', '/trigger'], async (req, res) => {
   try {
     const { buildId, environment } = req.body;
     const triggeredBy = (req as any).user?.email || 'unknown';
@@ -71,10 +71,10 @@ router.get('/environments', async (req, res) => {
 });
 
 /**
- * GET /api/deployments/:id
+ * GET /api/deployments/:id or GET /api/deploy/:id/status
  * Get a single deployment by ID
  */
-router.get('/:id', async (req, res) => {
+router.get(['/:id', '/:id/status'], async (req, res) => {
   try {
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.DEPLOYMENTS, req.params.id);
     res.json(doc);

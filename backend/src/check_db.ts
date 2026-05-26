@@ -6,12 +6,10 @@ async function checkAppwriteDB() {
 
     try {
         const collections = await databases.listCollections(DB_ID);
-        console.log('Collections status: Success');
-        console.log('Available collections:', collections.collections.map(c => c.name));
+        console.log('Collections:', collections.collections.map(c => c.name));
 
-        // Try a simple select from repositories
-        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, []);
-        console.log('Repositories check: Success', `(${repos.total} documents)`);
+        const deploymentsAttr = await databases.listAttributes(DB_ID, 'deployments');
+        console.log('Deployments attributes:', deploymentsAttr.attributes.map((a: any) => ({ key: a.key, type: a.type })));
     } catch (error: any) {
         console.error('Appwrite DB check failed:', error.message);
     }
