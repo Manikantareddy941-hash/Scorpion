@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { triggerScan } from '../services/scanService';
+import { triggerPipelineRun } from '../services/pipelineService';
 
 const router = Router();
 
@@ -84,7 +85,7 @@ router.post('/github', async (req: Request, res: Response) => {
         }
     }
 
-    if (event !== 'push') {
+    if (event !== 'push' && event !== 'pull_request') {
         return res.json({ message: `Event ${event} ignored` });
     }
 
@@ -102,46 +103,141 @@ router.post('/github', async (req: Request, res: Response) => {
             return res.json({ message: 'No matching repository found' });
         }
 
-        const commits = req.body.commits || [];
-        const sensitivePatterns = ['.env', 'password', 'secret', 'key.pem', 'credentials', 'config.json', 'token'];
+        const branch = event === 'push' 
+            ? (req.body.ref?.replace('refs/heads/', '') || 'main')
+            : (req.body.pull_request?.head?.ref || 'main');
 
-        for (const repo of repos.documents) {
-            for (const commit of commits) {
-                const filesChanged = [
-                    ...(commit.added || []),
-                    ...(commit.modified || []),
-                    ...(commit.removed || [])
-                ];
-                
-                const isSensitive = filesChanged.some(file => 
-                    sensitivePatterns.some(pattern => file.toLowerCase().includes(pattern))
-                );
+        const commitHash = event === 'push'
+            ? (req.body.head_commit?.id || 'HEAD')
+            : (req.body.pull_request?.head?.sha || 'HEAD');
 
-                try {
-                    await databases.createDocument(DB_ID, COLLECTIONS.COMMITS, ID.unique(), {
-                        repo_id: repo.$id,
-                        commit_hash: commit.id || String(Date.now()),
-                        author: commit.author?.name || commit.author?.username || 'Unknown',
-                        message: commit.message || '',
-                        url: commit.url || '',
-                        timestamp: commit.timestamp || new Date().toISOString(),
-                        files_changed: filesChanged.map(String),
-                        is_sensitive: isSensitive
-                    });
-                } catch (err) {
-                    console.error('[Webhook] Failed to log commit:', err);
+        const commitMessage = event === 'push'
+            ? (req.body.head_commit?.message || 'Push event trigger')
+            : (req.body.pull_request?.title || 'Pull request event trigger');
+
+        const author = event === 'push'
+            ? (req.body.head_commit?.author?.name || req.body.head_commit?.author?.username || 'Unknown')
+            : (req.body.pull_request?.user?.login || 'Unknown');
+
+        // Log the commits first (reusing existing schema)
+        if (event === 'push') {
+            const commits = req.body.commits || [];
+            const sensitivePatterns = ['.env', 'password', 'secret', 'key.pem', 'credentials', 'config.json', 'token'];
+            for (const repo of repos.documents) {
+                for (const commit of commits) {
+                    const filesChanged = [
+                        ...(commit.added || []),
+                        ...(commit.modified || []),
+                        ...(commit.removed || [])
+                    ];
+                    const isSensitive = filesChanged.some(file => 
+                        sensitivePatterns.some(pattern => file.toLowerCase().includes(pattern))
+                    );
+                    try {
+                        await databases.createDocument(DB_ID, COLLECTIONS.COMMITS, ID.unique(), {
+                            repo_id: repo.$id,
+                            commit_hash: commit.id || String(Date.now()),
+                            author: commit.author?.name || commit.author?.username || 'Unknown',
+                            message: commit.message || '',
+                            url: commit.url || '',
+                            timestamp: commit.timestamp || new Date().toISOString(),
+                            files_changed: filesChanged.map(String),
+                            is_sensitive: isSensitive
+                        });
+                    } catch (err) {
+                        console.error('[Webhook] Failed to log commit:', err);
+                    }
                 }
             }
-
-            triggerScan(repo.$id, {}).catch(err => {
-                console.error(`[Webhook] Failed to trigger scan for ${repo.$id}:`, err);
-            });
         }
 
-        res.json({ message: `Processed ${commits.length} commits and triggered scan for ${repos.total} repository(ies)` });
+        const triggeredRuns: string[] = [];
+        for (const repo of repos.documents) {
+            const runId = await triggerPipelineRun(
+                repo.$id,
+                branch,
+                commitHash,
+                commitMessage,
+                author
+            );
+            triggeredRuns.push(runId);
+        }
+
+        res.json({ 
+            message: `Triggered ${triggeredRuns.length} pipeline run(s)`, 
+            runs: triggeredRuns 
+        });
     } catch (err: any) {
         console.error('[Webhook] Error processing webhook:', err);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * Standard GitLab Webhook for automated pipeline runs
+ */
+router.post('/gitlab', async (req: Request, res: Response) => {
+    const gitlabToken = req.headers['x-gitlab-token'] as string;
+    const expectedToken = process.env.GITLAB_WEBHOOK_SECRET;
+
+    if (expectedToken && gitlabToken !== expectedToken) {
+        return res.status(401).json({ error: 'Invalid GitLab webhook token' });
+    }
+
+    const event = req.headers['x-gitlab-event'] as string;
+    if (event !== 'Push Hook' && event !== 'Merge Request Hook') {
+        return res.json({ message: `Event ${event} ignored` });
+    }
+
+    const repoUrl = req.body.project?.web_url || req.body.repository?.homepage;
+    if (!repoUrl) {
+        return res.status(400).json({ error: 'Missing repository URL in GitLab payload' });
+    }
+
+    try {
+        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+            Query.equal('url', repoUrl)
+        ]);
+
+        if (repos.total === 0) {
+            return res.json({ message: 'No matching repository found' });
+        }
+
+        const branch = event === 'Push Hook'
+            ? (req.body.ref?.replace('refs/heads/', '') || 'main')
+            : (req.body.object_attributes?.source_branch || 'main');
+
+        const commitHash = event === 'Push Hook'
+            ? (req.body.checkout_sha || 'HEAD')
+            : (req.body.object_attributes?.last_commit?.id || 'HEAD');
+
+        const commitMessage = event === 'Push Hook'
+            ? (req.body.commits?.[0]?.message || 'GitLab Push trigger')
+            : (req.body.object_attributes?.title || 'GitLab Merge Request trigger');
+
+        const author = event === 'Push Hook'
+            ? (req.body.user_name || req.body.commits?.[0]?.author?.name || 'Unknown')
+            : (req.body.object_attributes?.last_commit?.author?.name || 'Unknown');
+
+        const triggeredRuns: string[] = [];
+        for (const repo of repos.documents) {
+            const runId = await triggerPipelineRun(
+                repo.$id,
+                branch,
+                commitHash,
+                commitMessage,
+                author
+            );
+            triggeredRuns.push(runId);
+        }
+
+        res.json({ 
+            message: `Triggered ${triggeredRuns.length} pipeline run(s)`, 
+            runs: triggeredRuns 
+        });
+    } catch (err: any) {
+        console.error('[GitLab Webhook Error]', err.message);
+        res.status(500).json({ error: 'Internal server error', details: err.message });
     }
 });
 

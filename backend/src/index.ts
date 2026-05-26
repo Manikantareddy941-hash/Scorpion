@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import { initScheduler } from './scheduler';
-import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, Query, ID } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
 
 // Route Imports
@@ -50,6 +50,7 @@ import monitorRoutes from './routes/monitorRoutes';
 import issuesRoutes from './routes/issuesRoutes';
 import buildRoutes from './routes/buildRoutes';
 import deployRoutes from './routes/deployRoutes';
+import pipelineRoutes from './routes/pipelineRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 import { createNodeMiddleware } from "@octokit/webhooks";
@@ -73,9 +74,11 @@ requiredEnv.forEach(env => {
 });
 
 import { validateTools } from './services/scan/orchestrator';
+import { initToolCache } from './utils/toolCheck';
 
 (async () => {
     console.log("🛡️  Security Tool Chain Diagnostic:");
+    await initToolCache();
     await validateTools();
 
     // --- Recovery Mechanism ---
@@ -220,14 +223,58 @@ app.use('/api/monitor', monitorRoutes);
 app.use('/api/issues', authenticate, issuesRoutes);
 app.use('/api/builds', buildRoutes);
 app.use('/api/deployments', deployRoutes);
+app.use('/api/deploy', deployRoutes);
+app.use('/api/pipelines', pipelineRoutes);
 app.use('/metrics', metricsRoutes);
 
+// --- Ingestion APIs for Metrics & Logs ---
+app.post('/api/metrics', async (req: Request, res: Response) => {
+    try {
+        const { repoId, cpu, memory, requestRate, deploymentId } = req.body;
+        if (!repoId) return res.status(400).json({ error: 'repoId is required' });
+
+        const doc = await databases.createDocument(DB_ID, 'metrics', ID.unique(), {
+            repoId,
+            deploymentId: deploymentId || '',
+            cpu: Number(cpu || 0),
+            memory: Number(memory || 0),
+            requestRate: Number(requestRate || 0),
+            timestamp: new Date().toISOString()
+        });
+        res.status(201).json(doc);
+    } catch (err: any) {
+        res.status(500).json({ error: 'Failed to record metrics', details: err.message });
+    }
+});
+
+app.post('/api/logs', async (req: Request, res: Response) => {
+    try {
+        const { repoId, log, level = 'info', deploymentId } = req.body;
+        if (!repoId || !log) return res.status(400).json({ error: 'repoId and log are required' });
+
+        const doc = await databases.createDocument(DB_ID, COLLECTIONS.AUDIT_LOGS, ID.unique(), {
+            action: 'app_log',
+            actor: 'application',
+            actorEmail: 'app@scorpion.local',
+            resource: 'deployment',
+            resourceId: deploymentId || repoId,
+            timestamp: new Date().toISOString(),
+            details: JSON.stringify({ log, level, repoId })
+        });
+        res.status(201).json(doc);
+    } catch (err: any) {
+        res.status(500).json({ error: 'Failed to record log', details: err.message });
+    }
+});
+
 import { initReportScheduler } from './services/scheduleService';
+import { initUptimeScheduler } from './services/monitorService';
 
 // --- Initialization ---
 initScheduler();
 initReportScheduler();
 initScanWorker();
+initUptimeScheduler();
 
 // --- Error Handler ---
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

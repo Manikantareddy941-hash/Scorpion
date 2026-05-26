@@ -30,7 +30,7 @@ async function ensurePipelineStateCollection() {
 }
 
 // Check if a repository is allowed to be released
-async function checkReleaseGate(repoId: string) {
+export async function checkReleaseGate(repoId: string) {
     const findingsResponse = await databases.listDocuments(
         DB_ID,
         'vulnerabilities',

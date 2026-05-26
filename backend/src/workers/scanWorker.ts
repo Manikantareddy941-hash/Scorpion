@@ -11,25 +11,8 @@ import { sendFindingAlert } from '../utils/alertDispatcher';
 import { logAuditEvent } from '../utils/auditLogger';
 import crypto from 'crypto';
 
+import { resolveToolCommand } from '../utils/toolCheck';
 const isWin = process.platform === 'win32';
-const resolveTool = (name: string): { cmd: string, prefixArgs: string[] } => {
-    if (!isWin) return { cmd: name, prefixArgs: [] };
-    
-    if (name === 'checkov') {
-        // Windows limitation: .cmd files require a shell.
-        // Calling 'cmd /c checkov' satisfies DEP0190 as args are passed via array.
-        return { cmd: 'cmd', prefixArgs: ['/c', 'checkov'] };
-    }
-    
-    const mapping: Record<string, string> = {
-        'semgrep': 'semgrep.exe',
-        'bandit': 'bandit.exe',
-        'gitleaks': 'gitleaks.exe',
-        'trivy': 'trivy.exe'
-    };
-    
-    return { cmd: mapping[name] || name, prefixArgs: [] };
-};
 
 // Environment Variables
 export let isWorkerRunning = false;
@@ -64,12 +47,16 @@ interface Finding {
 /**
  * Runs Gitleaks for secret detection
  */
-function runGitleaks(repoPath: string, repo: any): Finding[] {
+async function runGitleaks(repoPath: string, repo: any): Promise<Finding[]> {
     console.log(`[Gitleaks] Scanning ${repo.name}...`);
     const reportId = ID.unique();
     const reportPath = path.join(os.tmpdir(), `gitleaks-${reportId}.json`);
     
-    const tool = resolveTool('gitleaks');
+    const tool = await resolveToolCommand('gitleaks');
+    const options: any = {};
+    if (isWin && tool.cmd === 'cmd') {
+        options.shell = true;
+    }
     spawnSync(tool.cmd, [
         ...tool.prefixArgs,
         'detect',
@@ -77,7 +64,7 @@ function runGitleaks(repoPath: string, repo: any): Finding[] {
         '--report-format', 'json',
         '--report-path', reportPath,
         '--exit-code', '0'
-    ]);
+    ], options);
 
     if (!fs.existsSync(reportPath)) {
         console.log(`[Gitleaks] No report generated for ${repo.name}.`);
@@ -167,19 +154,23 @@ async function runDependencyScan(repoPath: string, repo: any): Promise<Finding[]
 /**
  * Runs SAST scan using Semgrep
  */
-function runSastScan(repoPath: string, repo: any): Finding[] {
+async function runSastScan(repoPath: string, repo: any): Promise<Finding[]> {
     console.log(`[SAST] Scanning ${repo.name} with Semgrep...`);
     const findings: Finding[] = [];
 
     try {
-        const tool = resolveTool('semgrep');
+        const tool = await resolveToolCommand('semgrep');
+        const options: any = { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 };
+        if (isWin && tool.cmd === 'cmd') {
+            options.shell = true;
+        }
         const result = spawnSync(tool.cmd, [
             ...tool.prefixArgs,
             '--config=auto',
             repoPath,
             '--json',
             '--quiet'
-        ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+        ], options);
 
         if (result.status !== 0 && result.error) {
             console.warn(`[SAST Warning] Semgrep execution failed: ${result.error.message}`);
@@ -221,12 +212,16 @@ function runSastScan(repoPath: string, repo: any): Finding[] {
 /**
  * Runs IaC scan using Checkov
  */
-function runIacScan(repoPath: string, repo: any): Finding[] {
+async function runIacScan(repoPath: string, repo: any): Promise<Finding[]> {
     console.log(`[IaC] Scanning ${repo.name} with Checkov...`);
     const findings: Finding[] = [];
 
     try {
-        const tool = resolveTool('checkov');
+        const tool = await resolveToolCommand('checkov');
+        const options: any = { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 };
+        if (isWin && tool.cmd === 'cmd') {
+            options.shell = true;
+        }
         const result = spawnSync(tool.cmd, [
             ...tool.prefixArgs,
             '-d', repoPath,
@@ -234,7 +229,7 @@ function runIacScan(repoPath: string, repo: any): Finding[] {
             '--no-guide',
             '--soft-fail',
             '--output', 'json'
-        ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+        ], options);
 
         if (result.status !== 0 && result.error) {
             console.warn(`[IaC Warning] Checkov execution failed: ${result.error.message}`);
@@ -415,10 +410,10 @@ export async function processRepo(repo: any) {
     try {
         await git().clone(repo.url, tempDir);
         
-        const secretFindings = runGitleaks(tempDir, repo);
+        const secretFindings = await runGitleaks(tempDir, repo);
         const dependencyFindings = await runDependencyScan(tempDir, repo);
-        const sastFindings = runSastScan(tempDir, repo);
-        const iacFindings = runIacScan(tempDir, repo);
+        const sastFindings = await runSastScan(tempDir, repo);
+        const iacFindings = await runIacScan(tempDir, repo);
         
         const allFindings = [...secretFindings, ...dependencyFindings, ...sastFindings, ...iacFindings].map(f => ({
             ...f,
@@ -443,7 +438,7 @@ export async function processRepo(repo: any) {
 /**
  * Worker Main Loop
  */
-export function initScanWorker() {
+export async function initScanWorker() {
     isWorkerRunning = true;
     console.log('🛡️  [Scan Worker] Initializing Security Scan Worker...');
 
@@ -452,12 +447,9 @@ export function initScanWorker() {
         const tools = ['semgrep', 'checkov', 'gitleaks', 'trivy', 'bandit'];
         
         for (const toolName of tools) {
-            const tool = resolveTool(toolName);
-            const versionFlag = toolName === 'gitleaks' ? 'version' : '--version';
-            const check = spawnSync(tool.cmd, [...tool.prefixArgs, versionFlag]);
-            
+            const tool = await resolveToolCommand(toolName);
             const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
-            if (check.status !== 0) {
+            if (tool.status === 'missing') {
                 console.warn(`❌ [Scan Worker] ${displayName} NOT found`);
             } else {
                 console.log(`✅ [Scan Worker] ${displayName} detected and active`);
