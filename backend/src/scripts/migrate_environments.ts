@@ -1,36 +1,38 @@
+// backend/src/scripts/migrate_environments.ts
 import { Client, Databases } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load variables out of your root ecosystem configuration files
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT || '')
-  .setProject(process.env.APPWRITE_PROJECT_ID || '')
+  .setProject(process.env.APPWRITE_PROJECT_ID || process.env.APPWRITE_PROJECT || '')
   .setKey(process.env.APPWRITE_API_KEY || '');
 
 const databases = new Databases(client);
+
+// Constants – adjust if your DB ID differs
 const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'default';
 const COLLECTION_ID = 'environments';
 
-async function provisionEnvironmentsCollection() {
-  console.log(`[Migration] Starting schema setup for database context: "${DATABASE_ID}"...`);
-  
+async function runMigration() {
+  console.log(`[Migration] Initializing target database cluster context: "${DATABASE_ID}"...`);
+
   try {
-    // 1. Initialize Collection Root Node
+    // 1. Establish the collection master node
     await databases.createCollection(DATABASE_ID, COLLECTION_ID, 'Target Infrastructure Environments');
     console.log(`[Migration] Collection "${COLLECTION_ID}" established successfully.`);
   } catch (err: any) {
     if (err.code === 409) {
-      console.log(`[Migration] Warning: Collection "${COLLECTION_ID}" already initialized. Applying schema attributes...`);
+      console.log(`[Migration] Collection "${COLLECTION_ID}" already exists. Syncing structural attributes...`);
     } else {
-      console.error(`[Migration Fault] Fatal structural initialization failure:`, err);
+      console.error(`[Migration Fatal] Collection creation failed:`, err);
       process.exit(1);
     }
   }
 
-  // Define database architectural parameters
+  // 2. Blueprint schemas for the destination targets
   const attributes = [
     { key: 'name', type: 'string', size: 255, required: true },
     { key: 'host', type: 'string', size: 255, required: true },
@@ -47,17 +49,17 @@ async function provisionEnvironmentsCollection() {
       } else if (attr.type === 'integer') {
         await databases.createIntegerAttribute(DATABASE_ID, COLLECTION_ID, attr.key, attr.required);
       }
-      console.log(`   └─ Created attribute: [${attr.type.toUpperCase()}] ${attr.key}`);
+      console.log(`   └─ Created attribute: [${attr.type.toUpperCase()}] -> ${attr.key}`);
     } catch (attrErr: any) {
       if (attrErr.code === 409) {
-        console.log(`   └─ Attribute "${attr.key}" already matches architectural blueprints. Skipping.`);
+        console.log(`   └─ Attribute "${attr.key}" verified. Skipping.`);
       } else {
-        console.error(`   └─ Error processing structural column "${attr.key}":`, attrErr.message);
+        console.error(`   └─ Error creating attribute "${attr.key}":`, attrErr.message);
       }
     }
   }
 
-  console.log(`[Migration] Schema initialization procedures resolved smoothly.`);
+  console.log(`[Migration] Schema synchronization resolved successfully.`);
 }
 
-provisionEnvironmentsCollection();
+runMigration();

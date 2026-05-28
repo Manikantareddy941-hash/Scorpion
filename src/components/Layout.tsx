@@ -19,7 +19,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="flex flex-col h-screen overflow-y-auto custom-scrollbar text-[var(--text-primary)]" style={{ background: 'transparent' }}>
       <div className="flex flex-1 items-start">
         <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0" style={{ zoom: 0.85 }}>
           <header className={`h-16 flex items-center justify-between px-8 sticky top-0 z-40 ${theme === 'liquid-glass' ? '' : 'border-b border-[var(--border-subtle)]'}`} style={{ background: 'transparent' }}>
             <div />
 
