@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { runScanPipeline } from '../scanners/pipeline';
 import { parseSemgrep, parseGitleaks, parseTrivy, Finding as BaseFinding } from '../services/scan/parsers';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
+import { deduplicateFindings } from '../deduplication';
 
 const router = Router();
 
@@ -14,6 +15,27 @@ export interface IDEFinding {
   line: number;
   message: string;
 }
+
+/**
+ * Map NormalizedVulnerability to the shape expected by the VS Code extension.
+ */
+const mapToIDEFinding = (vuln: any): IDEFinding => {
+  // Determine type based on source scanner(s)
+  const source = (vuln.scanner?.toLowerCase() || (Array.isArray(vuln.sources) && vuln.sources[0]?.toLowerCase())) ?? '';
+  let type: 'sast' | 'sca' | 'secret' = 'sast';
+  if (source.includes('gitleaks') || source.includes('secret')) type = 'secret';
+  else if (source.includes('trivy') || source.includes('sca')) type = 'sca';
+
+  return {
+    id: vuln.hash,
+    type,
+    severity: vuln.severity as any,
+    title: vuln.title,
+    file: vuln.filePath,
+    line: vuln.line,
+    message: vuln.description || vuln.title,
+  };
+};;
 
 router.post('/scan', async (req: Request, res: Response) => {
   const { path: localPath, repoId, repoUrl } = req.body;
@@ -29,57 +51,63 @@ router.post('/scan', async (req: Request, res: Response) => {
   }
 
   try {
+    // Run the scanners inside a Docker container (or local pipeline)
     const results = await runScanPipeline({ localPath });
-    
-    const findings: IDEFinding[] = [];
 
-    // Normalize Semgrep
+    // Collect raw findings in a normalized shape
+    const rawFindings: any[] = [];
+
+    // Normalize Semgrep findings
     if (results.semgrep && results.semgrep.results) {
       const parsed = parseSemgrep(JSON.stringify(results.semgrep));
       parsed.forEach((f, index) => {
-        findings.push({
-          id: `semgrep-${index}`,
-          type: 'sast',
-          severity: f.severity.toUpperCase() as any,
-          title: 'SAST Finding',
-          file: f.file_path || '',
+        rawFindings.push({
+          filePath: f.file_path || '',
           line: f.line_number || 0,
-          message: f.message
+          severity: f.severity?.toUpperCase() ?? 'INFO',
+          scanner: 'semgrep',
+          ruleId: f.rule_id ?? `semgrep-${index}`,
+          title: f.title ?? f.message ?? '',
+          description: f.message ?? ''
         });
       });
     }
 
-    // Normalize Gitleaks
+    // Normalize Gitleaks findings
     if (Array.isArray(results.gitleaks)) {
       const parsed = parseGitleaks(JSON.stringify(results.gitleaks));
       parsed.forEach((f, index) => {
-        findings.push({
-          id: `gitleaks-${index}`,
-          type: 'secret',
-          severity: 'CRITICAL',
-          title: 'Secret Detected',
-          file: f.file_path || '',
+        rawFindings.push({
+          filePath: f.file_path || '',
           line: f.line_number || 0,
-          message: f.message
+          severity: 'CRITICAL',
+          scanner: 'gitleaks',
+          ruleId: f.rule_id ?? `gitleaks-${index}`,
+          title: f.title ?? f.message ?? '',
+          description: f.message ?? ''
         });
       });
     }
 
-    // Normalize Trivy
+    // Normalize Trivy findings
     if (results.trivy && results.trivy.Results) {
       const parsed = parseTrivy(JSON.stringify(results.trivy));
       parsed.forEach((f, index) => {
-        findings.push({
-          id: `trivy-${index}`,
-          type: 'sca',
-          severity: f.severity.toUpperCase() as any,
-          title: 'Vulnerability Detected',
-          file: f.file_path || '',
+        rawFindings.push({
+          filePath: f.file_path || '',
           line: f.line_number || 0,
-          message: f.message
+          severity: f.severity?.toUpperCase() ?? 'INFO',
+          scanner: 'trivy',
+          ruleId: f.rule_id ?? `trivy-${index}`,
+          title: f.title ?? f.message ?? '',
+          description: f.message ?? ''
         });
       });
     }
+
+    // Deduplicate and map to IDE finding format
+    const deduped = deduplicateFindings(rawFindings);
+    const findings: IDEFinding[] = deduped.map(mapToIDEFinding);
 
     const criticalCount = findings.filter(f => f.severity === 'CRITICAL').length;
     const highCount = findings.filter(f => f.severity === 'HIGH').length;
@@ -106,6 +134,9 @@ router.post('/scan', async (req: Request, res: Response) => {
     });
 
     res.json({ findings });
+    
+// Duplicate processing block removed – deduplication already performed above
+
   } catch (error: any) {
     console.error('[IDE Route] Scan failed:', error);
     res.status(500).json({ error: error.message });

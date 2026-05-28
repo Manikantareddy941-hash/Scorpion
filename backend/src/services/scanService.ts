@@ -4,6 +4,7 @@ import { orchestrateScan } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, parseCheckov, parseBandit, Finding } from './scan/parsers';
 import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
+import { deduplicateFindings } from '../deduplication';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
 import * as path from 'path';
@@ -327,6 +328,9 @@ export const triggerScan = async (
             ...normalizeBandit(scanResults.bandit || {}, scanPath)
         ];
 
+// Deduplicate overlapping findings across scanners
+const dedupedIssues = deduplicateFindings(issues);
+
         // 9️⃣ Count by severity (Adjusted for uppercase)
         const criticalCount = issues.filter(i => i.severity === 'CRITICAL').length;
         const highCount     = issues.filter(i => i.severity === 'HIGH').length;
@@ -344,7 +348,7 @@ export const triggerScan = async (
         const riskScore = 100 - score;
 
         // 🔟 Store vulnerabilities (Normalized) via Delta Ingestion (Delta Scans)
-        await ingestVulnerabilitiesDelta(repoId, scanId!, issues);
+        await ingestVulnerabilitiesDelta(repoId, scanId!, dedupedIssues);
 
         console.log(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: issues.length }));
 

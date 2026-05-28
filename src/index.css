@@ -1,4 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@700;800;900&display=swap');
+@layer base {
+  html {
+    font-size: 13.5px;
+  }
+}
 
 :root {
   --color-primary: #6db87a;
@@ -524,17 +529,11 @@ body {
   }
 
   .glass-card {
-    background-color: rgb(var(--bg-secondary-rgb, 255 255 255) / 0.8);
-    background-color: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--card-radius);
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    isolation: isolate;
-    will-change: transform;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
+    background-color: rgba(2, 6, 23, 0.4); /* bg-slate-950/40 */
+    backdrop-filter: blur(24px); /* backdrop-blur-xl */
+    border: 1px solid rgba(255, 255, 255, 0.1); /* border-white/10 */
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.15); /* teal glow */
+    border-radius: 0.75rem; /* rounded-xl */
   }
 
   .btn-premium {
@@ -612,3 +611,16 @@ a[href*="bolt.new"], div[class*="bolt"], [data-bolt], #bolt-watermark, .bolt-wat
   }
 }
 
+
+/* Telemetry Card Hover Effect */
+.tele-card {
+  transition: transform 0.22s cubic-bezier(.34,1.56,.64,1),
+              box-shadow 0.22s ease,
+              border-color 0.2s ease;
+  transform-origin: top center;
+}
+.tele-card:hover {
+  transform: scaleY(1.06) translateY(-4px);
+  border-color: var(--color-border-secondary);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}

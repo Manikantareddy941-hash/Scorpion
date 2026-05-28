@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Shield, TrendingUp, ChevronRight, CheckCircle2, AlertTriangle, Info, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { TopVulnerabilities } from './TopVulnerabilities';
 
 interface PostureData {
   score: number;
@@ -52,23 +53,38 @@ export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = fal
   };
 
   if (loading) return <div className="h-64 bg-[var(--bg-card)] animate-pulse rounded-[16px]"></div>;
-  if (!data) return null;
+
+// Fallback data when API fails
+const displayData: PostureData = data ?? {
+  score: Math.round(ciGateRate) || 0,
+  breakdown: [
+    { category: 'Critical Vulnerabilities', impact: 0 },
+    { category: 'High Vulnerabilities', impact: 0 },
+    { category: 'Medium Vulnerabilities', impact: 0 },
+    { category: 'CI Gate Compliance', impact: ciGateRate < 50 ? 30 : ciGateRate < 80 ? 10 : 0 },
+  ],
+  recommendations: ['Run a scan to populate posture data.']
+};
 
   return (
     <div className={`bg-[var(--bg-card)] rounded-[16px] ${compact ? 'p-4' : 'p-6'} shadow-[0_4px_16px_rgba(0,0,0,0.04)] h-full flex flex-col border border-[var(--border-subtle)]`}>
-      <div className={`flex justify-between items-start ${compact ? 'mb-4' : 'mb-6'}`}>
+      <div className="flex justify-between items-start mb-6">
         <div>
-          <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">Postural Health Breakdown</h3>
-          <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Impact Analysis & Remediation</p>
+          <h3 className="text-xs font-bold tracking-wider text-[#2d3728] uppercase">
+            Postural Health Breakdown
+          </h3>
+          <p className="text-[10px] text-[#7a8275] uppercase font-mono mt-0.5">
+            Impact Analysis & Remediation
+          </p>
         </div>
-        <div className="flex flex-col items-end">
-          <span className={`${compact ? 'text-[18px]' : 'text-[22px]'} font-black text-[var(--status-success)]`}>{data.score}%</span>
-          <span className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Global Score</span>
+        <div className="text-right">
+          <span className="text-2xl font-bold text-emerald-600 font-mono tracking-tight">{displayData.score}%</span>
+          <div className="text-[9px] text-[#7a8275] font-mono tracking-wider mt-0.5">GLOBAL SCORE</div>
         </div>
       </div>
 
       <div className={`${compact ? 'space-y-3 mb-4' : 'space-y-4 mb-8'}`}>
-        {data.breakdown.map((item, i) => (
+        {displayData.breakdown.map((item, i) => (
           <div key={i} className="flex flex-col gap-1">
             <div className="flex justify-between text-[10px] font-bold uppercase tracking-tight">
               <span className="text-[var(--text-secondary)]">{item.category}</span>
@@ -88,36 +104,16 @@ export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = fal
           </div>
         ))}
       </div>
+        {/* Action Panel: Top Vulnerabilities */}
+        <TopVulnerabilities />
 
-      <div className={`mt-auto ${compact ? 'pt-4' : 'pt-6'} border-t border-[var(--border-subtle)]`}>
-        <h4 className="text-[10px] font-black text-[var(--text-primary)] uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Zap size={12} className="text-yellow-500" /> Remediation Roadmap
-        </h4>
-        <div className={`${compact ? 'space-y-2' : 'space-y-3'}`}>
-          {(() => {
-            const recs = [...(data.recommendations || [])].filter(r => !r.toLowerCase().includes('ci gate'));
-            if (ciGateRate > 0) {
-              recs.unshift(`CI gate is passing at ${ciGateRate}%. Keep maintaining policy compliance.`);
-            } else if (!hasScans) {
-              recs.unshift(`No scans have been run yet. Add a repository and trigger a scan to see recommendations.`);
-            } else {
-              recs.unshift(`Improve CI gate pass rate (currently 0%) by fixing policy blockers.`);
-            }
-            return recs.map((rec, i) => (
-              <div 
-                key={i} 
-                onClick={() => handleRecommendationClick(rec)}
-                className={`flex gap-2 items-start ${compact ? 'p-1.5' : 'p-3'} rounded-xl bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/40 group transition-all cursor-pointer`}
-              >
-                <div className="w-4 h-4 rounded-lg bg-green-50 text-green-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <ChevronRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
-                </div>
-                <p className="text-[10px] font-medium text-[var(--text-primary)] leading-snug">{rec}</p>
-              </div>
-            ));
-          })()}
+        {/* Footer Banner */}
+        <div className="mt-6 p-3 bg-[#fdfbf7] border border-[#e6e2da] rounded-lg flex items-center gap-2">
+          <span className="text-emerald-600 text-xs font-mono">→</span>
+          <p className="text-[11px] text-[#2d3728] font-mono leading-none">
+            CI gate is passing at {ciGateRate}%. Keep maintaining policy compliance.
+          </p>
         </div>
-      </div>
     </div>
   );
 }

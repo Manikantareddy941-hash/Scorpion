@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import toast from 'react-hot-toast';
 import PostureRoadmap from './PostureRoadmap';
+import RuntimeThreatStream from './RuntimeThreatStream';
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: '#ff5252', HIGH: '#ff8a00',
@@ -32,8 +33,8 @@ const SecurityRadarChart = memo(({ data }: { data: any[] }) => {
 
   return (
     <div style={{ background: 'var(--chart-bg)', width: '100%', height: '100%', borderRadius: 'inherit' }}>
-      <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-        <RadarChart cx="50%" cy="50%" outerRadius="75%" data={normalizedData}>
+      <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={normalizedData}>
           <PolarGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
           <PolarAngleAxis
             dataKey="axis"
@@ -469,8 +470,8 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
   );
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: theme === 'dark' ? '#0a0a0a' : 'var(--bg-primary)', padding: '12px' }}>
-      <div className="w-full mx-auto space-y-6">
+    <div className="w-full min-h-screen px-4 md:px-8 lg:px-10 transition-colors duration-300" style={{ backgroundColor: theme === 'dark' ? '#0a0a0a' : 'var(--bg-primary)', padding: '12px 0' }}>
+      <div className="w-full max-w-full space-y-6">
 
         {/* Top Header Console Banner */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[var(--bg-card)] rounded-[16px] py-3 px-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
@@ -501,27 +502,34 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
         </div>
 
         {/* 1. Top Section: Core Security Posture (Full Width Summary Matrix) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch w-full">
           {/* Col 1: Postural Health Breakdown */}
-          <div className="lg:col-span-1 h-full">
+          <div className="xl:col-span-3 w-full h-full min-h-[400px] group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
             <PostureRoadmap compact ciGateRate={ciGateStats.rate} hasScans={latestScan !== null} />
           </div>
 
-          {/* Col 2: Threat Dimension Analysis */}
-          <div className="lg:col-span-1 h-full">
-            <div className="bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] h-full flex flex-col border border-[var(--border-subtle)]">
-              <div className="mb-4">
-                <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">Threat Dimension Analysis</h3>
-                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Continuous Scanner Footprint Map</p>
+          {/* Col 2: Threat Dimension Analysis & Runtime Threat Stream Side-Panel */}
+          <div className="xl:col-span-6 w-full h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full h-full">
+              <div className="lg:col-span-8 w-full h-full">
+                <div className="bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] w-full h-full flex flex-col border border-[var(--border-subtle)] group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
+                  <div className="mb-4">
+                    <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">Threat Dimension Analysis</h3>
+                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Continuous Scanner Footprint Map</p>
+                  </div>
+                  <div style={{ width: '100%', minHeight: 420 }} className="flex-1 flex items-center justify-center w-full h-full">
+                    <SecurityRadarChart data={threatData} />
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 flex items-center justify-center min-h-[220px]">
-                <SecurityRadarChart data={threatData} />
+                <div className="lg:col-span-4 w-full h-full group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
+                <RuntimeThreatStream />
               </div>
             </div>
           </div>
 
           {/* Col 3: Core Compliance Gates Stack */}
-          <div className="lg:col-span-1 flex flex-col gap-4">
+            <div className="xl:col-span-3 w-full h-full flex flex-col gap-4 overflow-visible">
             {[
               { id: 'ci', label: 'CI Gate Integrity', value: `${ciGateStats.rate}%`, trend: 'Success Rate', color: 'var(--status-success)', counts: `Passed: ${ciGateStats.passed} | Blocked: ${ciGateStats.blocked}` },
               { 
@@ -537,8 +545,10 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
             ].map((stat, i) => (
               loading ? <SkeletonCard key={i} h="h-20" /> :
               <div key={i}
-                onClick={() => stat.id === 'ci' && setShowGateSummary(true)}
-                className={`bg-[var(--bg-card)] rounded-[12px] p-3 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex flex-col justify-between flex-1 min-h-[90px] border border-[var(--border-subtle)] relative transition-all ${stat.id === 'ci' ? 'cursor-pointer hover:scale-[1.02] hover:border-[var(--accent-primary)]/30' : ''}`}
+                onClick={() => {
+                  if (stat.id === 'ci') setShowGateSummary(true);
+                }}
+                className="mb-4 rounded-[12px] p-6 shadow-lg flex flex-col justify-between flex-1 min-h-[90px] border border-[var(--border-subtle)] relative transition-all duration-300 ease-out group hover:z-50 hover:scale-[1.04] hover:shadow-2xl hover:-translate-y-1 bg-white"
               >
                 <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: stat.color }}></div>
 
@@ -833,10 +843,10 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
           </div>
 
           {detailsExpanded && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 transition-all duration-300">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 transition-all duration-300 items-start">
               
               {/* 1. Geo Attack Origins */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 relative">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Geo Attack Origins</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Live Ingress Threat Feeds</p>
@@ -869,7 +879,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               </div>
 
               {/* 2. Protocol Breakdown */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Protocol Breakdown</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">API Route Ingress Share</p>
@@ -898,7 +908,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               </div>
 
               {/* 3. Audit Feed */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Audit Ledger Stream</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Recent Security Actions</p>
@@ -923,7 +933,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               </div>
 
               {/* 4. Alert Mesh summary */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Alert Mesh Nodes</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Webhook Sync Status</p>

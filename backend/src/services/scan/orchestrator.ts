@@ -15,38 +15,56 @@ export interface ScanResult {
 }
 
 /**
- * Internal helper to run a CLI tool using spawn (No shell:true, DEP0190 compliant unless cmd is wrapped on Windows)
+ * Internal helper to run a CLI tool using Docker
  */
 const executeTool = async (toolId: string, userArgs: string[], toolName: ScanResult['tool']): Promise<ScanResult> => {
-    const tool = await resolveToolCommand(toolId);
     return new Promise((resolve) => {
-        const finalArgs = [...tool.prefixArgs, ...userArgs];
+        const imageMap: Record<string, string> = {
+            'semgrep': 'semgrep/semgrep',
+            semgrep: 'semgrep/semgrep:latest',
+            gitleaks: 'zricethezav/gitleaks:latest',
+            trivy: 'aquasec/trivy:latest',
+            checkov: 'bridgecrew/checkov:latest',
+            bandit: 'bandit:latest'
+        };
+        const image = imageMap[toolName] ?? toolName;
+
+        // The caller supplies the absolute path to the repository (targetPath). We mount it
+        // into the container at /src and rewrite any argument that points to the original path
+        // to use the container-internal path. This works because all current scanners accept a
+        // filesystem path argument (e.g., "semgrep scan … <path>", "trivy fs … <path>").
+        const mountPath = userArgs.find(arg => arg.startsWith('/') || /^[a-zA-Z]:/.test(arg)) ?? '';
+        const containerPath = '/src';
+        const rewrittenArgs = userArgs.map(arg => (arg === mountPath ? containerPath : arg));
+
+        // Build docker run command
+        const dockerArgs = [
+            'run', '--rm',
+            '-v', `${mountPath}:${containerPath}`,
+            '-w', containerPath,
+            image,
+            ...rewrittenArgs
+        ];
+
         let stdout = '';
         let stderr = '';
-        
-        console.log(`[Orchestrator] Executing: ${tool.cmd} ${finalArgs.join(' ')}`);
-        
-        const options: any = { timeout: SCAN_TIMEOUT_MS };
-        if (isWin && tool.cmd === 'cmd') {
-            options.shell = true;
-        }
-
-        const child = spawn(tool.cmd, finalArgs, options);
+        console.log(`[Orchestrator] Executing Docker: docker ${dockerArgs.join(' ')}`);
+        const child = spawn('docker', dockerArgs, { timeout: SCAN_TIMEOUT_MS });
 
         child.stdout?.on('data', (data) => { stdout += data.toString(); });
         child.stderr?.on('data', (data) => { stderr += data.toString(); });
 
         child.on('error', (err: any) => {
-            console.error(`[Orchestrator] ${toolName} execution error:`, err.message);
-            const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' : 
-                                toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
+            console.error(`[Orchestrator] ${toolName} Docker execution error:`, err.message);
+            const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' :
+                toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
             resolve({ tool: toolName, stdout: emptyOutput, stderr: err.message, status: null });
         });
 
         child.on('close', (code) => {
             if (code !== 0 && !stdout) {
-                const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' : 
-                                    toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
+                const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' :
+                    toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
                 resolve({ tool: toolName, stdout: emptyOutput, stderr: `Exit code ${code}`, status: code });
             } else {
                 resolve({ tool: toolName, stdout, stderr, status: code });
