@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
     CheckCircle2, AlertTriangle, Bug, Activity, Shield, Cpu, Globe,
-    Filter, ArrowUpDown, Clock, LayoutGrid, List, ChevronRight,
+    Filter, Clock, LayoutGrid, List, ChevronRight,
     CheckCircle, XCircle, Loader2, RefreshCw, Sparkles, Github, X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -35,9 +35,7 @@ export default function TasksPage() {
     const [aiBlueprintContent, setAiBlueprintContent] = useState('');
     const [aiBlueprintLoading, setAiBlueprintLoading] = useState(false);
 
-    useEffect(() => {
-        fetchFindings();
-    }, []);
+    useEffect(() => { fetchFindings(); }, []);
 
     const fetchFindings = async () => {
         setLoading(true);
@@ -48,7 +46,6 @@ export default function TasksPage() {
                 Query.limit(100),
                 Query.orderDesc('$createdAt')
             ]);
-
             const mappedFindings = res.documents.map((doc: any) => ({
                 $id: doc.$id,
                 title: doc.title || doc.name || 'Untitled Finding',
@@ -59,7 +56,6 @@ export default function TasksPage() {
                 created_at: doc.created_at || doc.$createdAt,
                 status: doc.status || 'open'
             }));
-
             setFindings(mappedFindings);
         } catch (err: any) {
             console.error('Fetch findings error:', err);
@@ -73,14 +69,10 @@ export default function TasksPage() {
     const handleResolve = async (id: string) => {
         try {
             const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
-            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, {
-                status: 'resolved'
-            });
-
+            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved' });
             setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
             toast.success('Issue marked as resolved');
         } catch (err) {
-            console.error('Resolve error:', err);
             toast.error('Failed to update status');
         }
     };
@@ -103,7 +95,6 @@ export default function TasksPage() {
             toast.success(`Bulk acknowledged ${selectedTasks.size} tasks`, { id: toastId });
             setSelectedTasks(new Set());
         } catch (err) {
-            console.error('Bulk acknowledge error:', err);
             toast.error('Failed to acknowledge tasks', { id: toastId });
         }
     };
@@ -119,7 +110,6 @@ export default function TasksPage() {
             toast.success(`Bulk dismissed ${selectedTasks.size} tasks`, { id: toastId });
             setSelectedTasks(new Set());
         } catch (err) {
-            console.error('Bulk dismiss error:', err);
             toast.error('Failed to dismiss tasks', { id: toastId });
         }
     };
@@ -128,7 +118,6 @@ export default function TasksPage() {
         setAiModalOpen(true);
         setAiBlueprintLoading(true);
         setAiBlueprintContent('');
-
         try {
             const token = await getJWT();
             const res = await fetch(`/api/dashboard/tasks/${id}/ai-blueprint`, {
@@ -136,14 +125,9 @@ export default function TasksPage() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
-            if (res.ok) {
-                setAiBlueprintContent(data.blueprint);
-            } else {
-                setAiBlueprintContent(`Error: ${data.error || 'Failed to generate blueprint'}`);
-                toast.error('Failed to generate AI Blueprint');
-            }
+            if (res.ok) setAiBlueprintContent(data.blueprint);
+            else { setAiBlueprintContent(`Error: ${data.error || 'Failed to generate blueprint'}`); toast.error('Failed to generate AI Blueprint'); }
         } catch (err) {
-            console.error('AI Blueprint error:', err);
             setAiBlueprintContent('Error: Could not connect to AI service.');
             toast.error('Failed to generate AI Blueprint');
         } finally {
@@ -160,16 +144,9 @@ export default function TasksPage() {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
-            if (res.ok) {
-                toast.success('Synced to GitHub successfully', { id: toastId });
-                if (data.url) {
-                    window.open(data.url, '_blank');
-                }
-            } else {
-                toast.error(data.error || 'Failed to sync with GitHub', { id: toastId });
-            }
+            if (res.ok) { toast.success('Synced to GitHub successfully', { id: toastId }); if (data.url) window.open(data.url, '_blank'); }
+            else toast.error(data.error || 'Failed to sync with GitHub', { id: toastId });
         } catch (err) {
-            console.error('GitHub sync error:', err);
             toast.error('Error syncing to GitHub', { id: toastId });
         }
     };
@@ -180,12 +157,7 @@ export default function TasksPage() {
         if (severity.toLowerCase() === 'critical') hoursAllowed = 24;
         else if (severity.toLowerCase() === 'high') hoursAllowed = 7 * 24;
         else if (severity.toLowerCase() === 'medium') hoursAllowed = 14 * 24;
-
-        const deadline = created + (hoursAllowed * 60 * 60 * 1000);
-        const now = Date.now();
-        const remainingHours = (deadline - now) / (1000 * 60 * 60);
-
-        return remainingHours;
+        return (created + hoursAllowed * 3600000 - Date.now()) / 3600000;
     };
 
     const filteredFindings = findings
@@ -198,8 +170,8 @@ export default function TasksPage() {
         .sort((a, b) => {
             if (sortBy === 'date') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             if (sortBy === 'severity') {
-                const weight: any = { critical: 4, high: 3, medium: 2, low: 1 };
-                return weight[b.severity.toLowerCase()] - weight[a.severity.toLowerCase()];
+                const w: any = { critical: 4, high: 3, medium: 2, low: 1 };
+                return w[b.severity.toLowerCase()] - w[a.severity.toLowerCase()];
             }
             return a.repo_name.localeCompare(b.repo_name);
         });
@@ -235,6 +207,182 @@ export default function TasksPage() {
         }
     };
 
+    // ── Grid Card: compact, info-dense, no vertical button stack ──────────────
+    const GridCard = ({ finding }: { finding: Finding }) => {
+        const remainingHours = getSLA(finding.created_at, finding.severity);
+        const isOverdue = remainingHours <= 0;
+        const isEmergency = remainingHours > 0 && remainingHours < 6;
+        const isResolved = finding.status === 'resolved';
+
+        const severityAccent: any = {
+            critical: 'border-l-red-500',
+            high: 'border-l-orange-400',
+            medium: 'border-l-yellow-400',
+            low: 'border-l-green-500',
+        };
+        const accent = severityAccent[finding.severity.toLowerCase()] || 'border-l-slate-300';
+
+        return (
+            <div className={`premium-card group border-l-4 ${accent} hover:border-[var(--accent-primary)]/40 transition-all flex flex-col`}>
+                {/* ── Top row: checkbox + badges + date ── */}
+                <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                            type="checkbox"
+                            checked={selectedTasks.has(finding.$id)}
+                            onChange={() => toggleSelection(finding.$id)}
+                            className="w-3.5 h-3.5 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] cursor-pointer shrink-0"
+                        />
+                        <SeverityBadge severity={finding.severity} />
+                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase italic border ${isOverdue ? 'bg-red-500/20 text-red-500 border-red-500 animate-pulse' :
+                                isEmergency ? 'bg-orange-500/20 text-orange-400 border-orange-400 animate-pulse' :
+                                    'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                            }`}>
+                            {isOverdue ? 'SLA Overdue' : `${Math.floor(remainingHours)}h`}
+                        </span>
+                        <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded text-[8px] font-black uppercase italic text-[var(--text-secondary)]">
+                            <TypeIcon type={finding.type} />
+                            {finding.type}
+                        </span>
+                    </div>
+                    <span className="text-[8px] font-bold text-[var(--text-secondary)] font-mono shrink-0 mt-0.5">
+                        {new Date(finding.created_at).toLocaleDateString()}
+                    </span>
+                </div>
+
+                {/* ── Title ── */}
+                <div className="px-4 pb-2 flex-1">
+                    <h4 className={`text-[11px] font-black uppercase italic leading-tight ${isResolved ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'
+                        }`}>
+                        {finding.title}
+                    </h4>
+                </div>
+
+                {/* ── Repo + file path ── */}
+                <div className="px-4 pb-3">
+                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic flex items-center gap-1.5 truncate">
+                        <Globe size={10} className="text-[var(--accent-primary)] shrink-0" />
+                        <span className="truncate">{finding.repo_name}</span>
+                        <span className="opacity-30 shrink-0">·</span>
+                        <span className="truncate opacity-60">{finding.file_path}</span>
+                    </p>
+                </div>
+
+                {/* ── Bottom action bar — horizontal, always at bottom ── */}
+                <div className="border-t border-[var(--border-subtle)] px-4 py-2.5 flex items-center justify-between bg-[var(--bg-primary)]/40 rounded-b-2xl">
+                    {/* Resolve toggle */}
+                    <button
+                        title={isResolved ? 'Resolved' : 'Mark Resolved'}
+                        onClick={() => !isResolved && handleResolve(finding.$id)}
+                        className={`flex items-center gap-1.5 text-[8px] font-black uppercase italic transition-all ${isResolved
+                                ? 'text-[var(--status-success)] cursor-default'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--status-success)] cursor-pointer'
+                            }`}
+                    >
+                        {isResolved
+                            ? <><CheckCircle size={14} /> Resolved</>
+                            : <><div className="w-3.5 h-3.5 rounded-full border-2 border-current" /> Resolve</>
+                        }
+                    </button>
+
+                    {/* Right-side icon actions */}
+                    <div className="flex items-center gap-1">
+                        <button
+                            title="AI Blueprint"
+                            onClick={() => handleAIBlueprint(finding.$id)}
+                            className="p-1.5 rounded-lg text-yellow-500 hover:bg-yellow-500/10 border border-transparent hover:border-yellow-500/30 transition-all cursor-pointer"
+                        >
+                            <Sparkles size={13} />
+                        </button>
+                        <button
+                            title="Export to GitHub"
+                            onClick={() => handleGithubSync(finding.$id)}
+                            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/10 border border-transparent hover:border-white/20 transition-all cursor-pointer"
+                        >
+                            <Github size={13} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ── List Row: original horizontal layout ──────────────────────────────────
+    const ListRow = ({ finding }: { finding: Finding }) => {
+        const remainingHours = getSLA(finding.created_at, finding.severity);
+        const isOverdue = remainingHours <= 0;
+        const isEmergency = remainingHours > 0 && remainingHours < 6;
+        const isResolved = finding.status === 'resolved';
+
+        return (
+            <div className="premium-card group hover:border-[var(--accent-primary)]/40 transition-all">
+                <div className="p-5 flex items-center gap-4">
+                    <input
+                        type="checkbox"
+                        checked={selectedTasks.has(finding.$id)}
+                        onChange={() => toggleSelection(finding.$id)}
+                        className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-primary)] cursor-pointer shrink-0"
+                    />
+                    <button
+                        title="Resolve"
+                        onClick={() => !isResolved && handleResolve(finding.$id)}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 ${isResolved
+                                ? 'bg-[var(--status-success)]/10 text-[var(--status-success)] cursor-default'
+                                : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--status-success)] hover:text-[var(--status-success)] hover:bg-[var(--status-success)]/5 cursor-pointer'
+                            }`}
+                    >
+                        {isResolved ? <CheckCircle size={18} /> : <div className="w-4 h-4 rounded-full border-2 border-current" />}
+                    </button>
+                    <button
+                        title="AI Blueprint"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-yellow-500 hover:border-yellow-500 hover:bg-yellow-500/10 transition-all shrink-0 cursor-pointer"
+                        onClick={() => handleAIBlueprint(finding.$id)}
+                    >
+                        <Sparkles size={15} />
+                    </button>
+                    <button
+                        title="Export to GitHub"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-white hover:text-white hover:bg-white/10 transition-all shrink-0 cursor-pointer"
+                        onClick={() => handleGithubSync(finding.$id)}
+                    >
+                        <Github size={15} />
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <SeverityBadge severity={finding.severity} />
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase italic border ${isOverdue ? 'bg-red-500/20 text-red-500 border-red-500 animate-pulse' :
+                                    isEmergency ? 'bg-orange-500/20 text-orange-500 border-orange-500 animate-pulse' :
+                                        'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                                }`}>
+                                {isOverdue ? 'SLA Overdue' : `${Math.floor(remainingHours)}h Remaining`}
+                            </span>
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded text-[9px] font-black uppercase italic text-[var(--text-secondary)]">
+                                <TypeIcon type={finding.type} />
+                                {finding.type}
+                            </span>
+                            <span className="text-[8px] font-bold text-[var(--text-secondary)] ml-auto font-mono flex items-center gap-1">
+                                <Clock size={9} />
+                                {new Date(finding.created_at).toLocaleDateString()}
+                            </span>
+                        </div>
+                        <h4 className={`text-sm font-black uppercase italic truncate ${isResolved ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'}`}>
+                            {finding.title}
+                        </h4>
+                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 flex items-center gap-2">
+                            <Globe size={10} className="text-[var(--accent-primary)]" />
+                            {finding.repo_name}
+                            <span className="opacity-30">•</span>
+                            <span className="truncate">{finding.file_path}</span>
+                        </p>
+                    </div>
+
+                    <ChevronRight size={18} className="text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)] transition-colors shrink-0" />
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
@@ -244,7 +392,6 @@ export default function TasksPage() {
                         <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Security Tasks</h1>
                         <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Remediation pipeline & finding lifecycle</p>
                     </div>
-
                     <div className="flex gap-4">
                         <div className="premium-card px-6 py-3 flex items-center gap-4">
                             <div className="text-center">
@@ -270,85 +417,37 @@ export default function TasksPage() {
 
                 {/* Filters Bar */}
                 <div className="premium-card p-4 mb-8 flex flex-wrap items-center gap-4">
-
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <Filter size={14} className="text-[var(--text-secondary)]" />
-                        <select
-                            value={filterSeverity}
-                            onChange={(e) => setFilterSeverity(e.target.value)}
-                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
-                        >
-                            <option value="all">All Severities</option>
-                            <option value="critical">Critical</option>
-                            <option value="high">High</option>
-                            <option value="medium">Medium</option>
-                            <option value="low">Low</option>
-                        </select>
-
-                        <select
-                            value={filterType}
-                            onChange={(e) => setFilterType(e.target.value)}
-                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
-                        >
-                            <option value="all">All Types</option>
-                            <option value="secret">Secret</option>
-                            <option value="dependency">Dependency</option>
-                            <option value="sast">SAST</option>
-                            <option value="iac">IaC</option>
-                            <option value="dast">DAST</option>
-                        </select>
-
-                        <select
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
-                        >
-                            <option value="all">All Status</option>
-                            <option value="open">Open</option>
-                            <option value="resolved">Resolved</option>
-                        </select>
-
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none"
-                        >
-                            <option value="date">Sort: Recent</option>
-                            <option value="severity">Sort: Severity</option>
-                            <option value="repo">Sort: Repo</option>
-                        </select>
+                        {[
+                            { value: filterSeverity, onChange: setFilterSeverity, options: [['all', 'All Severities'], ['critical', 'Critical'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] },
+                            { value: filterType, onChange: setFilterType, options: [['all', 'All Types'], ['secret', 'Secret'], ['dependency', 'Dependency'], ['sast', 'SAST'], ['iac', 'IaC'], ['dast', 'DAST']] },
+                            { value: filterStatus, onChange: setFilterStatus, options: [['all', 'All Status'], ['open', 'Open'], ['resolved', 'Resolved']] },
+                            { value: sortBy, onChange: setSortBy, options: [['date', 'Sort: Recent'], ['severity', 'Sort: Severity'], ['repo', 'Sort: Repo']] },
+                        ].map((sel, i) => (
+                            <select key={i} value={sel.value} onChange={e => sel.onChange(e.target.value)}
+                                className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-[10px] font-black italic uppercase text-[var(--text-primary)] outline-none cursor-pointer">
+                                {sel.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                        ))}
                     </div>
-
-                    <div className="flex bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl p-1">
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-                        >
+                    <div className="flex bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl p-1 ml-auto">
+                        <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
                             <List size={16} />
                         </button>
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
-                        >
+                        <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[var(--accent-primary)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
                             <LayoutGrid size={16} />
                         </button>
                     </div>
                 </div>
 
-                {/* Tasks List/Grid */}
+                {/* Tasks */}
                 {hasError ? (
-                    <div className="premium-card p-16 text-center border-red-500/20 max-w-xl mx-auto my-12 bg-red-500/[0.02]">
+                    <div className="premium-card p-16 text-center border-red-500/20 max-w-xl mx-auto my-12">
                         <XCircle className="w-16 h-16 text-red-500 mx-auto mb-6 animate-pulse" />
                         <h3 className="text-xl font-black text-red-500 uppercase italic">Unable to load findings</h3>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-2 leading-relaxed">
-                            Check your connection or scanner configuration
-                        </p>
-                        <button
-                            onClick={fetchFindings}
-                            className="mt-6 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all hover:scale-[1.02] cursor-pointer"
-                        >
-                            Retry
-                        </button>
+                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-2">Check your connection or scanner configuration</p>
+                        <button onClick={fetchFindings} className="mt-6 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer">Retry</button>
                     </div>
                 ) : loading ? (
                     <div className="flex flex-col items-center justify-center py-24">
@@ -361,135 +460,52 @@ export default function TasksPage() {
                         <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Tasks Detected</h3>
                         <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">The security perimeter is currently clear</p>
                     </div>
+                ) : viewMode === 'grid' ? (
+                    // Grid: 3 cols, compact cards with left severity border accent
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredFindings.map(f => <GridCard key={f.$id} finding={f} />)}
+                    </div>
                 ) : (
-                    <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-                        {filteredFindings.map((finding) => {
-                            const remainingHours = getSLA(finding.created_at, finding.severity);
-                            const isEmergency = remainingHours > 0 && remainingHours < 6;
-                            const isOverdue = remainingHours <= 0;
-
-                            return (
-                                <div key={finding.$id} className="premium-card group hover:border-[var(--accent-primary)]/40 transition-all relative">
-                                    <div className={`p-6 ${viewMode === 'list' ? 'flex items-center gap-6' : 'flex flex-col gap-4'}`}>
-
-                                        <div className="flex items-center gap-3">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedTasks.has(finding.$id)}
-                                                onChange={() => toggleSelection(finding.$id)}
-                                                className="w-4 h-4 rounded border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)] cursor-pointer"
-                                            />
-                                        </div>
-
-                                        {/* Action Box */}
-                                        <button
-                                            title="Resolve"
-                                            onClick={() => finding.status === 'open' && handleResolve(finding.$id)}
-                                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0
-                                            ${finding.status === 'resolved'
-                                                    ? 'bg-[var(--status-success)]/10 text-[var(--status-success)] cursor-default'
-                                                    : 'bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-[var(--status-success)] hover:text-[var(--status-success)] hover:bg-[var(--status-success)]/5'}`}
-                                        >
-                                            {finding.status === 'resolved' ? <CheckCircle size={20} /> : <div className="w-5 h-5 rounded-full border-2 border-current" />}
-                                        </button>
-
-                                        <button
-                                            title="AI Blueprint"
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-yellow-500 hover:border-yellow-500 hover:bg-yellow-500/10 transition-all flex-shrink-0"
-                                            onClick={() => handleAIBlueprint(finding.$id)}
-                                        >
-                                            <Sparkles size={16} />
-                                        </button>
-
-                                        <button
-                                            title="Export to GitHub"
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-white hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
-                                            onClick={() => handleGithubSync(finding.$id)}
-                                        >
-                                            <Github size={16} />
-                                        </button>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <SeverityBadge severity={finding.severity} />
-                                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase italic border ${isOverdue ? 'bg-red-500/20 text-red-500 border-red-500 animate-pulse' :
-                                                        isEmergency ? 'bg-orange-500/20 text-orange-500 border-orange-500 animate-pulse' :
-                                                            'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
-                                                    }`}>
-                                                    {isOverdue ? 'SLA Overdue' : `${Math.floor(remainingHours)}h Remaining`}
-                                                </span>
-                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded text-[9px] font-black uppercase italic text-[var(--text-secondary)]">
-                                                    <TypeIcon type={finding.type} />
-                                                    {finding.type}
-                                                </div>
-                                                <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase ml-auto font-mono flex items-center gap-1">
-                                                    <Clock size={10} />
-                                                    {new Date(finding.created_at).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                            <h4 className={`text-sm font-black uppercase italic truncate ${finding.status === 'resolved' ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'}`}>
-                                                {finding.title}
-                                            </h4>
-                                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 flex items-center gap-2">
-                                                <Globe size={12} className="text-[var(--accent-primary)]" />
-                                                {finding.repo_name}
-                                                <span className="opacity-30">•</span>
-                                                <span className="truncate">{finding.file_path}</span>
-                                            </p>
-                                        </div>
-
-                                        {viewMode === 'list' && (
-                                            <div className="flex items-center gap-2">
-                                                <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors">
-                                                    <ChevronRight size={20} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                    // List: original horizontal rows
+                    <div className="space-y-3">
+                        {filteredFindings.map(f => <ListRow key={f.$id} finding={f} />)}
                     </div>
                 )}
 
-                {/* Floating Bottom Bar for Bulk Actions */}
+                {/* Bulk Action Bar */}
                 {selectedTasks.size > 0 && (
-                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--bg-secondary)]/90 backdrop-blur-md border border-[var(--border-color)] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-10">
-                        <span className="text-xs font-black uppercase text-[var(--text-primary)] italic">
-                            {selectedTasks.size} Selected
-                        </span>
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--bg-secondary)]/90 backdrop-blur-md border border-[var(--border-color)] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-50">
+                        <span className="text-xs font-black uppercase text-[var(--text-primary)] italic">{selectedTasks.size} Selected</span>
                         <div className="flex gap-3">
                             <button onClick={handleBulkAcknowledge} className="px-4 py-2 bg-[var(--accent-primary)] hover:bg-opacity-90 text-white text-[10px] font-black uppercase rounded-lg italic transition-all">Bulk Acknowledge</button>
                             <button onClick={handleBulkDismiss} className="px-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white text-[10px] font-black uppercase rounded-lg italic transition-all">Bulk Dismiss</button>
                         </div>
                     </div>
                 )}
+
                 {/* AI Blueprint Modal */}
                 {aiModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                         <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
                             <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
                                 <div className="flex items-center gap-2 text-yellow-500">
                                     <Sparkles size={18} />
                                     <h3 className="font-black uppercase italic tracking-wide">AI Remediation Blueprint</h3>
                                 </div>
-                                <button onClick={() => setAiModalOpen(false)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
+                                <button onClick={() => setAiModalOpen(false)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                            <div className="p-6 overflow-y-auto flex-1">
                                 {aiBlueprintLoading ? (
                                     <div className="flex flex-col items-center justify-center py-12">
                                         <Loader2 className="w-8 h-8 text-yellow-500 animate-spin mb-4" />
                                         <p className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Analyzing Task Parameters...</p>
                                     </div>
                                 ) : (
-                                    <div className="prose prose-invert prose-sm max-w-none">
-                                        <pre className="whitespace-pre-wrap font-mono text-[11px] text-[var(--text-primary)] bg-[var(--bg-primary)] p-4 rounded-xl border border-[var(--border-subtle)] overflow-x-auto custom-scrollbar">
-                                            {aiBlueprintContent}
-                                        </pre>
-                                    </div>
+                                    <pre className="whitespace-pre-wrap font-mono text-[11px] text-[var(--text-primary)] bg-[var(--bg-primary)] p-4 rounded-xl border border-[var(--border-subtle)] overflow-x-auto">
+                                        {aiBlueprintContent}
+                                    </pre>
                                 )}
                             </div>
                         </div>

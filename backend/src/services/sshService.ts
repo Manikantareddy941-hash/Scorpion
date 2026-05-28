@@ -1,3 +1,4 @@
+// backend/src/services/sshService.ts
 import { Client } from 'ssh2';
 
 export interface RemoteServerConfig {
@@ -16,61 +17,62 @@ export interface DeployOptions {
 
 export class SshService {
   /**
-   * Established a cryptographically secure, isolated session to execute delivery payloads.
+   * Executes a series of deployment commands on a remote server via SSH.
+   * Standard output and error streams are forwarded line‑by‑line to the provided logger.
    */
   public async executeDeployment(options: DeployOptions): Promise<{ success: boolean }> {
     const { server, deployPath, commands, logger } = options;
     const conn = new Client();
 
     return new Promise((resolve, reject) => {
-      conn.on('ready', () => {
-        logger.log(`[SSHService] Connection handshake established successfully with endpoint: ${server.host}`);
-        
-        // Chain operations inside a targeted deployment path
-        const flattenedPayload = `cd ${deployPath} && ${commands.join(' && ')}`;
-        
-        conn.exec(flattenedPayload, (err, stream) => {
-          if (err) {
-            conn.end();
-            return reject(err);
-          }
-
-          // Pipe target system execution streams line-by-line back to your frontend SSE log interface
-          stream.on('data', (data: Buffer) => {
-            const lines = data.toString('utf8').split('\n');
-            lines.forEach(line => {
-              if (line.trim()) logger.log(`[Remote Host OS] ${line.trim()}`);
-            });
-          });
-
-          stream.stderr.on('data', (data: Buffer) => {
-            const lines = data.toString('utf8').split('\n');
-            lines.forEach(line => {
-              if (line.trim()) logger.log(`[Remote Host WARN] ${line.trim()}`);
-            });
-          });
-
-          stream.on('close', (exitCode: number) => {
-            conn.end();
-            if (exitCode === 0) {
-              logger.log(`[SSHService] Isolated workload processing terminated with clean status code: 0`);
-              resolve({ success: true });
-            } else {
-              logger.log(`[SSHService] Host architecture process returned an execution error: ${exitCode}`);
-              resolve({ success: false });
+      conn
+        .on('ready', () => {
+          logger.log(`[SSHService] Connected to ${server.host}`);
+          const payload = `cd ${deployPath} && ${commands.join(' && ')}`;
+          conn.exec(payload, (err, stream) => {
+            if (err) {
+              conn.end();
+              return reject(err);
             }
+            stream.on('data', (data: Buffer) => {
+              data
+                .toString('utf8')
+                .split('\n')
+                .forEach(line => {
+                  if (line.trim()) logger.log(`[Remote] ${line.trim()}`);
+                });
+            });
+            stream.stderr.on('data', (data: Buffer) => {
+              data
+                .toString('utf8')
+                .split('\n')
+                .forEach(line => {
+                  if (line.trim()) logger.log(`[Remote][ERR] ${line.trim()}`);
+                });
+            });
+            stream.on('close', (code: number) => {
+              conn.end();
+              if (code === 0) {
+                logger.log('[SSHService] Deployment succeeded');
+                resolve({ success: true });
+              } else {
+                logger.log(`[SSHService] Deployment failed with exit code ${code}`);
+                resolve({ success: false });
+              }
+            });
           });
+        })
+        .on('error', err => {
+          logger.log(`[SSHService] Connection error: ${err.message}`);
+          reject(err);
+        })
+        .connect({
+          host: server.host,
+          port: server.port,
+          username: server.username,
+          privateKey: server.privateKey,
+          readyTimeout: 15000
         });
-      }).on('error', (handshakeErr) => {
-        logger.log(`[SSHService] Fatal infrastructure transport error: ${handshakeErr.message}`);
-        reject(handshakeErr);
-      }).connect({
-        host: server.host,
-        port: server.port,
-        username: server.username,
-        privateKey: server.privateKey,
-        readyTimeout: 15000
-      });
     });
   }
 }

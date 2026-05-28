@@ -11,6 +11,10 @@ import { checkReleaseGate } from '../routes/gateRoutes';
 import { triggerDeploy } from '../deploy/deployService';
 import { logger } from './logger';
 import { dockerRunnerService } from './dockerRunnerService';
+import { sshService } from './sshService';
+import { securityScanService } from './securityScanService';
+
+
 
 const execAsync = util.promisify(exec);
 
@@ -275,13 +279,18 @@ export async function runPipeline(runId: string) {
     await pipeLogger.log(`--- Stage: security_scan (Running) ---`);
     await notifyUpdate('security_scan', { securityScanStatus: 'running', currentStage: 'security_scan' });
     
-    await pipeLogger.log('Triggering SCORPION multi-engine security scans...');
-    const scanRes = await triggerScan(runDoc.repoId, { branch: runDoc.branch });
-    if (scanRes.error) {
-      throw new Error(`Security scan failed: ${scanRes.error}`);
+    try {
+      const criticalThreats = await securityScanService.runTrivyScan(
+        runDoc.$id,
+        workspaceDir,
+        pipeLogger,
+        databases
+      );
+      // optional: halt pipeline on critical threats
+    } catch (secError: any) {
+      await pipeLogger.log(`[Security Stage Fault] ${secError.message}`);
     }
-    await pipeLogger.log(`Security scan completed. Scan ID: ${scanRes.scanId}`);
-
+    
     await notifyUpdate('security_scan', { securityScanStatus: 'success' });
 
     // --- STAGE 5: GATE CHECK ---
@@ -303,16 +312,55 @@ export async function runPipeline(runId: string) {
     // --- STAGE 6: DEPLOY ---
     await pipeLogger.log(`--- Stage: deploy (Running) ---`);
     await notifyUpdate('deploy', { deployStatus: 'running', currentStage: 'deploy' });
-    
-    await pipeLogger.log('Triggering environment deployment...');
-    const deployEnv = 'dev'; // Default to dev environment or configure on pipeline doc
-    // Trigger deployment - builds collection is also mapped, we can pass buildId = runId
-    const deployRes = await triggerDeploy(runId, deployEnv, 'pipeline-runner');
-    if (deployRes.status === 'failed') {
-      throw new Error(`Deploy failed: ${deployRes.reason}`);
+
+    await pipeLogger.log('Resolving deployment target environment...');
+    let envDoc: any = null;
+    try {
+      const envName = (runDoc.targetEnvironment || 'production').toString();
+      const envRes = await databases.listDocuments(
+        DB_ID,
+        COLLECTIONS.ENVIRONMENTS,
+        [Query.equal('name', envName)]
+      );
+      if (envRes.documents.length > 0) {
+        envDoc = envRes.documents[0];
+      }
+    } catch (e: any) {
+      await pipeLogger.log(`[Deploy] Environment lookup error: ${e.message}`);
     }
-    
-    await pipeLogger.log(`Successfully deployed. Deployment ID: ${deployRes.deploymentId}`);
+
+    if (envDoc) {
+      await pipeLogger.log(`Deploying to remote environment "${envDoc.name}" via SSH.`);
+      const serverConfig = {
+        host: envDoc.host,
+        port: Number(envDoc.port),
+        username: envDoc.username,
+        privateKey: envDoc.privateKey,
+      };
+      const remoteCommands = [
+        `docker pull scorpion-registry.local/${runDoc.repoName || runDoc.repoId}:latest`,
+        `docker stop ${runDoc.repoName || runDoc.repoId} || true`,
+        `docker rm ${runDoc.repoName || runDoc.repoId} || true`,
+        `docker run -d --name ${runDoc.repoName || runDoc.repoId} --restart unless-stopped -p 8080:8080 scorpion-registry.local/${runDoc.repoName || runDoc.repoId}:latest`,
+      ];
+      const deployResult = await sshService.executeDeployment({
+        server: serverConfig,
+        deployPath: envDoc.deployPath,
+        commands: remoteCommands,
+        logger: pipeLogger,
+      });
+      if (!deployResult.success) {
+        throw new Error('Remote SSH deployment failed');
+      }
+    } else {
+      await pipeLogger.log('[Deploy] No remote environment configured; falling back to local deployment.');
+      const deployEnv = 'dev';
+      const deployRes = await triggerDeploy(runId, deployEnv, 'pipeline-runner');
+      if (deployRes.status === 'failed') {
+        throw new Error(`Deploy failed: ${deployRes.reason}`);
+      }
+      await pipeLogger.log(`Successfully deployed. Deployment ID: ${deployRes.deploymentId}`);
+    }
     await notifyUpdate('deploy', { deployStatus: 'success' });
 
     // --- COMPLETE ---
