@@ -1,1 +1,1 @@
-declare module "../components/LanguageSwitcher";
+declare module "*/LanguageSwitcher";
