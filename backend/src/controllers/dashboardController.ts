@@ -1,4 +1,4 @@
-// @ts-nocheck
+// eslint-disable @typescript-eslint/ban-ts-comment
 import { Request, Response } from 'express';
 import { deduplicateFindings } from '../deduplication';
 // @ts-nocheck
