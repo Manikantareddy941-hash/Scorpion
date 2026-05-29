@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
     Shield, Bug, AlertTriangle, CheckCircle, 
     XCircle, Clock, BarChart3, LineChart as LineIcon,
-    AlertCircle, Activity, Loader2
+    AlertCircle, Activity, Loader2, Cpu, Globe
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,

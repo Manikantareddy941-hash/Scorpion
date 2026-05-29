@@ -329,7 +329,7 @@ const LiquidGlassSlideshow = () => {
           objectPosition: 'center',
           zIndex: -2,
           transition: 'opacity 2s ease-in-out',
-          imageRendering: 'high-quality',
+          imageRendering: 'auto' as const,
         } as React.CSSProperties}
         alt=""
       />
