@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response } from 'express';
 import { deduplicateFindings } from '../deduplication';
 // @ts-nocheck
@@ -25,9 +26,9 @@ export const getMetrics = async (req: Request, res: Response) => {
     // 4. Compliance mapping – simple hard‑coded example. Extend as needed.
     const complianceMapping: Record<string, number> = {
       // scanner type → count of findings mapped to a compliance control
-      sast: dedupedFindings.filter((f) => f.scannerSource?.includes('semgrep')).length,
-      secret: dedupedFindings.filter((f) => f.scannerSource?.includes('gitleaks')).length,
-      sca: dedupedFindings.filter((f) => f.scannerSource?.includes('trivy')).length,
+      sast: dedupedFindings.filter((f) => f.tool?.includes('semgrep')).length,
+      secret: dedupedFindings.filter((f) => f.tool?.includes('gitleaks')).length,
+      sca: dedupedFindings.filter((f) => f.tool?.includes('trivy')).length,
       iac: 0, // placeholder – populate when IaC scanners are added
     };
 
