@@ -1,1 +1,1 @@
-export default {};
+const liquidGlassBackgrounds: string[] = []; export default liquidGlassBackgrounds;
