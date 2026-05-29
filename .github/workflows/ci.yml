@@ -7,34 +7,60 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  frontend:
+    name: Frontend CI
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      # Backend
-      - name: Setup Node.js (Backend)
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "npm"
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Lint Frontend
+        run: npm run lint
+
+      - name: Check TypeScript Types
+        run: npm run typecheck
+
+      - name: Build Frontend
+        run: npm run build
+
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
           cache-dependency-path: backend/package-lock.json
 
       - name: Install Backend Dependencies
         working-directory: backend
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      # Frontend
-      - name: Setup Node.js (Frontend)
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-          cache: "npm"
-          cache-dependency-path: package-lock.json
+      - name: Lint Backend
+        working-directory: backend
+        run: npm run lint
 
-      - name: Install Frontend Dependencies
-        run: npm ci
-
-      - name: Build Frontend
+      - name: Build Backend
+        working-directory: backend
         run: npm run build
+
+      - name: Run Backend Tests
+        working-directory: backend
+        run: npm run test
