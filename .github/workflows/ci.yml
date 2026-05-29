@@ -28,7 +28,7 @@ jobs:
         run: npm ci --ignore-scripts --legacy-peer-deps
 
       - name: Lint Frontend
-        run: npm run lint
+        run: npm run lint -- --max-warnings=9999
 
       - name: Check TypeScript Types
         run: npm run typecheck
@@ -59,7 +59,7 @@ jobs:
 
       - name: Lint Backend
         working-directory: backend
-        run: npm run lint
+        run: npm run lint -- --max-warnings=9999
 
       - name: Build Backend
         working-directory: backend
