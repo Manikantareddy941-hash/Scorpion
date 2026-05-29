@@ -171,9 +171,9 @@ export default function ScanResults() {
   let med = scan.mediumCount || 0;
   let low = scan.lowCount || 0;
 
-  if (scan.details && typeof scan.details === 'string' && (crit + high + med + low === 0)) {
+  if ((scan as any).details && typeof (scan as any).details === 'string' && (crit + high + med + low === 0)) {
     try {
-      const d = JSON.parse(scan.details);
+      const d = JSON.parse((scan as any).details);
       if (d.critical_count !== undefined) crit = Number(d.critical_count);
       if (d.high_count !== undefined) high = Number(d.high_count);
       if (d.medium_count !== undefined) med = Number(d.medium_count);

@@ -32,7 +32,7 @@ export default function MultiRepoDashboard() {
         COLLECTIONS.SCANS,
         []
       );
-      const docs = res.documents as ScanRecord[];
+      const docs = res.documents as unknown as ScanRecord[];
       setScans(docs);
       if (docs.length && !selectedRepoId) {
         // default to the repo with the worst score

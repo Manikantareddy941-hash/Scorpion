@@ -257,8 +257,8 @@ export default function JourneyMap() {
                     const statusColor = isCompromised ? '#ef4444' :
                                         isBlocked ? '#f59e0b' :
                                         status === 'passing' ? '#22c55e' : 
-                                        status === 'warning' ? '#f97316' : 
-                                        status === 'blocked' ? '#ef4444' : '#6b7280';
+                                        (status as string) === 'warning' ? '#f97316' : 
+                                        (status as string) === 'blocked' ? '#ef4444' : '#6b7280';
 
                     const NodeIcon = (node.id === 'release' && isBlocked) ? Lock : node.icon;
 

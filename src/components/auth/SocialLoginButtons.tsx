@@ -5,16 +5,8 @@ import NetworkErrorPanel from '../NetworkErrorPanel';
 import { useAuth } from '../../contexts/AuthContext';
 
 const providers = [
-  {
-    provider: 'google',
-    icon: <FcGoogle size={28} />,
-    aria: 'Sign in with Google',
-  },
-  {
-    provider: 'github',
-    icon: <FaGithub size={26} color="#1f2937" />,
-    aria: 'Sign in with GitHub',
-  },
+  { provider: 'google', icon: <FcGoogle size={28} />, aria: 'Sign in with Google' },
+  { provider: 'github', icon: <FaGithub size={26} color="#1f2937" />, aria: 'Sign in with GitHub' },
 ];
 
 export default function SocialLoginButtons() {
@@ -28,16 +20,9 @@ export default function SocialLoginButtons() {
     setNetworkError(false);
     setLoadingProvider(provider);
     try {
-      const { error } = await signInWithOAuth(provider as 'google' | 'github');
-      if (error) {
-        setError(error.message || 'OAuth error.');
-        setLoadingProvider(null);
-      }
+      await signInWithOAuth(provider as 'google' | 'github');
     } catch (err: any) {
-      if (
-        err?.name === 'TypeError' ||
-        /network|ssl|dns|fetch|failed/i.test(err?.message || '')
-      ) {
+      if (err?.name === 'TypeError' || /network|ssl|dns|fetch|failed/i.test(err?.message || '')) {
         setNetworkError(true);
       } else {
         setError('OAuth popup closed or error occurred.');
@@ -46,9 +31,7 @@ export default function SocialLoginButtons() {
     }
   };
 
-  if (networkError) {
-    return <NetworkErrorPanel onRetry={() => setNetworkError(false)} />;
-  }
+  if (networkError) return <NetworkErrorPanel onRetry={() => setNetworkError(false)} />;
 
   return (
     <div className="w-full">
@@ -67,11 +50,9 @@ export default function SocialLoginButtons() {
             disabled={!!loadingProvider}
             className={`w-11 h-11 flex items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]/50 hover:shadow-lg hover:border-[var(--accent-primary)]/50 hover:bg-[var(--accent-primary)]/5 ${loadingProvider === p.provider ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
-            {loadingProvider === p.provider ? (
-              <span className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              p.icon
-            )}
+            {loadingProvider === p.provider
+              ? <span className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              : p.icon}
           </button>
         ))}
       </div>
