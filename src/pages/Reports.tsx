@@ -59,7 +59,7 @@ export default function Reports() {
     const fetchRecentReports = async () => {
         try {
             const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
-            const res = await databases.listDocuments(DB_ID, COLLECTIONS.REPORTS, [
+            const res = await databases.listDocuments(DB_ID, (COLLECTIONS as any).REPORTS, [
                 Query.limit(5),
                 Query.orderDesc('$createdAt')
             ]);
@@ -133,7 +133,7 @@ export default function Reports() {
             // Record in Appwrite
             const { databases, DB_ID, COLLECTIONS, ID } = await import('../lib/appwrite');
             if (user?.$id) {
-                await databases.createDocument(DB_ID, COLLECTIONS.REPORTS, ID.unique(), {
+                await databases.createDocument(DB_ID, (COLLECTIONS as any).REPORTS, ID.unique(), {
                     userId: user.$id,
                     title: `Security Audit: ${repoName}`,
                     type: format,

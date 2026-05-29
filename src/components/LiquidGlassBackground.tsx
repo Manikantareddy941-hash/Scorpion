@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
-import { liquidGlassBackgrounds } from '../assets/liquidGlassBackgrounds';
+import liquidGlassBackgrounds from '../assets/liquidGlassBackgrounds';
 
 // Simple djb2 hash function
 const hashCode = (str: string) => {
