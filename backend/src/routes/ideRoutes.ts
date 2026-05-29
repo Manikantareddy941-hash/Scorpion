@@ -66,8 +66,8 @@ router.post('/scan', async (req: Request, res: Response) => {
           line: f.line_number || 0,
           severity: f.severity?.toUpperCase() ?? 'INFO',
           scanner: 'semgrep',
-          ruleId: f.rule_id ?? `semgrep-${index}`,
-          title: f.title ?? f.message ?? '',
+          ruleId: f.tool ?? `semgrep-${index}`,
+          title: f.message ?? f.message ?? '',
           description: f.message ?? ''
         });
       });
@@ -82,8 +82,8 @@ router.post('/scan', async (req: Request, res: Response) => {
           line: f.line_number || 0,
           severity: 'CRITICAL',
           scanner: 'gitleaks',
-          ruleId: f.rule_id ?? `gitleaks-${index}`,
-          title: f.title ?? f.message ?? '',
+          ruleId: f.tool ?? `gitleaks-${index}`,
+          title: f.message ?? f.message ?? '',
           description: f.message ?? ''
         });
       });
@@ -98,8 +98,8 @@ router.post('/scan', async (req: Request, res: Response) => {
           line: f.line_number || 0,
           severity: f.severity?.toUpperCase() ?? 'INFO',
           scanner: 'trivy',
-          ruleId: f.rule_id ?? `trivy-${index}`,
-          title: f.title ?? f.message ?? '',
+          ruleId: f.tool ?? `trivy-${index}`,
+          title: f.message ?? f.message ?? '',
           description: f.message ?? ''
         });
       });

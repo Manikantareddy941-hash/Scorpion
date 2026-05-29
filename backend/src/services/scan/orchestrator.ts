@@ -20,7 +20,6 @@ export interface ScanResult {
 const executeTool = async (toolId: string, userArgs: string[], toolName: ScanResult['tool']): Promise<ScanResult> => {
     return new Promise((resolve) => {
         const imageMap: Record<string, string> = {
-            'semgrep': 'semgrep/semgrep',
             semgrep: 'semgrep/semgrep:latest',
             gitleaks: 'zricethezav/gitleaks:latest',
             trivy: 'aquasec/trivy:latest',

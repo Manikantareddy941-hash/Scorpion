@@ -14,7 +14,6 @@ export class SecurityScanService {
 
     try {
       const result = await dockerRunnerService.runInContainer({
-        tool: 'fallback', // Standard alpine/linux wrapper runtime
         image: 'aquasec/trivy:latest',
         cmd: ['fs', '--format', 'json', '--output', `/workspace/${reportName}`, '/workspace'],
         workspacePath,
