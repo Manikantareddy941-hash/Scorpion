@@ -1,4 +1,5 @@
 // backend/src/deduplication.ts
+import crypto from 'crypto';
 
 /**
  * Unified vulnerability shape after normalisation.
@@ -34,9 +35,6 @@ export interface NormalizedVulnerability {
  */
 const generateHash = (filePath: string, line: number, severity: string, ruleId: string): string => {
   const data = `${filePath}|${line}|${severity}|${ruleId}`;
-  // Node's built‑in crypto – no external deps
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const crypto = require('crypto');
   return crypto.createHash('sha256').update(data).digest('hex');
 };
 
