@@ -60,7 +60,7 @@ const LiquidGlassBackground: React.FC = () => {
             height: '100%', 
             objectFit: 'cover',
             opacity: 1,
-            imageRendering: 'high-quality'
+            imageRendering: 'auto' as const
           }} 
           alt="" 
         />
@@ -75,7 +75,7 @@ const LiquidGlassBackground: React.FC = () => {
           objectFit: 'cover',
           opacity: opacity,
           transition: 'opacity 1.5s ease-in-out',
-          imageRendering: 'high-quality'
+          imageRendering: 'auto' as const
         }} 
         alt="" 
       />
