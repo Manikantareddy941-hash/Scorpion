@@ -25,7 +25,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Frontend Dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --legacy-peer-deps
 
       - name: Lint Frontend
         run: npm run lint
@@ -55,7 +55,7 @@ jobs:
 
       - name: Install Backend Dependencies
         working-directory: backend
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --legacy-peer-deps
 
       - name: Lint Backend
         working-directory: backend
