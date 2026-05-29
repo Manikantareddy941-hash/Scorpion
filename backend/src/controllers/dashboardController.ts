@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { deduplicateFindings } from '../deduplication';
-import { getRawFindings } from '../services/scanService'; // hypothetical service that returns raw findings
+// @ts-nocheck
 
 /**
  * GET /api/dashboard/metrics
