@@ -1,0 +1,6 @@
+backend/
+engine/
+scorpion-vscode/
+src-backup/
+node_modules/
+dist/

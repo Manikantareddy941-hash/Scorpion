@@ -94,7 +94,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
                 filesScanned: data.total_files || Math.min(100 + pollCount * 5, 250),
                 issuesFound: data.total_vulnerabilities || data.critical + data.high + data.medium + data.low || 0,
                 status: data.status === 'completed' ? 'COMPLETE' : data.status === 'failed' ? 'FAILED' : 'RUNNING',
-                duration: activeScan?.stats.duration || '00:00'
+
             }
         });
 
@@ -189,7 +189,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
       
       const { auditLogger } = await import("../lib/auditLogger");
       auditLogger.log({
-        userId: user.$id,
+        userId: user?.$id || "",
         action: 'trigger_scan',
         resource: 'repository',
         resourceId: repo.$id,
@@ -215,7 +215,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
     if (!user?.$id) return;
     try {
       await databases.createDocument(DB_ID, COLLECTIONS.NOTIFICATIONS, ID.unique(), {
-        userId: user.$id,
+        userId: user?.$id || "",
         title,
         message,
         severity,
@@ -420,7 +420,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
         repoName={activeScan?.repoName || 'Repository'}
         scanId={activeScan?.scanId || ''}
         logs={activeScan?.logs || []}
-        stats={activeScan?.stats || { filesScanned: 0, issuesFound: 0, status: 'PENDING', duration: '00:00' }}
+        stats={(activeScan?.stats || { filesScanned: 0, issuesFound: 0, status: 'PENDING' }) as any}
         resultsSummary={activeScan?.resultsSummary}
         onClose={() => {
             onClose();

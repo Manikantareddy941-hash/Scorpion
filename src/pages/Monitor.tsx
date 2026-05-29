@@ -67,7 +67,7 @@ export default function Monitor() {
     const unsubscribeFindings = client.subscribe(
       `databases.${DB_ID}.collections.${COLLECTIONS.VULNERABILITIES}.documents`,
       (response: any) => {
-        if (response.events.some(e => e.includes('.create'))) {
+        if (response.events.some((e: string) => e.includes('.create'))) {
           setFindings(prev => [response.payload, ...prev].slice(0, 10));
           toast.success(t('monitor.new_finding_detected'), { icon: '🔍' });
         }
@@ -78,7 +78,7 @@ export default function Monitor() {
     const unsubscribeScans = client.subscribe(
       `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`,
       (response: any) => {
-        if (response.events.some(e => e.includes('.update'))) {
+        if (response.events.some((e: string) => e.includes('.update'))) {
           fetchData(); // Refresh health scorecards when a scan completes
         }
       }
@@ -193,9 +193,9 @@ export default function Monitor() {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: 'Build Success Rate', value: `${trends?.success_rate || 0}%`, trend: 'Stable', color: 'var(--status-success)' },
-          { label: 'Avg Scan Duration', value: `${trends?.avg_duration || 0}s`, trend: 'Optimizing', color: 'var(--accent-primary)' },
-          { label: 'Finding Velocity', value: trends?.velocity || 'Stable', trend: 'Analysis Active', color: 'var(--status-success)' }
+          { label: 'Build Success Rate', value: `${(trends as any)?.success_rate || 0}%`, trend: 'Stable', color: 'var(--status-success)' },
+          { label: 'Avg Scan Duration', value: `${(trends as any)?.avg_duration || 0}s`, trend: 'Optimizing', color: 'var(--accent-primary)' },
+          { label: 'Finding Velocity', value: (trends as any)?.velocity || 'Stable', trend: 'Analysis Active', color: 'var(--status-success)' }
         ].map((m, i) => (
           <div key={i} className="premium-card p-4 flex justify-between items-center">
             {loading ? <div className="h-10 w-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
