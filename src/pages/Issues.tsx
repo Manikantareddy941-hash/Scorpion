@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight } from 'lucide-react';
+import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { createTicket, findTicketByFinding } from '../hooks/useTickets';
+import toast from 'react-hot-toast';
 
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -13,16 +17,102 @@ const TYPE_ICON: Record<string, any> = {
 };
 
 export default function Issues() {
+  const navigate = useNavigate();
+  const { getJWT } = useAuth();
   const [issues, setIssues] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState({ severity: '', type: '', tool: '' });
   const [loading, setLoading] = useState(true);
   const [latestScan, setLatestScan] = useState<any>(null);
+  const [ticketMap, setTicketMap] = useState<Record<string, string>>({});
 
   useEffect(() => { 
     fetchIssues();
     fetchLatestScan();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const checkTickets = async () => {
+      try {
+        const token = await getJWT();
+        const getJWTStub = async () => token;
+        const results = await Promise.all(
+          issues.map(async (issue) => {
+            if (!issue.$id) return { id: null, ticketId: null };
+            const ticket = await findTicketByFinding(getJWTStub, issue.$id);
+            return { id: issue.$id, ticketId: ticket ? ticket.id : null };
+          })
+        );
+
+        if (active) {
+          const newMap: Record<string, string> = {};
+          results.forEach(({ id, ticketId }) => {
+            if (id && ticketId) {
+              newMap[id] = ticketId;
+            }
+          });
+          setTicketMap(newMap);
+        }
+      } catch (err) {
+        console.error('Error fetching linked tickets for issues:', err);
+      }
+    };
+
+    if (issues.length > 0) {
+      checkTickets();
+    }
+    return () => {
+      active = false;
+    };
+  }, [issues, getJWT]);
+
+  const handleCreateTicket = async (e: React.MouseEvent, issue: any) => {
+    e.stopPropagation();
+    const toastId = toast.loading('Creating ticket...');
+    try {
+      const sevStr = (issue.severity || '').toUpperCase();
+      let severity = 2.5;
+      let priority: 'critical' | 'high' | 'medium' | 'low' = 'low';
+
+      if (sevStr === 'CRITICAL') {
+        severity = 9.5;
+        priority = 'critical';
+      } else if (sevStr === 'HIGH') {
+        severity = 7.5;
+        priority = 'high';
+      } else if (sevStr === 'MEDIUM') {
+        severity = 5.0;
+        priority = 'medium';
+      } else if (sevStr === 'LOW') {
+        severity = 2.5;
+        priority = 'low';
+      } else if (sevStr === 'INFO') {
+        severity = 1.0;
+        priority = 'low';
+      }
+
+      const description = `Issue detected by ${issue.tool || 'scanner'} in ${issue.file || 'workspace'}.\nMessage: ${issue.message}\n` + (issue.code ? `Code:\n${issue.code}` : '');
+
+      const newTicket = await createTicket(getJWT, {
+        title: issue.title || `Scan Finding in ${issue.file || 'Workspace'}`,
+        description,
+        type: 'vulnerability',
+        severity,
+        priority,
+        assignee: '',
+        reporter: '',
+        tags: [issue.tool, issue.severity].filter(Boolean),
+        linkedFindings: [issue.$id],
+        status: 'todo'
+      });
+
+      setTicketMap(prev => ({ ...prev, [issue.$id]: newTicket.id }));
+      toast.success(`Ticket ${newTicket.id} created successfully!`, { id: toastId });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create ticket', { id: toastId });
+    }
+  };
 
   const fetchIssues = async () => {
     setLoading(true);
@@ -237,7 +327,12 @@ export default function Issues() {
                   {expanded === file && (
                     <div className="border-t border-[var(--border-subtle)]">
                       {fileIssues.map((issue: any) => (
-                        <IssueRow key={issue.$id} issue={issue} />
+                        <IssueRow 
+                          key={issue.$id} 
+                          issue={issue} 
+                          ticketId={ticketMap[issue.$id]}
+                          onCreateTicket={handleCreateTicket}
+                        />
                       ))}
                     </div>
                   )}
@@ -251,49 +346,83 @@ export default function Issues() {
   );
 }
 
-function IssueRow({ issue }: { issue: any }) {
+function IssueRow({ 
+  issue, 
+  ticketId, 
+  onCreateTicket 
+}: { 
+  issue: any; 
+  ticketId?: string; 
+  onCreateTicket: (e: React.MouseEvent, issue: any) => void;
+}) {
   const [showCode, setShowCode] = useState(false);
+  const navigate = useNavigate();
 
   return (
-    <div className="border-b border-[var(--border-subtle)] last:border-0">
-      <button
-        onClick={() => setShowCode(!showCode)}
-        className="w-full flex items-center gap-4 px-5 py-3 hover:bg-[var(--bg-primary)]/30 transition-colors text-left">
+    <div className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--bg-primary)]/15 transition-colors flex flex-col">
+      <div className="flex items-center justify-between w-full px-5 py-3 gap-4">
+        {/* Main click area to toggle code */}
+        <div 
+          onClick={() => setShowCode(!showCode)}
+          className="flex-1 flex items-center gap-4 cursor-pointer min-w-0"
+        >
+          {/* Severity dot */}
+          <div className="w-2 h-2 rounded-full flex-shrink-0"
+            style={{ background: SEVERITY_COLOR[issue.severity] }} />
 
-        {/* Severity dot */}
-        <div className="w-2 h-2 rounded-full flex-shrink-0"
-          style={{ background: SEVERITY_COLOR[issue.severity] }} />
-
-        {/* Title + message */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[11px] font-black text-[var(--text-primary)] truncate">{issue.title}</span>
-            <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase flex-shrink-0"
-              style={{ background: `${SEVERITY_COLOR[issue.severity]}15`, color: SEVERITY_COLOR[issue.severity] }}>
-              {issue.severity}
-            </span>
+          {/* Title + message */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-[11px] font-black text-[var(--text-primary)] truncate">{issue.title}</span>
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase flex-shrink-0"
+                style={{ background: `${SEVERITY_COLOR[issue.severity]}15`, color: SEVERITY_COLOR[issue.severity] }}>
+                {issue.severity}
+              </span>
+            </div>
+            <p className="text-[10px] text-[var(--text-secondary)] truncate">{issue.message}</p>
           </div>
-          <p className="text-[10px] text-[var(--text-secondary)] truncate">{issue.message}</p>
+
+          {/* Line number */}
+          {issue.line > 0 && (
+            <span className="text-[10px] font-mono text-[var(--accent-primary)] flex-shrink-0">
+              L{issue.line}{issue.endLine > issue.line ? `–${issue.endLine}` : ''}
+            </span>
+          )}
+
+          {/* Effort */}
+          <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase flex-shrink-0">
+            {issue.effort}
+          </span>
+
+          {/* Tool badge */}
+          <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase flex-shrink-0
+            bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+            {issue.tool}
+          </span>
         </div>
 
-        {/* Line number */}
-        {issue.line > 0 && (
-          <span className="text-[10px] font-mono text-[var(--accent-primary)] flex-shrink-0">
-            L{issue.line}{issue.endLine > issue.line ? `–${issue.endLine}` : ''}
-          </span>
-        )}
-
-        {/* Effort */}
-        <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase flex-shrink-0">
-          {issue.effort}
-        </span>
-
-        {/* Tool badge */}
-        <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase flex-shrink-0
-          bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-          {issue.tool}
-        </span>
-      </button>
+        {/* Ticket Action Button */}
+        <div className="flex-shrink-0 flex items-center">
+          {ticketId ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/tickets/${ticketId}`);
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-emerald-500 hover:text-black transition-all"
+            >
+              <TicketIcon size={10} /> View Ticket
+            </button>
+          ) : (
+            <button
+              onClick={(e) => onCreateTicket(e, issue)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-cyan-500 hover:text-black transition-all"
+            >
+              <TicketIcon size={10} /> Create Ticket
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Code snippet */}
       {showCode && issue.code && (
