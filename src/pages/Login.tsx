@@ -4,10 +4,12 @@ import { Eye, EyeOff, LogIn } from 'lucide-react';
 import ModernAuthLayout from '../components/auth/ModernAuthLayout';
 import SocialLoginButtons from '../components/auth/SocialLoginButtons';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const { t } = useTranslation();
   const { signIn } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,7 +21,13 @@ export default function Login() {
     setError('');
     setLoading(true);
     const { error } = await signIn(email, password);
-    if (error) setError(error.message || t('auth.invalid_credentials', 'Invalid credentials'));
+    if (error) {
+      setError(error.message || t('auth.invalid_credentials', 'Invalid credentials'));
+    } else {
+      const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
+      sessionStorage.removeItem('oauth_return_to');
+      navigate(returnTo, { replace: true });
+    }
     setLoading(false);
   };
 

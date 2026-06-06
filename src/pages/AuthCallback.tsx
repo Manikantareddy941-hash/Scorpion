@@ -1,32 +1,29 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { account } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function AuthCallback() {
+  const { refreshUser } = useAuth();
   const navigate = useNavigate();
-  const { setUser, refreshUser } = useAuth();
 
   useEffect(() => {
-    account.getSession('current')
-      .then(async (session) => {
-        if (session) {
-          // If logged in via GitHub, store the GitHub ID in preferences for webhook matching
-          if (session.provider === 'github') {
-            await account.updatePrefs({ github_user_id: session.providerUid });
-          }
-          refreshUser().then(user => setUser(user));
-          const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
-          sessionStorage.removeItem('oauth_return_to');
-          navigate(returnTo, { replace: true });
-        } else {
-          navigate('/login', { replace: true });
-        }
-      })
-      .catch(() => {
-        navigate('/login', { replace: true });
-      });
-  }, [navigate, setUser, refreshUser]);
+    const handleCallback = async () => {
+      // Give Appwrite a moment to finalize the OAuth session cookie
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const user = await refreshUser();
+      const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
+      sessionStorage.removeItem('oauth_return_to');
+
+      if (user) {
+        navigate(returnTo, { replace: true });
+      } else {
+        navigate('/login?error=oauth_failed', { replace: true });
+      }
+    };
+
+    handleCallback();
+  }, [navigate, refreshUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0D0D0D]">

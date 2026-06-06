@@ -20,6 +20,7 @@ export default function SocialLoginButtons() {
     setNetworkError(false);
     setLoadingProvider(provider);
     try {
+      sessionStorage.setItem('oauth_return_to', '/dashboard');
       await signInWithOAuth(provider as 'google' | 'github');
     } catch (err: any) {
       if (err?.name === 'TypeError' || /network|ssl|dns|fetch|failed/i.test(err?.message || '')) {

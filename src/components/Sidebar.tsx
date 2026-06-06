@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, 
   ChevronLeft, ChevronRight, Layout, Clock, Map, 
   TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug, 
-  Zap, Package, Tag
+  Zap, Package, Tag, Ticket
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +55,8 @@ export default function Sidebar({
     {
       title: 'PLAN',
       items: [
+        { icon: Layout, label: 'PLAN WORKSPACE', path: '/plan' },
+        { icon: Ticket, label: 'TICKETS', path: '/tickets' },
         { icon: ListTodo, label: t('sidebar.tasks'), path: '/tasks' },
         { icon: Users, label: t('sidebar.teams'), path: '/teams' }
       ]
@@ -302,7 +304,7 @@ export default function Sidebar({
               <div className={`flex flex-col ${isCollapsed ? 'gap-0' : 'gap-[2px]'}`}>
                 {section.items.map((item) => {
                   const { icon: Icon, label, path } = item as any;
-                  const active = location.pathname === path;
+                  const active = path === '/plan' ? location.pathname.startsWith('/plan') : (path === '/tickets' ? (location.pathname.startsWith('/tickets') || location.pathname === '/jira-settings') : location.pathname === path);
                   const tourId = 
                     path === '/' ? 'tour-dashboard' :
                     path === '/repos' ? 'tour-repos' :

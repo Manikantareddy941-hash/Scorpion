@@ -43,6 +43,10 @@ import PolicyBuilder from './pages/PolicyBuilder';
 import { Shield } from 'lucide-react';
 import AuthCallback from './pages/AuthCallback';
 import AuditLog from './pages/AuditLog';
+import PlanWorkspace from './pages/PlanWorkspace';
+import TicketDashboard from './pages/TicketDashboard';
+import TicketDetail from './pages/TicketDetail';
+import JiraSettings from './pages/JiraSettings';
 import Footer from './components/Footer';
 import NetworkErrorPanel from './components/NetworkErrorPanel';
 import { useEffect, useState } from 'react';
@@ -160,6 +164,10 @@ function App() {
               <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
               <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
+              <Route path="/tickets" element={<ProtectedRoute><TicketDashboard /></ProtectedRoute>} />
+              <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
+              <Route path="/jira-settings" element={<ProtectedRoute><JiraSettings /></ProtectedRoute>} />
+              <Route path="/plan/*" element={<ProtectedRoute><PlanWorkspace /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><Dashboard isSidebarCollapsed={isSidebarCollapsed} /></ProtectedRoute>} />
               <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
