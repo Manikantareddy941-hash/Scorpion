@@ -1,6 +1,10 @@
-import { Package, Wrench, ChevronDown, ChevronUp, Zap } from 'lucide-react';
-import { useState } from 'react';
+import { Package, Wrench, ChevronDown, ChevronUp, Zap, Ticket as TicketIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { createTicket, findTicketByFinding } from '../hooks/useTickets';
+import toast from 'react-hot-toast';
 import type { AppwriteFinding } from '../pages/ScanResults';
 
 const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -15,12 +19,99 @@ const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 interface Props {
   findings: AppwriteFinding[];
   onRemediate?: (id: string) => void;
+  onCreateTicket?: (finding: AppwriteFinding) => void;
 }
 
-export default function FindingsTable({ findings, onRemediate }: Props) {
+export default function FindingsTable({ findings, onRemediate, onCreateTicket }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { getJWT } = useAuth();
+  
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(SEVERITY_ORDER));
+  const [ticketMap, setTicketMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    const checkTickets = async () => {
+      try {
+        const token = await getJWT();
+        const getJWTStub = async () => token;
+        
+        const results = await Promise.all(
+          findings.map(async (f) => {
+            if (!f.$id) return { id: null, ticketId: null };
+            const ticket = await findTicketByFinding(getJWTStub, f.$id);
+            return { id: f.$id, ticketId: ticket ? ticket.id : null };
+          })
+        );
+
+        if (active) {
+          const newMap: Record<string, string> = {};
+          results.forEach(({ id, ticketId }) => {
+            if (id && ticketId) {
+              newMap[id] = ticketId;
+            }
+          });
+          setTicketMap(newMap);
+        }
+      } catch (err) {
+        console.error('Error fetching linked tickets:', err);
+      }
+    };
+
+    if (findings.length > 0) {
+      checkTickets();
+    }
+    return () => {
+      active = false;
+    };
+  }, [findings, getJWT]);
+
+  const handleCreateTicket = async (finding: AppwriteFinding) => {
+    const toastId = toast.loading('Creating ticket...');
+    try {
+      const sevStr = (finding.severity || '').toUpperCase();
+      let severity = 2.5;
+      let priority: 'critical' | 'high' | 'medium' | 'low' = 'low';
+
+      if (sevStr === 'CRITICAL') {
+        severity = 9.5;
+        priority = 'critical';
+      } else if (sevStr === 'HIGH') {
+        severity = 7.5;
+        priority = 'high';
+      } else if (sevStr === 'MEDIUM') {
+        severity = 5.0;
+        priority = 'medium';
+      } else if (sevStr === 'LOW') {
+        severity = 2.5;
+        priority = 'low';
+      }
+
+      const newTicket = await createTicket(getJWT, {
+        title: finding.title,
+        description: finding.description,
+        type: 'vulnerability',
+        severity,
+        priority,
+        assignee: '',
+        reporter: '',
+        tags: [finding.package, finding.severity].filter(Boolean),
+        linkedFindings: [finding.$id],
+        status: 'todo'
+      });
+
+      setTicketMap(prev => ({ ...prev, [finding.$id]: newTicket.id }));
+      toast.success(`Ticket ${newTicket.id} created successfully!`, { id: toastId });
+
+      if (onCreateTicket) {
+        onCreateTicket(finding);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create ticket', { id: toastId });
+    }
+  };
 
   if (findings.length === 0) {
     return (
@@ -134,6 +225,27 @@ export default function FindingsTable({ findings, onRemediate }: Props) {
                             className="flex items-center gap-1 px-2 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-[var(--accent-primary)] hover:text-black transition-all ml-2"
                           >
                             <Zap size={10} /> {t('findings_table.remediate', 'Remediate')}
+                          </button>
+                        )}
+                        {ticketMap[finding.$id] ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/tickets/${ticketMap[finding.$id]}`);
+                            }}
+                            className="flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-emerald-500 hover:text-black transition-all ml-2"
+                          >
+                            <TicketIcon size={10} /> {t('findings_table.view_ticket', 'View Ticket')}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateTicket(finding);
+                            }}
+                            className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-cyan-500 hover:text-black transition-all ml-2"
+                          >
+                            <TicketIcon size={10} /> {t('findings_table.create_ticket', 'Create Ticket')}
                           </button>
                         )}
                       </div>

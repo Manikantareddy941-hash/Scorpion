@@ -51,6 +51,8 @@ import issuesRoutes from './routes/issuesRoutes';
 import buildRoutes from './routes/buildRoutes';
 import deployRoutes from './routes/deployRoutes';
 import pipelineRoutes from './routes/pipelineRoutes';
+import planRoutes from './routes/planRoutes';
+import { registerTicketRoutes } from './registerRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 import { createNodeMiddleware } from "@octokit/webhooks";
@@ -225,6 +227,8 @@ app.use('/api/builds', buildRoutes);
 app.use('/api/deployments', deployRoutes);
 app.use('/api/deploy', deployRoutes);
 app.use('/api/pipelines', pipelineRoutes);
+app.use('/api/plan', authenticate, planRoutes);
+registerTicketRoutes(app);
 app.use('/metrics', metricsRoutes);
 
 // --- Ingestion APIs for Metrics & Logs ---

@@ -37,20 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   useEffect(() => {
-    const publicPaths = ['/login', '/signup', '/auth/callback', '/forgot-password', '/reset-password', '/verify-otp', '/auth'];
-    const currentPath = location.pathname.replace(/\/$/, '') || '/';
-
-    if (publicPaths.includes(currentPath)) {
-      setLoading(false);
-      return;
-    }
-
     const checkUser = async () => {
       try {
         const currentUser = await account.get();
         setUser(currentUser);
-        
-        // Fetch role from backend instead of direct Appwrite query to avoid 401
+
         const jwt = await account.createJWT();
         const roleResponse = await fetch(`${BACKEND_URL}/api/user/role`, {
           headers: { 'Authorization': `Bearer ${jwt.jwt}` }
@@ -61,18 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(role);
         }
       } catch (error: any) {
-        if (error?.code === 401) {
-          setUser(null);
-        } else {
-          console.error("[AuthContext] Auth check failed:", error);
-          setUser(null);
-        }
+        setUser(null);
       } finally {
         setLoading(false);
       }
     };
+
     checkUser();
-  }, [location.pathname]);
+  }, []);
 
   const signUp = async (email: string, password: string, name: string = "") => {
     try {
