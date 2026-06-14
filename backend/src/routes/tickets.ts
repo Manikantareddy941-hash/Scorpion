@@ -52,7 +52,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     sortOrder: sortOrder as 'asc' | 'desc'
   };
 
-  const response = listTickets(filters);
+  const response = await listTickets(filters);
   res.json(response);
 }));
 
@@ -60,7 +60,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/tickets/stats - Aggregated stats
  */
 router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
-  const stats = getStats();
+  const stats = await getStats();
   res.json(stats);
 }));
 
@@ -119,7 +119,7 @@ router.get('/jira/test', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/tickets/by-finding/:findingId - Get ticket by linked finding ID
  */
 router.get('/by-finding/:findingId', asyncHandler(async (req: Request, res: Response) => {
-  const ticket = findByLinkedFinding(req.params.findingId);
+  const ticket = await findByLinkedFinding(req.params.findingId);
   if (!ticket) {
     return res.status(404).json({ error: 'Ticket not found for this finding' });
   }
@@ -130,7 +130,7 @@ router.get('/by-finding/:findingId', asyncHandler(async (req: Request, res: Resp
  * GET /api/tickets/:id - Get a single ticket
  */
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
-  const ticket = getTicket(req.params.id);
+  const ticket = await getTicket(req.params.id);
   if (!ticket) {
     return res.status(404).json({ error: 'Ticket not found' });
   }
@@ -141,7 +141,7 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
  * POST /api/tickets - Create a new ticket
  */
 router.post('/', asyncHandler(async (req: Request, res: Response) => {
-  const { title, description, status, priority, type, severity, assignee, tags, linkedFindings } = req.body;
+  const { title, description, status, priority, type, severity, assignee, tags, linkedFindings, storyPoints, dueDate, epicLink, sprintId } = req.body;
 
   if (!title || !description) {
     return res.status(400).json({ error: 'Title and description are required.' });
@@ -150,7 +150,7 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
   // Duplicate prevention check
   if (Array.isArray(linkedFindings) && linkedFindings.length > 0) {
     for (const findingId of linkedFindings) {
-      const existingTicket = findByLinkedFinding(findingId);
+      const existingTicket = await findByLinkedFinding(findingId);
       if (existingTicket) {
         return res.status(409).json({ 
           error: 'A ticket is already linked to this finding.', 
@@ -162,7 +162,7 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
 
   const userEmail = (req as any).user?.email || 'dev@scorpion.local';
   
-  const ticket = createTicket({
+  const ticket = await createTicket({
     title,
     description,
     status: status || 'todo',
@@ -172,8 +172,12 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
     assignee: assignee || '',
     reporter: userEmail,
     tags: Array.isArray(tags) ? tags : [],
-    linkedFindings: Array.isArray(linkedFindings) ? linkedFindings : []
-  });
+    linkedFindings: Array.isArray(linkedFindings) ? linkedFindings : [],
+    storyPoints: storyPoints !== undefined ? Number(storyPoints) : undefined,
+    dueDate,
+    epicLink,
+    sprintId
+  } as any);
 
   res.status(201).json(ticket);
 }));
@@ -183,20 +187,23 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
  */
 router.patch('/:id', asyncHandler(async (req: Request, res: Response) => {
   const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-  const updated = updateTicket(req.params.id, req.body, userEmail);
-
-  if (!updated) {
-    return res.status(404).json({ error: 'Ticket not found' });
+  try {
+    const updated = await updateTicket(req.params.id, req.body, userEmail);
+    if (!updated) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Error in PATCH ticket:', err);
+    res.status(500).json({ error: err.message || 'Failed to update ticket' });
   }
-
-  res.json(updated);
 }));
 
 /**
  * DELETE /api/tickets/:id - Delete a ticket
  */
 router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
-  const success = deleteTicket(req.params.id);
+  const success = await deleteTicket(req.params.id);
   if (!success) {
     return res.status(404).json({ error: 'Ticket not found' });
   }
@@ -207,7 +214,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/tickets/:id/comments - Retrieve comment thread
  */
 router.get('/:id/comments', asyncHandler(async (req: Request, res: Response) => {
-  const comments = getComments(req.params.id);
+  const comments = await getComments(req.params.id);
   res.json(comments);
 }));
 
@@ -221,7 +228,7 @@ router.post('/:id/comments', asyncHandler(async (req: Request, res: Response) =>
   }
 
   const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-  const comment = addComment(req.params.id, body, userEmail);
+  const comment = await addComment(req.params.id, body, userEmail);
   res.status(201).json(comment);
 }));
 
@@ -229,7 +236,7 @@ router.post('/:id/comments', asyncHandler(async (req: Request, res: Response) =>
  * GET /api/tickets/:id/activity - Retrieve ticket activity audit logs
  */
 router.get('/:id/activity', asyncHandler(async (req: Request, res: Response) => {
-  const activity = getActivity(req.params.id);
+  const activity = await getActivity(req.params.id);
   res.json(activity);
 }));
 
@@ -237,7 +244,7 @@ router.get('/:id/activity', asyncHandler(async (req: Request, res: Response) => 
  * POST /api/tickets/sync/bulk - Bulk sync all unsynced tickets to Jira
  */
 router.post('/sync/bulk', asyncHandler(async (req: Request, res: Response) => {
-  const unsynced = getUnsyncedTickets();
+  const unsynced = await getUnsyncedTickets();
   const results: any[] = [];
   let synced = 0;
   let failed = 0;

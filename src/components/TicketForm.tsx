@@ -23,7 +23,11 @@ export default function TicketForm({ onClose, onSave }: Props) {
     assignee: '',
     severity: 0,
     tags: '',
-    linkedFindings: ''
+    linkedFindings: '',
+    storyPoints: '',
+    dueDate: '',
+    epicLink: '',
+    sprintId: ''
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,7 +59,11 @@ export default function TicketForm({ onClose, onSave }: Props) {
         reporter: '', // Backend overrides this with the auth user
         severity: Number(form.severity),
         tags: parsedTags,
-        linkedFindings: parsedFindings
+        linkedFindings: parsedFindings,
+        storyPoints: form.storyPoints ? Number(form.storyPoints) : undefined,
+        dueDate: form.dueDate || undefined,
+        epicLink: form.epicLink.trim() || undefined,
+        sprintId: form.sprintId.trim() || undefined
       });
 
       toast.success('Ticket created successfully');
@@ -134,6 +142,8 @@ export default function TicketForm({ onClose, onSave }: Props) {
                 <option value="bug">Bug</option>
                 <option value="vulnerability">Vulnerability</option>
                 <option value="feature">Feature</option>
+                <option value="story">Story</option>
+                <option value="epic">Epic</option>
               </select>
             </div>
 
@@ -225,6 +235,62 @@ export default function TicketForm({ onClose, onSave }: Props) {
               placeholder="e.g. f-101, f-102"
               className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all font-mono text-[10px]"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-wider block">
+                Story Points
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={form.storyPoints}
+                onChange={e => setForm({ ...form, storyPoints: e.target.value })}
+                placeholder="e.g. 5"
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all font-semibold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-wider block">
+                Due Date
+              </label>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={e => setForm({ ...form, dueDate: e.target.value })}
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all font-semibold"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-wider block">
+                Epic Link
+              </label>
+              <input
+                type="text"
+                value={form.epicLink}
+                onChange={e => setForm({ ...form, epicLink: e.target.value })}
+                placeholder="Epic Ticket ID"
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all font-semibold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-wider block">
+                Sprint
+              </label>
+              <input
+                type="text"
+                value={form.sprintId}
+                onChange={e => setForm({ ...form, sprintId: e.target.value })}
+                placeholder="Sprint ID"
+                className="w-full px-4 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all font-semibold"
+              />
+            </div>
           </div>
 
           {/* Footer buttons */}
