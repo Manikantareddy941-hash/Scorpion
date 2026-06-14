@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTickets, useStats, updateTicket, bulkSyncToJira } from '../hooks/useTickets';
 import { Ticket, TicketFilters } from '../../shared/types';
 import TicketForm from '../components/TicketForm';
+import IssueDetailModal from '../components/IssueDetailModal';
 import {
   LayoutGrid, List, Search, Filter, Plus, Bug, ShieldAlert,
   Clock, Sparkles, AlertOctagon, Link2, ExternalLink,
@@ -17,6 +18,7 @@ export default function TicketDashboard() {
   
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<TicketFilters>({
@@ -31,10 +33,68 @@ export default function TicketDashboard() {
     sortOrder: 'desc'
   });
 
-  const { tickets, loading, error, refetch } = useTickets(filters);
+  const { tickets: fetchedTickets, loading, error, refetch } = useTickets(filters);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+
+  useEffect(() => {
+    setTickets(fetchedTickets);
+  }, [fetchedTickets]);
+
   const { stats, loading: statsLoading, refetch: refetchStats } = useStats();
 
   const [syncingAll, setSyncingAll] = useState(false);
+  
+  const [draggedTicketId, setDraggedTicketId] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<Ticket['status'] | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, ticketId: string) => {
+    e.dataTransfer.setData('text/plain', ticketId);
+    setDraggedTicketId(ticketId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTicketId(null);
+    setDragOverColumn(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, status: Ticket['status']) => {
+    e.preventDefault();
+    setDragOverColumn(status);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, newStatus: Ticket['status']) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+    const ticketId = e.dataTransfer.getData('text/plain') || draggedTicketId;
+    if (!ticketId) return;
+
+    const targetTicket = tickets.find(t => t.id === ticketId);
+    if (!targetTicket || targetTicket.status === newStatus) return;
+
+    const oldStatus = targetTicket.status;
+
+    // Optimistic Update
+    setTickets(prevTickets =>
+      prevTickets.map(t => (t.id === ticketId ? { ...t, status: newStatus } : t))
+    );
+
+    try {
+      await updateTicket(getJWT, ticketId, { status: newStatus });
+      toast.success(`Ticket status updated to ${newStatus.replace('_', ' ')}`);
+      refetch();
+      refetchStats();
+    } catch (err: any) {
+      // Revert on failure
+      setTickets(prevTickets =>
+        prevTickets.map(t => (t.id === ticketId ? { ...t, status: oldStatus } : t))
+      );
+      toast.error(err.message || 'Failed to update ticket status');
+    }
+  };
 
   const handleBulkSync = async () => {
     setSyncingAll(true);
@@ -232,13 +292,13 @@ export default function TicketDashboard() {
           <div className="flex bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl p-1 shrink-0">
             <button
               onClick={() => setViewMode('board')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'board' ? 'bg-[var(--accent-primary)] text-black font-black' : 'text-[var(--text-secondary)] hover:text-white'}`}
+              className="p-1.5 rounded-lg transition-all text-[var(--text-secondary)] hover:text-white"
             >
               <LayoutGrid size={16} />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-[var(--accent-primary)] text-black font-black' : 'text-[var(--text-secondary)] hover:text-white'}`}
+              className="p-1.5 rounded-lg transition-all text-[var(--text-secondary)] hover:text-white"
             >
               <List size={16} />
             </button>
@@ -279,7 +339,13 @@ export default function TicketDashboard() {
             {COLUMNS.map(col => {
               const colTickets = tickets.filter(t => t.status === col.id);
               return (
-                <div key={col.id} className="flex flex-col min-h-[500px]">
+                <div 
+                  key={col.id} 
+                  className={`flex flex-col min-h-[500px] rounded-xl p-2 transition-all duration-200 ${dragOverColumn === col.id ? 'bg-[var(--bg-secondary)]/30 border-2 border-dashed border-[var(--accent-primary)]/40' : 'border-2 border-transparent'}`}
+                  onDragOver={(e) => handleDragOver(e, col.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, col.id)}
+                >
                   {/* Column Header */}
                   <div className={`flex items-center justify-between pb-3 mb-4 border-b border-[var(--border-subtle)] border-t-4 ${col.bg} pt-2`}>
                     <span className="text-[10px] font-black uppercase italic tracking-wider text-[var(--text-primary)]">
@@ -295,8 +361,12 @@ export default function TicketDashboard() {
                     {colTickets.map(ticket => (
                       <div
                         key={ticket.id}
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, ticket.id)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => setSelectedTicketId(ticket.id)}
                         className="premium-card bg-[var(--bg-card)] hover:border-[var(--accent-primary)]/45 transition-all p-4 flex flex-col gap-3 cursor-pointer group hover:shadow-lg relative overflow-hidden"
+                        style={{ opacity: draggedTicketId === ticket.id ? 0.4 : 1 }}
                       >
                         {/* Header Row */}
                         <div className="flex items-start justify-between gap-2">
@@ -407,7 +477,7 @@ export default function TicketDashboard() {
                   {tickets.map(ticket => (
                     <tr
                       key={ticket.id}
-                      onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      onClick={() => setSelectedTicketId(ticket.id)}
                       className="hover:bg-[var(--bg-secondary)]/30 transition-colors cursor-pointer group font-semibold text-xs"
                     >
                       <td className="p-4 font-mono font-bold text-[10px] text-[var(--text-secondary)]">{ticket.id}</td>
@@ -462,6 +532,18 @@ export default function TicketDashboard() {
         <TicketForm
           onClose={() => setShowCreateModal(false)}
           onSave={(newTicket) => {
+            refetch();
+            refetchStats();
+          }}
+        />
+      )}
+
+      {/* Ticket Details Modal Overlay */}
+      {selectedTicketId && (
+        <IssueDetailModal
+          ticketId={selectedTicketId}
+          onClose={() => setSelectedTicketId(null)}
+          onSave={() => {
             refetch();
             refetchStats();
           }}

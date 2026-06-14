@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { account } from '../lib/appwrite';
 
 export default function AuthCallback() {
   const { refreshUser } = useAuth();
@@ -8,16 +9,26 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Give Appwrite a moment to finalize the OAuth session cookie
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const user = await refreshUser();
-      const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
-      sessionStorage.removeItem('oauth_return_to');
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('userId');
+        const secret = urlParams.get('secret');
 
-      if (user) {
-        navigate(returnTo, { replace: true });
-      } else {
+        if (userId && secret) {
+          await account.createSession(userId, secret);
+        }
+        
+        const user = await refreshUser();
+        const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
+        sessionStorage.removeItem('oauth_return_to');
+
+        if (user) {
+          navigate(returnTo, { replace: true });
+        } else {
+          navigate('/login?error=oauth_failed', { replace: true });
+        }
+      } catch (error) {
+        console.error("OAuth session creation failed:", error);
         navigate('/login?error=oauth_failed', { replace: true });
       }
     };

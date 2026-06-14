@@ -4,12 +4,16 @@ export interface Ticket {
   description: string;
   status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'closed';
   priority: 'critical' | 'high' | 'medium' | 'low';
-  type: 'bug' | 'vulnerability' | 'task' | 'feature';
+  type: 'bug' | 'vulnerability' | 'task' | 'feature' | 'story' | 'epic';
   severity: number; // 0-10
   assignee: string;
   reporter: string;
   tags: string[];
   linkedFindings: string[]; // IDs from existing detected_issues/open_issues
+  storyPoints?: number;
+  dueDate?: string;
+  epicLink?: string;
+  sprintId?: string;
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;

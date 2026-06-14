@@ -76,6 +76,18 @@ interface AutomationRule {
   action: string;
 }
 
+interface Threat {
+  $id: string;
+  projectId: string;
+  title: string;
+  strideCategory: 'Spoofing' | 'Tampering' | 'Repudiation' | 'Information Disclosure' | 'Denial of Service' | 'Elevation of Privilege';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description?: string;
+  mitigation?: string;
+  status: 'identified' | 'mitigated' | 'accepted';
+  issueId?: string;
+}
+
 interface PlanSchema {
   projects: Project[];
   epics: Epic[];
@@ -83,6 +95,7 @@ interface PlanSchema {
   issues: Issue[];
   comments: Comment[];
   automationRules: AutomationRule[];
+  threats: Threat[];
 }
 
 const defaultMockDb: PlanSchema = {
@@ -113,7 +126,8 @@ const defaultMockDb: PlanSchema = {
   automationRules: [
     { $id: 'rule-1', projectId: 'proj-1', trigger: 'vuln_resolved', action: 'auto_create_task' },
     { $id: 'rule-2', projectId: 'proj-1', trigger: 'sprint_ended', action: 'move_to_backlog' }
-  ]
+  ],
+  threats: []
 };
 
 // Helper: Read mock database from JSON file
@@ -618,6 +632,207 @@ router.get('/vulnerabilities', async (req: AuthenticatedRequest, res: Response) 
     // If not config/failing, return empty list
     res.json([]);
   }
+});
+
+/* ==========================================================================
+   THREATS (Threat Modeling)
+   ========================================================================== */
+
+// GET threats for a project
+router.get('/projects/:projectId/threats', async (req: AuthenticatedRequest, res: Response) => {
+  const { projectId } = req.params;
+  const data = await handleQuery(
+    async () => {
+      const docList = await databases.listDocuments(DB_ID, 'plan_threats', [
+        Query.equal('projectId', projectId)
+      ]);
+      return docList.documents;
+    },
+    async () => {
+      const db = await readMockDb();
+      return (db.threats || []).filter(t => t.projectId === projectId);
+    }
+  );
+  res.json(data);
+});
+
+// POST threat
+router.post('/projects/:projectId/threats', async (req: AuthenticatedRequest, res: Response) => {
+  const { projectId } = req.params;
+  const { title, strideCategory, severity, description, mitigation } = req.body;
+  if (!title || !strideCategory || !severity) {
+    return res.status(400).json({ error: 'Title, strideCategory, and severity are required' });
+  }
+
+  const newThreat: Threat = {
+    $id: 'threat-' + Math.random().toString(36).substr(2, 9),
+    projectId,
+    title,
+    strideCategory,
+    severity,
+    description: description || '',
+    mitigation: mitigation || '',
+    status: 'identified'
+  };
+
+  const data = await handleQuery(
+    async () => {
+      return await databases.createDocument(DB_ID, 'plan_threats', ID.unique(), {
+        projectId,
+        title: newThreat.title,
+        strideCategory: newThreat.strideCategory,
+        severity: newThreat.severity,
+        description: newThreat.description,
+        mitigation: newThreat.mitigation,
+        status: newThreat.status
+      });
+    },
+    async () => {
+      const db = await readMockDb();
+      if (!db.threats) db.threats = [];
+      db.threats.push(newThreat);
+      await writeMockDb(db);
+      return newThreat;
+    }
+  );
+  res.status(201).json(data);
+});
+
+// PATCH threat
+router.patch('/projects/:projectId/threats/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  const data = await handleQuery(
+    async () => {
+      return await databases.updateDocument(DB_ID, 'plan_threats', id, updates);
+    },
+    async () => {
+      const db = await readMockDb();
+      if (!db.threats) db.threats = [];
+      const idx = db.threats.findIndex(t => t.$id === id);
+      if (idx !== -1) {
+        db.threats[idx] = { ...db.threats[idx], ...updates };
+        await writeMockDb(db);
+        return db.threats[idx];
+      }
+      return null;
+    }
+  );
+
+  if (!data) return res.status(404).json({ error: 'Threat not found' });
+  res.json(data);
+});
+
+// DELETE threat
+router.delete('/projects/:projectId/threats/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+
+  const ok = await handleQuery(
+    async () => {
+      await databases.deleteDocument(DB_ID, 'plan_threats', id);
+      return true;
+    },
+    async () => {
+      const db = await readMockDb();
+      if (!db.threats) db.threats = [];
+      const idx = db.threats.findIndex(t => t.$id === id);
+      if (idx !== -1) {
+        db.threats.splice(idx, 1);
+        await writeMockDb(db);
+        return true;
+      }
+      return false;
+    }
+  );
+
+  if (!ok) return res.status(404).json({ error: 'Threat not found' });
+  res.json({ success: true });
+});
+
+// POST convert threat to ticket
+router.post('/projects/:projectId/threats/:id/convert', async (req: AuthenticatedRequest, res: Response) => {
+  const { projectId, id } = req.params;
+
+  // 1. Fetch threat details
+  const threat = await handleQuery(
+    async () => {
+      return await databases.getDocument(DB_ID, 'plan_threats', id);
+    },
+    async () => {
+      const db = await readMockDb();
+      return (db.threats || []).find(t => t.$id === id) || null;
+    }
+  );
+
+  if (!threat) return res.status(404).json({ error: 'Threat not found' });
+
+  // 2. Create the ticket (issue)
+  const priority = threat.severity.toLowerCase() === 'critical' ? 'critical' :
+                   threat.severity.toLowerCase() === 'high' ? 'high' :
+                   threat.severity.toLowerCase() === 'medium' ? 'medium' : 'low';
+
+  const newIssue = {
+    projectId,
+    title: `[Threat] ${threat.title}`,
+    type: 'bug' as const,
+    priority,
+    storyPoints: 3,
+    description: `Threat Category: ${threat.strideCategory}\n\nDescription:\n${threat.description || 'N/A'}\n\nProposed Mitigation:\n${threat.mitigation || 'N/A'}`,
+    createdAt: new Date().toISOString()
+  };
+
+  const issueData = await handleQuery(
+    async () => {
+      return await databases.createDocument(DB_ID, 'plan_issues', ID.unique(), {
+        projectId: newIssue.projectId,
+        title: newIssue.title,
+        type: newIssue.type,
+        priority: newIssue.priority,
+        storyPoints: newIssue.storyPoints,
+        description: newIssue.description,
+        createdAt: newIssue.createdAt,
+        status: 'todo'
+      });
+    },
+    async () => {
+      const db = await readMockDb();
+      const issueWithId = {
+        ...newIssue,
+        $id: 'issue-' + Math.random().toString(36).substr(2, 9),
+        status: 'todo' as const,
+        timeLogged: 0,
+        labels: []
+      };
+      db.issues.push(issueWithId);
+      await writeMockDb(db);
+      return issueWithId;
+    }
+  );
+
+  // 3. Update the threat
+  const updatedThreat = await handleQuery(
+    async () => {
+      return await databases.updateDocument(DB_ID, 'plan_threats', id, {
+        issueId: issueData.$id,
+        status: 'mitigated'
+      });
+    },
+    async () => {
+      const db = await readMockDb();
+      if (!db.threats) db.threats = [];
+      const idx = db.threats.findIndex(t => t.$id === id);
+      if (idx !== -1) {
+        db.threats[idx].issueId = issueData.$id;
+        db.threats[idx].status = 'mitigated';
+        await writeMockDb(db);
+        return db.threats[idx];
+      }
+      return null;
+    }
+  );
+
+  res.json(updatedThreat);
 });
 
 export default router;
