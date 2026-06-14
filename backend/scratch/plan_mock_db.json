@@ -1,0 +1,166 @@
+{
+  "projects": [
+    {
+      "$id": "proj-1",
+      "name": "Scorpion Defense System",
+      "repoId": "all",
+      "type": "scrum",
+      "createdAt": "2026-06-14T18:42:00.963Z"
+    },
+    {
+      "$id": "proj-2",
+      "name": "Vulnerability Remediation Kanban",
+      "repoId": "all",
+      "type": "kanban",
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    }
+  ],
+  "epics": [
+    {
+      "$id": "epic-1",
+      "projectId": "proj-1",
+      "title": "Automate Dependency Checks",
+      "color": "#3b82f6",
+      "status": "active"
+    },
+    {
+      "$id": "epic-2",
+      "projectId": "proj-1",
+      "title": "Resolve Critical Log4j Violations",
+      "color": "#ef4444",
+      "status": "active"
+    },
+    {
+      "$id": "epic-3",
+      "projectId": "proj-2",
+      "title": "Developer Security Training",
+      "color": "#10b981",
+      "status": "active"
+    }
+  ],
+  "sprints": [
+    {
+      "$id": "sprint-1",
+      "projectId": "proj-1",
+      "name": "Sprint 1 - Initial Lockdown",
+      "goal": "Address top CVEs & lock down APIs",
+      "startDate": "2026-06-14T18:42:00.964Z",
+      "endDate": "2026-06-28T18:42:00.964Z",
+      "status": "active"
+    },
+    {
+      "$id": "sprint-2",
+      "projectId": "proj-1",
+      "name": "Sprint 2 - CI Integration",
+      "goal": "Build policy engine checks directly into build pipelines",
+      "status": "planned"
+    }
+  ],
+  "issues": [
+    {
+      "$id": "issue-1",
+      "projectId": "proj-1",
+      "epicId": "epic-1",
+      "sprintId": "sprint-1",
+      "type": "task",
+      "title": "Integrate Trivy Scanner into GitHub workflows",
+      "priority": "high",
+      "status": "inprogress",
+      "assignee": "dev@scorpion.local",
+      "storyPoints": 5,
+      "timeEstimate": 12,
+      "timeLogged": 4,
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    },
+    {
+      "$id": "issue-2",
+      "projectId": "proj-1",
+      "epicId": "epic-2",
+      "sprintId": "sprint-1",
+      "type": "bug",
+      "title": "Fix Log4j remote execution vulnerability (CVE-2021-44228)",
+      "priority": "critical",
+      "status": "todo",
+      "assignee": "dev@scorpion.local",
+      "storyPoints": 8,
+      "timeEstimate": 16,
+      "timeLogged": 0,
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    },
+    {
+      "$id": "issue-3",
+      "projectId": "proj-1",
+      "epicId": "epic-1",
+      "sprintId": "sprint-1",
+      "type": "story",
+      "title": "Provide real-time SBOM export utility in Web Console",
+      "priority": "medium",
+      "status": "inreview",
+      "assignee": "dev@scorpion.local",
+      "storyPoints": 3,
+      "timeEstimate": 8,
+      "timeLogged": 7,
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    },
+    {
+      "$id": "issue-4",
+      "projectId": "proj-1",
+      "epicId": null,
+      "sprintId": null,
+      "type": "task",
+      "title": "Verify SSL certificate validation across edge routes",
+      "priority": "low",
+      "status": "backlog",
+      "assignee": "dev@scorpion.local",
+      "storyPoints": 2,
+      "timeEstimate": 4,
+      "timeLogged": 0,
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    },
+    {
+      "$id": "issue-5",
+      "projectId": "proj-2",
+      "epicId": "epic-3",
+      "sprintId": null,
+      "type": "task",
+      "title": "Conduct secure coding training on SQL Injection prevention",
+      "priority": "medium",
+      "status": "inprogress",
+      "assignee": "dev@scorpion.local",
+      "storyPoints": 2,
+      "timeEstimate": 4,
+      "timeLogged": 2,
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    }
+  ],
+  "comments": [
+    {
+      "$id": "comm-1",
+      "issueId": "issue-1",
+      "author": "Tony AI",
+      "body": "The Trivy scanner will need write access to upload SARIF report files.",
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    },
+    {
+      "$id": "comm-2",
+      "issueId": "issue-2",
+      "author": "Security Lead",
+      "body": "This is blocking our release gate. Let's prioritize patch validation.",
+      "createdAt": "2026-06-14T18:42:00.964Z"
+    }
+  ],
+  "automationRules": [
+    {
+      "$id": "rule-1",
+      "projectId": "proj-1",
+      "trigger": "vuln_resolved",
+      "action": "auto_create_task"
+    },
+    {
+      "$id": "rule-2",
+      "projectId": "proj-1",
+      "trigger": "sprint_ended",
+      "action": "move_to_backlog"
+    }
+  ]
+}

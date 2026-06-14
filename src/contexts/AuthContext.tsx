@@ -38,6 +38,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const checkUser = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isOAuthCallback = window.location.pathname === '/auth/callback' ||
+        (urlParams.has('userId') && urlParams.has('secret'));
+
+      if (isOAuthCallback) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const currentUser = await account.get();
         setUser(currentUser);
@@ -67,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await account.createEmailPasswordSession(email, password);
       const currentUser = await account.get();
       setUser(currentUser);
-      
+
       const { auditLogger } = await import("../lib/auditLogger");
       auditLogger.log({
         userId: currentUser.$id,
@@ -108,8 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const baseUrl = window.location.origin;
     const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
     sessionStorage.setItem('oauth_return_to', returnTo);
-    
-    account.createOAuth2Session(
+
+    account.createOAuth2Token(
       provider === 'google' ? OAuthProvider.Google : OAuthProvider.Github,
       `${baseUrl}/auth/callback`,
       `${baseUrl}/login`,
@@ -134,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await account.deleteSession("current");
       setUser(null);
-      
+
       const { auditLogger } = await import("../lib/auditLogger");
       auditLogger.log({
         userId,

@@ -121,7 +121,7 @@ function convertToADF(text: string) {
  */
 export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult> {
   try {
-    const ticket = getTicket(ticketId);
+    const ticket = await getTicket(ticketId);
     if (!ticket) {
       return { ok: false, error: `Ticket with ID ${ticketId} not found.` };
     }
@@ -161,7 +161,7 @@ export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult
         throw new Error('Jira response did not return an issue key.');
       }
 
-      updateTicket(ticketId, {
+      await updateTicket(ticketId, {
         jiraKey,
         jiraId,
         jiraSyncedAt: new Date().toISOString(),
@@ -187,7 +187,7 @@ export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult
       // Transition check
       await transitionJiraIssue(jiraKey, ticket.status);
 
-      updateTicket(ticketId, {
+      await updateTicket(ticketId, {
         jiraSyncedAt: new Date().toISOString(),
         jiraSyncStatus: 'synced'
       }, 'Jira Sync Engine');
@@ -201,7 +201,7 @@ export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult
                      err.message;
     
     // Update local ticket sync status to error
-    updateTicket(ticketId, {
+    await updateTicket(ticketId, {
       jiraSyncStatus: 'error'
     }, 'Jira Sync Engine');
 
@@ -258,7 +258,7 @@ export async function pullFromJira(jiraKey: string): Promise<{ ok: boolean; tick
     }
 
     // Find the local ticket with this jiraKey
-    const paginatedTickets = listTickets({ search: jiraKey, page: 1, limit: 100 });
+    const paginatedTickets = await listTickets({ search: jiraKey, page: 1, limit: 100 });
     const localTicket = paginatedTickets.data.find(t => t.jiraKey === jiraKey);
 
     if (!localTicket) {
@@ -282,7 +282,7 @@ export async function pullFromJira(jiraKey: string): Promise<{ ok: boolean; tick
     const tags = jiraLabels.filter(label => !label.startsWith('finding-') && label !== 'scorpion-security');
 
     // Update internal ticket
-    const updated = updateTicket(localTicket.id, {
+    const updated = await updateTicket(localTicket.id, {
       status: mappedStatus,
       priority: mappedPriority,
       tags: tags.length > 0 ? tags : localTicket.tags,

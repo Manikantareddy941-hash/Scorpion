@@ -84,9 +84,21 @@ interface Vulnerability {
   repo_name: string;
 }
 
+interface Threat {
+  $id: string;
+  projectId: string;
+  title: string;
+  strideCategory: 'Spoofing' | 'Tampering' | 'Repudiation' | 'Information Disclosure' | 'Denial of Service' | 'Elevation of Privilege';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description?: string;
+  mitigation?: string;
+  status: 'identified' | 'mitigated' | 'accepted';
+  issueId?: string;
+}
+
 export default function PlanWorkspace() {
   const { getJWT } = useAuth();
-  const [activeTab, setActiveTab] = useState<'board' | 'backlog' | 'timeline' | 'reports' | 'dashboard' | 'settings'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'backlog' | 'threats' | 'timeline' | 'reports' | 'dashboard' | 'settings'>('board');
 
   // DB States
   const [projects, setProjects] = useState<Project[]>([]);
@@ -96,6 +108,7 @@ export default function PlanWorkspace() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
+  const [threats, setThreats] = useState<Threat[]>([]);
 
   // UI States
   const [loading, setLoading] = useState(true);
@@ -103,6 +116,14 @@ export default function PlanWorkspace() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentBody, setNewCommentBody] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [createThreatOpen, setCreateThreatOpen] = useState(false);
+
+  // New Threat Form States
+  const [newThreatTitle, setNewThreatTitle] = useState('');
+  const [newThreatStride, setNewThreatStride] = useState<'Spoofing' | 'Tampering' | 'Repudiation' | 'Information Disclosure' | 'Denial of Service' | 'Elevation of Privilege'>('Spoofing');
+  const [newThreatSeverity, setNewThreatSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+  const [newThreatDesc, setNewThreatDesc] = useState('');
+  const [newThreatMitigation, setNewThreatMitigation] = useState('');
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +215,10 @@ export default function PlanWorkspace() {
       // Fetch Rules
       const resRules = await fetch(`/api/plan/projects/${projId}/automation-rules`, { headers });
       if (resRules.ok) setAutomationRules(await resRules.json());
+
+      // Fetch Threats
+      const resThreats = await fetch(`/api/plan/projects/${projId}/threats`, { headers });
+      if (resThreats.ok) setThreats(await resThreats.json());
     } catch (err) {
       console.error('Error fetching project detail data:', err);
     }
@@ -405,6 +430,90 @@ export default function PlanWorkspace() {
     }
   };
 
+  const handleCreateThreat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newThreatTitle) return;
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/projects/${selectedProjId}/threats`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newThreatTitle,
+          strideCategory: newThreatStride,
+          severity: newThreatSeverity,
+          description: newThreatDesc,
+          mitigation: newThreatMitigation
+        })
+      });
+      if (res.ok) {
+        const threat = await res.json();
+        setThreats(prev => [...prev, threat]);
+        setNewThreatTitle('');
+        setNewThreatDesc('');
+        setNewThreatMitigation('');
+        setCreateThreatOpen(false);
+        toast.success('Threat identified and logged');
+      }
+    } catch (err) {
+      toast.error('Failed to log threat');
+    }
+  };
+
+  const handleUpdateThreat = async (threatId: string, updates: Partial<Threat>) => {
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/projects/${selectedProjId}/threats/${threatId}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setThreats(prev => prev.map(t => t.$id === threatId ? updated : t));
+      }
+    } catch (err) {
+      toast.error('Failed to update threat');
+    }
+  };
+
+  const handleDeleteThreat = async (threatId: string) => {
+    if (!window.confirm('Delete this threat assessment?')) return;
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/projects/${selectedProjId}/threats/${threatId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setThreats(prev => prev.filter(t => t.$id !== threatId));
+        toast.success('Threat deleted');
+      }
+    } catch (err) {
+      toast.error('Failed to delete threat');
+    }
+  };
+
+  const handleConvertThreat = async (threat: Threat) => {
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/projects/${selectedProjId}/threats/${threat.$id}/convert`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setThreats(prev => prev.map(t => t.$id === threat.$id ? updated : t));
+        // Refresh issues list
+        const resIssues = await fetch(`/api/plan/projects/${selectedProjId}/issues`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (resIssues.ok) setIssues(await resIssues.json());
+        toast.success('Threat converted to project ticket');
+      }
+    } catch (err) {
+      toast.error('Failed to convert threat');
+    }
+  };
+
   // Comments Fetch & Create
   const fetchComments = async (issueId: string) => {
     setCommentLoading(true);
@@ -532,6 +641,7 @@ export default function PlanWorkspace() {
           {[
             { id: 'board', label: 'Active Board', icon: LayoutGrid },
             { id: 'backlog', label: 'Backlog & Sprints', icon: ListTodo },
+            { id: 'threats', label: 'Threat Model', icon: Shield },
             { id: 'timeline', label: 'Roadmap & Timeline', icon: Calendar },
             { id: 'reports', label: 'Agile Reports', icon: BarChart2 },
             { id: 'dashboard', label: 'Project Dashboard', icon: Shield },
@@ -1052,6 +1162,147 @@ export default function PlanWorkspace() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── THREAT MODEL TAB ── */}
+        {activeTab === 'threats' && (
+          <div className="space-y-6">
+            <div className="premium-card p-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black uppercase italic tracking-wider text-[var(--text-primary)]">
+                  Project Threat Model (STRIDE)
+                </h3>
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-0.5 tracking-wider font-mono">
+                  Identify design-time security flaws and generate remediation tasks.
+                </p>
+              </div>
+              <button
+                onClick={() => setCreateThreatOpen(true)}
+                className="btn-premium flex items-center gap-2 py-2 px-4"
+              >
+                <Plus size={14} />
+                Log Threat Finding
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {[
+                { id: 'Spoofing', label: 'Spoofing (Identity)', desc: 'Pretending to be something or someone other than oneself.' },
+                { id: 'Tampering', label: 'Tampering (Data)', desc: 'Modifying data or configuration maliciously.' },
+                { id: 'Repudiation', label: 'Repudiation', desc: 'Claiming not to have performed an action without proof.' },
+                { id: 'Information Disclosure', label: 'Information Disclosure', desc: 'Exposing confidential information to unauthorized parties.' },
+                { id: 'Denial of Service', label: 'Denial of Service', desc: 'Interrupting or reducing capability to provide service.' },
+                { id: 'Elevation of Privilege', label: 'Elevation of Privilege', desc: 'Gaining authorization level beyond expected capabilities.' }
+              ].map(cat => {
+                const catThreats = threats.filter(t => t.strideCategory === cat.id);
+                return (
+                  <div key={cat.id} className="premium-card p-5 space-y-4 border border-[var(--border-subtle)] bg-[var(--bg-secondary)]/35">
+                    <div className="border-b border-[var(--border-subtle)] pb-2 flex justify-between items-center">
+                      <div>
+                        <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-primary)] block">
+                          {cat.label}
+                        </span>
+                        <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block font-mono">
+                          {cat.desc}
+                        </span>
+                      </div>
+                      <span className="bg-[var(--bg-secondary)] text-[9px] font-black italic px-2 py-0.5 rounded-full border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                        {catThreats.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                      {catThreats.map(threat => {
+                        const sevColors = {
+                          critical: 'text-red-500 border-red-500/20 bg-red-500/5',
+                          high: 'text-orange-500 border-orange-500/20 bg-orange-500/5',
+                          medium: 'text-yellow-500 border-yellow-500/20 bg-yellow-500/5',
+                          low: 'text-green-500 border-green-500/20 bg-green-500/5'
+                        };
+
+                        const statusColors = {
+                          identified: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+                          mitigated: 'bg-green-500/10 text-green-500 border-green-500/20',
+                          accepted: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                        };
+
+                        return (
+                          <div key={threat.$id} className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] p-4 rounded-xl space-y-3 relative group">
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border tracking-wider italic ${sevColors[threat.severity]}`}>
+                                  {threat.severity}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border tracking-wider italic ${statusColors[threat.status]}`}>
+                                  {threat.status}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteThreat(threat.$id)}
+                                className="opacity-0 group-hover:opacity-100 text-[var(--status-error)] transition-opacity p-1 bg-transparent border-none cursor-pointer"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+
+                            <h4 className="text-[11px] font-black uppercase italic leading-tight text-[var(--text-primary)]">
+                              {threat.title}
+                            </h4>
+
+                            {threat.description && (
+                              <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                                {threat.description}
+                              </p>
+                            )}
+
+                            {threat.mitigation && (
+                              <div className="p-2.5 bg-[var(--bg-primary)]/50 border border-[var(--border-subtle)] rounded-lg">
+                                <span className="text-[8px] font-black uppercase italic text-[var(--text-secondary)] block mb-1">Proposed Countermeasure</span>
+                                <p className="text-[9px] font-bold text-[var(--text-primary)] font-mono leading-tight">
+                                  {threat.mitigation}
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-4">
+                              {threat.issueId ? (
+                                <span className="text-[8px] font-black uppercase italic text-green-500 flex items-center gap-1">
+                                  <CheckCircle2 size={10} /> Converted (ID: {threat.issueId})
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleConvertThreat(threat)}
+                                  className="w-full py-1 bg-[var(--accent-primary)]/10 hover:bg-[var(--accent-primary)]/20 border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] text-[8px] font-black uppercase italic rounded-md flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <ArrowRight size={10} /> Convert to Ticket
+                                </button>
+                              )}
+
+                              <select
+                                value={threat.status}
+                                onChange={e => handleUpdateThreat(threat.$id, { status: e.target.value as any })}
+                                className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-2 py-1 text-[9px] font-black italic uppercase text-[var(--text-primary)] outline-none cursor-pointer"
+                              >
+                                <option value="identified">Identified</option>
+                                <option value="mitigated">Mitigated</option>
+                                <option value="accepted">Accepted</option>
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {catThreats.length === 0 && (
+                        <div className="text-center py-8 border border-dashed border-[var(--border-subtle)] rounded-2xl opacity-40">
+                          <span className="text-[9px] font-black uppercase italic">No threat identified</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1975,6 +2226,93 @@ export default function PlanWorkspace() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Create Threat Modal */}
+      {createThreatOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <form onSubmit={handleCreateThreat} className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-[var(--border-subtle)]">
+              <span className="font-black uppercase italic text-xs tracking-wider text-[var(--text-primary)]">
+                Log New Threat Finding
+              </span>
+              <button type="button" onClick={() => setCreateThreatOpen(false)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase italic text-[var(--text-secondary)]">Threat Title</label>
+                <input
+                  type="text"
+                  required
+                  value={newThreatTitle}
+                  onChange={e => setNewThreatTitle(e.target.value)}
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] outline-none"
+                  placeholder="e.g. CSRF token validation bypass in admin dashboard"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-black uppercase italic text-[var(--text-secondary)]">STRIDE Category</label>
+                  <select
+                    value={newThreatStride}
+                    onChange={e => setNewThreatStride(e.target.value as any)}
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] outline-none"
+                  >
+                    <option value="Spoofing">Spoofing (Identity)</option>
+                    <option value="Tampering">Tampering (Data)</option>
+                    <option value="Repudiation">Repudiation</option>
+                    <option value="Information Disclosure">Information Disclosure</option>
+                    <option value="Denial of Service">Denial of Service</option>
+                    <option value="Elevation of Privilege">Elevation of Privilege</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-black uppercase italic text-[var(--text-secondary)]">Severity</label>
+                  <select
+                    value={newThreatSeverity}
+                    onChange={e => setNewThreatSeverity(e.target.value as any)}
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] outline-none"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase italic text-[var(--text-secondary)]">Description / Attack Vector</label>
+                <textarea
+                  value={newThreatDesc}
+                  onChange={e => setNewThreatDesc(e.target.value)}
+                  rows={3}
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] outline-none resize-none"
+                  placeholder="Describe how an attacker could exploit this threat..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase italic text-[var(--text-secondary)]">Proposed Countermeasure / Mitigation</label>
+                <textarea
+                  value={newThreatMitigation}
+                  onChange={e => setNewThreatMitigation(e.target.value)}
+                  rows={2}
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] outline-none resize-none"
+                  placeholder="Describe the proposed fix or security controls..."
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-[var(--border-subtle)] flex justify-end gap-2 bg-[var(--bg-primary)]/20">
+              <button type="button" onClick={() => setCreateThreatOpen(false)} className="px-4 py-2 text-[10px] font-black uppercase italic text-[var(--text-secondary)]">Cancel</button>
+              <button type="submit" className="btn-premium py-2 px-6">Log Threat</button>
+            </div>
+          </form>
         </div>
       )}
 
