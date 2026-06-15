@@ -11,7 +11,9 @@ import {
   addComment,
   getComments,
   getActivity,
-  getStats
+  getStats,
+  addLink,
+  removeLink
 } from '../models/ticketModel';
 import {
   setJiraConfig,
@@ -20,7 +22,7 @@ import {
   pullFromJira,
   testConnection
 } from '../middleware/jiraService';
-import { TicketFilters } from '../../../shared/types';
+import { TicketFilters, TicketLinkType } from '../../../shared/types';
 
 const router = Router();
 
@@ -49,7 +51,8 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     page: page ? parseInt(page as string, 10) : undefined,
     limit: limit ? parseInt(limit as string, 10) : undefined,
     sortBy: sortBy as string,
-    sortOrder: sortOrder as 'asc' | 'desc'
+    sortOrder: sortOrder as 'asc' | 'desc',
+    overdue: req.query.overdue === 'true'
   };
 
   const response = await listTickets(filters);
@@ -138,6 +141,53 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
+ * POST /api/tickets/from-finding - Auto-create ticket from a security finding
+ */
+router.post('/from-finding', asyncHandler(async (req: Request, res: Response) => {
+  const { findingId, title, description, severity, type } = req.body;
+
+  if (!findingId || !title || !description) {
+    return res.status(400).json({ error: 'findingId, title, and description are required.' });
+  }
+
+  // Duplicate prevention check
+  const existingTicket = await findByLinkedFinding(findingId);
+  if (existingTicket) {
+    return res.status(409).json({ 
+      error: 'A ticket is already linked to this finding.', 
+      ticket: existingTicket 
+    });
+  }
+
+  const sevVal = severity !== undefined ? Number(severity) : 0;
+  let priority: 'critical' | 'high' | 'medium' | 'low' = 'low';
+  if (sevVal >= 9) {
+    priority = 'critical';
+  } else if (sevVal >= 7) {
+    priority = 'high';
+  } else if (sevVal >= 4) {
+    priority = 'medium';
+  }
+
+  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
+
+  const ticket = await createTicket({
+    title,
+    description,
+    status: 'todo',
+    priority,
+    type: type || 'vulnerability',
+    severity: sevVal,
+    assignee: '',
+    reporter: userEmail,
+    tags: [],
+    linkedFindings: [findingId]
+  } as any);
+
+  res.status(201).json(ticket);
+}));
+
+/**
  * POST /api/tickets - Create a new ticket
  */
 router.post('/', asyncHandler(async (req: Request, res: Response) => {
@@ -208,6 +258,37 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
     return res.status(404).json({ error: 'Ticket not found' });
   }
   res.status(204).end();
+}));
+
+/**
+ * POST /api/tickets/:id/links - Link a ticket to another ticket
+ */
+router.post('/:id/links', asyncHandler(async (req: Request, res: Response) => {
+  const { targetId, type } = req.body;
+  if (!targetId || !type) {
+    return res.status(400).json({ error: 'targetId and type are required' });
+  }
+  
+  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
+  const updatedTicket = await addLink(req.params.id, targetId, type as TicketLinkType, userEmail);
+  if (!updatedTicket) {
+    return res.status(404).json({ error: 'Ticket or target ticket not found' });
+  }
+  
+  res.json(updatedTicket);
+}));
+
+/**
+ * DELETE /api/tickets/:id/links/:targetId - Remove a link between tickets
+ */
+router.delete('/:id/links/:targetId', asyncHandler(async (req: Request, res: Response) => {
+  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
+  const updatedTicket = await removeLink(req.params.id, req.params.targetId, userEmail);
+  if (!updatedTicket) {
+    return res.status(404).json({ error: 'Ticket not found' });
+  }
+  
+  res.json(updatedTicket);
 }));
 
 /**

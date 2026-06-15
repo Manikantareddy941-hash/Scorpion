@@ -29,6 +29,7 @@ export function useTickets(filters: TicketFilters) {
       if (filters.limit) queryParams.append('limit', String(filters.limit));
       if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
       if (filters.sortOrder) queryParams.append('sortOrder', filters.sortOrder);
+      if (filters.overdue) queryParams.append('overdue', 'true');
 
       const response = await fetch(`/api/tickets?${queryParams.toString()}`, {
         headers: {
@@ -178,6 +179,28 @@ export async function findTicketByFinding(getJWT: () => Promise<string | null>, 
   }
 }
 
+export async function createTicketFromFinding(
+  getJWT: () => Promise<string | null>,
+  findingData: { findingId: string; title: string; description: string; severity: number; type?: string }
+): Promise<Ticket> {
+  const token = await getJWT();
+  const response = await fetch('/api/tickets/from-finding', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(findingData)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to create ticket from finding');
+  }
+
+  return response.json();
+}
+
 export async function createTicket(getJWT: () => Promise<string | null>, ticketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt' | 'resolvedAt'>): Promise<Ticket> {
   const token = await getJWT();
   const response = await fetch('/api/tickets', {
@@ -245,6 +268,42 @@ export async function addComment(getJWT: () => Promise<string | null>, ticketId:
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || 'Failed to add comment');
+  }
+
+  return response.json();
+}
+
+export async function addTicketLink(getJWT: () => Promise<string | null>, ticketId: string, targetId: string, type: string): Promise<Ticket> {
+  const token = await getJWT();
+  const response = await fetch(`/api/tickets/${ticketId}/links`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ targetId, type })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to add ticket link');
+  }
+
+  return response.json();
+}
+
+export async function removeTicketLink(getJWT: () => Promise<string | null>, ticketId: string, targetId: string): Promise<Ticket> {
+  const token = await getJWT();
+  const response = await fetch(`/api/tickets/${ticketId}/links/${targetId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to remove ticket link');
   }
 
   return response.json();

@@ -30,7 +30,8 @@ export default function TicketDashboard() {
     page: 1,
     limit: 100,
     sortBy: 'createdAt',
-    sortOrder: 'desc'
+    sortOrder: 'desc',
+    overdue: false
   });
 
   const { tickets: fetchedTickets, loading, error, refetch } = useTickets(filters);
@@ -233,6 +234,17 @@ export default function TicketDashboard() {
                 {statsLoading ? '...' : stats?.resolved ?? 0}
               </p>
             </div>
+            {stats?.overdue > 0 && (
+              <>
+                <div className="w-px h-8 bg-[var(--border-subtle)]" />
+                <div className="text-center">
+                  <p className="text-[8px] font-black text-red-500 uppercase italic animate-pulse">Overdue</p>
+                  <p className="text-2xl font-black text-red-500 italic animate-pulse">
+                    {stats.overdue}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
           <button
             onClick={() => {
@@ -285,6 +297,17 @@ export default function TicketDashboard() {
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
               </select>
+
+              <button
+                onClick={() => handleFilterChange('overdue', !filters.overdue)}
+                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all border ${
+                  filters.overdue 
+                    ? 'bg-red-500 text-white border-red-500' 
+                    : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-red-500/40 hover:text-red-400'
+                }`}
+              >
+                Overdue Only
+              </button>
             </div>
           </div>
 
@@ -383,7 +406,14 @@ export default function TicketDashboard() {
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Unsynced" />
                             )}
                           </div>
-                          <PriorityBadge priority={ticket.priority} />
+                          <div className="flex flex-col items-end gap-1">
+                            <PriorityBadge priority={ticket.priority} />
+                            {ticket.isOverdue && (
+                              <span className="px-1.5 py-0.5 bg-red-500 text-white rounded text-[7px] font-black uppercase tracking-wider animate-pulse shadow-sm shadow-red-500/20">
+                                Overdue
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Title */}
