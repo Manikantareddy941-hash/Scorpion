@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Loader2, Save } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { createTicket } from '../hooks/useTickets';
@@ -8,9 +8,10 @@ import toast from 'react-hot-toast';
 interface Props {
   onClose: () => void;
   onSave: (ticket: Ticket) => void;
+  initialData?: Partial<Ticket>;
 }
 
-export default function TicketForm({ onClose, onSave }: Props) {
+export default function TicketForm({ onClose, onSave, initialData }: Props) {
   const { getJWT } = useAuth();
   const [loading, setLoading] = useState(false);
 
@@ -29,6 +30,26 @@ export default function TicketForm({ onClose, onSave }: Props) {
     epicLink: '',
     sprintId: ''
   });
+
+  useEffect(() => {
+    if (initialData) {
+      setForm({
+        title: initialData.title || '',
+        description: initialData.description || '',
+        type: initialData.type || 'task',
+        priority: initialData.priority || 'medium',
+        status: initialData.status || 'todo',
+        assignee: initialData.assignee || '',
+        severity: initialData.severity !== undefined ? initialData.severity : 0,
+        tags: Array.isArray(initialData.tags) ? initialData.tags.join(', ') : '',
+        linkedFindings: Array.isArray(initialData.linkedFindings) ? initialData.linkedFindings.join(', ') : '',
+        storyPoints: initialData.storyPoints !== undefined ? String(initialData.storyPoints) : '',
+        dueDate: initialData.dueDate || '',
+        epicLink: initialData.epicLink || '',
+        sprintId: initialData.sprintId || ''
+      });
+    }
+  }, [initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
