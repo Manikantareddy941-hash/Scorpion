@@ -1,10 +1,11 @@
-import { Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse } from '../../../shared/types';
+import { Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse, TicketLink, TicketLinkType } from '../../../shared/types';
 import crypto from 'crypto';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 
 // In-memory stores for comments and activity log (these remain local for now)
 const commentsMap = new Map<string, TicketComment[]>();
 const activityMap = new Map<string, TicketActivity[]>();
+const linksMap = new Map<string, TicketLink[]>();
 
 /**
  * Maps an Appwrite document to the Ticket interface format.
@@ -33,6 +34,8 @@ function mapDocumentToTicket(doc: any): Ticket {
     jiraId: doc.jiraId,
     jiraSyncedAt: doc.jiraSyncedAt,
     jiraSyncStatus: doc.jiraSyncStatus,
+    slaDeadline: doc.slaDeadline,
+    links: linksMap.get(doc.$id) || [],
   };
 }
 
@@ -56,6 +59,29 @@ export async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' |
     sprintId: (ticketData as any).sprintId || null,
   };
 
+  // Compute slaDeadline if not provided
+  if (!(ticketData as any).slaDeadline) {
+    if (data.dueDate) {
+      data.slaDeadline = data.dueDate;
+    } else {
+      const msInHour = 60 * 60 * 1000;
+      let addedMs = 0;
+      switch (data.priority) {
+        case 'critical': addedMs = 24 * msInHour; break;
+        case 'high': addedMs = 72 * msInHour; break;
+        case 'medium': addedMs = 7 * 24 * msInHour; break;
+        case 'low': addedMs = 30 * 24 * msInHour; break;
+      }
+      if (addedMs > 0) {
+        data.slaDeadline = new Date(Date.now() + addedMs).toISOString();
+      } else {
+        data.slaDeadline = null;
+      }
+    }
+  } else {
+    data.slaDeadline = (ticketData as any).slaDeadline;
+  }
+
   if (data.status === 'done' || data.status === 'closed') {
     data.resolvedAt = now;
   }
@@ -68,6 +94,7 @@ export async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' |
   );
 
   const newTicket = mapDocumentToTicket(doc);
+  linksMap.set(newTicket.id, ticketData.links || []);
 
   await recordActivity(newTicket.id, ticketData.reporter || 'System', 'created', {
     message: `Ticket created with title: "${newTicket.title}"`
@@ -126,6 +153,7 @@ export async function updateTicket(id: string, updates: Partial<Ticket>, actor: 
     delete data.id;
     delete data.createdAt;
     delete data.updatedAt;
+    delete data.links;
 
     // Manage resolvedAt timestamp
     if (updates.status) {
@@ -137,6 +165,9 @@ export async function updateTicket(id: string, updates: Partial<Ticket>, actor: 
     }
 
     const doc = await databases.updateDocument(DB_ID, 'tickets', id, data);
+    if (updates.links) {
+      linksMap.set(id, updates.links);
+    }
     const updatedTicket = mapDocumentToTicket(doc);
 
     // Auto-log activity logs for status, priority, or assignee updates
@@ -206,9 +237,27 @@ export async function listTickets(filters: TicketFilters): Promise<PaginatedResp
     queries.push(Query.limit(1000));
 
     const response = await databases.listDocuments(DB_ID, 'tickets', queries);
-    let list = response.documents.map(mapDocumentToTicket);
+    const nowMs = Date.now();
+    let list = response.documents.map(doc => {
+      const t = mapDocumentToTicket(doc);
+      // Compute isOverdue dynamically
+      if (t.status !== 'done' && t.status !== 'closed') {
+        const deadline = t.dueDate || t.slaDeadline;
+        if (deadline) {
+          t.isOverdue = new Date(deadline).getTime() < nowMs;
+        } else {
+          t.isOverdue = false;
+        }
+      } else {
+        t.isOverdue = false;
+      }
+      return t;
+    });
 
     // Filtering
+    if (filters.overdue) {
+      list = list.filter(t => t.isOverdue);
+    }
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       list = list.filter(t => 
@@ -344,6 +393,15 @@ export async function getStats() {
 
     // top-5 aging open tickets (oldest createdAt, status !== done & !== closed)
     const openTickets = tickets.filter(t => t.status !== 'done' && t.status !== 'closed');
+    const nowMs = Date.now();
+    let overdueCount = 0;
+    openTickets.forEach(t => {
+      const deadline = t.dueDate || t.slaDeadline;
+      if (deadline && new Date(deadline).getTime() < nowMs) {
+        overdueCount++;
+      }
+    });
+
     openTickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     const agingTickets = openTickets.slice(0, 5);
 
@@ -352,6 +410,7 @@ export async function getStats() {
       open,
       critical,
       resolved,
+      overdue: overdueCount,
       countsByStatus,
       countsByPriority,
       countsByType,
@@ -364,10 +423,64 @@ export async function getStats() {
       open: 0,
       critical: 0,
       resolved: 0,
+      overdue: 0,
       countsByStatus: { todo: 0, in_progress: 0, in_review: 0, done: 0, closed: 0 },
       countsByPriority: { critical: 0, high: 0, medium: 0, low: 0 },
       countsByType: { bug: 0, vulnerability: 0, task: 0, feature: 0, story: 0, epic: 0 },
       agingTickets: []
     };
   }
+}
+
+export async function addLink(fromId: string, toId: string, type: TicketLinkType): Promise<void> {
+  const fromTicket = await getTicket(fromId);
+  const toTicket = await getTicket(toId);
+  if (!fromTicket || !toTicket) {
+    throw new Error('One or both tickets do not exist');
+  }
+
+  const fromLinks = linksMap.get(fromId) || [];
+  const toLinks = linksMap.get(toId) || [];
+
+  if (fromLinks.some(l => l.ticketId === toId && l.type === type)) {
+    return;
+  }
+
+  let inverseType: TicketLinkType = 'relates_to';
+  if (type === 'blocks') {
+    inverseType = 'blocked_by';
+  } else if (type === 'blocked_by') {
+    inverseType = 'blocks';
+  }
+
+  fromLinks.push({ ticketId: toId, type });
+  toLinks.push({ ticketId: fromId, type: inverseType });
+
+  linksMap.set(fromId, fromLinks);
+  linksMap.set(toId, toLinks);
+
+  await recordActivity(fromId, 'System', 'status_change', {
+    message: `Linked ticket ${toId} as ${type}`
+  });
+  await recordActivity(toId, 'System', 'status_change', {
+    message: `Linked ticket ${fromId} as ${inverseType}`
+  });
+}
+
+export async function removeLink(fromId: string, toId: string): Promise<void> {
+  const fromLinks = linksMap.get(fromId) || [];
+  const toLinks = linksMap.get(toId) || [];
+
+  const newFromLinks = fromLinks.filter(l => l.ticketId !== toId);
+  const newToLinks = toLinks.filter(l => l.ticketId !== fromId);
+
+  linksMap.set(fromId, newFromLinks);
+  linksMap.set(toId, newToLinks);
+
+  await recordActivity(fromId, 'System', 'status_change', {
+    message: `Removed link to ticket ${toId}`
+  });
+  await recordActivity(toId, 'System', 'status_change', {
+    message: `Removed link to ticket ${fromId}`
+  });
 }

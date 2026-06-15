@@ -12,6 +12,8 @@ export interface Ticket {
   linkedFindings: string[]; // IDs from existing detected_issues/open_issues
   storyPoints?: number;
   dueDate?: string;
+  slaDeadline?: string;
+  isOverdue?: boolean;
   epicLink?: string;
   sprintId?: string;
   createdAt: string;
@@ -21,6 +23,14 @@ export interface Ticket {
   jiraId?: string;
   jiraSyncedAt?: string;
   jiraSyncStatus?: 'synced' | 'error';
+  links?: TicketLink[];
+}
+
+export type TicketLinkType = 'blocks' | 'blocked_by' | 'relates_to';
+
+export interface TicketLink {
+  ticketId: string;
+  type: TicketLinkType;
 }
 
 export interface TicketComment {
@@ -70,6 +80,7 @@ export interface TicketFilters {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  overdue?: boolean;
 }
 
 export interface PaginatedResponse<T> {

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTicket, updateTicket, addComment, syncToJira } from '../hooks/useTickets';
+import { useTicket, updateTicket, addComment, syncToJira, addTicketLink, removeTicketLink } from '../hooks/useTickets';
 import { Ticket, TicketComment, TicketActivity } from '../../shared/types';
 import {
   ArrowLeft, ExternalLink, Link2, Plus, Send, User, Clock,
   AlertOctagon, CheckCircle2, ShieldAlert, Bug, Sparkles,
-  Loader2, RefreshCw, Check, Calendar, Activity, Tag
+  Loader2, RefreshCw, Check, Calendar, Activity, Tag, Trash2, Link
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -29,6 +29,11 @@ export default function TicketDetail() {
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
+
+  // Link form state
+  const [linkTargetId, setLinkTargetId] = useState('');
+  const [linkType, setLinkType] = useState('relates_to');
+  const [linking, setLinking] = useState(false);
 
   // Update temp values on ticket load
   useEffect(() => {
@@ -105,6 +110,34 @@ export default function TicketDetail() {
       toast.error(err.message || 'Failed to sync with Jira', { id: toastId });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleAddLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkTargetId.trim() || !ticket) return;
+    
+    setLinking(true);
+    try {
+      await addTicketLink(getJWT, ticket.id, linkTargetId.trim(), linkType);
+      toast.success('Link added');
+      setLinkTargetId('');
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add link');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleRemoveLink = async (targetId: string) => {
+    if (!ticket) return;
+    try {
+      await removeTicketLink(getJWT, ticket.id, targetId);
+      toast.success('Link removed');
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to remove link');
     }
   };
 
@@ -200,6 +233,17 @@ export default function TicketDetail() {
             </button>
           </div>
         </div>
+
+        {/* Warnings Banner */}
+        {ticket.links?.some(l => l.type === 'blocked_by') && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center gap-3">
+            <AlertOctagon className="w-5 h-5 text-red-500 shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-red-500 uppercase tracking-wide">Blocked Issue</p>
+              <p className="text-xs text-red-400 font-semibold">This ticket is blocked by one or more dependencies.</p>
+            </div>
+          </div>
+        )}
 
         {/* Main 2-Panel layout */}
         <div className="flex flex-col lg:flex-row gap-6">
@@ -433,6 +477,68 @@ export default function TicketDetail() {
           {/* Details Sidebar (Right) */}
           <div className="w-full lg:w-[280px] shrink-0 space-y-6">
             
+            {/* Linked Issues Block */}
+            <div className="premium-card p-5 space-y-4 bg-[var(--bg-card)]">
+              <h4 className="text-[10px] font-black uppercase italic tracking-wider text-[var(--text-primary)] pb-2 border-b border-[var(--border-subtle)]/50">
+                Linked Dependencies
+              </h4>
+              
+              <div className="space-y-2">
+                {!ticket.links || ticket.links.length === 0 ? (
+                  <p className="text-[9px] font-bold text-[var(--text-secondary)] italic">No linked tickets.</p>
+                ) : (
+                  ticket.links.map(link => (
+                    <div key={link.ticketId} className="flex items-center justify-between p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-subtle)]/50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {link.type === 'blocks' && <AlertOctagon size={12} className="text-orange-500 shrink-0" />}
+                        {link.type === 'blocked_by' && <AlertOctagon size={12} className="text-red-500 shrink-0" />}
+                        {link.type === 'relates_to' && <Link size={12} className="text-blue-500 shrink-0" />}
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] font-bold text-[var(--text-primary)] truncate">{link.ticketId}</span>
+                          <span className="text-[8px] font-mono text-[var(--text-secondary)] uppercase">{link.type.replace('_', ' ')}</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleRemoveLink(link.ticketId)}
+                        className="p-1.5 text-[var(--text-secondary)] hover:text-red-500 transition-colors"
+                        title="Remove link"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form onSubmit={handleAddLink} className="space-y-2 pt-2 border-t border-[var(--border-subtle)]/30">
+                <select
+                  value={linkType}
+                  onChange={e => setLinkType(e.target.value)}
+                  className="w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-xs font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all cursor-pointer"
+                >
+                  <option value="relates_to">Relates To</option>
+                  <option value="blocks">Blocks</option>
+                  <option value="blocked_by">Blocked By</option>
+                </select>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={linkTargetId}
+                    onChange={e => setLinkTargetId(e.target.value)}
+                    placeholder="Ticket ID..."
+                    className="flex-1 px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg text-xs font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all min-w-0"
+                  />
+                  <button
+                    type="submit"
+                    disabled={linking || !linkTargetId.trim()}
+                    className="px-3 py-2 bg-[var(--accent-primary)] text-black rounded-lg text-xs font-bold hover:bg-opacity-90 disabled:opacity-50 flex items-center justify-center shrink-0"
+                  >
+                    {linking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus size={14} />}
+                  </button>
+                </div>
+              </form>
+            </div>
+
             {/* Meta status inspector card */}
             <div className="premium-card p-5 space-y-4 bg-[var(--bg-card)]">
               <h4 className="text-[10px] font-black uppercase italic tracking-wider text-[var(--accent-secondary)] pb-2 border-b border-[var(--border-subtle)]/50">
@@ -472,6 +578,36 @@ export default function TicketDetail() {
                   <option value="high">High Priority</option>
                   <option value="critical">Critical Index</option>
                 </select>
+              </div>
+
+              {/* Due Date & SLA */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-wider block font-mono">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  value={ticket.dueDate ? ticket.dueDate.split('T')[0] : (ticket.slaDeadline ? ticket.slaDeadline.split('T')[0] : '')}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val) {
+                      handleUpdate('dueDate', new Date(val).toISOString());
+                    } else {
+                      handleUpdate('dueDate', null);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-xs font-bold text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-all cursor-pointer"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[8px] font-mono text-[var(--text-secondary)] italic">
+                    SLA deadline: {ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleDateString() : 'N/A'}
+                  </span>
+                  {ticket.isOverdue && (
+                    <span className="px-1.5 py-0.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded text-[7px] font-black uppercase tracking-wider">
+                      Overdue
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Assignee Input */}

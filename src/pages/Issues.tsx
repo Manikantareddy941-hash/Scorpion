@@ -3,7 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { createTicket, findTicketByFinding } from '../hooks/useTickets';
+import { createTicket, findTicketByFinding, useTickets, createTicketFromFinding } from '../hooks/useTickets';
 import toast from 'react-hot-toast';
 
 
@@ -19,12 +19,39 @@ const TYPE_ICON: Record<string, any> = {
 export default function Issues() {
   const navigate = useNavigate();
   const { getJWT } = useAuth();
+  const { tickets: allTickets, refetch: refetchTickets } = useTickets({});
   const [issues, setIssues] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState({ severity: '', type: '', tool: '' });
   const [loading, setLoading] = useState(true);
   const [latestScan, setLatestScan] = useState<any>(null);
   const [ticketMap, setTicketMap] = useState<Record<string, string>>({});
+
+  const handleCreateTicketFromFinding = async (issue: any) => {
+    const sevStr = (issue.severity || '').toUpperCase();
+    let severity = 2.5;
+    if (sevStr === 'CRITICAL') {
+      severity = 9.5;
+    } else if (sevStr === 'HIGH') {
+      severity = 7.5;
+    } else if (sevStr === 'MEDIUM') {
+      severity = 5.0;
+    } else if (sevStr === 'LOW') {
+      severity = 2.5;
+    } else if (sevStr === 'INFO') {
+      severity = 1.0;
+    }
+
+    const description = `Issue detected by ${issue.tool || 'scanner'} in ${issue.file || 'workspace'}.\nMessage: ${issue.message}\n` + (issue.code ? `Code:\n${issue.code}` : '');
+
+    return await createTicketFromFinding(getJWT, {
+      findingId: issue.$id,
+      title: issue.title || `Scan Finding in ${issue.file || 'Workspace'}`,
+      description,
+      severity,
+      type: 'vulnerability'
+    });
+  };
 
   useEffect(() => { 
     fetchIssues();
@@ -326,14 +353,18 @@ export default function Issues() {
                   {/* Issue rows */}
                   {expanded === file && (
                     <div className="border-t border-[var(--border-subtle)]">
-                      {fileIssues.map((issue: any) => (
-                        <IssueRow 
-                          key={issue.$id} 
-                          issue={issue} 
-                          ticketId={ticketMap[issue.$id]}
-                          onCreateTicket={handleCreateTicket}
-                        />
-                      ))}
+                      {fileIssues.map((issue: any) => {
+                        const existingTicket = allTickets.find(t => t.linkedFindings && t.linkedFindings.includes(issue.$id));
+                        return (
+                          <IssueRow 
+                            key={issue.$id} 
+                            issue={issue} 
+                            existingTicket={existingTicket}
+                            onCreateTicketFromFinding={handleCreateTicketFromFinding}
+                            refetchTickets={refetchTickets}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -348,14 +379,18 @@ export default function Issues() {
 
 function IssueRow({ 
   issue, 
-  ticketId, 
-  onCreateTicket 
+  existingTicket, 
+  onCreateTicketFromFinding,
+  refetchTickets
 }: { 
   issue: any; 
-  ticketId?: string; 
-  onCreateTicket: (e: React.MouseEvent, issue: any) => void;
+  existingTicket?: any; 
+  onCreateTicketFromFinding: (issue: any) => Promise<any>;
+  refetchTickets: () => void;
 }) {
   const [showCode, setShowCode] = useState(false);
+  const [createdTicketInfo, setCreatedTicketInfo] = useState<any | null>(null);
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   return (
@@ -401,22 +436,55 @@ function IssueRow({
           </span>
         </div>
 
-        {/* Ticket Action Button */}
+        {/* Ticket Action Area */}
         <div className="flex-shrink-0 flex items-center">
-          {ticketId ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/tickets/${ticketId}`);
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-emerald-500 hover:text-black transition-all"
-            >
-              <TicketIcon size={10} /> View Ticket
-            </button>
+          {existingTicket ? (
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 bg-stone-500/10 text-stone-400 border border-stone-500/30 rounded-2xl text-[9px] font-black uppercase italic">
+                Ticketed
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/tickets/${existingTicket.id}`);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-emerald-500 hover:text-black transition-all"
+              >
+                <TicketIcon size={10} /> View Ticket
+              </button>
+            </div>
+          ) : createdTicketInfo ? (
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10px] font-bold text-emerald-500">Ticket created — {createdTicketInfo.id}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/tickets/${createdTicketInfo.id}`);
+                }}
+                className="text-cyan-400 underline hover:text-cyan-300 text-[10px] font-semibold"
+              >
+                View Ticket
+              </button>
+            </div>
           ) : (
             <button
-              onClick={(e) => onCreateTicket(e, issue)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-cyan-500 hover:text-black transition-all"
+              disabled={creating}
+              onClick={async (e) => {
+                e.stopPropagation();
+                setCreating(true);
+                const toastId = toast.loading('Creating ticket...');
+                try {
+                  const t = await onCreateTicketFromFinding(issue);
+                  setCreatedTicketInfo(t);
+                  refetchTickets();
+                  toast.success(`Ticket ${t.id} created successfully!`, { id: toastId });
+                } catch (err: any) {
+                  toast.error(err.message || 'Failed to create ticket', { id: toastId });
+                } finally {
+                  setCreating(false);
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50"
             >
               <TicketIcon size={10} /> Create Ticket
             </button>
