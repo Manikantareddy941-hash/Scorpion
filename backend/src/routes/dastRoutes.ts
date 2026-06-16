@@ -1,85 +1,70 @@
 import { Router, Response, Request } from 'express';
-import { databases, DB_ID, ID } from '../lib/appwrite';
+import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
-import { spawnSync } from 'child_process';
-import { sendFindingAlert } from '../utils/alertDispatcher';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import { runZapScan } from '../workers/zapWorker';
 
 const router = Router();
 
 router.post('/dast', verifyUser, async (req: Request, res: Response) => {
-    const { target_url } = req.body;
+    const { target_url, scanMode = 'spider' } = req.body;
     if (!target_url) return res.status(400).json({ error: 'target_url is required' });
 
-    const reportPath = path.join(os.tmpdir(), `zap-report-${ID.unique()}.json`);
-
     try {
-        console.log(`[DAST] Initializing ZAP Baseline scan for ${target_url}...`);
+        const scanId = ID.unique();
+        const userId = (req as any).user?.$id || 'system';
+
+        console.log(`[DAST API] Initializing ZAP scan for ${target_url} (Mode: ${scanMode})...`);
         
-        // Use zap-baseline.py (standard ZAP docker/binary entrypoint)
-        const result = spawnSync('zap-baseline.py', [
-            '-t', target_url,
-            '-J', reportPath,
-            '-m', '5' // Max 5 minutes for baseline
-        ], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
-
-        if (!fs.existsSync(reportPath)) {
-            return res.status(500).json({ error: "DAST scan failed to generate report", details: result.stderr });
-        }
-
-        const reportContent = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-        const site = reportContent.site?.[0] || {};
-        const alerts = site.alerts || [];
-
-        const stats = {
-            total: alerts.length,
-            target: target_url,
-            findings: [] as any[]
-        };
-
-        for (const alert of alerts) {
-            const severityMap: Record<string, string> = {
-                '3': 'high',
-                '2': 'medium',
-                '1': 'low',
-                '0': 'info'
-            };
-
-            const finding = {
+        // Create initial scan document
+        await databases.createDocument(
+            DB_ID,
+            COLLECTIONS.SCANS,
+            scanId,
+            {
                 repo_id: 'dast',
-                repo_name: target_url,
-                type: 'dast',
-                severity: severityMap[alert.riskcode] || 'medium',
-                title: alert.alert,
-                description: alert.desc,
-                file_path: alert.instances?.[0]?.uri || target_url,
-                status: 'open',
-                created_at: new Date().toISOString(),
-                scanId: ID.unique()
-            };
-
-            const createdFinding = await databases.createDocument(
-                DB_ID,
-                'findings',
-                ID.unique(),
-                finding
-            );
-
-            const userId = (req as any).user?.$id;
-            if (userId) {
-                await sendFindingAlert(createdFinding as any, userId);
+                status: 'pending',
+                scan_type: 'dast',
+                repoUrl: target_url,
+                startedAt: new Date().toISOString(),
+                timestamp: new Date().toISOString(),
+                scannerVersion: 'ZAP',
+                visibility: 'private',
+                details: JSON.stringify({ target: target_url, mode: scanMode })
             }
-            
-            stats.findings.push(createdFinding);
-        }
+        );
 
-        fs.unlinkSync(reportPath);
-        res.json(stats);
+        // Run worker asynchronously
+        runZapScan({
+            targetUrl: target_url,
+            scanMode,
+            scanId,
+            userId
+        }).catch(err => {
+            console.error('[DAST API Worker Error]', err);
+        });
+
+        res.json({ scanId, status: 'started' });
 
     } catch (err: any) {
         console.error('[DAST API Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+router.get('/dast/:scanId/status', verifyUser, async (req: Request, res: Response) => {
+    const { scanId } = req.params;
+    if (!scanId) return res.status(400).json({ error: 'scanId is required' });
+
+    try {
+        const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        res.json({
+            status: scan.status,
+            completedAt: scan.completedAt || null,
+            details: scan.details ? JSON.parse(scan.details) : null
+        });
+    } catch (err: any) {
+        if (err.code === 404) return res.status(404).json({ error: 'Scan not found' });
+        console.error('[DAST API Status Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
