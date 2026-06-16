@@ -52,6 +52,7 @@ import buildRoutes from './routes/buildRoutes';
 import deployRoutes from './routes/deployRoutes';
 import pipelineRoutes from './routes/pipelineRoutes';
 import planRoutes from './routes/planRoutes';
+import threatModelRoutes from './routes/threatModelRoutes';
 import { registerTicketRoutes } from './registerRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
@@ -228,6 +229,7 @@ app.use('/api/deployments', deployRoutes);
 app.use('/api/deploy', deployRoutes);
 app.use('/api/pipelines', pipelineRoutes);
 app.use('/api/plan', authenticate, planRoutes);
+app.use('/api/threat-models', authenticate, threatModelRoutes);
 registerTicketRoutes(app);
 app.use('/metrics', metricsRoutes);
 

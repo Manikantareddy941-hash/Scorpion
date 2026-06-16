@@ -9,7 +9,8 @@ export type AuditAction =
   | 'user.login' | 'user.logout'
   | 'gate.blocked' | 'rollback.triggered'
   | 'evidence.exported'
-  | 'build.triggered' | 'build.completed' | 'build.cancelled';
+  | 'build.triggered' | 'build.completed' | 'build.cancelled'
+  | 'threat_model.created' | 'threat_model.updated' | 'threat_model.deleted' | 'threat_model.analyzed';
 
 export async function auditLog({
   action, actor, actorEmail, resource,
