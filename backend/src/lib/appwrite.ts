@@ -51,6 +51,8 @@ export const COLLECTIONS = {
   DEPLOYMENTS: 'deployments',
   BUILD_ARTIFACTS: 'build_artifacts',
   ENVIRONMENTS: 'environments',
+  THREAT_MODELS: 'threat_models',
+  AUDIT_LOGS_V2: 'audit_logs_v2',
 };
 
 export { ID, Query };
