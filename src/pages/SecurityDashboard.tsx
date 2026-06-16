@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
 interface DashboardData {
     total: number;
@@ -422,8 +423,41 @@ function DastScanSection() {
     const { t } = useTranslation();
     const { getJWT } = useAuth();
     const [targetUrl, setTargetUrl] = useState('');
+    const [scanMode, setScanMode] = useState<'spider'|'active'|'passive'>('spider');
     const [scanning, setScanning] = useState(false);
     const [result, setResult] = useState<any>(null);
+    const [scanId, setScanId] = useState<string | null>(null);
+    const [scanStatus, setScanStatus] = useState<string | null>(null);
+
+    // Polling effect
+    useEffect(() => {
+        let interval: any;
+        if (scanId && (scanStatus === 'running' || scanStatus === 'pending')) {
+            interval = setInterval(async () => {
+                try {
+                    const token = await getJWT();
+                    const res = await fetch(`/api/scan/dast/${scanId}/status`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        setScanStatus(data.status);
+                        if (data.status === 'completed') {
+                            setResult(data.details);
+                            setScanning(false);
+                            toast.success(`DAST ${scanMode} scan complete`);
+                        } else if (data.status === 'failed') {
+                            setScanning(false);
+                            toast.error(data.details?.error || 'Scan failed');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Polling error', e);
+                }
+            }, 5000);
+        }
+        return () => clearInterval(interval);
+    }, [scanId, scanStatus, scanMode, getJWT]);
 
     const handleDastScan = async () => {
         if (!targetUrl) return;
@@ -438,18 +472,33 @@ function DastScanSection() {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ target_url: targetUrl })
+                body: JSON.stringify({ target_url: targetUrl, scanMode })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Scan failed');
-            setResult(data);
-            toast.success('DAST baseline scan complete');
+            setScanId(data.scanId);
+            setScanStatus('running');
+            toast.success(`DAST ${scanMode} scan initiated...`);
         } catch (err: any) {
             toast.error(err.message);
-        } finally {
             setScanning(false);
         }
     };
+
+    const [vulns, setVulns] = useState<any[]>([]);
+    const [filterSev, setFilterSev] = useState<string>('ALL');
+
+    // Fetch vulns once completed
+    useEffect(() => {
+        if (scanStatus === 'completed' && scanId) {
+            databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                Query.equal('scanId', scanId),
+                Query.limit(500)
+            ]).then(res => setVulns(res.documents)).catch(console.error);
+        }
+    }, [scanStatus, scanId]);
+
+    const filteredVulns = vulns.filter(v => filterSev === 'ALL' || v.severity === filterSev);
 
     return (
         <div className="premium-card p-10 bg-gradient-to-r from-[var(--bg-card)] to-[var(--bg-primary)]">
@@ -464,41 +513,100 @@ function DastScanSection() {
                     </div>
                 </div>
 
-                <div className="flex-1 w-full max-w-xl flex gap-4">
-                    <input 
-                        type="url" 
-                        placeholder="https://staging.example.com"
-                        value={targetUrl}
-                        onChange={(e) => setTargetUrl(e.target.value)}
-                        className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl px-6 py-4 text-xs font-black text-[var(--text-primary)] outline-none focus:border-rose-500 transition-all"
-                    />
-                    <button 
-                        onClick={handleDastScan}
-                        disabled={scanning || !targetUrl}
-                        className="btn-premium bg-rose-600 shadow-rose-500/20 px-8 py-4 disabled:opacity-50"
-                    >
-                        {scanning ? <Loader2 className="animate-spin" /> : 'Launch Probe'}
-                    </button>
+                <div className="flex-1 w-full max-w-xl flex flex-col gap-4">
+                    <div className="flex gap-4">
+                        <input 
+                            type="url" 
+                            placeholder="https://staging.example.com"
+                            value={targetUrl}
+                            onChange={(e) => setTargetUrl(e.target.value)}
+                            className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl px-6 py-4 text-xs font-black text-[var(--text-primary)] outline-none focus:border-rose-500 transition-all"
+                        />
+                        <select 
+                            value={scanMode}
+                            onChange={(e: any) => setScanMode(e.target.value)}
+                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl px-4 py-4 text-xs font-black text-[var(--text-primary)] outline-none focus:border-rose-500 transition-all"
+                        >
+                            <option value="spider">Spider</option>
+                            <option value="active">Active Scan</option>
+                            <option value="passive">Passive Scan</option>
+                        </select>
+                        <button 
+                            onClick={handleDastScan}
+                            disabled={scanning || !targetUrl}
+                            className="btn-premium bg-rose-600 shadow-rose-500/20 px-8 py-4 disabled:opacity-50 min-w-[160px]"
+                        >
+                            {scanning ? <Loader2 className="animate-spin mx-auto" /> : 'Launch Probe'}
+                        </button>
+                    </div>
+                    {scanning && (
+                        <div className="w-full bg-[var(--bg-primary)] rounded-full h-1.5 overflow-hidden border border-[var(--border-subtle)]">
+                            <div className="bg-rose-500 h-full animate-pulse transition-all duration-1000" style={{ width: '100%' }}></div>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {result && (
-                <div className="mt-8 p-6 bg-rose-500/5 border border-rose-500/20 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-500 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <div className="text-center">
-                            <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase italic">Risks Detected</p>
-                            <p className="text-3xl font-black text-rose-500 italic tracking-tighter">{result.total}</p>
-                        </div>
-                        <div className="h-10 w-px bg-rose-500/20" />
-                        <div className="text-left">
-                            <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase italic">Target Perimeter</p>
-                            <p className="text-xs font-black text-[var(--text-primary)] uppercase italic truncate max-w-[200px]">{result.target}</p>
-                        </div>
+            {scanStatus === 'completed' && (
+                <div className="mt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-4 mb-4">
+                        <span className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Filter:</span>
+                        {['ALL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].map(sev => (
+                            <button 
+                                key={sev}
+                                onClick={() => setFilterSev(sev)}
+                                className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest italic transition-colors ${filterSev === sev ? 'bg-rose-500 text-white' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20'}`}
+                            >
+                                {sev}
+                            </button>
+                        ))}
                     </div>
-                    <div className="flex gap-2">
-                        <div className="px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-[10px] font-black text-rose-500 uppercase italic">
-                            Scan Complete
-                        </div>
+                    
+                    <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-primary)]">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Severity</th>
+                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Alert Name</th>
+                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Location/URL</th>
+                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Confidence</th>
+                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Solution</th>
+                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--border-subtle)]">
+                                {filteredVulns.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="p-8 text-center text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">No vulnerabilities found for this filter.</td>
+                                    </tr>
+                                ) : filteredVulns.map(v => {
+                                    const sevColors: Record<string, string> = {
+                                        'HIGH': 'text-red-500 bg-red-500/10 border-red-500/20',
+                                        'MEDIUM': 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20',
+                                        'LOW': 'text-green-500 bg-green-500/10 border-green-500/20',
+                                        'INFO': 'text-cyan-500 bg-cyan-500/10 border-cyan-500/20'
+                                    };
+                                    return (
+                                        <tr key={v.$id} className="hover:bg-white/5 transition-colors">
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${sevColors[v.severity] || sevColors.INFO}`}>
+                                                    {v.severity}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-[11px] font-bold text-[var(--text-primary)] max-w-[200px] truncate">{v.title}</td>
+                                            <td className="p-4 text-[10px] text-[var(--text-secondary)] font-mono max-w-[200px] truncate">{v.filePath}</td>
+                                            <td className="p-4 text-[10px] text-[var(--text-secondary)]">{v.confidence || 'Medium'}</td>
+                                            <td className="p-4 text-[10px] text-[var(--text-secondary)] max-w-[250px] truncate">{v.solution || 'N/A'}</td>
+                                            <td className="p-4 text-center">
+                                                <button className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded bg-teal-500/10 text-teal-500 border border-teal-500/20 hover:bg-teal-500 hover:text-white transition-all">
+                                                    TONY AI
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             )}
