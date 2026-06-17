@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ShieldCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
@@ -16,16 +16,20 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const { getJWT } = useAuth();
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     // Auto-start verification scan on mount
     startVerification();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, []);
 
-  const pollScanStatus = async (id: string, token: string) => {
+  const pollScanStatus = async (id: string, token: string, repoId: string) => {
     const apiBase = '';
     let pollCount = 0;
-    
+
     const interval = setInterval(async () => {
       try {
         pollCount++;
@@ -41,6 +45,7 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
           // Auto-close vulnerabilities
           try {
             const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+              Query.equal('repo_id', repoId),
               Query.limit(50)
             ]);
             for (const v of vulnsRes.documents) {
@@ -77,6 +82,7 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
         console.error('Polling error:', err);
       }
     }, 2000);
+    intervalRef.current = interval;
   };
 
   const startVerification = async () => {
@@ -117,7 +123,7 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
       
       if (scanData.scanId) {
         setProgress(15);
-        pollScanStatus(scanData.scanId, token);
+        pollScanStatus(scanData.scanId, token, repo.$id);
       } else {
         throw new Error(scanData.error || "Failed to initiate verification scan");
       }

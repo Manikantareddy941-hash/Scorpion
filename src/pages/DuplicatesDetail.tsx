@@ -21,7 +21,7 @@ export default function DuplicatesDetail() {
           Query.limit(100)
         ]);
         // Filter for duplicates/clones (mocked logic for now)
-        const docs = res.documents.filter((d: any) => d.message.toLowerCase().includes('duplicate') || d.title.toLowerCase().includes('duplicate'));
+        const docs = res.documents.filter((d: any) => d.message?.toLowerCase().includes('duplicate') || d.title?.toLowerCase().includes('duplicate'));
         setFindings(docs);
       } catch (err) {
         toast.error('Failed to load duplicates audit');

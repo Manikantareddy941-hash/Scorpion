@@ -20,7 +20,7 @@ export default function DeadCodeDetail() {
           Query.equal('scanId', scanId),
           Query.limit(100)
         ]);
-        const docs = res.documents.filter((d: any) => d.message.toLowerCase().includes('unused') || d.title.toLowerCase().includes('dead'));
+        const docs = res.documents.filter((d: any) => d.message?.toLowerCase().includes('unused') || d.title?.toLowerCase().includes('dead'));
         setFindings(docs);
       } catch (err) {
         toast.error('Failed to load dead code analysis');
