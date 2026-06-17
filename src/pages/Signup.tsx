@@ -36,6 +36,10 @@ export default function Signup() {
       setError(t('auth.passwords_not_match', 'Passwords do not match'));
       return;
     }
+    if (strength < 2) {
+      setError(t('auth.password_too_weak', 'Please choose a stronger password (at least 8 characters, with a mix of letters, numbers, or symbols)'));
+      return;
+    }
     setLoading(true);
     const { error } = await signUp(email, password);
     if (error) setError(error.message || t('auth.signup_failed', 'Signup failed'));

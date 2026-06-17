@@ -33,57 +33,6 @@ const StatusIndicator = ({ type }: { type: 'PASS' | 'FAIL' | 'WARN' }) => {
   return <span className="text-amber-500 font-bold font-mono text-xs uppercase tracking-widest flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> WARNING</span>;
 };
 
-const releaseGatesData = [
-  { 
-    id: "fit-track", 
-    repo: "FIT_TRACK", 
-    findings: 90, 
-    status: "BLOCKED", 
-    rule: "Failed: Found 1 Critical SAST bug",
-    checks: [
-      { name: "SAST Code-Level Security Policy", threshold: "0 Critical Allowed", status: "FAIL", detail: "1 Critical finding detected in fit_track/auth.ts" },
-      { name: "Open Source Dependency Check (Trivy)", status: "PASS", detail: "All packages conform to baseline SLAs." },
-      { name: "Hardcoded Secret Scanner (Gitleaks)", status: "PASS", detail: "Zero plaintext keys found in commit history." }
-    ]
-  },
-  { 
-    id: "food-delivery", 
-    repo: "FOOD-DELIVERY-APP", 
-    findings: 0, 
-    status: "PASSED", 
-    rule: "Passed: Zero security vulnerabilities",
-    checks: [
-      { name: "SAST Code-Level Security Policy", threshold: "0 Critical Allowed", status: "PASS", detail: "Zero high or critical alerts." },
-      { name: "Open Source Dependency Check (Trivy)", status: "PASS", detail: "No outdated vulnerable packages found." },
-      { name: "Hardcoded Secret Scanner (Gitleaks)", status: "PASS", detail: "Zero credentials leaked." }
-    ]
-  },
-  { 
-    id: "scorpion-platform", 
-    repo: "SCORPION", 
-    findings: 149, 
-    status: "BLOCKED", 
-    rule: "Failed: Open compliance violation (SOC 2)",
-    checks: [
-      { name: "SAST Code-Level Security Policy", threshold: "0 Critical Allowed", status: "PASS", detail: "Code-level checks secure." },
-      { name: "Compliance Baseline Policy (SOC 2)", status: "FAIL", detail: "Missing active Falco runtime monitoring on production K8s cluster." },
-      { name: "Hardcoded Secret Scanner (Gitleaks)", status: "PASS", detail: "No plaintext keys found." }
-    ]
-  },
-  { 
-    id: "train-ticket", 
-    repo: "TRAIN-TICKET-RESERVATION", 
-    findings: 75, 
-    status: "PASSED", 
-    rule: "Passed: All findings below High severity threshold",
-    checks: [
-      { name: "SAST Code-Level Security Policy", threshold: "0 Critical Allowed", status: "PASS", detail: "Findings present but pass baseline SLA requirements." },
-      { name: "Open Source Dependency Check (Trivy)", status: "PASS", detail: "Vulnerable dependencies triaged or snoozed." },
-      { name: "Hardcoded Secret Scanner (Gitleaks)", status: "PASS", detail: "Zero secrets detected." }
-    ]
-  }
-];
-
 export default function ReleaseGate() {
     const { getJWT } = useAuth();
     const [repos, setRepos] = useState<Repo[]>([]);
@@ -182,49 +131,68 @@ export default function ReleaseGate() {
                             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">{error}</p>
                             <button onClick={fetchRepos} className="mt-6 btn-premium bg-orange-600">Reconnect to Fleet</button>
                         </div>
+                    ) : repos.length === 0 ? (
+                        <div className="premium-card p-24 text-center">
+                            <Rocket className="w-16 h-16 text-[var(--text-secondary)] mx-auto mb-6 opacity-20" />
+                            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Repositories Found</h3>
+                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">Connect a repository to begin enforcing release gates.</p>
+                        </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 w-full">
-                            {releaseGatesData.map((gate) => {
-                                const isOpen = activeRepoId === gate.id;
+                            {repos.map((repo) => {
+                                const isOpen = activeRepoId === repo.repo_id;
+                                const hasResult = isOpen && selectedRepo?.id === repo.repo_id ? gateResult : null;
+                                const isChecking = isOpen && checking && selectedRepo?.id === repo.repo_id;
+                                const status = hasResult ? (hasResult.allowed ? 'PASSED' : 'BLOCKED') : (repo.count === 0 ? 'PASSED' : 'BLOCKED');
+                                const rule = hasResult
+                                    ? (hasResult.allowed ? `Passed: ${hasResult.blocker_count} open finding(s) within policy` : `Failed: ${hasResult.blocker_count} open finding(s) blocking release`)
+                                    : (repo.count === 0 ? 'No open findings recorded' : `${repo.count} open finding(s) recorded`);
 
                                 return (
-                                <div key={gate.id} className="premium-card group hover:border-[var(--border-subtle)] transition-all bg-white/5 hover:bg-white/10 flex flex-col overflow-hidden h-fit">
-                                    <div className="p-8 cursor-pointer select-none" onClick={() => setActiveRepoId(isOpen ? null : gate.id)}>
+                                <div key={repo.repo_id} className="premium-card group hover:border-[var(--border-subtle)] transition-all bg-white/5 hover:bg-white/10 flex flex-col overflow-hidden h-fit">
+                                    <div className="p-8 cursor-pointer select-none" onClick={() => {
+                                        if (isOpen) {
+                                            setActiveRepoId(null);
+                                        } else {
+                                            setActiveRepoId(repo.repo_id);
+                                            checkGate(repo.repo_id, repo.repo_name);
+                                        }
+                                    }}>
                                         <div className="flex justify-between items-start mb-6">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all ${gate.status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white' : 'bg-red-500/10 text-red-500 border-red-500/20 group-hover:bg-red-500 group-hover:text-white'}`}>
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all ${status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white' : 'bg-red-500/10 text-red-500 border-red-500/20 group-hover:bg-red-500 group-hover:text-white'}`}>
                                                 <Shield size={24} />
                                             </div>
                                             <div className="flex items-center gap-4">
-                                                <span 
-                                                    title={gate.status === 'BLOCKED' ? `Violation: ${gate.rule}` : undefined}
-                                                    className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest border cursor-help ${gate.status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_rgba(109,184,122,0.15)]' : 'bg-red-500/10 text-red-500 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'}`}
+                                                <span
+                                                    title={status === 'BLOCKED' ? `Violation: ${rule}` : undefined}
+                                                    className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest border cursor-help ${status === 'PASSED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30 shadow-[0_0_10px_rgba(109,184,122,0.15)]' : 'bg-red-500/10 text-red-500 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'}`}
                                                 >
-                                                    {gate.status}
+                                                    {status}
                                                 </span>
                                                 <ChevronRight className={`text-[var(--text-secondary)] transition-transform duration-300 ${isOpen ? 'rotate-90' : 'group-hover:translate-x-1'}`} />
                                             </div>
                                         </div>
-                                        <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{gate.repo}</h3>
-                                        
+                                        <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{repo.repo_name}</h3>
+
                                         <div className="flex flex-col gap-4 mt-6">
                                             <div className="flex items-center gap-2">
-                                                <div className={`w-2 h-2 rounded-full animate-pulse ${gate.status === 'PASSED' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                                <span className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-widest">{gate.findings} Total Findings</span>
+                                                <div className={`w-2 h-2 rounded-full animate-pulse ${status === 'PASSED' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                <span className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-widest">{repo.count} Total Findings</span>
                                             </div>
-                                            
+
                                             <div className="p-3 rounded-lg border border-transparent"
                                                  style={{
-                                                     background: gate.status === 'PASSED' ? '#f0fff4' : '#fff0f0',
-                                                     borderLeft: gate.status === 'PASSED' ? '3px solid #6db87a' : '3px solid #e74c3c',
+                                                     background: status === 'PASSED' ? '#f0fff4' : '#fff0f0',
+                                                     borderLeft: status === 'PASSED' ? '3px solid #6db87a' : '3px solid #e74c3c',
                                                      borderRadius: '8px'
                                                  }}>
                                                 <span className="text-[9px] font-black uppercase tracking-widest block mb-1"
-                                                      style={{ color: gate.status === 'PASSED' ? '#1a7a4a' : '#c0392b', opacity: 0.8 }}>
+                                                      style={{ color: status === 'PASSED' ? '#1a7a4a' : '#c0392b', opacity: 0.8 }}>
                                                     ENFORCED POLICY:
                                                 </span>
                                                 <span className="font-mono text-[11px] font-bold"
-                                                      style={{ color: gate.status === 'PASSED' ? '#1a7a4a' : '#c0392b' }}>
-                                                    {gate.rule}
+                                                      style={{ color: status === 'PASSED' ? '#1a7a4a' : '#c0392b' }}>
+                                                    {rule}
                                                 </span>
                                             </div>
                                         </div>
@@ -236,35 +204,48 @@ export default function ReleaseGate() {
                                         <p className="text-[10px] font-bold font-mono tracking-wider text-emerald-400 uppercase">
                                           Automated Security Guard Evaluation Matrix
                                         </p>
-                                        
-                                        <div className="flex flex-col gap-3 mt-1">
-                                          {gate.checks.map((check: any, index) => (
-                                            <div key={index} className="flex flex-col gap-2 bg-black/40 p-4 rounded-xl border border-white/5 font-mono text-xs">
-                                              <div className="flex items-start justify-between">
-                                                <div className="flex flex-col gap-1.5">
-                                                  <span className="text-white/90 font-semibold">{check.name}</span>
-                                                  {check.threshold && (
-                                                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded w-fit border border-white/5">Threshold: {check.threshold}</span>
-                                                  )}
-                                                </div>
-                                                <StatusIndicator type={check.status as any} />
-                                              </div>
-                                              <p className="text-[11px] text-zinc-400 leading-normal mt-1">{check.detail}</p>
-                                            </div>
-                                          ))}
-                                        </div>
 
-                                        {gate.status === 'BLOCKED' && (
-                                          <div className="mt-2 p-4 bg-red-950/20 border border-red-500/20 rounded-xl">
-                                            <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                                              <ShieldAlert size={12} /> ENFORCEMENT REASON
-                                            </h4>
-                                            <div className="space-y-1.5 font-mono text-[10px] text-zinc-300">
-                                              <p><span className="text-zinc-500 font-bold uppercase">Policy Violated:</span> {gate.rule}</p>
-                                              <p><span className="text-zinc-500 font-bold uppercase">Trigger Scan ID:</span> scan-sec-{gate.id}-prod</p>
-                                              <p><span className="text-zinc-500 font-bold uppercase">Timestamp:</span> {new Date(Date.now() - 3600000 * 2).toLocaleString()}</p>
-                                            </div>
+                                        {isChecking ? (
+                                          <div className="flex items-center gap-2 py-6 justify-center">
+                                            <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
+                                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Evaluating policy...</span>
                                           </div>
+                                        ) : hasResult ? (
+                                          <>
+                                            <div className="flex flex-col gap-3 mt-1">
+                                              {hasResult.blockers.length === 0 ? (
+                                                <div className="flex flex-col gap-2 bg-black/40 p-4 rounded-xl border border-white/5 font-mono text-xs">
+                                                  <StatusIndicator type="PASS" />
+                                                  <p className="text-[11px] text-zinc-400 leading-normal mt-1">No open findings blocking this release.</p>
+                                                </div>
+                                              ) : hasResult.blockers.map((blocker) => (
+                                                <div key={blocker.$id} className="flex flex-col gap-2 bg-black/40 p-4 rounded-xl border border-white/5 font-mono text-xs">
+                                                  <div className="flex items-start justify-between">
+                                                    <div className="flex flex-col gap-1.5">
+                                                      <span className="text-white/90 font-semibold">{blocker.title}</span>
+                                                      <span className="text-[9px] text-zinc-500 uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded w-fit border border-white/5">{blocker.type} &middot; {blocker.file_path}</span>
+                                                    </div>
+                                                    <StatusIndicator type={(blocker.severity || '').toLowerCase() === 'critical' || (blocker.severity || '').toLowerCase() === 'high' ? 'FAIL' : 'WARN'} />
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+
+                                            {!hasResult.allowed && (
+                                              <div className="mt-2 p-4 bg-red-950/20 border border-red-500/20 rounded-xl">
+                                                <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                  <ShieldAlert size={12} /> ENFORCEMENT REASON
+                                                </h4>
+                                                <div className="space-y-1.5 font-mono text-[10px] text-zinc-300">
+                                                  <p><span className="text-zinc-500 font-bold uppercase">Policy Violated:</span> {rule}</p>
+                                                  <p><span className="text-zinc-500 font-bold uppercase">Repository:</span> {repo.repo_name}</p>
+                                                  <p><span className="text-zinc-500 font-bold uppercase">Timestamp:</span> {new Date().toLocaleString()}</p>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest py-6 text-center">Gate evaluation unavailable.</p>
                                         )}
                                       </div>
                                     )}

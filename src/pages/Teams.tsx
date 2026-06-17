@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-    Users, UserPlus, LogOut, Settings, Plus, ChevronRight,
-    Loader2, Mail, Activity, GitBranch, Shield, Terminal,
-    Trash2, Edit2, Check, X, Search, RefreshCw, AlertTriangle,
-    Clock, Filter, Copy, ChevronDown, Eye, Lock, Unlock
+    Users, UserPlus, Plus,
+    Loader2, Mail, Trash2, RefreshCw, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTerminology } from '../contexts/TerminologyContext';
@@ -18,33 +16,6 @@ interface Team {
     owner_id: string;
     role?: string;
     policy?: string;
-}
-
-interface Member {
-    $id: string;
-    user_id: string;
-    email: string;
-    name: string;
-    role: string;
-}
-
-interface AttachedPolicy {
-    name: string;
-    description: string;
-    arn: string;
-    document: string;
-    version?: string;
-    lastModified?: string;
-    attachedAt?: string;
-}
-
-interface AuditEntry {
-    id: string;
-    action: string;
-    actor: string;
-    target: string;
-    timestamp: string;
-    severity: 'info' | 'warn' | 'critical';
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -63,123 +34,6 @@ const TEAM_TYPES = [
     { id: 'network', name: 'Network', icon: 'network', color: '#8BE9FD' },
     { id: 'engineering', name: 'Engineering', icon: 'engineering', color: '#F1FA8C' },
 ] as const;
-
-const ATTACHED_POLICIES_MOCK: AttachedPolicy[] = [
-    {
-        name: "ScorpionDeveloperAccess",
-        description: "Enables code scans, reading repositories, creating and resolving triage tasks. Denies security gate bypasses.",
-        arn: "arn:scorpion:iam::aws:policy/ScorpionDeveloperAccess",
-        version: "v3",
-        lastModified: "2026-05-17",
-        attachedAt: "2026-04-01",
-        document: JSON.stringify({
-            "Version": "2026-05-17",
-            "Statements": [
-                {
-                    "Effect": "Allow",
-                    "Actions": ["repo:read", "repo:scan", "tasks:read", "tasks:create", "tasks:triage", "threats:read"],
-                    "Resources": ["*"]
-                },
-                {
-                    "Effect": "Deny",
-                    "Actions": ["gate:bypass", "policy:edit"],
-                    "Resources": ["*"]
-                }
-            ]
-        }, null, 2)
-    },
-    {
-        name: "SecurityAuditorMinimal",
-        description: "Minimal read-only access for compliance audit inspection across all namespaces.",
-        arn: "arn:scorpion:iam::aws:policy/SecurityAuditorMinimal",
-        version: "v1",
-        lastModified: "2026-03-10",
-        attachedAt: "2026-04-15",
-        document: JSON.stringify({
-            "Version": "2026-03-10",
-            "Statements": [
-                {
-                    "Effect": "Allow",
-                    "Actions": ["repo:read", "tasks:read", "threats:read", "audit:read"],
-                    "Resources": ["*"]
-                },
-                {
-                    "Effect": "Deny",
-                    "Actions": ["*"],
-                    "Resources": ["arn:scorpion:iam::*"]
-                }
-            ]
-        }, null, 2)
-    },
-    {
-        name: "PipelineExecutorAccess",
-        description: "Grants CI/CD pipeline trigger and read permissions. Denies direct repository write.",
-        arn: "arn:scorpion:iam::aws:policy/PipelineExecutorAccess",
-        version: "v2",
-        lastModified: "2026-02-20",
-        attachedAt: "2026-05-01",
-        document: JSON.stringify({
-            "Version": "2026-02-20",
-            "Statements": [
-                {
-                    "Effect": "Allow",
-                    "Actions": ["pipeline:read", "pipeline:trigger", "pipeline:logs"],
-                    "Resources": ["arn:scorpion:pipeline::*"]
-                },
-                {
-                    "Effect": "Deny",
-                    "Actions": ["repo:write", "repo:delete", "gate:bypass"],
-                    "Resources": ["*"]
-                }
-            ]
-        }, null, 2)
-    }
-];
-
-const AUDIT_LOG_MOCK: AuditEntry[] = [
-    { id: '1', action: 'MEMBER_INVITED', actor: 'manikanta@scorpion.io', target: 'dev@scorpion.io', timestamp: '2026-05-28T04:12:00Z', severity: 'info' },
-    { id: '2', action: 'ROLE_CHANGED', actor: 'manikanta@scorpion.io', target: 'dev@scorpion.io (viewer → editor)', timestamp: '2026-05-27T18:45:00Z', severity: 'warn' },
-    { id: '3', action: 'POLICY_ATTACHED', actor: 'manikanta@scorpion.io', target: 'SecurityAuditorMinimal', timestamp: '2026-05-27T10:20:00Z', severity: 'info' },
-    { id: '4', action: 'MEMBER_REMOVED', actor: 'manikanta@scorpion.io', target: 'ex-dev@scorpion.io', timestamp: '2026-05-26T14:00:00Z', severity: 'critical' },
-];
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getRoleBadge(role: string, t_term: (a: string, b: string) => string) {
-    const base = "px-2 py-0.5 rounded text-[8px] font-black uppercase italic border";
-    switch (role.toLowerCase()) {
-        case 'owner':
-            return <span className={`${base} bg-orange-50 text-orange-600 border-orange-200`}>{t_term('Commander', 'Team Lead')}</span>;
-        case 'admin':
-            return <span className={`${base} bg-purple-50 text-purple-600 border-purple-200`}>{t_term('Officer', 'Admin')}</span>;
-        case 'editor':
-            return <span className={`${base} bg-blue-50 text-blue-600 border-blue-200`}>{t_term('Specialist', 'Editor')}</span>;
-        default:
-            return <span className={`${base} bg-slate-100 text-slate-500 border-slate-200`}>{t_term('Operator', 'Member')}</span>;
-    }
-}
-
-function getSeverityBadge(severity: AuditEntry['severity']) {
-    switch (severity) {
-        case 'critical': return <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-red-50 text-red-600 border border-red-200">CRITICAL</span>;
-        case 'warn': return <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-yellow-50 text-yellow-600 border border-yellow-200">WARN</span>;
-        default: return <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">INFO</span>;
-    }
-}
-
-function formatTimestamp(ts: string) {
-    return new Date(ts).toLocaleString('en-US', { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-function syntaxHighlightJSON(doc: string) {
-    return doc.split('\n').map((line, i) => {
-        if (line.includes('"Allow"')) return <span key={i} className="text-[#6db87a]">{line}{'\n'}</span>;
-        if (line.includes('"Deny"')) return <span key={i} className="text-red-400">{line}{'\n'}</span>;
-        if (line.match(/"[A-Z][a-zA-Z]+"\s*:/)) return <span key={i} className="text-blue-300">{line}{'\n'}</span>;
-        if (line.match(/:\s*"[^"]+"/)) return <span key={i} className="text-amber-200">{line}{'\n'}</span>;
-        return <span key={i}>{line}{'\n'}</span>;
-    });
-}
 
 // ─── Custom SVG Icons ─────────────────────────────────────────────────────────
 
@@ -387,280 +241,6 @@ const getIconComponent = (iconType: string, color: string) => {
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
 
-/** Inline role editor for an existing member row */
-function RoleEditor({
-    member, currentUserId, onRoleChange, onRemove, t_term
-}: {
-    member: Member;
-    currentUserId?: string;
-    onRoleChange: (userId: string, role: Role) => Promise<void>;
-    onRemove: (userId: string) => void;
-    t_term: (a: string, b: string) => string;
-}) {
-    const [editing, setEditing] = useState(false);
-    const [selectedRole, setSelectedRole] = useState<Role>(member.role as Role || 'viewer');
-    const [saving, setSaving] = useState(false);
-
-    const save = async () => {
-        setSaving(true);
-        await onRoleChange(member.user_id, selectedRole);
-        setSaving(false);
-        setEditing(false);
-    };
-
-    const isSelf = member.user_id === currentUserId;
-
-    return (
-        <div className="p-5 flex items-center justify-between hover:bg-[#f5f0e8]/50 transition-colors group">
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center font-black text-blue-500 italic text-sm font-mono shadow-inner">
-                    {member.email.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-xs font-black text-slate-700 uppercase italic tracking-tight">
-                            {member.name || member.email.split('@')[0]}
-                        </p>
-                        {!editing && getRoleBadge(member.role, t_term)}
-                        {isSelf && (
-                            <span className="text-[7px] font-black bg-blue-50 text-blue-500 border border-blue-200 px-1.5 py-0.5 rounded uppercase tracking-widest font-mono">You</span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                        <Mail size={10} className="text-slate-300" />
-                        <p className="text-[9px] font-bold text-slate-400 uppercase font-mono">{member.email}</p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-                {editing ? (
-                    <div className="flex items-center gap-2">
-                        <select
-                            value={selectedRole}
-                            onChange={e => setSelectedRole(e.target.value as Role)}
-                            className="text-[9px] font-black uppercase bg-[#f5f0e8] border border-[#e8e0d0] rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 cursor-pointer"
-                        >
-                            {ROLES.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
-                        </select>
-                        <button
-                            onClick={save}
-                            disabled={saving}
-                            className="p-1.5 bg-green-50 border border-green-200 rounded-lg text-green-600 hover:bg-green-100 transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                            {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                        </button>
-                        <button
-                            onClick={() => setEditing(false)}
-                            className="p-1.5 bg-[#f5f0e8] border border-[#e8e0d0] rounded-lg text-slate-400 hover:bg-[#e8e0d0] transition-colors cursor-pointer"
-                        >
-                            <X size={12} />
-                        </button>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                        {!isSelf && (
-                            <>
-                                <button
-                                    onClick={() => setEditing(true)}
-                                    title="Change role"
-                                    className="p-2 text-slate-300 hover:text-blue-500 transition-colors cursor-pointer"
-                                >
-                                    <Edit2 size={14} />
-                                </button>
-                                <button
-                                    onClick={() => onRemove(member.user_id)}
-                                    title="Remove member"
-                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors cursor-pointer"
-                                >
-                                    <LogOut size={14} />
-                                </button>
-                            </>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
-/** Policy picker with search */
-function PolicyPicker({
-    policies, selected, onSelect
-}: {
-    policies: AttachedPolicy[];
-    selected: string;
-    onSelect: (name: string) => void;
-}) {
-    const [search, setSearch] = useState('');
-    const filtered = policies.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.description.toLowerCase().includes(search.toLowerCase())
-    );
-
-    return (
-        <div className="bg-white border border-[#e8e0d0] shadow-sm rounded-xl p-6 space-y-4">
-            <div className="border-b border-[#e8e0d0] pb-3 flex justify-between items-center gap-3">
-                <h4 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5 shrink-0">
-                    <Shield size={12} className="text-purple-500" />
-                    Attached IAM Policies
-                </h4>
-                <div className="relative">
-                    <Search size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300" />
-                    <input
-                        placeholder="Filter..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="pl-7 pr-2 py-1.5 text-[9px] bg-[#f5f0e8] border border-[#e8e0d0] rounded-lg outline-none focus:border-purple-300 w-28 font-mono"
-                    />
-                </div>
-            </div>
-
-            <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-                {filtered.length === 0 ? (
-                    <p className="text-center text-[9px] text-slate-400 py-4 uppercase font-bold">No policies match</p>
-                ) : filtered.map((pol) => {
-                    const isSelected = selected === pol.name;
-                    return (
-                        <div
-                            key={pol.name}
-                            onClick={() => onSelect(pol.name)}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${isSelected
-                                ? 'bg-purple-50 border-purple-300'
-                                : 'bg-[#f5f0e8] border-[#e8e0d0] hover:bg-[#e8e0d0]'}`}
-                        >
-                            <div className="flex justify-between items-center mb-1">
-                                <span className={`text-[10px] font-black uppercase tracking-wider ${isSelected ? 'text-purple-700' : 'text-slate-700'}`}>
-                                    {pol.name}
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[7px] font-mono text-slate-400 font-bold">{pol.version}</span>
-                                    <span className="text-[8px] px-1.5 py-0.5 rounded bg-white text-purple-500 font-mono border border-purple-100 font-bold">Attached</span>
-                                </div>
-                            </div>
-                            <p className="text-[9px] text-slate-500 leading-relaxed mb-2 font-mono">{pol.description}</p>
-                            <div className="flex justify-between items-center">
-                                <p className="text-[8px] font-mono text-slate-400 font-medium tracking-tight truncate max-w-[70%]">{pol.arn}</p>
-                                {pol.attachedAt && (
-                                    <span className="text-[7px] text-slate-400 font-mono flex items-center gap-1">
-                                        <Clock size={8} />
-                                        {pol.attachedAt}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-/** JSON policy document viewer with copy & version info */
-function PolicyViewer({ policy }: { policy: AttachedPolicy | undefined }) {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = () => {
-        if (!policy) return;
-        navigator.clipboard.writeText(policy.document);
-        toast.success('IAM Policy copied to clipboard');
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    if (!policy) return null;
-
-    return (
-        <div className="bg-white border border-[#e8e0d0] shadow-sm rounded-xl p-6 flex flex-col gap-4">
-            <div className="border-b border-[#e8e0d0] pb-3 flex justify-between items-center">
-                <h4 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                    <Terminal size={12} className="text-purple-500" />
-                    JSON Policy Document
-                </h4>
-                <div className="flex items-center gap-2">
-                    <span className="text-[7px] font-mono text-slate-400 font-bold">Modified: {policy.lastModified}</span>
-                    <span className="text-[8px] px-2 py-0.5 rounded bg-purple-50 text-purple-600 font-mono font-bold tracking-widest border border-purple-100">{policy.version}</span>
-                    <span className="text-[8px] px-2 py-0.5 rounded bg-green-50 text-green-600 font-mono font-bold border border-green-100">Active</span>
-                </div>
-            </div>
-
-            <div className="bg-slate-800 text-slate-200 p-4 rounded-xl font-mono text-xs border border-slate-700 shadow-inner overflow-x-auto max-h-[320px] overflow-y-auto leading-relaxed">
-                <pre className="text-[10px] whitespace-pre font-mono">
-                    {syntaxHighlightJSON(policy.document)}
-                </pre>
-            </div>
-
-            {/* Policy stat chips */}
-            <div className="flex flex-wrap gap-2">
-                {(() => {
-                    try {
-                        const parsed = JSON.parse(policy.document);
-                        const stmts = parsed.Statements || [];
-                        const allowCount = stmts.filter((s: any) => s.Effect === 'Allow').length;
-                        const denyCount = stmts.filter((s: any) => s.Effect === 'Deny').length;
-                        return (
-                            <>
-                                <span className="text-[8px] px-2 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 font-bold font-mono">
-                                    ✓ {allowCount} Allow Statement{allowCount !== 1 ? 's' : ''}
-                                </span>
-                                <span className="text-[8px] px-2 py-1 rounded-lg bg-red-50 border border-red-200 text-red-600 font-bold font-mono">
-                                    ✗ {denyCount} Deny Statement{denyCount !== 1 ? 's' : ''}
-                                </span>
-                                <span className="text-[8px] px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 font-bold font-mono">
-                                    {stmts.length} Total Statement{stmts.length !== 1 ? 's' : ''}
-                                </span>
-                            </>
-                        );
-                    } catch { return null; }
-                })()}
-            </div>
-
-            <div className="border-t border-[#e8e0d0] pt-4 flex justify-between items-center">
-                <span className="text-[8px] text-slate-400 uppercase tracking-widest font-bold">AWS-STYLE PARSER v1.0.0</span>
-                <button
-                    onClick={handleCopy}
-                    className={`px-3.5 py-2 border rounded-lg text-[8px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm flex items-center gap-1.5
-                        ${copied ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-[#e8e0d0] hover:bg-[#f5f0e8] text-purple-600'}`}
-                >
-                    {copied ? <Check size={10} /> : <Copy size={10} />}
-                    {copied ? 'Copied!' : 'Copy Document'}
-                </button>
-            </div>
-        </div>
-    );
-}
-
-/** Audit log panel */
-function AuditLog({ entries }: { entries: AuditEntry[] }) {
-    return (
-        <div className="bg-white border border-[#e8e0d0] shadow-sm rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#e8e0d0] flex justify-between items-center bg-[#f5f0e8]/30">
-                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                    <Clock size={12} className="text-amber-500" />
-                    Recent IAM Activity
-                </h3>
-                <span className="text-[8px] font-bold text-slate-400 uppercase font-mono">{entries.length} events</span>
-            </div>
-            <div className="divide-y divide-[#e8e0d0]">
-                {entries.map(entry => (
-                    <div key={entry.id} className="px-6 py-3 flex items-center justify-between hover:bg-[#f5f0e8]/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                            {getSeverityBadge(entry.severity)}
-                            <div>
-                                <p className="text-[9px] font-black text-slate-700 uppercase tracking-wide font-mono">{entry.action}</p>
-                                <p className="text-[8px] text-slate-400 font-mono mt-0.5">
-                                    <span className="text-blue-500">{entry.actor}</span> → <span>{entry.target}</span>
-                                </p>
-                            </div>
-                        </div>
-                        <span className="text-[8px] text-slate-400 font-mono shrink-0 ml-4">{formatTimestamp(entry.timestamp)}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 /** Delete team confirmation modal */
 function DeleteTeamModal({
     team, onConfirm, onCancel
@@ -719,14 +299,12 @@ function DeleteTeamModal({
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function Teams() {
-    const { getJWT, user } = useAuth();
+    const { getJWT } = useAuth();
     const { t_term } = useTerminology();
 
     const [teams, setTeams] = useState<Team[]>([]);
     const [activeTeam, setActiveTeam] = useState<Team | null>(null);
-    const [members, setMembers] = useState<Member[]>([]);
     const [loading, setLoading] = useState(true);
-    const [membersLoading, setMembersLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -737,11 +315,7 @@ export default function Teams() {
     const [newTeamDesc, setNewTeamDesc] = useState('');
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<Role>('viewer');
-    const [memberSearch, setMemberSearch] = useState('');
-    const [memberRoleFilter, setMemberRoleFilter] = useState<'all' | Role>('all');
 
-    const [activeTab, setActiveTab] = useState<'roster' | 'iam' | 'audit'>('roster');
-    const [selectedPolicyName, setSelectedPolicyName] = useState('ScorpionDeveloperAccess');
     const [selectedTeamType, setSelectedTeamType] = useState('all');
 
     // Fetch teams from API
@@ -767,25 +341,7 @@ export default function Teams() {
         }
     }, [getJWT, t_term]);
 
-    const fetchMembers = useCallback(async (teamId: string) => {
-        setMembersLoading(true);
-        try {
-            const token = await getJWT();
-            const res = await fetch(`/api/teams/${teamId}/members`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            setMembers(data || []);
-        } catch (err) {
-            console.error('fetchMembers:', err);
-            setMembers([]);
-            toast.error(t_term('Failed to fetch team operators', 'Failed to fetch team members'));
-        } finally {
-            setMembersLoading(false);
-        }
-    }, [getJWT, t_term]);
-
     useEffect(() => { fetchTeams(); }, []);
-    useEffect(() => { if (activeTeam) fetchMembers(activeTeam.$id); }, [activeTeam?.$id]);
 
     // ── Actions ──
 
@@ -832,61 +388,11 @@ export default function Teams() {
                 setShowInviteModal(false);
                 setInviteEmail('');
                 setInviteRole('viewer');
-                fetchMembers(activeTeam.$id);
             } else {
                 const err = await res.json();
                 toast.error(err.error || t_term('Failed to deploy operator', 'Failed to invite member'));
             }
         } catch { toast.error(t_term('Failed to deploy operator', 'Failed to invite member')); }
-    };
-
-    const handleRemoveMember = (memberUserId: string) => {
-        if (!activeTeam) return;
-        // Optimistic removal with undo opportunity
-        const prev = [...members];
-        setMembers(m => m.filter(x => x.user_id !== memberUserId));
-        toast.custom((toastInstance) => (
-            <div className="bg-white border border-[#e8e0d0] rounded-xl px-4 py-3 shadow-lg flex items-center gap-4 font-mono text-xs">
-                <AlertTriangle size={14} className="text-red-500 shrink-0" />
-                <span className="text-slate-700 font-bold uppercase text-[10px]">{t_term('Operator ejected', 'Member removed')}</span>
-                <button
-                    onClick={() => { setMembers(prev); toast.dismiss(toastInstance.id); }}
-                    className="text-blue-500 font-black uppercase text-[9px] underline cursor-pointer"
-                >
-                    Undo
-                </button>
-            </div>
-        ), { duration: 5000 });
-
-        getJWT().then(token =>
-            fetch(`/api/teams/${activeTeam.$id}/members/${memberUserId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-        ).catch(() => {
-            setMembers(prev);
-            toast.error(t_term('Failed to remove operator', 'Failed to remove member'));
-        });
-    };
-
-    const handleRoleChange = async (userId: string, newRole: Role) => {
-        if (!activeTeam) return;
-        try {
-            const token = await getJWT();
-            const res = await fetch(`/api/teams/${activeTeam.$id}/members/${userId}/role`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: newRole })
-            });
-            if (res.ok) {
-                setMembers(m => m.map(mem => mem.user_id === userId ? { ...mem, role: newRole } : mem));
-                toast.success(`Role updated to ${newRole.toUpperCase()}`);
-            } else {
-                throw new Error('PATCH failed');
-            }
-        } catch {
-            toast.error('Failed to update role');
-        }
     };
 
     const handleDeleteTeam = async () => {
@@ -904,26 +410,6 @@ export default function Teams() {
             toast.error('Failed to delete team');
         }
     };
-
-    // Derived state
-    const filteredMembers = members.filter(m => {
-        const matchesSearch = !memberSearch ||
-            m.email.toLowerCase().includes(memberSearch.toLowerCase()) ||
-            (m.name || '').toLowerCase().includes(memberSearch.toLowerCase());
-        const matchesRole = memberRoleFilter === 'all' || m.role === memberRoleFilter;
-        return matchesSearch && matchesRole;
-    });
-
-    const activePolicyDoc = activeTeam?.policy
-        ? (typeof activeTeam.policy === 'string' ? activeTeam.policy : JSON.stringify(activeTeam.policy, null, 2))
-        : null;
-
-    // If the team has a real policy attached, synthesize it into the mock list so the viewer works
-    const effectivePolicies: AttachedPolicy[] = activePolicyDoc
-        ? [{ name: 'Team Policy', description: 'Team-level IAM policy', arn: `arn:scorpion:iam::${activeTeam?.$id}:policy/TeamPolicy`, document: activePolicyDoc, version: 'v1', lastModified: 'Unknown' }, ...ATTACHED_POLICIES_MOCK]
-        : ATTACHED_POLICIES_MOCK;
-
-    const selectedPolicy = effectivePolicies.find(p => p.name === selectedPolicyName) ?? effectivePolicies[0];
 
     // ── Render ──
 

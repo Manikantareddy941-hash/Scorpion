@@ -16,7 +16,7 @@ import { useTerminology } from '../contexts/TerminologyContext';
 
 export default function Settings() {
     const { t } = useTranslation();
-    const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT } = useAuth();
+    const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT, signInWithOAuth } = useAuth();
     const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled } = useTheme();
     const { uiMode, setUiMode } = useTerminology();
     const [isGithubConnected, setIsGithubConnected] = useState(false);
@@ -118,8 +118,7 @@ export default function Settings() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Permissive image validation
-        if (!file.type.startsWith('image/') && !file.type.includes('octet-stream')) {
+        if (!file.type.startsWith('image/')) {
             alert(t('settings.invalid_image_type', 'Please upload a valid image file (JPG, PNG, WebP, etc.)'));
             return;
         }
@@ -413,7 +412,7 @@ export default function Settings() {
                                 <button
                                     onClick={() => {
                                         sessionStorage.setItem('oauth_return_to', '/settings');
-                                        (useAuth() as any).signInWithOAuth('github');
+                                        signInWithOAuth('github');
                                     }}
                                     className={`px-8 py-3 rounded-2xl text-xs font-black uppercase italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl
                                         ${isGithubConnected ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-[var(--accent-primary)] text-black shadow-[var(--accent-primary)]/20 hover:shadow-[var(--accent-primary)]/40'}`}
