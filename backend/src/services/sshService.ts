@@ -1,6 +1,12 @@
 // backend/src/services/sshService.ts
 import { Client } from 'ssh2';
 
+// Wraps a value in single quotes for safe inclusion in a remote shell command,
+// escaping any embedded single quotes so deployPath can't break out into new commands.
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export interface RemoteServerConfig {
   host: string;
   port: number;
@@ -28,7 +34,7 @@ export class SshService {
       conn
         .on('ready', () => {
           logger.log(`[SSHService] Connected to ${server.host}`);
-          const payload = `cd ${deployPath} && ${commands.join(' && ')}`;
+          const payload = `cd ${shellEscape(deployPath)} && ${commands.join(' && ')}`;
           conn.exec(payload, (err, stream) => {
             if (err) {
               conn.end();

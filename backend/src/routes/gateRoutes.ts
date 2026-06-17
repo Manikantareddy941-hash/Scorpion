@@ -73,7 +73,7 @@ export async function checkReleaseGate(repoId: string) {
 }
 
 // POST /api/gates/evaluate
-router.post('/evaluate', async (req: Request, res: Response) => {
+router.post('/evaluate', verifyUser, async (req: Request, res: Response) => {
     const { repo_id } = req.body;
     if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
 
@@ -206,7 +206,7 @@ router.post('/override', verifyUser, checkPermission('gate:bypass'), async (req:
 });
 
 // GET /api/gates/state
-router.get('/state', async (req: Request, res: Response) => {
+router.get('/state', verifyUser, async (req: Request, res: Response) => {
     try {
         await ensurePipelineStateCollection();
         const existingState = await databases.listDocuments(DB_ID, 'pipeline_state', [

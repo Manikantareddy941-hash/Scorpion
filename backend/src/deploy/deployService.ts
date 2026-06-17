@@ -2,21 +2,21 @@ import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { logger } from '../services/logger';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import axios from 'axios';
 
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 
 async function scanDockerImage(imageTag: string): Promise<boolean> {
   logger.info(`[DeployService] Running Trivy scan on image: ${imageTag}`);
   try {
-    const { stdout } = await execAsync(`trivy image -q -f json ${imageTag}`);
+    const { stdout } = await execFileAsync('trivy', ['image', '-q', '-f', 'json', imageTag]);
     const report = JSON.parse(stdout);
     
     let hasCritical = false;
@@ -60,14 +60,14 @@ async function executeTargetDeployment(
 
       logger.info(`[DeployService] Docker deploy: Stopping and removing container ${containerName}...`);
       try {
-        await execAsync(`docker stop ${containerName}`);
+        await execFileAsync('docker', ['stop', containerName]);
       } catch (_) {}
       try {
-        await execAsync(`docker rm ${containerName}`);
+        await execFileAsync('docker', ['rm', containerName]);
       } catch (_) {}
 
       logger.info(`[DeployService] Docker deploy: Starting new container ${containerName} on port ${hostPort}...`);
-      await execAsync(`docker run -d --name ${containerName} -p ${hostPort}:${containerPort} ${imageTag}`);
+      await execFileAsync('docker', ['run', '-d', '--name', containerName, '-p', `${hostPort}:${containerPort}`, imageTag]);
       
       return { success: true, port: parseInt(hostPort) };
     } else {
@@ -102,10 +102,10 @@ spec:
       logger.info(`[DeployService] Kubernetes deploy: Applying manifest to namespace ${namespace}...`);
       
       try {
-        await execAsync(`kubectl create namespace ${namespace}`);
+        await execFileAsync('kubectl', ['create', 'namespace', namespace]);
       } catch (_) {}
-      
-      await execAsync(`kubectl apply -f ${manifestPath}`);
+
+      await execFileAsync('kubectl', ['apply', '-f', manifestPath]);
       return { success: true };
     }
   } catch (err: any) {

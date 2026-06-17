@@ -16,6 +16,9 @@ router.post(['/', '/trigger'], async (req, res) => {
     if (!buildId || !environment) {
       return res.status(400).json({ error: 'buildId and environment are required' });
     }
+    if (!['dev', 'staging', 'production'].includes(environment)) {
+      return res.status(400).json({ error: 'environment must be one of: dev, staging, production' });
+    }
 
     // Trigger deployment async (doesn't await completion)
     const result = await triggerDeploy(buildId, environment as 'dev' | 'staging' | 'production', triggeredBy);

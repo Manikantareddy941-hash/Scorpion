@@ -1,8 +1,15 @@
 import { Webhooks, EmitterWebhookEvent } from '@octokit/webhooks';
+import crypto from 'crypto';
 import { triggerCIScan } from './ciOrchestrator';
 
+// Never fall back to a hardcoded secret here: a known default would let anyone forge a
+// valid signature and trigger CI scans. If GITHUB_WEBHOOK_SECRET isn't configured, use an
+// unguessable random secret instead so signature checks fail closed until it's set properly.
+if (!process.env.GITHUB_WEBHOOK_SECRET) {
+  console.warn('[GitHub Webhook] WARNING: GITHUB_WEBHOOK_SECRET not set. Using a random per-process secret; all incoming GitHub webhook events will be rejected until this is configured.');
+}
 const webhooks = new Webhooks({
-  secret: process.env.GITHUB_WEBHOOK_SECRET || 'scorpion_webhook_secret'
+  secret: process.env.GITHUB_WEBHOOK_SECRET || crypto.randomBytes(32).toString('hex')
 });
 
 // Handle Pull Request events

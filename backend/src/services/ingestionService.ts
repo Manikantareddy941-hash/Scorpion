@@ -15,10 +15,27 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
             fs.mkdirSync(extractionPath, { recursive: true });
         }
 
-        // 2. Extract ZIP
-        await fs.createReadStream(filePath)
-            .pipe(unzipper.Extract({ path: extractionPath }))
-            .promise();
+        // 2. Extract ZIP, validating each entry stays within extractionPath (zip-slip guard)
+        const resolvedExtractionPath = path.resolve(extractionPath) + path.sep;
+        const directory = await unzipper.Open.file(filePath);
+        for (const entry of directory.files) {
+            const targetPath = path.resolve(extractionPath, entry.path);
+            if (!targetPath.startsWith(resolvedExtractionPath)) {
+                console.warn(`[IngestionService] Skipping zip entry with path traversal: ${entry.path}`);
+                continue;
+            }
+            if (entry.type === 'Directory') {
+                fs.mkdirSync(targetPath, { recursive: true });
+                continue;
+            }
+            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+            await new Promise<void>((resolve, reject) => {
+                entry.stream()
+                    .pipe(fs.createWriteStream(targetPath))
+                    .on('finish', resolve)
+                    .on('error', reject);
+            });
+        }
 
         // 3. Scan extracted files (Secure extraction validation)
         const files: string[] = [];

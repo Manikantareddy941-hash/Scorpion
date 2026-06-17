@@ -1,7 +1,7 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface ImageScanResult {
   vulnerabilities: any[];
@@ -11,8 +11,8 @@ export interface ImageScanResult {
 export async function scanImage(image: string): Promise<ImageScanResult> {
   console.log(`[Image Scanner] Scanning image: ${image}`);
   try {
-    const { stdout } = await execAsync(
-      `trivy image --format json --quiet ${image}`
+    const { stdout } = await execFileAsync(
+      'trivy', ['image', '--format', 'json', '--quiet', image]
     );
     
     const result = JSON.parse(stdout);

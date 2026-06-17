@@ -7,6 +7,15 @@ import { isFalcoRuleBlocked } from '../services/policyService';
 
 const router = Router();
 
+// Same shared-secret pattern as routes/falcoRoutes.ts's verifyFalcoSecret
+const verifyFalcoSecret = (req: Request, res: Response, next: any) => {
+  const secret = req.headers['x-falco-secret'];
+  if (process.env.FALCO_SECRET && secret !== process.env.FALCO_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized Falco source' });
+  }
+  next();
+};
+
 // Helper function to ensure THREATS collection and attributes exist
 async function ensureThreatsCollection() {
   try {
@@ -63,7 +72,7 @@ ensureThreatsCollection();
 ensurePipelineStateCollection();
 
 // POST /api/threats/falco
-router.post('/falco', async (req: Request, res: Response) => {
+router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => {
   const event = req.body;
   console.log(`[Falco Webhook] Received event: ${event.rule} (${event.priority})`);
 
@@ -139,7 +148,7 @@ router.post('/falco', async (req: Request, res: Response) => {
 });
 
 // GET /api/threats
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', verifyUser, async (req: Request, res: Response) => {
   try {
     await ensureThreatsCollection();
     const threatsRes = await databases.listDocuments(DB_ID, 'threats', [
@@ -154,7 +163,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/threats/clear - Diagnostic endpoint to reset/clear threat state back to passing
-router.post('/clear', async (req: Request, res: Response) => {
+router.post('/clear', verifyUser, async (req: Request, res: Response) => {
   try {
     await ensureThreatsCollection();
     await ensurePipelineStateCollection();
