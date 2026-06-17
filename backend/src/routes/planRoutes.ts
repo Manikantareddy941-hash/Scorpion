@@ -768,7 +768,7 @@ router.post('/projects/:projectId/threats/:id/convert', async (req: Authenticate
   if (!threat) return res.status(404).json({ error: 'Threat not found' });
 
   // 2. Create the ticket (issue)
-  const priority = threat.severity.toLowerCase() === 'critical' ? 'critical' :
+  const priority: 'critical' | 'high' | 'medium' | 'low' = threat.severity.toLowerCase() === 'critical' ? 'critical' :
                    threat.severity.toLowerCase() === 'high' ? 'high' :
                    threat.severity.toLowerCase() === 'medium' ? 'medium' : 'low';
 
