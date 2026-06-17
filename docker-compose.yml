@@ -1,54 +1,31 @@
 version: '3.9'
 
-services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: jira_clone_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: jira_clone
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+# SCORPION DevSecOps platform.
+# Backend (Express API on 3001) + frontend (Vite build served by nginx on 80).
+# State lives in Appwrite Cloud, so no local database service is required.
+# Secrets/config are read from the local .env file (see backend/.env.example).
 
+services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: jira_clone_backend
+    container_name: scorpion_backend
     restart: unless-stopped
     env_file:
-      - .env.example
-    ports:
-      - "4000:4000"
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - .env
     environment:
-      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/jira_clone?schema=public"
+      PORT: "3001"
+    ports:
+      - "3001:3001"
 
   frontend:
     build:
-      context: ./frontend
+      context: .
       dockerfile: Dockerfile
-    container_name: jira_clone_frontend
+    container_name: scorpion_frontend
     restart: unless-stopped
-    env_file:
-      - .env.example
     ports:
-      - "3000:3000"
+      - "8080:80"
     depends_on:
       - backend
-    environment:
-      REACT_APP_API_URL: "http://localhost:4000/api/v1"
-
-volumes:
-  pgdata:

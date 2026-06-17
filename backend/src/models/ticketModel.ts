@@ -432,18 +432,18 @@ export async function getStats() {
   }
 }
 
-export async function addLink(fromId: string, toId: string, type: TicketLinkType): Promise<void> {
+export async function addLink(fromId: string, toId: string, type: TicketLinkType, userEmail = 'System'): Promise<Ticket | null> {
   const fromTicket = await getTicket(fromId);
   const toTicket = await getTicket(toId);
   if (!fromTicket || !toTicket) {
-    throw new Error('One or both tickets do not exist');
+    return null;
   }
 
   const fromLinks = linksMap.get(fromId) || [];
   const toLinks = linksMap.get(toId) || [];
 
   if (fromLinks.some(l => l.ticketId === toId && l.type === type)) {
-    return;
+    return (await getTicket(fromId)) || null;
   }
 
   let inverseType: TicketLinkType = 'relates_to';
@@ -459,15 +459,22 @@ export async function addLink(fromId: string, toId: string, type: TicketLinkType
   linksMap.set(fromId, fromLinks);
   linksMap.set(toId, toLinks);
 
-  await recordActivity(fromId, 'System', 'status_change', {
+  await recordActivity(fromId, userEmail, 'status_change', {
     message: `Linked ticket ${toId} as ${type}`
   });
-  await recordActivity(toId, 'System', 'status_change', {
+  await recordActivity(toId, userEmail, 'status_change', {
     message: `Linked ticket ${fromId} as ${inverseType}`
   });
+
+  return (await getTicket(fromId)) || null;
 }
 
-export async function removeLink(fromId: string, toId: string): Promise<void> {
+export async function removeLink(fromId: string, toId: string, userEmail = 'System'): Promise<Ticket | null> {
+  const fromTicket = await getTicket(fromId);
+  if (!fromTicket) {
+    return null;
+  }
+
   const fromLinks = linksMap.get(fromId) || [];
   const toLinks = linksMap.get(toId) || [];
 
@@ -477,10 +484,12 @@ export async function removeLink(fromId: string, toId: string): Promise<void> {
   linksMap.set(fromId, newFromLinks);
   linksMap.set(toId, newToLinks);
 
-  await recordActivity(fromId, 'System', 'status_change', {
+  await recordActivity(fromId, userEmail, 'status_change', {
     message: `Removed link to ticket ${toId}`
   });
-  await recordActivity(toId, 'System', 'status_change', {
+  await recordActivity(toId, userEmail, 'status_change', {
     message: `Removed link to ticket ${fromId}`
   });
+
+  return (await getTicket(fromId)) || null;
 }
