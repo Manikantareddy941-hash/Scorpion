@@ -1,8 +1,14 @@
-import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from 'express';
+import { Client, Account } from 'node-appwrite';
 
 /**
- * Middleware to verify Appwrite JWT
+ * Middleware to verify an Appwrite session JWT.
+ *
+ * Appwrite JWTs are opaque to us (signed with a secret only Appwrite holds), so the only
+ * way to confirm one is genuine is to present it back to Appwrite via account.get() and see
+ * if it resolves to a real session. Do not switch this back to jwt.decode()-only: decode()
+ * never checks the signature, so any caller could forge a token with an arbitrary userId
+ * claim and impersonate any user.
  */
 export const verifyUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -29,16 +35,22 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
       return res.status(401).json({ error: "No token provided" });
     }
 
-    const decoded = jwt.decode(token) as any; // ✅ Appwrite JWT decode
+    const client = new Client()
+      .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1')
+      .setProject(process.env.APPWRITE_PROJECT_ID || '')
+      .setJWT(token);
 
-    if (!decoded || !decoded.userId) {
-      return res.status(401).json({ error: "Invalid token" });
+    const account = new Account(client);
+    const user = await account.get();
+
+    if (!user || !user.$id) {
+      return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    // Assign decoded user to request with explicit $id mapping
     (req as any).user = {
-      $id: decoded.userId,   // ✅ THIS LINE MUST EXIST
-      ...decoded,
+      ...user,
+      $id: user.$id,
+      userId: user.$id,
     };
 
     next();

@@ -1,10 +1,10 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const SBOM_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
 export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'json') => {
@@ -25,7 +25,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
 
         if (repo.url.startsWith('http')) {
             console.log('[SBOM] Cloning remote repo:', repo.url);
-            await execAsync(`git clone --depth 1 "${repo.url}" "${tempDir}"`, { timeout: 60000 });
+            await execFileAsync('git', ['clone', '--depth', '1', repo.url, tempDir], { timeout: 60000 });
             scanPath = tempDir;
             isTemporary = true;
         } else if (repo.url.startsWith('upload://')) {
@@ -41,8 +41,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
         // If format is CSV, we might need to convert or use a different Trivy command.
         // For simplicity and standard compliance, we'll focus on CycloneDX JSON.
         
-        const cmd = `trivy fs --format ${outputFormat} --output "${tempDir}_out.${format}" "${scanPath}"`;
-        await execAsync(cmd, { timeout: SBOM_TIMEOUT_MS });
+        await execFileAsync('trivy', ['fs', '--format', outputFormat, '--output', `${tempDir}_out.${format}`, scanPath], { timeout: SBOM_TIMEOUT_MS });
 
         const outputPath = `${tempDir}_out.${format}`;
         if (!fs.existsSync(outputPath)) {

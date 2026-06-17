@@ -15,6 +15,13 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Status is required' });
         }
 
+        const userId = (req as any).user?.$id;
+        const existingFinding = await databases.getDocument(DB_ID, 'findings', id);
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, existingFinding.repo_id);
+        if (repo.user_id !== userId) {
+            return res.status(403).json({ error: 'You do not have access to this finding' });
+        }
+
         const updatedFinding = await databases.updateDocument(
             DB_ID,
             'findings',
@@ -22,7 +29,6 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
             { status }
         );
 
-        const userId = (req as any).user?.$id;
         await logAuditEvent('FINDING_RESOLVED', `Security finding "${updatedFinding.title}" marked as ${status}`, userId, updatedFinding.repo_id);
 
         res.json(updatedFinding);

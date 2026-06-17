@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 import { Response } from 'express';
 import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
@@ -15,8 +15,6 @@ import { sshService } from './sshService';
 import { securityScanService } from './securityScanService';
 
 
-
-const execAsync = util.promisify(exec);
 
 // SSE Client Store
 const sseClients = new Map<string, Response[]>();
@@ -121,12 +119,17 @@ const sanitizeUrl = (url: string): string => {
   return url.replace(/https:\/\/[^@]+@/, 'https://**REDACTED**@');
 };
 
-async function execCommand(command: string, cwd: string, pipeLogger: PipelineLogger) {
-  // Redact any credentials before logging the command
-  const safeCommand = sanitizeUrl(command);
+const execFileAsync = util.promisify(execFile);
+
+/**
+ * Runs a command with arguments passed as an array (no shell interpolation), so
+ * attacker-influenced values (branch names, repo URLs) can't break out into shell syntax.
+ */
+async function execFileCommand(file: string, args: string[], cwd: string, pipeLogger: PipelineLogger) {
+  const safeCommand = sanitizeUrl(`${file} ${args.join(' ')}`);
   await pipeLogger.log(`Running: ${safeCommand}`);
   try {
-    const { stdout, stderr } = await execAsync(command, { cwd });
+    const { stdout, stderr } = await execFileAsync(file, args, { cwd });
     if (stdout) await pipeLogger.log(sanitizeUrl(stdout));
     if (stderr) await pipeLogger.log(`[stderr]: ${sanitizeUrl(stderr)}`);
   } catch (error: any) {
@@ -205,7 +208,7 @@ export async function runPipeline(runId: string) {
       if (token && repoUrl.startsWith('https://')) {
         cloneUrl = repoUrl.replace('https://', `https://${token}@`);
       }
-      await execCommand(`git clone --depth 1 --branch ${runDoc.branch} ${cloneUrl} "${workspaceDir}"`, os.tmpdir(), pipeLogger);
+      await execFileCommand('git', ['clone', '--depth', '1', '--branch', runDoc.branch, cloneUrl, workspaceDir], os.tmpdir(), pipeLogger);
     }
     
     const buildTool = await detectBuildTool(workspaceDir);
@@ -224,7 +227,7 @@ export async function runPipeline(runId: string) {
       }
     } else if (buildTool === 'docker') {
       const imageTag = `repo-${runDoc.repoId}:${runId}`;
-      await execCommand(`docker build -t ${imageTag} .`, workspaceDir, pipeLogger);
+      await execFileCommand('docker', ['build', '-t', imageTag, '.'], workspaceDir, pipeLogger);
       await pipeLogger.log(`Docker image ${imageTag} built.`);
     } else if (buildTool === 'gradle') {
       const executionImage = getRuntimeImageForTool(buildTool);

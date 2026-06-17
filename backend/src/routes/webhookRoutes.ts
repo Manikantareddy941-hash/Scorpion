@@ -312,8 +312,13 @@ router.post('/github/app-install', async (req: Request, res: Response) => {
  * CI Test Report Webhook
  */
 router.post('/tests/report', async (req: Request, res: Response) => {
+    const secret = req.headers['x-tests-report-secret'];
+    if (!process.env.TESTS_REPORT_SECRET || secret !== process.env.TESTS_REPORT_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized test report source' });
+    }
+
     const { repo_url, build_id, total_tests, passed_tests, failed_tests, skipped_tests, coverage, status } = req.body;
-    
+
     if (!repo_url) return res.status(400).json({ error: 'Missing repo_url' });
 
     try {

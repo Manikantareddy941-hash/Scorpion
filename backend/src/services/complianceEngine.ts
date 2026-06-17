@@ -14,7 +14,7 @@ const SOC2_CONTROLS = [
 
 const ISO27001_CONTROLS = [
   { controlId: 'A.12.6.1', title: 'Management of technical vulnerabilities', framework: 'ISO27001',
-    check: (scans: any[]) => scans.some(s => (s.criticalCount ?? 0) === 0) },
+    check: (scans: any[]) => scans.every(s => (s.criticalCount ?? 0) === 0) },
   { controlId: 'A.14.2.8', title: 'System security testing', framework: 'ISO27001',
     check: (scans: any[]) => scans.length > 0 },
   { controlId: 'A.16.1.2', title: 'Reporting security incidents', framework: 'ISO27001',

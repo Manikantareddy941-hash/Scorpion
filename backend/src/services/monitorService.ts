@@ -93,6 +93,29 @@ export async function checkDeploymentUptime(deployment: any) {
       }
     }
 
+    // 3. Alert on recovery (transition back to up) and clear the stale "down" status
+    if (status === 'up' && lastState === 'down') {
+      logger.info(`[MonitorService] Transition to UP detected for ${key}. Service recovered.`);
+
+      if (SLACK_WEBHOOK_URL) {
+        await sendSlackNotification(SLACK_WEBHOOK_URL, {
+          title: `✅ SERVICE RECOVERED: ${repoId} in ${environment}`,
+          severity: 'LOW',
+          repository: repoId,
+          rule: `Uptime SLA check passed again. Container URL ${sanitizedUrl} is responding.`
+        }).catch((e) => logger.error(`[MonitorService] Recovery alert failed:`, e));
+      }
+
+      try {
+        await databases.updateDocument(DB_ID, 'deployment_status', deploymentId, {
+          status,
+          lastUpdated: new Date().toISOString()
+        });
+      } catch (e: any) {
+        logger.error(`[MonitorService] Failed to clear stale down status:`, e);
+      }
+    }
+
     previousStatus.set(key, status);
   } catch (err: any) {
     logger.error(`[MonitorService] Error recording health check:`, err);

@@ -63,6 +63,10 @@ router.post('/create-pr', async (req: Request, res: Response) => {
 
     // 3. Write the fixed file content
     const targetFile = path.join(tmpDir, filePath);
+    const resolvedTmpDir = path.resolve(tmpDir) + path.sep;
+    if (!path.resolve(targetFile).startsWith(resolvedTmpDir)) {
+      return res.status(400).json({ error: 'Invalid filePath: path traversal detected' });
+    }
     await fs.mkdir(path.dirname(targetFile), { recursive: true });
     await fs.writeFile(targetFile, fixedContent, 'utf-8');
 
