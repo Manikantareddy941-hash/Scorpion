@@ -1,13 +1,24 @@
 import { Resend } from 'resend';
 
-// Initialize Resend with API key from environment variables
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend's constructor throws synchronously if the key is missing, which would
+// crash the whole process at import time. Initialize lazily so a missing key
+// only disables email sending instead of taking the server down.
+let resend: Resend;
+const getResendClient = (): Resend => {
+  if (!resend) {
+    if (!process.env.RESEND_API_KEY) {
+      console.error('[Email] RESEND_API_KEY is not set - email sending is disabled');
+    }
+    resend = new Resend(process.env.RESEND_API_KEY || 're_disabled');
+  }
+  return resend;
+};
 
 export const sendOtpEmail = async (email: string, otp: string) => {
   const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: `StackPilot Auth <${fromEmail}>`,
       to: [email],
       subject: 'Your Verification Code',
@@ -49,7 +60,7 @@ export const sendCriticalAlertEmail = async (email: string, repoName: string, vu
   const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: `StackPilot Security <${fromEmail}>`,
       to: [email],
       subject: `🚨 CRITICAL: ${vulnCount} Security Issues Found in ${repoName}`,
@@ -80,7 +91,7 @@ export const sendScanCompletionEmail = async (email: string, repoName: string, s
   const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: `StackPilot <${fromEmail}>`,
       to: [email],
       subject: `Scan Completed: ${repoName}`,
@@ -105,7 +116,7 @@ export const sendAiReportEmail = async (email: string, reportHtml: string, range
   const fromEmail = process.env.EMAIL_FROM || 'reports@resend.dev';
 
   try {
-    await resend.emails.send({
+    await getResendClient().emails.send({
       from: `Scorpion AI <${fromEmail}>`,
       to: [email],
       subject: `Automated AI Security Briefing (${range})`,
