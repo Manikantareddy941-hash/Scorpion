@@ -8,8 +8,8 @@ version: '3.9'
 services:
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: scorpion_backend
     restart: unless-stopped
     env_file:
