@@ -8,6 +8,10 @@ import {
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import SeverityBadge from '../components/SeverityBadge';
+import Input from '../components/Input';
+import Button from '../components/Button';
+import EmptyState from '../components/EmptyState';
 
 import { 
   AreaChart, Area, XAxis, ReferenceLine, ResponsiveContainer, Tooltip as RechartsTooltip
@@ -148,12 +152,9 @@ export default function SastDetail() {
       {/* Header Area */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div className="flex items-center gap-4">
-          <button 
-            onClick={() => navigate(-1)}
-            className="p-3 bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-all shadow-sm"
-          >
+          <Button variant="ghost" iconOnly size="lg" onClick={() => navigate(-1)} className="shadow-sm">
             <ArrowLeft size={18} />
-          </button>
+          </Button>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">
@@ -174,15 +175,15 @@ export default function SastDetail() {
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={14} />
-            <input 
-              type="text" 
+            <Input
+              type="text"
               placeholder="SEARCH FINDINGS..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl py-2.5 pl-10 pr-4 text-[10px] font-bold uppercase tracking-wider text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-primary)] w-64 transition-all"
+              className="pl-10 pr-4 font-bold uppercase tracking-wider w-64"
             />
           </div>
-          <div className="flex bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-1 shadow-sm">
+          <div className="flex bg-[var(--bg-card)] border border-neutral-800 rounded-lg p-1 shadow-sm">
             {['critical', 'high', 'medium', 'low'].map(sev => (
               <button
                 key={sev}
@@ -209,7 +210,7 @@ export default function SastDetail() {
           { label: 'EPSS ≥ 10%', value: '00', sub: '(0%)' },
           { label: 'EPSS ≥ 50%', value: '00', sub: '(0%)' },
         ].map((s, i) => (
-          <div key={i} className="bg-[var(--bg-card)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
+          <div key={i} className="card bg-neutral-900 rounded-lg p-5 border border-neutral-800 shadow-sm">
             <div className="text-2xl font-black text-[var(--text-primary)]">{s.value}</div>
             <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase mt-1 tracking-wider">{s.label}</div>
             {s.sub && (
@@ -225,7 +226,7 @@ export default function SastDetail() {
       </div>
 
       {/* Severity Legend & Funnel Chart */}
-      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] p-6 mb-6 shadow-sm">
+      <div className="card bg-neutral-900 rounded-lg border border-neutral-800 p-6 mb-6 shadow-sm">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Issue Status & Prioritization</h3>
           <div className="flex gap-4">
@@ -263,7 +264,7 @@ export default function SastDetail() {
             const sevColor = getSeverityColor(finding.severity);
             
             return (
-              <div key={finding.$id} className="bg-[var(--bg-card)] rounded-2xl overflow-hidden border border-[var(--border-subtle)] shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
+              <div key={finding.$id} className="card bg-neutral-900 rounded-lg overflow-hidden border border-neutral-800 shadow-md">
                 <div className="flex flex-col md:flex-row">
                   {/* Left Severity Accent */}
                   <div className="w-full md:w-1.5" style={{ backgroundColor: sevColor }}></div>
@@ -279,7 +280,7 @@ export default function SastDetail() {
                             {finding.message.split('\n')[0].substring(0, 80)}...
                           </h3>
                           <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mt-0.5 flex items-center gap-2">
-                            <span style={{ color: sevColor }}>{finding.severity.toUpperCase()}</span>
+                            <SeverityBadge severity={finding.severity} />
                             <span className="opacity-30">|</span>
                             <span className="flex items-center gap-1"><Terminal size={10} /> {finding.tool.toUpperCase()}</span>
                           </p>
@@ -356,19 +357,16 @@ export default function SastDetail() {
             );
           })
         ) : (
-          <div className="bg-[var(--bg-card)] rounded-3xl p-20 text-center border border-[var(--border-subtle)] flex flex-col items-center">
-            <div className="w-20 h-20 bg-[var(--bg-primary)] rounded-full flex items-center justify-center mb-6 shadow-inner">
-              <CheckCircle2 size={40} className="text-[var(--status-success)] opacity-20" />
-            </div>
-            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Findings Detected</h3>
-            <p className="text-xs text-[var(--text-secondary)] mt-2 font-bold uppercase tracking-widest">Your security posture is within optimal parameters</p>
-            <button 
-              onClick={() => {setSearchTerm(''); setActiveSeverity(null);}}
-              className="mt-8 px-6 py-2.5 bg-[var(--accent-primary)] text-black rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[var(--accent-primary)]/20 hover:scale-105 transition-all"
-            >
-              Reset Filters
-            </button>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            message="No Findings Detected"
+            description="Your security posture is within optimal parameters"
+            action={
+              <Button onClick={() => { setSearchTerm(''); setActiveSeverity(null); }}>
+                Reset Filters
+              </Button>
+            }
+          />
         )}
       </div>
     </div>

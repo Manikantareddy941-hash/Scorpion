@@ -43,7 +43,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
 
 
     return (
-        <nav className={`h-16 flex items-center justify-between px-8 z-40 transition-all duration-300 ${
+        <nav className={`h-14 flex items-center justify-between px-6 border border-[var(--border-subtle)] z-40 transition-all duration-300 ${
             theme === 'liquid-glass' ? '' : 
             theme === 'underwater' ? 'bg-[rgba(0,40,80,0.8)] backdrop-blur-[10px]' :
             theme === 'eye-protection' ? 'bg-transparent' :
@@ -51,7 +51,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
         } ${className}`}>
             {/* Left: Dynamic Greeting */}
             <div className="flex items-center min-w-[200px] animate-in fade-in duration-700">
-                <h1 className="text-[20px] font-bold text-[var(--text-primary)] transition-all">
+                <h1 className="text-[15px] font-bold text-[var(--text-primary)] transition-all">
                     {(() => {
                         const hour = new Date().getHours();
                         const firstName = user?.name?.split(' ')[0] || 'Operator';
@@ -70,7 +70,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                 {activeScan && !activeScan.isScanning && (
                     <div 
                         onClick={() => updateScan({ isScanning: true })}
-                        className="flex items-center gap-4 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl px-4 py-2 cursor-pointer hover:border-[var(--accent-primary)]/40 transition-all animate-in fade-in slide-in-from-right-4"
+                        className="flex items-center gap-4 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg px-3 py-1.5 cursor-pointer hover:border-[var(--accent-primary)]/40 transition-colors animate-in fade-in slide-in-from-right-4"
                     >
                         <div className="relative">
                             <Shield className="w-4 h-4 text-[var(--accent-primary)] animate-pulse" />
@@ -125,7 +125,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                         {showThemeMenu && (
                             <>
                                 <div className="fixed inset-0 z-[9998]" onClick={() => setShowThemeMenu(false)} />
-                                <div className="absolute right-0 mt-2 p-3 bg-[var(--bg-card)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-[var(--border-subtle)] z-[9999] animate-in fade-in zoom-in duration-200 grid grid-cols-3 gap-2 min-w-[180px]">
+                                <div className="card absolute right-0 mt-2 p-3 bg-neutral-900 rounded-lg shadow-lg border border-neutral-800 z-[9999] animate-in fade-in zoom-in duration-200 grid grid-cols-3 gap-2 min-w-[180px]">
                                 {
                                     [
                                         { id: 'light', icon: Sun },
@@ -167,8 +167,8 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                     {showNotifications && (
                         <>
                             <div className="fixed inset-0 z-[9998]" onClick={() => setShowNotifications(false)} />
-                            <div className="absolute right-0 mt-2 w-80 bg-[var(--bg-card)] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-[var(--border-subtle)] z-[9999] animate-in fade-in zoom-in duration-200 overflow-hidden">
-                                <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+                            <div className="card absolute right-0 mt-2 w-80 bg-neutral-900 rounded-lg shadow-lg border border-neutral-800 z-[9999] animate-in fade-in zoom-in duration-200 overflow-hidden">
+                                <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
                                     <h3 className="text-xs font-bold text-[var(--text-primary)]">Notifications</h3>
                                     {unreadCount > 0 && (
                                         <button 
@@ -206,7 +206,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                 <div className="relative flex items-center">
                     <button
                         onClick={() => setIsNavOpen(!isNavOpen)}
-                        className="flex items-center gap-3 p-1 rounded-2xl hover:bg-[var(--bg-secondary)] transition-all text-left group border border-transparent hover:border-[var(--border-subtle)]"
+                        className="flex items-center gap-2 p-1 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors text-left group border border-transparent hover:border-[var(--border-subtle)]"
                     >
                         <div className="w-8 h-8 bg-[var(--bg-secondary)] rounded-md flex items-center justify-center overflow-hidden text-[10px] font-bold text-[var(--text-primary)] border border-[var(--accent-primary)] group-hover:scale-105 transition-transform">
                             {((user?.prefs as any)?.profilePic) ? (
@@ -226,7 +226,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                     {isNavOpen && (
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setIsNavOpen(false)} />
-                            <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] py-2 z-50 animate-in fade-in zoom-in duration-200">
+                            <div className="card absolute right-0 top-full mt-2 w-48 bg-neutral-900 rounded-lg shadow-lg border border-neutral-800 py-2 z-50 animate-in fade-in zoom-in duration-200">
                                 {[
                                     { icon: Activity, label: 'Analytics', path: '/dashboard' },
                                     { icon: ListTodo, label: 'Reports', path: '/reports' },

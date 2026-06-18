@@ -1,6 +1,8 @@
 import React from 'react';
 import { Clock, CheckCircle, XCircle, RefreshCw, Zap } from 'lucide-react';
 import { GradeBadge } from './QualityGate';
+import StatusBadge from './StatusBadge';
+import EmptyState from './EmptyState';
 
 interface Scan {
     id: string;
@@ -16,16 +18,11 @@ interface ScanHistoryProps {
 
 export const ScanHistory: React.FC<ScanHistoryProps> = ({ scans }) => {
     if (scans.length === 0) {
-        return (
-            <div className="bg-[var(--bg-card)] p-12 text-center rounded-[2rem] border border-[var(--border-subtle)]">
-                <Clock className="w-8 h-8 text-[var(--text-secondary)] opacity-20 mx-auto mb-3" />
-                <p className="text-[var(--text-secondary)] font-bold uppercase tracking-widest text-[10px]">No scans recorded yet</p>
-            </div>
-        );
+        return <EmptyState icon={Clock} message="No scans recorded yet" />;
     }
 
     return (
-        <div className="bg-[var(--bg-card)] rounded-[2rem] border border-[var(--border-subtle)] overflow-hidden">
+        <div className="card bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden">
             <div className="divide-y divide-[var(--border-subtle)]">
                 {scans.map(scan => (
                     <div key={scan.id} className="p-5 hover:bg-[var(--text-primary)]/5 transition-all flex items-center justify-between group">
@@ -40,9 +37,7 @@ export const ScanHistory: React.FC<ScanHistoryProps> = ({ scans }) => {
                             <div>
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="font-black text-xs text-[var(--text-primary)] uppercase tracking-tighter">Audit #{scan.id.slice(0, 6)}</span>
-                                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-2xl ${scan.status === 'completed' ? 'text-[var(--status-success)] bg-[var(--status-success)]/10' :
-                                            scan.status === 'failed' ? 'text-[var(--status-error)] bg-[var(--status-error)]/10' : 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10'
-                                        }`}>{scan.status}</span>
+                                    <StatusBadge status={scan.status} />
                                 </div>
                                 <div className="flex items-center gap-3 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
                                     <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {new Date(scan.created_at).toLocaleString()}</span>

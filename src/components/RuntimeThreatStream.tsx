@@ -71,7 +71,7 @@ export const RuntimeThreatStream: React.FC = () => {
   const totalAnomalies = events.length;
 
   return (
-    <div className="bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] h-full flex flex-col border border-[var(--border-subtle)] group relative z-10 transition-all duration-300 ease-in-out hover:z-50 hover:scale-[1.03] hover:shadow-2xl">
+    <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-md h-full flex flex-col group">
       <div className="mb-4">
         <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">Runtime Threat Stream</h3>
         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">
@@ -91,9 +91,9 @@ export const RuntimeThreatStream: React.FC = () => {
             return (
               <div
                 key={ev.timestamp}
-                className={`bg-[var(--bg-primary)]/40 rounded-[12px] p-3 border border-[var(--border-subtle)] border-l-4 ${
+                className={`bg-[var(--bg-primary)]/40 rounded-lg p-3 border border-neutral-800 border-l-4 ${
                   isCritical ? 'border-l-red-500' : ev.priority === 'Warning' ? 'border-l-amber-500' : 'border-l-teal-400'
-                } flex flex-col transition-all hover:scale-[1.01]`}
+                } flex flex-col transition-colors hover:border-neutral-700`}
               >
                 <div className="flex justify-between items-center mb-1">
                   <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
