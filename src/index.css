@@ -134,7 +134,7 @@ html.eye-protection {
   --card-shadow: 0 2px 12px rgba(100,150,80,0.08);
   --chart-bg: #f0f7ea;
   --chart-grid: #c8ddb5;
-  --chart-label: #5a7a4a;
+  --chart-label: var(--text-secondary);
   --chart-fill: #6db87a;
   --chart-fill-opacity: 0.25;
 }
@@ -204,7 +204,7 @@ html.underwater {
   --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   --chart-bg: rgba(0, 40, 80, 0.4);
   --chart-grid: rgba(0, 200, 255, 0.1);
-  --chart-label: #90e0ef;
+  --chart-label: var(--text-secondary);
   --chart-fill: #00c8ff;
   --chart-fill-opacity: 0.3;
   --glass-blur: blur(8px);
@@ -307,7 +307,7 @@ html.liquid-glass {
   --border-color: rgba(255, 255, 255, 0.35);
   --chart-bg: rgba(255, 255, 255, 0.05);
   --chart-grid: rgba(255, 255, 255, 0.1);
-  --chart-label: #ffffff;
+  --chart-label: var(--text-secondary);
   --chart-fill: #ffffff;
   --chart-fill-opacity: 0.15;
   --sidebar-bg: rgba(255, 255, 255, 0.08);
@@ -402,7 +402,7 @@ html.matrix {
   --glass-blur: blur(3px);
   --chart-bg: transparent;
   --chart-grid: rgba(0, 255, 65, 0.2);
-  --chart-label: #00ff41;
+  --chart-label: var(--text-secondary);
   --chart-fill: #00ff41;
   --chart-fill-opacity: 0.12;
   --sidebar-bg: #000000;
