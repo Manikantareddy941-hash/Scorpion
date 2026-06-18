@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-    Shield, Bug, AlertTriangle, CheckCircle, 
-    XCircle, Clock, BarChart3, LineChart as LineIcon,
+import {
+    Shield, Bug, AlertTriangle, CheckCircle,
+    XCircle, Clock, BarChart3,
     AlertCircle, Activity, Loader2, Cpu, Globe
 } from 'lucide-react';
-import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    LineChart, Line, AreaChart, Area
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -15,6 +14,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import SeverityBadge from '../components/SeverityBadge';
 import Input from '../components/Input';
 import Button from '../components/Button';
+import TrendChart from '../components/TrendChart';
 import { SkeletonCard } from '../components/Skeleton';
 
 interface DashboardData {
@@ -197,54 +197,8 @@ export default function SecurityDashboard() {
                         </div>
                     </div>
 
-                    {/* Threat Trend (Line Chart) */}
-                    <div className="premium-card p-10 flex flex-col h-[450px]">
-                        <div className="flex items-center gap-4 mb-8">
-                            <div className="w-10 h-10 bg-[var(--accent-secondary)]/10 rounded-xl flex items-center justify-center text-[var(--accent-secondary)]">
-                                <LineIcon size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('dashboard.threat_telemetry', '30-Day Threat Telemetry')}</h3>
-                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('dashboard.temporal_velocity', 'Temporal velocity of new vulnerability detections')}</p>
-                            </div>
-                        </div>
-                        <div className="flex-1 w-full mt-4 min-h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={300}>
-                                <AreaChart data={data?.trend || []} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontWeight: 900 }} 
-                                        tickFormatter={(val) => val.split('-').slice(1).join('/')}
-                                    />
-                                    <YAxis 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontWeight: 900 }} 
-                                    />
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px', fontSize: '10px', color: 'var(--text-primary)' }}
-                                    />
-                                    <Area 
-                                        type="monotone" 
-                                        dataKey="count" 
-                                        stroke="var(--accent-primary)" 
-                                        strokeWidth={3} 
-                                        fillOpacity={1} 
-                                        fill="url(#colorTrend)" 
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
+                    {/* CVE Trend Analysis (severity-broken-down area chart) */}
+                    <TrendChart />
 
                 </div>
 
