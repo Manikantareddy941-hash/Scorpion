@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-    Shield, Bug, AlertTriangle, CheckCircle, 
-    XCircle, Clock, BarChart3, LineChart as LineIcon,
+import {
+    Shield, Bug, AlertTriangle, CheckCircle,
+    XCircle, Clock, BarChart3,
     AlertCircle, Activity, Loader2, Cpu, Globe
 } from 'lucide-react';
-import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    LineChart, Line, AreaChart, Area
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import SeverityBadge from '../components/SeverityBadge';
+import Input from '../components/Input';
+import Button from '../components/Button';
+import TrendChart from '../components/TrendChart';
+import { SkeletonCard } from '../components/Skeleton';
 
 interface DashboardData {
     total: number;
@@ -58,13 +62,15 @@ export default function SecurityDashboard() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[var(--bg-primary)] p-8 flex flex-col items-center justify-center space-y-4">
-                <Shield className="w-12 h-12 text-[var(--accent-primary)] animate-pulse" />
-                <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 text-[var(--text-secondary)] animate-spin" />
-                    <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] animate-pulse mono">
-                        Synchronizing Neural Intelligence...
-                    </p>
+            <div className="min-h-screen bg-[var(--bg-primary)] p-8 text-[var(--text-primary)]">
+                <div className="max-w-7xl mx-auto space-y-12">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} className="h-32" />)}
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <SkeletonCard className="h-[450px]" />
+                        <SkeletonCard className="h-[450px]" />
+                    </div>
                 </div>
             </div>
         );
@@ -73,7 +79,7 @@ export default function SecurityDashboard() {
     if (error) {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] p-8">
-                <div className="max-w-4xl mx-auto p-6 bg-[var(--status-error)]/10 border border-[var(--status-error)]/30 rounded-2xl flex items-center gap-4">
+                <div className="max-w-4xl mx-auto p-6 bg-[var(--status-error)]/10 border border-[var(--status-error)]/30 rounded-lg flex items-center gap-4">
                     <XCircle className="text-[var(--status-error)] w-8 h-8" />
                     <div>
                         <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic">Intelligence Link Offline</h3>
@@ -191,54 +197,8 @@ export default function SecurityDashboard() {
                         </div>
                     </div>
 
-                    {/* Threat Trend (Line Chart) */}
-                    <div className="premium-card p-10 flex flex-col h-[450px]">
-                        <div className="flex items-center gap-4 mb-8">
-                            <div className="w-10 h-10 bg-[var(--accent-secondary)]/10 rounded-xl flex items-center justify-center text-[var(--accent-secondary)]">
-                                <LineIcon size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('dashboard.threat_telemetry', '30-Day Threat Telemetry')}</h3>
-                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">{t('dashboard.temporal_velocity', 'Temporal velocity of new vulnerability detections')}</p>
-                            </div>
-                        </div>
-                        <div className="flex-1 w-full mt-4 min-h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={300}>
-                                <AreaChart data={data?.trend || []} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
-                                            <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                                    <XAxis 
-                                        dataKey="date" 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontWeight: 900 }} 
-                                        tickFormatter={(val) => val.split('-').slice(1).join('/')}
-                                    />
-                                    <YAxis 
-                                        axisLine={false} 
-                                        tickLine={false} 
-                                        tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontWeight: 900 }} 
-                                    />
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px', fontSize: '10px', color: 'var(--text-primary)' }}
-                                    />
-                                    <Area 
-                                        type="monotone" 
-                                        dataKey="count" 
-                                        stroke="var(--accent-primary)" 
-                                        strokeWidth={3} 
-                                        fillOpacity={1} 
-                                        fill="url(#colorTrend)" 
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
+                    {/* CVE Trend Analysis (severity-broken-down area chart) */}
+                    <TrendChart />
 
                 </div>
 
@@ -251,7 +211,7 @@ export default function SecurityDashboard() {
                 {/* Additional Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <TypeDistribution types={data?.by_type || { secret: 0, dependency: 0, sast: 0, docker: 0 }} />
-                    <div className="premium-card p-8 md:col-span-2 flex items-center justify-between bg-gradient-to-r from-[var(--bg-card)] to-[var(--bg-primary)]">
+                    <div className="premium-card p-8 md:col-span-2 flex items-center justify-between">
                         <div className="flex items-center gap-6">
                             <div className="w-16 h-16 bg-[var(--status-success)]/10 rounded-2xl flex items-center justify-center text-[var(--status-success)]">
                                 <Activity size={32} />
@@ -286,8 +246,8 @@ function SeverityCard({ label, count, color, bgColor, icon }: { label: string, c
                     {icon}
                 </div>
                 <div>
-                    <p className={`text-[11px] font-bold uppercase tracking-widest mono ${color}`}>{label}</p>
-                    <p className="text-3xl font-bold text-[var(--text-primary)] tracking-tight mt-1 mono">{count}</p>
+                    <SeverityBadge severity={label} />
+                    <p className="text-3xl font-bold text-[var(--text-primary)] tracking-tight mt-2 mono">{count}</p>
                 </div>
                 <div className="w-full h-1 bg-[var(--border-subtle)] rounded-full overflow-hidden">
                     <div className={`h-full ${bgColor.replace('/10', '')} transition-all duration-1000`} style={{ width: `${count > 0 ? 100 : 0}%` }} />
@@ -364,7 +324,7 @@ function DockerScanSection() {
     };
 
     return (
-        <div className="premium-card p-10 bg-gradient-to-r from-[var(--bg-card)] to-[var(--bg-primary)]">
+        <div className="premium-card p-10">
             <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex items-center gap-6">
                     <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-500 shadow-xl shadow-cyan-500/10">
@@ -377,20 +337,16 @@ function DockerScanSection() {
                 </div>
 
                 <div className="flex-1 w-full max-w-xl flex gap-4">
-                    <input 
-                        type="text" 
+                    <Input
+                        type="text"
                         placeholder="e.g. nginx:latest, node:18-alpine"
                         value={imageName}
                         onChange={(e) => setImageName(e.target.value)}
-                        className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl px-6 py-4 text-xs font-black text-[var(--text-primary)] outline-none focus:border-cyan-500 transition-all"
+                        className="flex-1 font-black"
                     />
-                    <button 
-                        onClick={handleDockerScan}
-                        disabled={scanning || !imageName}
-                        className="btn-premium bg-cyan-600 shadow-cyan-500/20 px-8 py-4 disabled:opacity-50"
-                    >
+                    <Button size="lg" onClick={handleDockerScan} disabled={scanning || !imageName}>
                         {scanning ? <Loader2 className="animate-spin" /> : 'Execute Scan'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -501,7 +457,7 @@ function DastScanSection() {
     const filteredVulns = vulns.filter(v => filterSev === 'ALL' || v.severity === filterSev);
 
     return (
-        <div className="premium-card p-10 bg-gradient-to-r from-[var(--bg-card)] to-[var(--bg-primary)]">
+        <div className="premium-card p-10">
             <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex items-center gap-6">
                     <div className="w-16 h-16 bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-500 shadow-xl shadow-rose-500/10">
@@ -515,29 +471,25 @@ function DastScanSection() {
 
                 <div className="flex-1 w-full max-w-xl flex flex-col gap-4">
                     <div className="flex gap-4">
-                        <input 
-                            type="url" 
+                        <Input
+                            type="url"
                             placeholder="https://staging.example.com"
                             value={targetUrl}
                             onChange={(e) => setTargetUrl(e.target.value)}
-                            className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl px-6 py-4 text-xs font-black text-[var(--text-primary)] outline-none focus:border-rose-500 transition-all"
+                            className="flex-1 font-black"
                         />
-                        <select 
+                        <select
                             value={scanMode}
                             onChange={(e: any) => setScanMode(e.target.value)}
-                            className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl px-4 py-4 text-xs font-black text-[var(--text-primary)] outline-none focus:border-rose-500 transition-all"
+                            className="bg-neutral-900 border border-neutral-800 rounded-lg px-4 py-2.5 text-xs font-black text-[var(--text-primary)] outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
                         >
                             <option value="spider">Spider</option>
                             <option value="active">Active Scan</option>
                             <option value="passive">Passive Scan</option>
                         </select>
-                        <button 
-                            onClick={handleDastScan}
-                            disabled={scanning || !targetUrl}
-                            className="btn-premium bg-rose-600 shadow-rose-500/20 px-8 py-4 disabled:opacity-50 min-w-[160px]"
-                        >
+                        <Button size="lg" onClick={handleDastScan} disabled={scanning || !targetUrl} className="min-w-[160px]">
                             {scanning ? <Loader2 className="animate-spin mx-auto" /> : 'Launch Probe'}
-                        </button>
+                        </Button>
                     </div>
                     {scanning && (
                         <div className="w-full bg-[var(--bg-primary)] rounded-full h-1.5 overflow-hidden border border-[var(--border-subtle)]">
@@ -562,42 +514,34 @@ function DastScanSection() {
                         ))}
                     </div>
                     
-                    <div className="overflow-x-auto border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-primary)]">
+                    <div className="overflow-auto max-h-[70vh] border border-neutral-800 rounded-lg bg-neutral-900">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
-                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Severity</th>
-                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Alert Name</th>
-                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Location/URL</th>
-                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Confidence</th>
-                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest">Solution</th>
-                                    <th className="p-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest text-center">Action</th>
+                                <tr className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800">
+                                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Severity</th>
+                                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Alert Name</th>
+                                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Location/URL</th>
+                                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Confidence</th>
+                                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Solution</th>
+                                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[var(--border-subtle)]">
+                            <tbody className="divide-y divide-neutral-800/60">
                                 {filteredVulns.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="p-8 text-center text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">No vulnerabilities found for this filter.</td>
                                     </tr>
-                                ) : filteredVulns.map(v => {
-                                    const sevColors: Record<string, string> = {
-                                        'HIGH': 'text-red-500 bg-red-500/10 border-red-500/20',
-                                        'MEDIUM': 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20',
-                                        'LOW': 'text-green-500 bg-green-500/10 border-green-500/20',
-                                        'INFO': 'text-cyan-500 bg-cyan-500/10 border-cyan-500/20'
-                                    };
+                                ) : filteredVulns.map((v, i) => {
                                     return (
-                                        <tr key={v.$id} className="hover:bg-white/5 transition-colors">
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${sevColors[v.severity] || sevColors.INFO}`}>
-                                                    {v.severity}
-                                                </span>
+                                        <tr key={v.$id} className={`hover:bg-neutral-800/40 transition-colors ${i % 2 === 1 ? 'bg-white/[0.02]' : ''}`}>
+                                            <td className="px-4 py-2.5">
+                                                <SeverityBadge severity={v.severity} />
                                             </td>
-                                            <td className="p-4 text-[11px] font-bold text-[var(--text-primary)] max-w-[200px] truncate">{v.title}</td>
-                                            <td className="p-4 text-[10px] text-[var(--text-secondary)] font-mono max-w-[200px] truncate">{v.filePath}</td>
-                                            <td className="p-4 text-[10px] text-[var(--text-secondary)]">{v.confidence || 'Medium'}</td>
-                                            <td className="p-4 text-[10px] text-[var(--text-secondary)] max-w-[250px] truncate">{v.solution || 'N/A'}</td>
-                                            <td className="p-4 text-center">
+                                            <td className="px-4 py-2.5 text-[11px] font-bold text-[var(--text-primary)] max-w-[200px] truncate">{v.title}</td>
+                                            <td className="px-4 py-2.5 text-[10px] text-[var(--text-secondary)] font-mono max-w-[200px] truncate">{v.filePath}</td>
+                                            <td className="px-4 py-2.5 text-[10px] text-[var(--text-secondary)]">{v.confidence || 'Medium'}</td>
+                                            <td className="px-4 py-2.5 text-[10px] text-[var(--text-secondary)] max-w-[250px] truncate">{v.solution || 'N/A'}</td>
+                                            <td className="px-4 py-2.5 text-right">
                                                 <button className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded bg-teal-500/10 text-teal-500 border border-teal-500/20 hover:bg-teal-500 hover:text-white transition-all">
                                                     TONY AI
                                                 </button>
@@ -660,10 +604,10 @@ function StatusBar() {
     );
 }
 
-function SeverityPill({ label, count, color }: { label: string, count: number, color: string }) {
+function SeverityPill({ label, count }: { label: string, count: number, color?: string }) {
     return (
-        <div className="flex flex-col items-start">
-            <span className={`text-[8px] font-black uppercase italic ${color}`}>{label}</span>
+        <div className="flex flex-col items-start gap-1">
+            <SeverityBadge severity={label} />
             <span className="text-sm font-black text-[var(--text-primary)] italic">{count}</span>
         </div>
     );

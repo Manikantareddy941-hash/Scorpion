@@ -13,6 +13,7 @@ const client = new Client()
     .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 import FindingsTable from '../components/FindingsTable';
 import SBOMExportButton from '../components/SBOMExportButton';
+import SeverityBadge from '../components/SeverityBadge';
 import { useTranslation } from 'react-i18next';
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -260,8 +261,8 @@ export default function ScanResults() {
           {stats.map(({ label, value, color, icon: Icon }) => (
             <div key={label} className="premium-card p-5 text-center group" style={{ borderColor: `${color}33` }}>
               <Icon className="w-6 h-6 mx-auto mb-3 transition-transform group-hover:scale-110" style={{ color }} />
-              <div className="text-3xl font-black italic tracking-tighter mb-1" style={{ color }}>{value}</div>
-              <div className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">{t(`scan_results.severity.${label.toLowerCase()}`, label)}</div>
+              <div className="text-3xl font-black italic tracking-tighter mb-2" style={{ color }}>{value}</div>
+              <SeverityBadge severity={label} label={t(`scan_results.severity.${label.toLowerCase()}`, label)} />
             </div>
           ))}
         </div>

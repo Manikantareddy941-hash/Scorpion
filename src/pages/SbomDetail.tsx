@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Activity, Box, Download, Search, FileCode } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import toast from 'react-hot-toast';
+import Button from '../components/Button';
 
 export default function SbomDetail() {
   const { scanId } = useParams();
@@ -39,7 +40,7 @@ export default function SbomDetail() {
     <div className="flex-1 w-full max-w-7xl mx-auto p-6">
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 bg-[var(--bg-card)] rounded-lg border border-[var(--border-subtle)]"><ArrowLeft size={18} /></button>
+          <Button variant="ghost" iconOnly onClick={() => navigate(-1)}><ArrowLeft size={18} /></Button>
           <div>
             <h1 className="text-2xl font-black text-[var(--text-primary)] uppercase italic">Software Bill of Materials (SBOM)</h1>
             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1">Inventory for Scan {scanId}</p>
@@ -50,7 +51,7 @@ export default function SbomDetail() {
         </button>
       </div>
 
-      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
+      <div className="card bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[var(--bg-primary)] border-bottom border-[var(--border-subtle)]">
