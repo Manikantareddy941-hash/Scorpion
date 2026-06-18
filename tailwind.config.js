@@ -168,7 +168,27 @@ export default {
         md: '0 2px 6px -1px rgb(0 0 0 / 0.25), 0 1px 2px -1px rgb(0 0 0 / 0.15)',
         lg: '0 8px 24px -6px rgb(0 0 0 / 0.35)',
       },
+
+      // Type scale: display / h1-h4 / body / caption. Generates
+      // text-display, text-h1 … utilities; weight is paired in
+      // index.css @layer base for native heading tags and components.
+      fontSize: {
+        display: ['2.25rem', { lineHeight: '1.15', letterSpacing: '-0.02em', fontWeight: '700' }],
+        h1: ['1.875rem', { lineHeight: '1.2', letterSpacing: '-0.015em', fontWeight: '600' }],
+        h2: ['1.5rem', { lineHeight: '1.25', letterSpacing: '-0.01em', fontWeight: '600' }],
+        h3: ['1.25rem', { lineHeight: '1.3', letterSpacing: '-0.005em', fontWeight: '600' }],
+        h4: ['1.0625rem', { lineHeight: '1.35', letterSpacing: '0em', fontWeight: '600' }],
+        body: ['0.875rem', { lineHeight: '1.55', letterSpacing: '0em', fontWeight: '400' }],
+        caption: ['0.75rem', { lineHeight: '1.4', letterSpacing: '0.01em', fontWeight: '500' }],
+      },
     },
+
+    // Default border color when a `border` utility is used without an
+    // explicit color (Tailwind's preflight otherwise falls back to gray-200).
+    borderColor: ({ theme }) => ({
+      ...theme('colors'),
+      DEFAULT: neutral[800],
+    }),
   },
   plugins: [],
 };

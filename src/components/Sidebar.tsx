@@ -131,12 +131,15 @@ export default function Sidebar({
           sectionLabel: 'rgba(100,200,255,0.6)',
           navText: 'rgba(180,230,255,0.85)',
           activeBg: '#00c8ff',
+          activeSurfaceBg: 'rgba(0,200,255,0.12)',
           activeText: '#ffffff',
           hoverBg: 'rgba(0,200,255,0.15)',
           newScanBg: 'linear-gradient(135deg, #00a8cc, #0077aa)',
           logoRing: '#00c8ff',
           logoText: '#ffffff',
           logoSubtext: '#00c8ff',
+          accentBar: '#00c8ff',
+          sectionDivider: 'rgba(0,200,255,0.15)',
           collapseBtnBg: 'rgba(0,40,80,0.8)',
           collapseBtnText: '#00c8ff',
           collapseBtnHover: '#00c8ff'
@@ -148,6 +151,7 @@ export default function Sidebar({
           sectionLabel: 'rgba(255, 255, 255, 0.5)',
           navText: 'rgba(255, 255, 255, 0.9)',
           activeBg: 'rgba(255, 255, 255, 0.25)',
+          activeSurfaceBg: 'rgba(255, 255, 255, 0.18)',
           activeBorder: '1px solid rgba(255, 255, 255, 0.5)',
           activeText: '#ffffff',
           hoverBg: 'rgba(255, 255, 255, 0.15)',
@@ -156,6 +160,7 @@ export default function Sidebar({
           logoText: '#ffffff',
           logoSubtext: 'rgba(255, 255, 255, 0.7)',
           accentBar: 'rgba(255, 255, 255, 0.8)',
+          sectionDivider: 'rgba(255, 255, 255, 0.12)',
           collapseBtnBg: 'rgba(255, 255, 255, 0.1)',
           collapseBtnText: 'rgba(255, 255, 255, 0.8)',
           collapseBtnHover: 'rgba(255, 255, 255, 0.3)'
@@ -167,6 +172,7 @@ export default function Sidebar({
           sectionLabel: '#003b00',
           navText: '#008f11',
           activeBg: 'rgba(0, 59, 0, 0.5)',
+          activeSurfaceBg: 'rgba(0, 255, 65, 0.10)',
           activeBorder: '1px solid #00ff41',
           activeText: '#00ff41',
           hoverBg: 'rgba(0, 59, 0, 0.3)',
@@ -174,26 +180,31 @@ export default function Sidebar({
           logoRing: '#00ff41',
           logoText: '#00ff41',
           logoSubtext: '#008f11',
+          accentBar: '#00ff41',
+          sectionDivider: '#003b00',
           collapseBtnBg: '#001100',
           collapseBtnText: '#008f11',
           collapseBtnHover: '#00ff41'
         };
       case 'dark':
         return {
-          sidebarBg: '#141414',
-          sidebarBorder: '1px solid #222222',
-          sectionLabel: '#555555',
-          navText: '#a0a0a0',
+          sidebarBg: '#18181b', // neutral-900
+          sidebarBorder: '1px solid #27272a', // neutral-800
+          sectionLabel: '#71717a', // neutral-500
+          navText: '#a1a1aa', // neutral-400
           activeBg: '#6db87a',
+          activeSurfaceBg: 'rgba(109,184,122,0.12)',
           activeText: '#ffffff',
-          hoverBg: '#1e1e1e',
+          hoverBg: '#27272a', // neutral-800
           newScanBg: '#6db87a',
           logoRing: '#eef8ef',
           logoIcon: '#6db87a',
-          logoText: '#ffffff',
+          logoText: '#f4f4f5', // neutral-100
           logoSubtext: '#6db87a',
-          collapseBtnBg: '#1e1e1e',
-          collapseBtnText: '#888888',
+          accentBar: '#6db87a',
+          sectionDivider: '#27272a', // neutral-800
+          collapseBtnBg: '#27272a', // neutral-800
+          collapseBtnText: '#a1a1aa', // neutral-400
           collapseBtnHover: '#6db87a'
         };
       case 'eye-protection':
@@ -203,6 +214,7 @@ export default function Sidebar({
           sectionLabel: '#8aaa78',
           navText: '#5a7a4a',
           activeBg: '#6db87a',
+          activeSurfaceBg: 'rgba(109,184,122,0.12)',
           activeText: '#ffffff',
           hoverBg: '#f8faf5',
           newScanBg: '#6db87a',
@@ -210,6 +222,8 @@ export default function Sidebar({
           logoIcon: '#6db87a',
           logoText: '#2d4a1e',
           logoSubtext: '#6db87a',
+          accentBar: '#6db87a',
+          sectionDivider: '#d4e6c3',
           collapseBtnBg: '#f8faf5',
           collapseBtnText: '#5a7a4a',
           collapseBtnHover: '#6db87a'
@@ -221,6 +235,7 @@ export default function Sidebar({
           sectionLabel: '#9ca3af',
           navText: '#6b7280',
           activeBg: '#6db87a',
+          activeSurfaceBg: 'rgba(109,184,122,0.10)',
           activeText: '#ffffff',
           hoverBg: 'rgba(240, 253, 244, 1)',
           newScanBg: '#6db87a',
@@ -228,6 +243,8 @@ export default function Sidebar({
           logoIcon: '#6db87a',
           logoText: '#111111',
           logoSubtext: '#6db87a',
+          accentBar: '#6db87a',
+          sectionDivider: '#e5e7eb',
           collapseBtnBg: '#f0fdf4',
           collapseBtnText: '#16a34a',
           collapseBtnHover: '#6db87a'
@@ -257,24 +274,25 @@ export default function Sidebar({
       }}>
 
         {/* Header / Logo Area */}
-        <div className={`flex ${isCollapsed ? 'flex-col items-center gap-4 px-0 pb-4 pt-6' : 'p-4 items-center justify-between'} shrink-0 relative`}>
+        <div className={`flex ${isCollapsed ? 'flex-col items-center gap-3 px-0 pb-3 pt-5' : 'px-3 py-3 items-center justify-between'} shrink-0 relative border-b`}
+          style={{ borderColor: s.sidebarBorder !== 'none' ? 'rgba(255,255,255,0.06)' : 'transparent' }}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center w-full' : 'gap-2'}`}>
-            <div className={`flex items-center justify-center rounded-lg transition-all ${isCollapsed ? 'w-10 h-10' : 'w-7 h-7'}`}
+            <div className={`flex items-center justify-center rounded-lg transition-all ${isCollapsed ? 'w-9 h-9' : 'w-6 h-6'}`}
                style={{ background: s.newScanBg, color: 'white' }}>
-              <Shield size={isCollapsed ? 20 : 14} strokeWidth={3} />
+              <Shield size={isCollapsed ? 18 : 13} strokeWidth={3} />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
-                <h1 className="text-[12px] font-black tracking-tighter leading-none italic" style={{ color: s.logoText || s.navText }}>SCORPION</h1>
+                <h1 className="text-[11px] font-black tracking-tighter leading-none italic" style={{ color: s.logoText || s.navText }}>SCORPION</h1>
                 <span className="text-[7px] font-bold tracking-[0.2em] uppercase opacity-60" style={{ color: s.logoSubtext || s.navText }}>SECops Platform</span>
               </div>
             )}
           </div>
-          
-          <button 
+
+          <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center transition-all z-10 border ${isCollapsed ? 'mx-auto' : ''}`}
-            style={{ 
+            className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center transition-all z-10 border ${isCollapsed ? 'mx-auto' : ''}`}
+            style={{
               background: s.collapseBtnBg,
               borderColor: 'rgba(255,255,255,0.1)',
               color: s.collapseBtnText,
@@ -282,30 +300,34 @@ export default function Sidebar({
             onMouseOver={(e) => { e.currentTarget.style.backgroundColor = s.collapseBtnHover; e.currentTarget.style.color = '#ffffff'; }}
             onMouseOut={(e) => { e.currentTarget.style.backgroundColor = s.collapseBtnBg; e.currentTarget.style.color = s.collapseBtnText; }}
           >
-            {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+            {isCollapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
           </button>
         </div>
 
 
         {/* Nav Sections */}
-        <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isCollapsed ? 'px-0' : 'px-3'} flex flex-col pb-6 mt-2`}>
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isCollapsed ? 'px-0' : 'px-2.5'} flex flex-col pb-5 mt-1`}>
           {navSections.map((section, idx) => (
-            <div key={idx} className="flex flex-col mb-4">
+            <div
+              key={idx}
+              className={`flex flex-col mb-1 ${idx > 0 ? (isCollapsed ? 'pt-2 mt-1' : 'pt-3 mt-2') : ''}`}
+              style={idx > 0 ? { borderTop: `1px solid ${s.sectionDivider || s.sidebarBorder}` } : undefined}
+            >
               {/* Section Header */}
               {!isCollapsed && (
-                <div className="px-2" style={{ margin: '2px 0 2px 0' }}>
-                  <p className="text-[7px] font-bold uppercase tracking-widest text-center md:text-left transition-all mono" style={{ color: s.sectionLabel }}>
+                <div className="px-2 mb-0.5">
+                  <p className="text-[7px] font-bold uppercase tracking-widest text-left transition-all mono" style={{ color: s.sectionLabel }}>
                     {section.title}
                   </p>
                 </div>
               )}
-              
+
               {/* Items */}
-              <div className={`flex flex-col ${isCollapsed ? 'gap-0' : 'gap-[2px]'}`}>
+              <div className={`flex flex-col ${isCollapsed ? 'gap-0' : 'gap-[1px]'}`}>
                 {section.items.map((item) => {
                   const { icon: Icon, label, path } = item as any;
                   const active = path === '/plan' ? location.pathname.startsWith('/plan') : (path === '/tickets' ? (location.pathname.startsWith('/tickets') || location.pathname === '/jira-settings') : location.pathname === path);
-                  const tourId = 
+                  const tourId =
                     path === '/' ? 'tour-dashboard' :
                     path === '/repos' ? 'tour-repos' :
                     path === '/tasks' ? 'tour-tasks' :
@@ -318,41 +340,41 @@ export default function Sidebar({
                       <Link
                         to={path}
                         id={tourId}
-                        className={isCollapsed 
-                          ? `flex items-center justify-center transition-all relative w-full h-[44px] ${active ? 'opacity-100 bg-[#6db87a]/10 border-l-[3px] border-l-[#6db87a]' : 'opacity-70 hover:opacity-100 hover:bg-[#6db87a]/5 border-l-[3px] border-l-transparent'}`
-                          : `flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100 hover:bg-[rgba(109,184,122,0.1)]'}`
+                        className={isCollapsed
+                          ? `flex items-center justify-center transition-colors relative w-full h-[38px] border-l-[3px] ${active ? 'border-l-[var(--sidebar-accent)]' : 'border-l-transparent'}`
+                          : `flex items-center gap-2 px-2.5 py-1.5 rounded-lg border-l-[3px] transition-colors relative group/item ${active ? 'border-l-[var(--sidebar-accent)]' : 'border-l-transparent'}`
                         }
-                        style={{ 
-                          transition: 'all 0.2s ease',
-                          margin: isCollapsed ? '0' : '0 4px',
+                        style={{
+                          margin: isCollapsed ? '0' : '0 2px',
                           position: 'relative',
                           overflow: 'hidden',
-                          boxShadow: !isCollapsed && active && theme !== 'liquid-glass' && theme !== 'underwater' ? '0 4px 12px rgba(109,184,122,0.3)' : 'none',
+                          background: active ? s.activeSurfaceBg : 'transparent',
+                          ['--sidebar-accent' as any]: s.accentBar || s.activeBg,
                         }}
-                        onMouseOver={(e) => { 
+                        onMouseOver={(e) => {
                           if (!active) {
-                            e.currentTarget.style.background = isCollapsed ? 'rgba(109,184,122,0.05)' : s.hoverBg; 
-                          } 
+                            e.currentTarget.style.background = s.hoverBg;
+                          }
                         }}
-                        onMouseOut={(e) => { 
+                        onMouseOut={(e) => {
                           if (!active) {
-                            e.currentTarget.style.background = 'transparent'; 
-                          } 
+                            e.currentTarget.style.background = 'transparent';
+                          }
                         }}
                       >
-                        {active && !isCollapsed && theme === 'liquid-glass' && (
-                          <div style={{ position: 'absolute', left: 0, top: '20%', bottom: '20%', width: '3px', background: s.accentBar, borderRadius: '0 4px 4px 0' }} />
-                        )}
-                        <Icon 
-                          size={isCollapsed ? 20 : 16} 
-                          style={{ 
-                            color: active ? (isCollapsed ? '#6db87a' : s.activeText) : 'inherit',
+                        <Icon
+                          size={isCollapsed ? 18 : 14}
+                          style={{
+                            color: active ? (s.accentBar || s.activeBg) : s.navText,
                             margin: isCollapsed ? '0 auto' : '0'
-                          }} 
-                          className="transition-colors" 
+                          }}
+                          className="transition-colors shrink-0"
                         />
                         {!isCollapsed && (
-                          <span className={`truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
+                          <span
+                            className={`truncate text-[10px] tracking-wide uppercase ${active ? 'font-bold' : 'font-medium'}`}
+                            style={{ color: active ? (s.logoText || s.navText) : s.navText }}
+                          >
                             {label}
                           </span>
                         )}

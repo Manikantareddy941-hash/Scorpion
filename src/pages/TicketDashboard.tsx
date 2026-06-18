@@ -5,6 +5,9 @@ import { useTickets, useStats, updateTicket, bulkSyncToJira } from '../hooks/use
 import { Ticket, TicketFilters } from '../../shared/types';
 import TicketForm from '../components/TicketForm';
 import IssueDetailModal from '../components/IssueDetailModal';
+import SeverityBadge from '../components/SeverityBadge';
+import { SkeletonTableRows, SkeletonCard } from '../components/Skeleton';
+import EmptyState from '../components/EmptyState';
 import {
   LayoutGrid, List, Search, Filter, Plus, Bug, ShieldAlert,
   Clock, Sparkles, AlertOctagon, Link2, ExternalLink,
@@ -142,19 +145,9 @@ export default function TicketDashboard() {
     }
   };
 
-  const PriorityBadge = ({ priority }: { priority: Ticket['priority'] }) => {
-    const styles = {
-      critical: 'bg-red-500/10 text-red-500 border-red-500/20',
-      high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-      medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-      low: 'bg-green-500/10 text-green-500 border-green-500/20'
-    };
-    return (
-      <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase italic border ${styles[priority]}`}>
-        {priority}
-      </span>
-    );
-  };
+  const PriorityBadge = ({ priority }: { priority: Ticket['priority'] }) => (
+    <SeverityBadge severity={priority} />
+  );
 
   // Columns for board view
   const COLUMNS: { id: Ticket['status']; label: string; bg: string }[] = [
@@ -341,21 +334,29 @@ export default function TicketDashboard() {
               Retry Connection
             </button>
           </div>
+        ) : loading && viewMode === 'list' ? (
+          <div className="premium-card overflow-hidden bg-neutral-900">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-neutral-900 border-b border-neutral-800">
+                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">ID</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Title</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Type</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Priority</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800/60">
+                <SkeletonTableRows rows={6} cols={5} />
+              </tbody>
+            </table>
+          </div>
         ) : loading ? (
-          <div className="flex flex-col items-center justify-center py-32">
-            <RefreshCw className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
-            <p className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)] italic">
-              Synchronizing task dashboard...
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} className="h-[420px]" />)}
           </div>
         ) : tickets.length === 0 ? (
-          <div className="premium-card p-24 text-center bg-[var(--bg-card)]">
-            <CheckCircle2 className="w-16 h-16 text-[var(--status-success)] mx-auto mb-6 opacity-20" />
-            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Tickets Found</h3>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">
-              Your security perimeter is completely synchronized
-            </p>
-          </div>
+          <EmptyState icon={CheckCircle2} message="No tickets found — your security perimeter is fully synchronized" />
         ) : viewMode === 'board' ? (
           /* Kanban Board View */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
@@ -487,49 +488,49 @@ export default function TicketDashboard() {
           </div>
         ) : (
           /* List Table View */
-          <div className="premium-card overflow-hidden bg-[var(--bg-card)]">
-            <div className="overflow-x-auto">
+          <div className="premium-card overflow-hidden bg-neutral-900">
+            <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border-subtle)]">
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">ID</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Title</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Type</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Status</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Priority</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Assignee</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Jira Connection</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Severity</th>
-                    <th className="p-4 text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)] text-right">Actions</th>
+                  <tr className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800">
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">ID</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Title</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Type</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Status</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Priority</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Assignee</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Jira Connection</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide text-right">Severity</th>
+                    <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {tickets.map(ticket => (
+                <tbody className="divide-y divide-neutral-800/60">
+                  {tickets.map((ticket, i) => (
                     <tr
                       key={ticket.id}
                       onClick={() => setSelectedTicketId(ticket.id)}
-                      className="hover:bg-[var(--bg-secondary)]/30 transition-colors cursor-pointer group font-semibold text-xs"
+                      className={`hover:bg-neutral-800/40 transition-colors cursor-pointer group font-semibold text-xs ${i % 2 === 1 ? 'bg-white/[0.02]' : ''}`}
                     >
-                      <td className="p-4 font-mono font-bold text-[10px] text-[var(--text-secondary)]">{ticket.id}</td>
-                      <td className="p-4 font-black uppercase italic text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                      <td className="px-4 py-3 font-mono font-bold text-[10px] text-[var(--text-secondary)]">{ticket.id}</td>
+                      <td className="px-4 py-3 font-black uppercase italic text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
                         {ticket.title}
                       </td>
-                      <td className="p-4">
+                      <td className="px-4 py-3">
                         <span className="flex items-center gap-1.5 uppercase italic text-[9px]">
                           <TypeIcon type={ticket.type} />
                           {ticket.type}
                         </span>
                       </td>
-                      <td className="p-4">
+                      <td className="px-4 py-3">
                         <span className="text-[10px] font-black uppercase italic tracking-wider text-[var(--text-primary)]">
                           {ticket.status.replace('_', ' ')}
                         </span>
                       </td>
-                      <td className="p-4">
+                      <td className="px-4 py-3">
                         <PriorityBadge priority={ticket.priority} />
                       </td>
-                      <td className="p-4 text-[var(--text-secondary)]">{ticket.assignee || 'Unassigned'}</td>
-                      <td className="p-4">
+                      <td className="px-4 py-3 text-[var(--text-secondary)]">{ticket.assignee || 'Unassigned'}</td>
+                      <td className="px-4 py-3">
                         {ticket.jiraKey ? (
                           <span className="text-[9px] font-mono font-bold text-cyan-400 flex items-center gap-1">
                             <Link2 size={10} />
@@ -539,8 +540,8 @@ export default function TicketDashboard() {
                           <span className="text-[9px] font-bold text-[var(--text-secondary)] opacity-40 uppercase">Local Only</span>
                         )}
                       </td>
-                      <td className="p-4 font-mono font-bold text-orange-400">{ticket.severity.toFixed(1)}</td>
-                      <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
+                      <td className="px-4 py-3 font-mono font-bold text-orange-400 text-right">{ticket.severity.toFixed(1)}</td>
+                      <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => navigate(`/tickets/${ticket.id}`)}
                           className="p-1.5 hover:bg-[var(--bg-primary)] border border-transparent hover:border-[var(--border-subtle)] rounded-lg text-[var(--text-secondary)] hover:text-white transition-all"

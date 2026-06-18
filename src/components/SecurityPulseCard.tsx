@@ -24,7 +24,7 @@ export default function SecurityPulseCard({
     const offset = circumference - (healthScore / 100) * circumference;
 
     return (
-        <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-sm border border-[var(--border-subtle)] relative overflow-hidden group">
+        <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-5 shadow-sm relative overflow-hidden group">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -81,30 +81,30 @@ export default function SecurityPulseCard({
 
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-[var(--bg-primary)] p-4 rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--status-error)]/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-neutral-800 hover:border-[var(--status-error)]/30 transition-colors">
                         <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-2 italic">Critical Risks</p>
-                        <p className="text-2xl font-black text-[var(--status-error)] tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
+                        <p className="text-2xl font-black text-[var(--status-error)] tracking-tighter italic leading-none">
                             {criticalRisks.toString().padStart(2, '0')}
                         </p>
                     </div>
 
-                    <div className="bg-[var(--bg-primary)] p-4 rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--status-success)]/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-neutral-800 hover:border-[var(--status-success)]/30 transition-colors">
                         <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-2 italic">Patch Rate</p>
-                        <p className="text-2xl font-black text-[var(--status-success)] tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
+                        <p className="text-2xl font-black text-[var(--status-success)] tracking-tighter italic leading-none">
                             {patchRate}%
                         </p>
                     </div>
 
-                    <div className="bg-[var(--bg-primary)] p-4 rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--status-warning)]/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-neutral-800 hover:border-[var(--status-warning)]/30 transition-colors">
                         <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-2 italic">Avg Fix Time</p>
-                        <p className="text-2xl font-black text-[var(--status-warning)] tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
+                        <p className="text-2xl font-black text-[var(--status-warning)] tracking-tighter italic leading-none">
                             {avgFixTime}h
                         </p>
                     </div>
 
-                    <div className="bg-[var(--bg-primary)] p-4 rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 transition-all group/card">
+                    <div className="bg-[var(--bg-primary)] p-4 rounded-lg border border-neutral-800 hover:border-[var(--accent-primary)]/30 transition-colors">
                         <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-2 italic">Managed Repos</p>
-                        <p className="text-2xl font-black text-[var(--text-primary)] tracking-tighter italic leading-none group-hover/card:scale-110 transition-transform origin-left">
+                        <p className="text-2xl font-black text-[var(--text-primary)] tracking-tighter italic leading-none">
                             {managedRepos}
                         </p>
                     </div>

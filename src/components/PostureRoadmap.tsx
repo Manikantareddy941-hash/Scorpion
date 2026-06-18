@@ -52,7 +52,7 @@ export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = fal
     }
   };
 
-  if (loading) return <div className="h-64 bg-[var(--bg-card)] animate-pulse rounded-[16px]"></div>;
+  if (loading) return <div className="h-64 bg-neutral-900 animate-pulse rounded-lg"></div>;
 
 // Fallback data when API fails
 const displayData: PostureData = data ?? {
@@ -67,7 +67,7 @@ const displayData: PostureData = data ?? {
 };
 
   return (
-    <div className={`bg-[var(--bg-card)] rounded-[16px] ${compact ? 'p-4' : 'p-6'} shadow-[0_4px_16px_rgba(0,0,0,0.04)] h-full flex flex-col border border-[var(--border-subtle)]`}>
+    <div className={`card bg-neutral-900 border border-neutral-800 rounded-lg ${compact ? 'p-5' : 'p-6'} shadow-md h-full flex flex-col`}>
       <div className="flex justify-between items-start mb-6">
         <div>
           <h3 className="text-xs font-bold tracking-wider text-[#2d3728] uppercase">
@@ -108,9 +108,9 @@ const displayData: PostureData = data ?? {
         <TopVulnerabilities />
 
         {/* Footer Banner */}
-        <div className="mt-6 p-3 bg-[#fdfbf7] border border-[#e6e2da] rounded-lg flex items-center gap-2">
+        <div className="mt-6 p-3 bg-neutral-800 border border-neutral-800 rounded-lg flex items-center gap-2">
           <span className="text-emerald-600 text-xs font-mono">→</span>
-          <p className="text-[11px] text-[#2d3728] font-mono leading-none">
+          <p className="text-[11px] text-[var(--text-primary)] font-mono leading-none">
             CI gate is passing at {ciGateRate}%. Keep maintaining policy compliance.
           </p>
         </div>

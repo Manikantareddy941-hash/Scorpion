@@ -147,8 +147,8 @@ function App() {
           {/* Navbar sticky */}
           {user && !isAuthPage && (
             <div className="sticky top-0 z-40 p-3 pb-0 bg-transparent">
-              <Navbar 
-                className="rounded-2xl shrink-0" 
+              <Navbar
+                className="rounded-lg shrink-0"
               />
             </div>
           )}
