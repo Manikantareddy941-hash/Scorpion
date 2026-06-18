@@ -3,15 +3,6 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2, Activity } from 'lucide-react';
 
-// Fixed semantic severity colors — match tailwind.config.js `severity` tokens.
-// These stay constant across themes so severity meaning never shifts with cosmetics.
-const SEVERITY_COLORS = {
-    Critical: '#ef4444',
-    High: '#f97316',
-    Medium: '#f59e0b',
-    Low: '#3b82f6',
-} as const;
-
 export default function TrendChart() {
     const { getJWT } = useAuth();
     const [data, setData] = useState<any[]>([]);
@@ -91,23 +82,24 @@ export default function TrendChart() {
 
                 {/* Filters */}
                 <div className="flex flex-wrap gap-3 mb-6">
-                    {(Object.keys(SEVERITY_COLORS) as Array<keyof typeof SEVERITY_COLORS>).map(key => {
-                        const color = SEVERITY_COLORS[key];
-                        const active = filters[key];
-                        return (
-                            <button
-                                key={key}
-                                onClick={() => toggleFilter(key)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${active ? 'bg-[var(--bg-primary)]' : 'opacity-40'}`}
-                                style={{ borderColor: active ? `${color}40` : 'var(--border-subtle)' }}
-                            >
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: active ? color : 'var(--text-secondary)' }}>
-                                    {key}
-                                </span>
-                            </button>
-                        );
-                    })}
+                    {[
+                        { key: 'Critical', color: '#ff5252' },
+                        { key: 'High', color: '#ff8a80' },
+                        { key: 'Medium', color: '#ffd740' },
+                        { key: 'Low', color: '#00ffcc' }
+                    ].map(sev => (
+                        <button
+                            key={sev.key}
+                            onClick={() => toggleFilter(sev.key as any)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${filters[sev.key as keyof typeof filters] ? 'bg-[var(--bg-primary)]' : 'opacity-40 grayscale'}`}
+                            style={{ borderColor: filters[sev.key as keyof typeof filters] ? sev.color + '40' : 'var(--border-subtle)' }}
+                        >
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: sev.color }} />
+                            <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: filters[sev.key as keyof typeof filters] ? sev.color : 'var(--text-secondary)' }}>
+                                {sev.key}
+                            </span>
+                        </button>
+                    ))}
                 </div>
 
                 <div className="flex-1 w-full min-h-[300px]">
@@ -118,16 +110,27 @@ export default function TrendChart() {
                     ) : (
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
-                                <XAxis
-                                    dataKey="displayDate"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: 'var(--chart-label)', fontSize: 10 }}
-                                    tickMargin={10}
-                                    minTickGap={20}
-                                />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--chart-label)', fontSize: 10 }} allowDecimals={false} />
+                                <defs>
+                                    <linearGradient id="colorCritical" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ff5252" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#ff5252" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorHigh" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ff8a80" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#ff8a80" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorMedium" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ffd740" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#ffd740" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorLow" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#00ffcc" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#00ffcc" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="displayDate" stroke="var(--border-subtle)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} tickMargin={10} minTickGap={20} />
+                                <YAxis stroke="var(--border-subtle)" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                                 <Tooltip
                                     contentStyle={{
                                         background: 'var(--bg-card)',
@@ -138,10 +141,10 @@ export default function TrendChart() {
                                         textTransform: 'uppercase'
                                     }}
                                 />
-                                {filters.Low && <Area type="monotone" dataKey="Low" stackId="1" stroke={SEVERITY_COLORS.Low} fill={SEVERITY_COLORS.Low} fillOpacity={0.18} strokeWidth={1.5} />}
-                                {filters.Medium && <Area type="monotone" dataKey="Medium" stackId="1" stroke={SEVERITY_COLORS.Medium} fill={SEVERITY_COLORS.Medium} fillOpacity={0.18} strokeWidth={1.5} />}
-                                {filters.High && <Area type="monotone" dataKey="High" stackId="1" stroke={SEVERITY_COLORS.High} fill={SEVERITY_COLORS.High} fillOpacity={0.18} strokeWidth={1.5} />}
-                                {filters.Critical && <Area type="monotone" dataKey="Critical" stackId="1" stroke={SEVERITY_COLORS.Critical} fill={SEVERITY_COLORS.Critical} fillOpacity={0.18} strokeWidth={1.5} />}
+                                {filters.Low && <Area type="monotone" dataKey="Low" stackId="1" stroke="#00ffcc" fill="url(#colorLow)" /> }
+                                {filters.Medium && <Area type="monotone" dataKey="Medium" stackId="1" stroke="#ffd740" fill="url(#colorMedium)" /> }
+                                {filters.High && <Area type="monotone" dataKey="High" stackId="1" stroke="#ff8a80" fill="url(#colorHigh)" /> }
+                                {filters.Critical && <Area type="monotone" dataKey="Critical" stackId="1" stroke="#ff5252" fill="url(#colorCritical)" /> }
                             </AreaChart>
                         </ResponsiveContainer>
                     )}

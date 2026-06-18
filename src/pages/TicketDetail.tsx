@@ -402,7 +402,7 @@ export default function TicketDetail() {
                   </p>
                 ) : (
                   comments.map(c => (
-                    <div key={c.id} className="p-4 bg-[var(--bg-primary)]/40 border border-neutral-800 rounded-lg flex gap-3.5 items-start">
+                    <div key={c.id} className="p-4 bg-[var(--bg-primary)]/40 border border-[var(--border-subtle)]/75 rounded-2xl flex gap-3.5 items-start">
                       <div className="w-8 h-8 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex items-center justify-center font-bold text-xs text-[var(--accent-primary)] shrink-0">
                         {getInitials(c.author)}
                       </div>

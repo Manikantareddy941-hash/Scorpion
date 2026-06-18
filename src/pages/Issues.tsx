@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { createTicket, findTicketByFinding, useTickets, createTicketFromFinding } from '../hooks/useTickets';
 import toast from 'react-hot-toast';
-import SeverityBadge from '../components/SeverityBadge';
 
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -342,7 +341,10 @@ export default function Issues() {
                         const count = fileIssues.filter((i: any) => i.severity === s).length;
                         if (!count) return null;
                         return (
-                          <SeverityBadge key={s} severity={s} label={`${count} ${s}`} />
+                          <span key={s} className="text-[9px] font-black px-2 py-0.5 rounded"
+                            style={{ background: `${SEVERITY_COLOR[s]}15`, color: SEVERITY_COLOR[s] }}>
+                            {count} {s}
+                          </span>
                         );
                       })}
                     </div>
@@ -407,7 +409,10 @@ function IssueRow({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <span className="text-[11px] font-black text-[var(--text-primary)] truncate">{issue.title}</span>
-              <SeverityBadge severity={issue.severity} className="flex-shrink-0" />
+              <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase flex-shrink-0"
+                style={{ background: `${SEVERITY_COLOR[issue.severity]}15`, color: SEVERITY_COLOR[issue.severity] }}>
+                {issue.severity}
+              </span>
             </div>
             <p className="text-[10px] text-[var(--text-secondary)] truncate">{issue.message}</p>
           </div>

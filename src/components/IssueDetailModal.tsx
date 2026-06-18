@@ -89,7 +89,7 @@ export default function IssueDetailModal({ ticketId, onClose, onSave }: Props) {
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-        <div className="card bg-neutral-900 border border-neutral-800 rounded-lg shadow-lg p-8 flex flex-col items-center justify-center min-w-[300px]">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl p-8 flex flex-col items-center justify-center min-w-[300px]">
           <Loader2 className="w-10 h-10 text-[var(--accent-primary)] animate-spin mb-4" />
           <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">
             Loading ticket payload...
@@ -102,7 +102,7 @@ export default function IssueDetailModal({ ticketId, onClose, onSave }: Props) {
   if (error || !ticket) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-        <div className="card bg-neutral-900 border border-red-500/20 rounded-lg shadow-lg p-8 max-w-md text-center">
+        <div className="bg-[var(--bg-card)] border border-red-500/20 rounded-2xl shadow-2xl p-8 max-w-md text-center">
           <AlertOctagon className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-sm font-black text-red-500 uppercase italic">Ticket Offline</h3>
           <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-2">
@@ -121,7 +121,7 @@ export default function IssueDetailModal({ ticketId, onClose, onSave }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-      <div className="card bg-neutral-900 border border-neutral-800 rounded-lg shadow-lg w-full max-w-4xl flex flex-col relative overflow-hidden max-h-[90vh]">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col relative overflow-hidden max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50">
           <div className="flex items-center gap-3">
@@ -227,7 +227,7 @@ export default function IssueDetailModal({ ticketId, onClose, onSave }: Props) {
                   </p>
                 ) : (
                   comments.map(c => (
-                    <div key={c.id} className="p-3 bg-[var(--bg-primary)]/40 border border-neutral-800 rounded-lg flex gap-3 items-start">
+                    <div key={c.id} className="p-3 bg-[var(--bg-primary)]/40 border border-[var(--border-subtle)]/75 rounded-2xl flex gap-3 items-start">
                       <div className="w-7 h-7 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex items-center justify-center font-bold text-[10px] text-[var(--accent-primary)] shrink-0">
                         {getInitials(c.author)}
                       </div>

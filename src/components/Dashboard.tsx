@@ -14,10 +14,6 @@ import {
 import toast from 'react-hot-toast';
 import PostureRoadmap from './PostureRoadmap';
 import RuntimeThreatStream from './RuntimeThreatStream';
-import SeverityBadge from './SeverityBadge';
-import StatusBadge from './StatusBadge';
-import Button from './Button';
-import { SkeletonCard } from './Skeleton';
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: '#ff5252', HIGH: '#ff8a00',
@@ -458,20 +454,27 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
           <XCircle size={48} className="mx-auto text-[var(--status-error)] mb-4" />
           <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">Failed to load dashboard data</h2>
           <p className="text-sm text-[var(--text-secondary)] mb-4">{error}</p>
-          <Button onClick={handleRefresh}>
+          <button onClick={handleRefresh} className="px-4 py-2 bg-[var(--accent-primary)] text-white rounded-lg text-sm font-bold shadow-sm hover:brightness-110">
             Retry
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
+
+  const SkeletonCard = ({ h }: { h: string }) => (
+    <div className={`bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] animate-pulse ${h}`}>
+      <div className="w-1/2 h-4 bg-gray-200 rounded mb-4"></div>
+      <div className="w-1/3 h-8 bg-gray-200 rounded"></div>
+    </div>
+  );
 
   return (
     <div className="w-full min-h-screen px-4 md:px-8 lg:px-10 transition-colors duration-300" style={{ backgroundColor: theme === 'dark' ? '#0a0a0a' : 'var(--bg-primary)', padding: '12px 0' }}>
       <div className="w-full max-w-full space-y-6">
 
         {/* Top Header Console Banner */}
-        <div className="card flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[var(--bg-card)] rounded-[16px] py-3 px-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
           <div>
             <div className="flex items-center gap-2">
               <Shield className="text-[var(--accent-primary)] animate-pulse" size={18} />
@@ -481,20 +484,27 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="secondary" size="lg" iconOnly onClick={handleRefresh} disabled={isRefreshing}>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)]/30 transition-all flex items-center justify-center"
+            >
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            </Button>
-            <Button size="lg" onClick={() => navigate('/repos')}>
+            </button>
+            <button
+              onClick={() => navigate('/repos')}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-[9px] tracking-widest uppercase transition-all shadow-[0_4px_12px_rgba(16,185,129,0.2)] flex items-center gap-2"
+            >
               <Activity size={12} />
               + INITIALIZE NEW SCAN
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* 1. Top Section: Core Security Posture (Full Width Summary Matrix) */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch w-full">
           {/* Col 1: Postural Health Breakdown */}
-          <div className="xl:col-span-3 w-full h-full min-h-[400px]">
+          <div className="xl:col-span-3 w-full h-full min-h-[400px] group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
             <PostureRoadmap compact ciGateRate={ciGateStats.rate} hasScans={latestScan !== null} />
           </div>
 
@@ -502,7 +512,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
           <div className="xl:col-span-6 w-full h-full">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full h-full">
               <div className="lg:col-span-8 w-full h-full">
-                <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-md w-full h-full flex flex-col">
+                <div className="bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] w-full h-full flex flex-col border border-[var(--border-subtle)] group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
                   <div className="mb-4">
                     <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">Threat Dimension Analysis</h3>
                     <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Continuous Scanner Footprint Map</p>
@@ -512,7 +522,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
                   </div>
                 </div>
               </div>
-                <div className="lg:col-span-4 w-full h-full">
+                <div className="lg:col-span-4 w-full h-full group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
                 <RuntimeThreatStream />
               </div>
             </div>
@@ -533,12 +543,12 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               { id: 'build', label: 'Last Build', value: lastBuildStatus.toUpperCase(), trend: 'Status', color: lastBuildStatus === 'success' ? 'var(--status-success)' : lastBuildStatus === 'failed' ? 'var(--status-error)' : 'var(--status-warning)' },
               { id: 'deploy', label: 'Deployments', value: deploymentsToday.toString(), trend: 'Today', color: 'var(--accent-primary)' }
             ].map((stat, i) => (
-              loading ? <SkeletonCard key={i} className="h-20" /> :
+              loading ? <SkeletonCard key={i} h="h-20" /> :
               <div key={i}
                 onClick={() => {
                   if (stat.id === 'ci') setShowGateSummary(true);
                 }}
-                className={`card mb-4 bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-md flex flex-col justify-between flex-1 min-h-[90px] relative transition-colors ${stat.id === 'ci' ? 'cursor-pointer hover:border-neutral-700' : ''}`}
+                className="mb-4 rounded-[12px] p-6 shadow-lg flex flex-col justify-between flex-1 min-h-[90px] border border-[var(--border-subtle)] relative transition-all duration-300 ease-out group hover:z-50 hover:scale-[1.04] hover:shadow-2xl hover:-translate-y-1 bg-white"
               >
                 <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: stat.color }}></div>
 
@@ -546,7 +556,13 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
                   <div className="flex flex-col h-full w-full justify-between">
                     <div className="flex justify-between items-start">
                       <h3 className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">QUALITY GATE</h3>
-                      <StatusBadge status={qualityGateScore > 70 ? 'passed' : qualityGateScore > 50 ? 'warning' : 'failed'} />
+                      <div className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-wider ${
+                        qualityGateScore > 70 
+                          ? 'bg-emerald-500/10 text-emerald-500' 
+                          : qualityGateScore > 50 
+                            ? 'bg-amber-500/10 text-amber-500' 
+                            : 'bg-red-500/10 text-red-500'
+                      }`}>{qualityGateScore > 70 ? 'PASSED' : qualityGateScore > 50 ? 'WARNING' : 'FAILED'}</div>
                     </div>
                     
                     <div className="flex items-center gap-2 my-1">
@@ -600,7 +616,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
         </div>
 
         {/* 2. Middle Section: Dynamic Vulnerability Telemetry (The Grid Matrix Board) */}
-        <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-md">
+        <div className="bg-[var(--bg-card)] rounded-[16px] p-6 border border-[var(--border-subtle)] shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
           <div className="flex justify-between items-center mb-6 border-b border-[var(--border-subtle)] pb-3">
             <div>
               <h3 className="text-[12px] font-black uppercase tracking-wider flex items-center gap-2">
@@ -621,13 +637,13 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest border-l-2 border-emerald-500 pl-2">Static Analysis Vulnerabilities</h4>
               <div className="grid grid-cols-2 gap-3">
                 {metrics.slice(0, 4).map((m, i) => (
-                  loading ? <SkeletonCard key={i} className="h-20" /> :
+                  loading ? <SkeletonCard key={i} h="h-20" /> :
                   <div key={i}
                     onClick={() => {
                       if (m.path?.includes('null')) return;
                       m.path && navigate(m.path);
                     }}
-                    className={`card bg-neutral-900 border border-neutral-800 rounded-lg p-3 flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:border-neutral-700'} transition-colors`}
+                    className={`bg-[var(--bg-primary)]/40 rounded-[12px] p-3 border border-[var(--border-subtle)] flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:scale-[1.02] hover:bg-[var(--bg-primary)]/80 hover:border-[var(--accent-primary)]/30'} transition-all`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: `${m.color}15`, color: m.color }}>
@@ -650,13 +666,13 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest border-l-2 border-emerald-600 pl-2">Infrastructure Telemetry</h4>
               <div className="grid grid-cols-2 gap-3">
                 {metrics.slice(4, 8).map((m, i) => (
-                  loading ? <SkeletonCard key={i} className="h-20" /> :
+                  loading ? <SkeletonCard key={i} h="h-20" /> :
                   <div key={i}
                     onClick={() => {
                       if (m.path?.includes('null')) return;
                       m.path && navigate(m.path);
                     }}
-                    className={`card bg-neutral-900 border border-neutral-800 rounded-lg p-3 flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:border-neutral-700'} transition-colors`}
+                    className={`bg-[var(--bg-primary)]/40 rounded-[12px] p-3 border border-[var(--border-subtle)] flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:scale-[1.02] hover:bg-[var(--bg-primary)]/80 hover:border-[var(--accent-primary)]/30'} transition-all`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: `${m.color}15`, color: m.color }}>
@@ -679,7 +695,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
         {/* 3. Bottom Section: Active Remediation & Core Priorities (Split Panel View) */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Left Panel (60% / 3 cols): TONY's Remediation Roadmap Staging Queue */}
-          <div className="card lg:col-span-3 flex flex-col bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-md">
+          <div className="lg:col-span-3 flex flex-col bg-[var(--bg-card)] rounded-[16px] p-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600">
@@ -704,7 +720,15 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
                   <div key={v.$id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-3 bg-[var(--bg-primary)]/40 hover:bg-[var(--bg-primary)]/80 border border-[var(--border-subtle)] rounded-xl transition-all group">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <SeverityBadge severity={v.severity} />
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider"
+                          style={{
+                            background: `${SEVERITY_COLOR[v.severity] ?? '#888'}15`,
+                            color: SEVERITY_COLOR[v.severity] ?? '#888',
+                            border: `1px solid ${SEVERITY_COLOR[v.severity] ?? '#888'}30`
+                          }}
+                        >
+                          {v.severity}
+                        </span>
                         <p className="text-[11px] font-black truncate text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">{v.title || v.message}</p>
                       </div>
                       <p className="text-[9px] text-[var(--text-secondary)] font-mono truncate">{v.file_path || v.location || v.file || 'unknown'}</p>
@@ -731,7 +755,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
           </div>
 
           {/* Right Panel (40% / 2 cols): Critical Real-Time Findings (Chronological Timeline) */}
-          <div className="card lg:col-span-2 flex flex-col bg-neutral-900 border border-neutral-800 rounded-lg p-6 shadow-md">
+          <div className="lg:col-span-2 flex flex-col bg-[var(--bg-card)] rounded-[16px] p-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2">
                 <AlertCircle className="text-emerald-500" size={14} />
@@ -754,7 +778,11 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
                     
                     <div className="flex justify-between items-start mb-1">
                       <p className="text-[11px] font-black truncate text-[var(--text-primary)] pr-2">{v.title || v.message}</p>
-                      <SeverityBadge severity={v.severity} className="shrink-0" />
+                      <span className="text-[8px] font-black uppercase tracking-wider shrink-0"
+                        style={{ color: SEVERITY_COLOR[v.severity] ?? '#888' }}
+                      >
+                        {v.severity}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-[9px] text-[var(--text-secondary)] font-mono truncate max-w-[70%]">{v.file?.split('/').pop() || 'unknown'}{v.line ? `:${v.line}` : ''}</p>
@@ -808,7 +836,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
                 setDetailsExpanded(nextVal);
                 localStorage.setItem('scorpion_dashboard_details_expanded', String(nextVal));
               }}
-              className="px-4 py-2 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 text-[9px] font-black uppercase tracking-widest text-[var(--text-primary)] rounded-lg transition-colors"
+              className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 text-[9px] font-black uppercase tracking-widest text-[var(--text-primary)] rounded-xl transition-all hover:scale-[1.02]"
             >
               {detailsExpanded ? 'Hide Details' : 'Show Details'}
             </button>
@@ -818,7 +846,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 transition-all duration-300 items-start">
               
               {/* 1. Geo Attack Origins */}
-              <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-5 shadow-md flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 relative">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Geo Attack Origins</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Live Ingress Threat Feeds</p>
@@ -834,7 +862,13 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
                           <p className="text-[10px] font-bold text-[var(--text-primary)]">{item.city}</p>
                           <p className="text-[8px] text-zinc-500">{item.ip}</p>
                         </div>
-                        <StatusBadge status={item.status} className="text-[7px] px-1" />
+                        <span className={`text-[7px] font-black uppercase px-1 rounded ${
+                          item.status === 'Blocked' 
+                            ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
+                            : item.status === 'Monitored'
+                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                        }`}>{item.status}</span>
                       </div>
                     ))}
                   </div>
@@ -845,7 +879,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               </div>
 
               {/* 2. Protocol Breakdown */}
-              <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-5 shadow-md flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Protocol Breakdown</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">API Route Ingress Share</p>
@@ -874,7 +908,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               </div>
 
               {/* 3. Audit Feed */}
-              <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-5 shadow-md flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Audit Ledger Stream</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Recent Security Actions</p>
@@ -899,7 +933,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
               </div>
 
               {/* 4. Alert Mesh summary */}
-              <div className="card bg-neutral-900 border border-neutral-800 rounded-lg p-5 shadow-md flex flex-col justify-between min-h-[220px]">
+              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
                 <div>
                   <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Alert Mesh Nodes</h4>
                   <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Webhook Sync Status</p>
@@ -934,16 +968,16 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
       {/* Gate Summary Modal */}
       {showGateSummary && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="card bg-neutral-900 w-full max-w-lg rounded-lg p-6 border border-neutral-800 shadow-lg">
+          <div className="bg-[var(--bg-card)] w-full max-w-lg rounded-2xl p-8 border border-[var(--border-subtle)] shadow-2xl">
             <h2 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-wider mb-6 flex items-center gap-2">
               <ShieldAlert className="text-[var(--status-error)]" size={20} /> Policy Blocking Summary
             </h2>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               {gateSummary.length > 0 ? gateSummary.map((repo, i) => (
-                <div key={i} className="p-4 rounded-lg bg-[var(--bg-primary)] border border-neutral-800">
+                <div key={i} className="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)]">
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-[12px] font-bold text-[var(--text-primary)]">{repo.name}</span>
-                    <StatusBadge status="blocked" />
+                    <span className="text-[10px] font-black text-[var(--status-error)] uppercase">Blocked</span>
                   </div>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{repo.reason}</p>
                 </div>

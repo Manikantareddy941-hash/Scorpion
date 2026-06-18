@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Bug, CheckCircle2, ChevronRight,
+  ArrowLeft, Activity, Bug, CheckCircle2, ChevronRight, 
   BarChart3, Filter, Search, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { 
@@ -10,10 +10,6 @@ import {
 } from 'recharts';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import toast from 'react-hot-toast';
-import SeverityBadge from '../components/SeverityBadge';
-import Button from '../components/Button';
-import { SkeletonTableRows } from '../components/Skeleton';
-import EmptyState from '../components/EmptyState';
 
 export default function AntipatternsDetail() {
   const { scanId } = useParams();
@@ -69,11 +65,13 @@ export default function AntipatternsDetail() {
     { name: 'Low', value: groupedFindings.filter((r: any) => r.severity === 'low').length, color: '#22c55e' },
   ], [groupedFindings]);
 
+  if (loading) return <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]"><Activity className="animate-spin text-[var(--accent-primary)]" /></div>;
+
   return (
     <div className="flex-1 w-full max-w-7xl mx-auto p-6">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" iconOnly onClick={() => navigate(-1)}><ArrowLeft size={18} /></Button>
+          <button onClick={() => navigate(-1)} className="p-2 bg-[var(--bg-card)] rounded-lg border border-[var(--border-subtle)]"><ArrowLeft size={18} /></button>
           <div>
             <h1 className="text-2xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">Antipattern Issues</h1>
             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1">Found in Scan {scanId}</p>
@@ -83,7 +81,7 @@ export default function AntipatternsDetail() {
 
       {/* Analytics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-        <div className="card lg:col-span-3 bg-neutral-900 rounded-lg border border-neutral-800 p-6 shadow-sm">
+        <div className="lg:col-span-3 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-sm">
           <h3 className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-6 flex items-center gap-2">
             <BarChart3 size={12} /> Severity Distribution
           </h3>
@@ -106,7 +104,7 @@ export default function AntipatternsDetail() {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="card bg-neutral-900 rounded-lg border border-neutral-800 p-6 shadow-sm flex flex-col justify-center text-center">
+        <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-sm flex flex-col justify-center text-center">
           <div className="text-5xl font-black text-[var(--text-primary)] mb-2 italic tracking-tighter">{groupedFindings.length}</div>
           <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Total Unique Issues</div>
         </div>
@@ -129,64 +127,64 @@ export default function AntipatternsDetail() {
       </div>
 
       {/* Table */}
-      {!loading && groupedFindings.length === 0 ? (
-        <EmptyState icon={ShieldCheck} message="No antipatterns detected" />
-      ) : (
-        <div className="card bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden shadow-sm">
-          <div className="max-h-[70vh] overflow-y-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800">
-                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Issue</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Type</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Severity</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide text-right">Files</th>
-                  <th className="px-4 py-2.5 text-[10px] font-semibold text-neutral-400 uppercase tracking-wide text-right">Issues</th>
-                  <th className="px-4 py-2.5"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800/60">
-                {loading ? (
-                  <SkeletonTableRows rows={6} cols={6} />
-                ) : (
-                  groupedFindings.map((row: any, i) => (
-                    <tr key={i} className={`hover:bg-neutral-800/40 transition-colors group ${i % 2 === 1 ? 'bg-white/[0.02]' : ''}`}>
-                      <td className="px-4 py-2.5">
-                        <div className="text-xs font-bold text-[var(--text-primary)] leading-relaxed max-w-md truncate">{row.message}</div>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase tracking-widest">
-                          {row.tool === 'semgrep' ? 'Code Smell' : 'Bug'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                         <SeverityBadge
-                           severity={row.severity}
-                           label={row.severity === 'critical' ? 'Critical' : row.severity === 'high' ? 'Major' : 'Minor'}
-                         />
-                      </td>
-                      <td className="px-4 py-2.5 text-[10px] font-bold text-[var(--text-secondary)] text-right">
-                        {row.files.size}
-                      </td>
-                      <td className="px-4 py-2.5 text-[10px] font-bold text-[var(--text-primary)] text-right">
-                        {row.count}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <button
-                          onClick={() => navigate(`/scans/${scanId}/sast?rule=${encodeURIComponent(row.message)}`)}
-                          className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 rounded-lg transition-all"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                    </td>
-                  </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden shadow-sm">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-[var(--bg-primary)] border-b border-[var(--border-subtle)]">
+              <th className="px-6 py-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Issue</th>
+              <th className="px-6 py-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Type</th>
+              <th className="px-6 py-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Severity</th>
+              <th className="px-6 py-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Likelihood</th>
+              <th className="px-6 py-4 text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Issues Count</th>
+              <th className="px-6 py-4 text-right"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border-subtle)]">
+            {groupedFindings.map((row: any, i) => (
+              <tr key={i} className="hover:bg-[var(--bg-primary)] transition-colors group">
+                <td className="px-6 py-5">
+                  <div className="text-xs font-bold text-[var(--text-primary)] leading-relaxed max-w-md truncate">{row.message}</div>
+                </td>
+                <td className="px-6 py-5">
+                  <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase tracking-widest">
+                    {row.tool === 'semgrep' ? 'Code Smell' : 'Bug'}
+                  </span>
+                </td>
+                <td className="px-6 py-5">
+                   <div className="flex items-center gap-2">
+                     <div className={`w-1.5 h-1.5 rounded-full ${
+                        row.severity === 'critical' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 
+                        row.severity === 'high' ? 'bg-orange-500' : 
+                        row.severity === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                     }`} />
+                     <span className={`text-[10px] font-black uppercase tracking-widest ${
+                        row.severity === 'critical' ? 'text-red-500' : 
+                        row.severity === 'high' ? 'text-orange-500' : 
+                        row.severity === 'medium' ? 'text-yellow-500' : 'text-green-500'
+                     }`}>
+                        {row.severity === 'critical' ? 'Critical' : row.severity === 'high' ? 'Major' : 'Minor'}
+                     </span>
+                   </div>
+                </td>
+                <td className="px-6 py-5 text-[10px] font-bold text-[var(--text-secondary)] uppercase">
+                  {row.files.size} files affected
+                </td>
+                <td className="px-6 py-5 text-[10px] font-bold text-[var(--text-primary)] uppercase">
+                  {row.count} issues
+                </td>
+                <td className="px-6 py-5 text-right">
+                  <button 
+                    onClick={() => navigate(`/scans/${scanId}/sast?rule=${encodeURIComponent(row.message)}`)}
+                    className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 rounded-lg transition-all"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -218,7 +218,7 @@ export default function ProjectDetail() {
                             </div>
                         </div>
                         <div className="text-center md:text-right border-t md:border-t-0 md:border-l border-[var(--border-subtle)] pt-8 md:pt-0 md:pl-12">
-                            <div className="text-7xl font-black text-[var(--text-primary)] tracking-tighter italic mb-1 leading-none">{100 - (repo?.risk_score || 0)}</div>
+                            <div className="text-7xl font-black text-[var(--text-primary)] tracking-tighter italic mb-1 group-hover:scale-110 transition-transform duration-500 leading-none">{100 - (repo?.risk_score || 0)}</div>
                             <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Health Index</div>
                         </div>
                     </div>
@@ -306,7 +306,7 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
                             <button
                                 key={p}
                                 onClick={() => updatePolicy(p.toLowerCase())}
-                                className={`p-8 rounded-lg border-2 transition-colors group relative overflow-hidden
+                                className={`p-8 rounded-[2rem] border-2 transition-all group relative overflow-hidden
                                     ${policy?.policy_name?.toLowerCase() === p.toLowerCase()
                                         ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5'
                                         : 'border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'}`}

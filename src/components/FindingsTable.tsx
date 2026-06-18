@@ -6,8 +6,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { createTicket, findTicketByFinding } from '../hooks/useTickets';
 import toast from 'react-hot-toast';
 import type { AppwriteFinding } from '../pages/ScanResults';
-import SeverityBadge from './SeverityBadge';
-import EmptyState from './EmptyState';
 
 const SEVERITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   CRITICAL: { bg: 'rgba(229,115,115,0.08)', text: 'var(--status-error)',   border: 'var(--status-error)'   },
@@ -116,7 +114,14 @@ export default function FindingsTable({ findings, onRemediate, onCreateTicket }:
   };
 
   if (findings.length === 0) {
-    return <EmptyState icon={Zap} message={t('findings_table.no_threats', 'No active threats detected. Clean scan.')} />;
+    return (
+      <div className="p-20 text-center flex flex-col items-center justify-center">
+        <div className="bg-[var(--bg-secondary)] w-20 h-20 rounded-3xl flex items-center justify-center mb-6 border border-[var(--border-subtle)]">
+          <Zap className="w-10 h-10 text-[var(--text-secondary)] opacity-30" />
+        </div>
+        <p className="text-[var(--text-secondary)] font-black uppercase tracking-[0.2em] text-xs italic">{t('findings_table.no_threats', 'No active threats detected. Clean scan.')}</p>
+      </div>
+    );
   }
 
   const toggleExpand = (id: string) => {
@@ -154,11 +159,8 @@ export default function FindingsTable({ findings, onRemediate, onCreateTicket }:
               onClick={() => toggleGroup(sev)}
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: colors.bg, borderLeft: `4px solid ${colors.text}`, cursor: 'pointer' }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <SeverityBadge severity={sev} label={t(`scan_results.severity.${sev.toLowerCase()}`, sev)} />
-                <span style={{ color: colors.text, fontWeight: 800, fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  {t('findings_table.findings_count', { count: items.length, defaultValue: '{{count}} findings' })}
-                </span>
+              <span style={{ color: colors.text, fontWeight: 800, fontSize: '0.72rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                {t(`scan_results.severity.${sev.toLowerCase()}`, sev)} &nbsp;·&nbsp; {t('findings_table.findings_count', { count: items.length, defaultValue: '{{count}} findings' })}
               </span>
               {isOpen ? <ChevronUp size={14} color={colors.text} /> : <ChevronDown size={14} color={colors.text} />}
             </button>

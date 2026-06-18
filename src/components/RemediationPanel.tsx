@@ -3,7 +3,6 @@ import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, Gi
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
-import Button from './Button';
 
 interface RemediationPanelProps {
     documentId: string;
@@ -233,9 +232,9 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             
-            <div className="card relative w-full max-w-4xl max-h-[90vh] bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden shadow-lg flex flex-col">
+            <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
                 {/* Header */}
-                <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-[var(--bg-secondary)]/50">
+                <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-secondary)]/50">
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-2xl bg-[var(--accent-primary)]/10 flex items-center justify-center text-[var(--accent-primary)] border border-[var(--accent-primary)]/20">
                             <Zap size={20} />
@@ -261,7 +260,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] animate-pulse">{t('remediation.running_analysis', 'Running Neural Analysis...')}</p>
                         </div>
                     ) : error ? (
-                        <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-4 text-red-500">
+                        <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 text-red-500">
                             <AlertCircle size={24} />
                             <div>
                                 <p className="text-xs font-black uppercase italic">{t('remediation.system_fault', 'System Fault Detected')}</p>
@@ -272,7 +271,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                         <div className="space-y-8">
                             {/* Analysis Section */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="p-6 bg-[var(--bg-secondary)] rounded-lg border border-neutral-800 relative group">
+                                <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative group">
                                     <div className="absolute -top-3 -left-3 px-3 py-1 bg-[var(--accent-primary)] text-black text-[9px] font-black uppercase italic rounded-2xl flex items-center gap-2">
                                         <Sparkles size={10} /> {t('remediation.ai_recommendation', 'AI Recommendation')}
                                     </div>
@@ -282,21 +281,18 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                     </p>
                                     <div className="mt-6 flex items-center justify-between">
                                         <div className="flex items-center gap-4">
-                                            <Button
-                                                variant="ghost"
-                                                iconOnly
+                                            <button 
                                                 onClick={() => { setFeedbackSent(true); trackEvent('accepted', fix?.$id, fix?.confidence); }}
-                                                className={feedbackSent ? 'bg-[var(--status-success)]/20 text-[var(--status-success)]' : ''}
+                                                className={`p-2 rounded-2xl transition-all ${feedbackSent ? 'bg-[var(--status-success)]/20 text-[var(--status-success)]' : 'hover:bg-white/5 text-[var(--text-secondary)]'}`}
                                             >
                                                 <ThumbsUp size={16} />
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                iconOnly
+                                            </button>
+                                            <button 
                                                 onClick={() => { setFeedbackSent(true); trackEvent('ignored', fix?.$id, fix?.confidence); }}
+                                                className="p-2 hover:bg-white/5 rounded-2xl transition-all text-[var(--text-secondary)]"
                                             >
                                                 <ThumbsDown size={16} />
-                                            </Button>
+                                            </button>
                                         </div>
                                         <div className="text-[9px] font-black uppercase italic text-[var(--accent-primary)] opacity-60">
                                             {t('remediation.confidence_index', 'Confidence Index')}: {((fix?.confidence || fix?.confidence_score || 0) * 100).toFixed(1)}%
@@ -304,12 +300,12 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                     </div>
                                 </div>
 
-                                <div className="p-6 bg-[var(--bg-secondary)] rounded-lg border border-neutral-800">
+                                <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
                                     <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic mb-3">{t('remediation.impact_assessment', 'Impact Assessment')}</h4>
                                     <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] font-medium">
                                         {fix?.impact_assessment || t('remediation.impact_desc', 'Assessment restricted to localized dependency tree. Minimal risk to core logic detected.')}
                                     </p>
-                                    <div className="mt-6 pt-6 border-t border-neutral-800 flex items-center justify-between">
+                                    <div className="mt-6 pt-6 border-t border-[var(--border-subtle)] flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full bg-[var(--status-success)] animate-pulse" />
                                             <span className="text-[9px] font-black uppercase italic text-[var(--status-success)] tracking-widest">{t('remediation.safe_execution', 'Safe for Execution')}</span>
@@ -323,7 +319,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                             </div>
 
                             {/* Diff View */}
-                            <div className="p-6 bg-[#0d1117] rounded-lg border border-neutral-800 overflow-hidden">
+                            <div className="p-6 bg-[#0d1117] rounded-2xl border border-[var(--border-subtle)] overflow-hidden">
                                 <div className="flex items-center justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         <Code size={14} className="text-[var(--text-secondary)]" />
@@ -340,9 +336,13 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
 
                             <div className="flex items-center gap-3">
                                 {prState.status === 'idle' && (
-                                    <Button size="lg" onClick={handleCreatePR} disabled={!fix}>
+                                    <button
+                                        onClick={handleCreatePR}
+                                        disabled={!fix}
+                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--accent-primary)] text-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 text-xs font-black uppercase italic tracking-widest shadow-xl shadow-[var(--accent-primary)]/20"
+                                    >
                                         <GitPullRequest size={18} /> {t('remediation.apply_path_pr', 'Apply Remediation Path (GitHub PR)')}
-                                    </Button>
+                                    </button>
                                 )}
 
                                 {prState.status === 'loading' && (
@@ -377,7 +377,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-6 border-t border-neutral-800 bg-[var(--bg-secondary)]/50 flex items-center justify-between">
+                <div className="p-6 border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Info size={14} className="text-[var(--text-secondary)]" />
                         <span className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">
@@ -396,10 +396,18 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                         </a>
                     ) : (
                         <div className="flex gap-4">
-                             <Button variant="secondary" size="lg" iconOnly onClick={fetchFix} disabled={loading || prLoading}>
+                             <button
+                                onClick={fetchFix}
+                                disabled={loading || prLoading}
+                                className="p-3 bg-white/5 border border-white/10 rounded-2xl text-[var(--text-secondary)] hover:bg-white/10 transition-all"
+                            >
                                 <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                            </Button>
-                            <Button size="lg" onClick={handleFixVulnerability} disabled={loading || prLoading || !fix}>
+                            </button>
+                            <button 
+                                onClick={handleFixVulnerability}
+                                disabled={loading || prLoading || !fix}
+                                className="flex items-center gap-3 px-8 py-3 bg-[var(--accent-primary)] text-black rounded-2xl text-xs font-black uppercase italic tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-[var(--accent-primary)]/20"
+                            >
                                 {prLoading ? (
                                     <>
                                         <Loader2 size={18} className="animate-spin" /> {t('remediation.patching', 'Patching...')}
@@ -409,7 +417,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         <GitPullRequest size={18} /> {t('remediation.apply_path', 'Apply Remediation Path')}
                                     </>
                                 )}
-                            </Button>
+                            </button>
                         </div>
                     )}
                 </div>

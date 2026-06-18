@@ -31,14 +31,5 @@ export default [
             ],
         },
     },
-    {
-        // Jest tests that need a fresh mock per-test (via jest.doMock) must
-        // require() the module body inside the test, since a hoisted ES
-        // `import` would resolve before jest.doMock() runs.
-        files: ["src/**/*.test.ts"],
-        rules: {
-            "@typescript-eslint/no-require-imports": "off",
-        },
-    },
     prettierConfig,
 ];
