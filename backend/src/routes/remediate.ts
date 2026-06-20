@@ -10,7 +10,10 @@ import * as path from 'path';
 import { logger } from '../services/logger';
 
 const router = Router();
-const workspaceDir = 'c:\\Users\\manik\\OneDrive\\Desktop\\Scorpion';
+// Fallback local path when a vulnerability's repo has no local_path set (e.g.
+// it wasn't ingested via ZIP upload or clone). Was previously hardcoded to a
+// specific developer's machine path, which broke on every other environment.
+const workspaceDir = process.env.LOCAL_SCAN_WORKSPACE_DIR || process.cwd();
 
 // POST /api/remediate/generate
 router.post('/generate', verifyUser, aiLimiter, async (req: Request, res: Response) => {
@@ -88,7 +91,7 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: Request, res: 
         const lineNumber = vuln.line_number || 12;
 
         // Path traversal protection
-        if (!absoluteFilePath.startsWith(localPath)) {
+        if (absoluteFilePath !== localPath && !absoluteFilePath.startsWith(localPath + path.sep)) {
             return res.status(400).json({ error: 'Invalid file_path: path traversal detected' });
         }
 
@@ -180,7 +183,7 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Request, res:
         const absoluteFilePath = path.resolve(localPath, relativeFilePath);
 
         // Path traversal protection
-        if (!absoluteFilePath.startsWith(localPath)) {
+        if (absoluteFilePath !== localPath && !absoluteFilePath.startsWith(localPath + path.sep)) {
             return res.status(400).json({ error: 'Invalid file_path: path traversal detected' });
         }
 
