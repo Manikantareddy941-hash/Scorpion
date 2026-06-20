@@ -2,6 +2,7 @@ import express from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { AlertService } from '../services/alertService';
 import { canAccessResource } from '../services/tenancyService';
+import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
 import { Models } from 'node-appwrite';
 
 const router = express.Router();
@@ -18,6 +19,11 @@ router.post('/test', async (req, res) => {
         
         if (!webhookUrl) {
             return res.status(400).json({ error: 'Missing webhookUrl' });
+        }
+        try {
+            await assertSafeWebhookUrl(webhookUrl);
+        } catch (err: any) {
+            return res.status(400).json({ error: err.message });
         }
 
         const mockFinding = {
@@ -43,6 +49,12 @@ router.post('/test', async (req, res) => {
 router.post('/notify', async (req, res) => {
     try {
         const { findingId, webhookUrl, type, repoName } = req.body;
+
+        try {
+            await assertSafeWebhookUrl(webhookUrl);
+        } catch (err: any) {
+            return res.status(400).json({ error: err.message });
+        }
 
         const findingDoc = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, findingId);
 
