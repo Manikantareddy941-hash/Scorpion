@@ -62,10 +62,14 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const userId = (req as any).user?.$id;
     const model = await getThreatModel(id);
 
     if (!model) {
       return res.status(404).json({ error: 'Threat model not found' });
+    }
+    if (model.createdBy !== userId) {
+      return res.status(403).json({ error: 'You do not have access to this threat model' });
     }
 
     res.json(model);
@@ -82,6 +86,12 @@ router.put('/:id', async (req: Request, res: Response) => {
     const { name, description, diagramData, threats, status } = req.body;
     const userId = (req as any).user?.$id || 'unknown';
     const userEmail = (req as any).user?.email || 'unknown';
+
+    const existing = await getThreatModel(id);
+    if (!existing) return res.status(404).json({ error: 'Threat model not found' });
+    if (existing.createdBy !== userId) {
+      return res.status(403).json({ error: 'You do not have access to this threat model' });
+    }
 
     const updates: any = {};
     if (name !== undefined) updates.name = name;
@@ -105,6 +115,12 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const userId = (req as any).user?.$id || 'unknown';
     const userEmail = (req as any).user?.email || 'unknown';
 
+    const existing = await getThreatModel(id);
+    if (!existing) return res.status(404).json({ error: 'Threat model not found' });
+    if (existing.createdBy !== userId) {
+      return res.status(403).json({ error: 'You do not have access to this threat model' });
+    }
+
     await deleteThreatModel(id, userId, userEmail);
     res.json({ success: true, message: 'Threat model deleted successfully' });
   } catch (err: any) {
@@ -124,6 +140,9 @@ router.post('/:id/analyze', async (req: Request, res: Response) => {
     const model = await getThreatModel(id);
     if (!model) {
       return res.status(404).json({ error: 'Threat model not found' });
+    }
+    if (model.createdBy !== userId) {
+      return res.status(403).json({ error: 'You do not have access to this threat model' });
     }
 
     // Generate STRIDE threats using AI

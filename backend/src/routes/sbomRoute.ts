@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { canAccessResource } from '../services/tenancyService';
 import crypto from 'crypto';
 
 function getHighestSeverity(severities: string[]): string {
@@ -17,6 +18,11 @@ router.get('/:repoId', async (req: Request, res: Response) => {
     const format = (req.query.format as 'json' | 'csv') || 'json';
 
     try {
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId).catch(() => null);
+        if (!repo || !(await canAccessResource(repo, (req as any).user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this repository' });
+        }
+
         console.log(`[SBOM] Generating SBOM from database for repo: ${repoId}`);
 
         // 1. Get the latest completed scan for this repo to get the scanId

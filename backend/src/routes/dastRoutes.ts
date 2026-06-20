@@ -22,6 +22,7 @@ router.post('/dast', verifyUser, async (req: Request, res: Response) => {
             scanId,
             {
                 repo_id: 'dast',
+                user_id: userId,
                 status: 'pending',
                 scan_type: 'dast',
                 repoUrl: target_url,
@@ -57,6 +58,9 @@ router.get('/dast/:scanId/status', verifyUser, async (req: Request, res: Respons
 
     try {
         const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        if (scan.user_id !== (req as any).user?.$id) {
+            return res.status(403).json({ error: 'You do not have access to this scan' });
+        }
         res.json({
             status: scan.status,
             completedAt: scan.completedAt || null,

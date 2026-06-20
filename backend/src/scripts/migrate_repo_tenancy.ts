@@ -5,24 +5,35 @@ import { databases, DB_ID } from '../lib/appwrite';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+async function addAttribute(collectionId: string, key: string) {
+    try {
+        console.log(`Adding ${key} to ${collectionId} in DB: ${DB_ID}`);
+        await databases.createStringAttribute(DB_ID, collectionId, key, 255, false);
+        await delay(1000);
+        console.log(`Done. ${key} is now available on the ${collectionId} collection.`);
+    } catch (err: any) {
+        if (err.code === 409) {
+            console.log(`Attribute ${key} already exists on ${collectionId}.`);
+            return;
+        }
+        throw err;
+    }
+}
+
 /**
  * Adds the team_id attribute to the repositories collection so repos can be
- * scoped to a team (multi-tenant) instead of only the creating user. Not
- * required, no default -- existing repos are left with team_id unset and
- * keep resolving to their current personal (user_id) scope.
+ * scoped to a team (multi-tenant) instead of only the creating user, and
+ * user_id to scans so scans with no real owning repo (DAST, which uses a
+ * placeholder repo_id of 'dast') can still be ownership-checked directly.
+ * Neither is required, no default -- existing docs are left unset and
+ * keep resolving to their current scope.
  */
 async function migrate() {
     try {
-        console.log(`Adding team_id to repositories in DB: ${DB_ID}`);
-        await databases.createStringAttribute(DB_ID, 'repositories', 'team_id', 255, false);
-        await delay(1000);
-        console.log('Done. team_id is now available on the repositories collection.');
+        await addAttribute('repositories', 'team_id');
+        await addAttribute('scans', 'user_id');
         process.exit(0);
     } catch (err: any) {
-        if (err.code === 409) {
-            console.log('Attribute team_id already exists on repositories.');
-            process.exit(0);
-        }
         console.error('Migration failed:', err.message);
         process.exit(1);
     }

@@ -5,6 +5,7 @@ import { logAuditEvent } from '../utils/auditLogger';
 import PDFDocument from 'pdfkit';
 import { Parser } from 'json2csv';
 import { generateSecuritySummary } from '../services/aiService';
+import { canAccessResource, resolveOwnershipScope } from '../services/tenancyService';
 import { PassThrough } from 'stream';
 
 const router = Router();
@@ -31,11 +32,17 @@ router.get('/ai-summary', verifyUser, async (req: Request, res: Response) => {
     const boundary = getRangeBoundary(range);
 
     try {
-        const findings = await databases.listDocuments(DB_ID, 'findings', [
+        const userId = (req as any).user?.$id;
+        const scope = await resolveOwnershipScope(req, userId);
+        const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(scope.field, scope.value)]);
+        const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+
+        const findings = repoIds.length > 0 ? await databases.listDocuments(DB_ID, 'findings', [
+            Query.equal('repo_id', repoIds),
             Query.greaterThanEqual('$createdAt', boundary),
             Query.limit(100)
-        ]);
-        
+        ]) : { documents: [] as any[] };
+
         const alerts = await databases.listDocuments(DB_ID, 'alerts', [
             Query.greaterThanEqual('$createdAt', boundary),
             Query.limit(50)
@@ -59,20 +66,30 @@ router.get('/ai-summary', verifyUser, async (req: Request, res: Response) => {
 // Support both POST and GET for exports (GET is easier for browser download triggers)
 const handleExport = async (req: Request, res: Response) => {
     const { repo_id, format, from, to, type } = { ...req.body, ...req.query };
-    
+    const userId = (req as any).user?.$id;
+
     try {
         let repo;
+        let queries: string[];
         if (repo_id === 'global') {
-            repo = { name: 'Global-Fleet', $id: 'global' };
+            // "Global" export is scoped to the caller's own accessible repos,
+            // not literally every user's findings.
+            repo = { name: 'My-Fleet', $id: 'global' };
+            const scope = await resolveOwnershipScope(req, userId);
+            const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(scope.field, scope.value)]);
+            const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+            queries = repoIds.length > 0 ? [Query.equal('repo_id', repoIds)] : [Query.equal('repo_id', '__none__')];
         } else {
             repo = await databases.getDocument(DB_ID, 'repositories', repo_id);
+            if (!(await canAccessResource(repo, userId))) {
+                return res.status(403).json({ error: 'You do not have access to this repository' });
+            }
+            queries = [Query.equal('repo_id', repo_id)];
         }
 
-        const queries = repo_id === 'global' ? [] : [Query.equal('repo_id', repo_id)];
         if (from) queries.push(Query.greaterThanEqual('$createdAt', from));
         if (to) queries.push(Query.lessThanEqual('$createdAt', to));
-        
-        const userId = (req as any).user?.$id;
+
         await logAuditEvent('REPORT_EXPORTED', `Security report generated as ${format.toUpperCase()} for ${repo.name}`, userId, repo_id);
 
         if (format === 'csv') {

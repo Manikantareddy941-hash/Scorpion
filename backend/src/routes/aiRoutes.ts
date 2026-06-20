@@ -4,6 +4,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { getRemediationFix, recordFeedback } from '../services/aiService';
 import { recordAIEvent, getAIAggregates, getAITrends } from '../services/metricsService';
 import { createPullRequest } from '../services/gitProviderService';
+import { canAccessResource } from '../services/tenancyService';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -11,10 +12,36 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
+// Verifies the caller can access the repo a vulnerability/fix belongs to.
+// Throws-by-returning-null on any lookup failure so callers fail closed.
+const assertVulnAccess = async (vulnerabilityId: string, userId?: string): Promise<boolean> => {
+    try {
+        const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerabilityId);
+        if (!vuln.repo_id) return false;
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id);
+        return canAccessResource(repo, userId);
+    } catch {
+        return false;
+    }
+};
+
+const assertFixAccess = async (fixId: string, userId?: string): Promise<boolean> => {
+    try {
+        const fix = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, fixId);
+        if (!fix.vulnerability_id) return false;
+        return assertVulnAccess(fix.vulnerability_id, userId);
+    } catch {
+        return false;
+    }
+};
+
 // Remediation
 router.post('/vulns/:id/remediate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
+        if (!(await assertVulnAccess(id, req.user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this vulnerability' });
+        }
         const fix = await getRemediationFix(id);
         res.json(fix);
     } catch (err) {
@@ -26,6 +53,10 @@ router.post('/vulns/:id/feedback', async (req: AuthenticatedRequest, res: Respon
     try {
         const { id } = req.params;
         const { feedback } = req.body;
+
+        if (!(await assertVulnAccess(id, req.user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this vulnerability' });
+        }
 
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, [
             Query.equal('vulnerability_id', id),
@@ -75,6 +106,9 @@ router.get('/metrics/trends', async (req: AuthenticatedRequest, res: Response, n
 router.post('/fixes/:id/pr', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
+        if (!(await assertFixAccess(id, req.user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this fix' });
+        }
         const result = await createPullRequest(id);
 
         await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, id, {
@@ -92,8 +126,11 @@ router.post('/fixes/:id/pr', async (req: AuthenticatedRequest, res: Response, ne
 router.get('/fixes/:id/pr/status', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
+        if (!(await assertFixAccess(id, req.user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this fix' });
+        }
         const data = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, id);
-        
+
         res.json({
             pr_status: data.pr_status,
             pr_url: data.pr_url,

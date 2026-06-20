@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express';
 import { databases, DB_ID, Query, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
+import { canAccessResource } from '../services/tenancyService';
 import { Octokit } from 'octokit';
 
 const router = Router();
@@ -51,11 +52,12 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
             const emptyData = {
                 total: 0,
                 by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
-                by_type: { secret: 0, dependency: 0, sast: 0, docker: 0 },
+                by_type: { secret: 0, dependency: 0, sast: 0, docker: 0, iac: 0 },
                 by_repo: [],
                 trend: [],
                 open_count: 0,
-                resolved_count: 0
+                resolved_count: 0,
+                mttr_days: null
             };
             return res.json(emptyData);
         }
@@ -95,22 +97,25 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
         const stats = {
             total: findingsResponse.total,
             by_severity: { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>,
-            by_type: { secret: 0, dependency: 0, sast: 0, docker: 0 } as Record<string, number>,
+            by_type: { secret: 0, dependency: 0, sast: 0, docker: 0, iac: 0 } as Record<string, number>,
             by_type_severity: {
                 secret: { critical: 0, high: 0, medium: 0, low: 0 },
                 dependency: { critical: 0, high: 0, medium: 0, low: 0 },
                 sast: { critical: 0, high: 0, medium: 0, low: 0 },
-                docker: { critical: 0, high: 0, medium: 0, low: 0 }
+                docker: { critical: 0, high: 0, medium: 0, low: 0 },
+                iac: { critical: 0, high: 0, medium: 0, low: 0 }
             } as Record<string, Record<string, number>>,
-            by_repo: [] as { repo_name: string, count: number, repo_id: string }[],
+            by_repo: [] as { repo_name: string, count: number, repo_id: string, critical: number, high: number }[],
             trend: [] as { date: string, count: number }[],
             open_count: 0,
             resolved_count: 0,
+            mttr_days: null as number | null,
             findings: findings
         };
 
-        const repoCounts: Record<string, number> = {};
+        const repoCounts: Record<string, { total: number, critical: number, high: number }> = {};
         const trendCounts: Record<string, number> = {};
+        const resolutionDurationsMs: number[] = [];
 
         // Map scanId to repoId for fallback
         const scanToRepo: Record<string, string> = {};
@@ -139,14 +144,16 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
             // Type normalization (mapping tools to types)
             let type = (finding.type || 'dependency').toLowerCase();
             const tool = (finding.tool || '').toLowerCase();
+            const titleAndMessage = `${finding.title || ''} ${finding.message || ''}`;
             if (tool.includes('gitleaks') || tool.includes('secret')) type = 'secret';
             if (tool.includes('semgrep') || tool.includes('sast')) type = 'sast';
             if (tool.includes('trivy') && finding.title?.includes('image')) type = 'docker';
+            if (tool.includes('trivy') && (titleAndMessage.includes('[IaC]') || titleAndMessage.includes('[CONFIG]'))) type = 'iac';
             if (tool.includes('trivy') && !type) type = 'dependency';
 
             if (stats.by_type.hasOwnProperty(type)) {
                 stats.by_type[type]++;
-                
+
                 if (stats.by_type_severity[type]) {
                     stats.by_type_severity[type][normalizedSeverity] = (stats.by_type_severity[type][normalizedSeverity] || 0) + 1;
                 }
@@ -155,7 +162,10 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
             // Repo identification (with fallback)
             const repoId = finding.repo_id || scanToRepo[finding.scanId];
             if (repoId) {
-                repoCounts[repoId] = (repoCounts[repoId] || 0) + 1;
+                if (!repoCounts[repoId]) repoCounts[repoId] = { total: 0, critical: 0, high: 0 };
+                repoCounts[repoId].total++;
+                if (normalizedSeverity === 'critical') repoCounts[repoId].critical++;
+                if (normalizedSeverity === 'high') repoCounts[repoId].high++;
             }
 
             // Trend
@@ -165,18 +175,31 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
             }
 
             // Status
-            if (finding.status === 'resolved') {
+            if (finding.status === 'resolved' || finding.status === 'remediated') {
                 stats.resolved_count++;
+                // $updatedAt reflects the last write to the document, which for a resolved
+                // finding is when its status flipped — used as a proxy resolution timestamp
+                // since there is no dedicated resolvedAt field on this collection.
+                const created = new Date(finding.$createdAt).getTime();
+                const resolved = new Date(finding.$updatedAt).getTime();
+                if (resolved > created) resolutionDurationsMs.push(resolved - created);
             } else {
                 stats.open_count++;
             }
         }
 
+        if (resolutionDurationsMs.length > 0) {
+            const avgMs = resolutionDurationsMs.reduce((sum, ms) => sum + ms, 0) / resolutionDurationsMs.length;
+            stats.mttr_days = Math.round((avgMs / (1000 * 60 * 60 * 24)) * 10) / 10;
+        }
+
         // Format by_repo
-        stats.by_repo = Object.entries(repoCounts).map(([id, count]) => ({
+        stats.by_repo = Object.entries(repoCounts).map(([id, counts]) => ({
             repo_id: id,
             repo_name: repoNames[id] || (id.includes('/') ? id.split('/').pop()?.replace('.git', '') : 'Unknown') || 'Unknown',
-            count
+            count: counts.total,
+            critical: counts.critical,
+            high: counts.high
         }));
 
         // Format trend
@@ -255,8 +278,14 @@ router.get('/posture-breakdown', verifyUser, async (req: Request, res: Response)
 router.post('/tasks/:id/ai-blueprint', verifyUser, async (req: Request, res: Response) => {
     try {
         const taskId = req.params.id;
+        const userId = (req as any).user?.$id;
         const task = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, taskId);
-        
+
+        const repo = task.repo_id ? await databases.getDocument(DB_ID, 'repositories', task.repo_id).catch(() => null) : null;
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this finding' });
+        }
+
         const prompt = `You are a DevOps Engineer. Create a step-by-step markdown blueprint to remediate this finding:
         Title: ${task.title || task.name}
         Severity: ${task.severity}
@@ -291,7 +320,13 @@ router.post('/tasks/:id/ai-blueprint', verifyUser, async (req: Request, res: Res
 router.post('/tasks/:id/github-sync', verifyUser, async (req: Request, res: Response) => {
     try {
         const taskId = req.params.id;
+        const userId = (req as any).user?.$id;
         const task = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, taskId);
+
+        const ownerRepo = task.repo_id ? await databases.getDocument(DB_ID, 'repositories', task.repo_id).catch(() => null) : null;
+        if (!ownerRepo || !(await canAccessResource(ownerRepo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this finding' });
+        }
 
         if (!process.env.GITHUB_TOKEN) {
              return res.status(500).json({ error: 'GITHUB_TOKEN not configured' });

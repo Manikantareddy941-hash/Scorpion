@@ -5,6 +5,7 @@ import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import rateLimit from 'express-rate-limit';
 import { verifyUser } from '../middleware/auth';
 import { runPipeline, registerSseClient, unregisterSseClient, PipelineLogger, triggerPipelineRun } from '../services/pipelineService';
+import { canAccessResource } from '../services/tenancyService';
 
 const router = Router();
 
@@ -45,9 +46,19 @@ router.get('/runs', verifyUser, async (req: Request, res: Response) => {
  * GET /api/pipelines/run/:runId
  * Fetch single pipeline run
  */
+// Verifies the caller can access the repo a pipeline run belongs to.
+const canAccessRun = async (run: any, userId?: string): Promise<boolean> => {
+  if (!run.repoId) return false;
+  const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, run.repoId).catch(() => null);
+  return !!repo && canAccessResource(repo, userId);
+};
+
 router.get('/run/:runId', verifyUser, async (req: Request, res: Response) => {
   try {
     const run = await databases.getDocument(DB_ID, 'pipeline_runs', req.params.runId);
+    if (!(await canAccessRun(run, (req as any).user?.$id))) {
+      return res.status(403).json({ error: 'You do not have access to this pipeline run' });
+    }
     res.json(run);
   } catch (err: any) {
     res.status(404).json({ error: 'Pipeline run not found', details: err.message });
@@ -60,6 +71,11 @@ router.get('/run/:runId', verifyUser, async (req: Request, res: Response) => {
  */
 router.get('/run/:runId/logs', verifyUser, async (req: Request, res: Response) => {
   try {
+    const run = await databases.getDocument(DB_ID, 'pipeline_runs', req.params.runId);
+    if (!(await canAccessRun(run, (req as any).user?.$id))) {
+      return res.status(403).json({ error: 'You do not have access to this pipeline run' });
+    }
+
     const pipeLogger = new PipelineLogger(req.params.runId);
     const logs = await pipeLogger.getLogs();
     res.type('text/plain').send(logs);
@@ -72,8 +88,17 @@ router.get('/run/:runId/logs', verifyUser, async (req: Request, res: Response) =
  * GET /api/pipelines/run/:runId/stream
  * SSE endpoint for live updates
  */
-router.get('/run/:runId/stream', verifyUser, (req: Request, res: Response) => {
+router.get('/run/:runId/stream', verifyUser, async (req: Request, res: Response) => {
   const { runId } = req.params;
+
+  try {
+    const run = await databases.getDocument(DB_ID, 'pipeline_runs', runId);
+    if (!(await canAccessRun(run, (req as any).user?.$id))) {
+      return res.status(403).json({ error: 'You do not have access to this pipeline run' });
+    }
+  } catch {
+    return res.status(404).json({ error: 'Pipeline run not found' });
+  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

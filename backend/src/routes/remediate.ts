@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { verifyUser } from '../middleware/auth';
 import { getRemediationFix } from '../services/aiService';
+import { canAccessResource } from '../services/tenancyService';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -18,6 +19,12 @@ router.post('/generate', verifyUser, async (req: Request, res: Response) => {
         // 1. Retrieve vulnerability metadata from Appwrite
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerability_id);
         if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
+
+        const userId = (req as any).user?.$id;
+        const repo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this vulnerability' });
+        }
 
         // 2. Call the real Gemini-powered service
         const fix = await getRemediationFix(vulnerability_id);
@@ -55,6 +62,12 @@ router.post('/apply', verifyUser, async (req: Request, res: Response) => {
         // 1. Retrieve vulnerability details
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerability_id);
         if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
+
+        const userId = (req as any).user?.$id;
+        const ownerRepo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
+        if (!ownerRepo || !(await canAccessResource(ownerRepo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this vulnerability' });
+        }
 
         let localPath = workspaceDir;
         if (vuln.repo_id) {
@@ -142,6 +155,12 @@ router.post('/revert', verifyUser, async (req: Request, res: Response) => {
         // 1. Retrieve vulnerability details
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerability_id);
         if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
+
+        const userId = (req as any).user?.$id;
+        const ownerRepo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
+        if (!ownerRepo || !(await canAccessResource(ownerRepo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this vulnerability' });
+        }
 
         let localPath = workspaceDir;
         if (vuln.repo_id) {

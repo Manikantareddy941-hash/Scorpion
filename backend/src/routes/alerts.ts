@@ -1,6 +1,7 @@
 import express from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { AlertService } from '../services/alertService';
+import { canAccessResource } from '../services/tenancyService';
 import { Models } from 'node-appwrite';
 
 const router = express.Router();
@@ -42,9 +43,14 @@ router.post('/test', async (req, res) => {
 router.post('/notify', async (req, res) => {
     try {
         const { findingId, webhookUrl, type, repoName } = req.body;
-        
+
         const findingDoc = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, findingId);
-        
+
+        const repo = findingDoc.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, findingDoc.repo_id).catch(() => null) : null;
+        if (!repo || !(await canAccessResource(repo, (req as any).user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this finding' });
+        }
+
         const finding = {
             vulnerability_id: findingDoc.vulnerability_id,
             rule_id: findingDoc.rule_id,

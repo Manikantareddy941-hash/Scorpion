@@ -6,6 +6,7 @@ import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { sendSecurityAlert } from '../services/notificationService';
 import { getDynamicPolicy } from '../services/policyService';
 import { checkPermission } from '../middleware/iamMiddleware';
+import { canAccessResource } from '../services/tenancyService';
 
 const router = Router();
 
@@ -240,8 +241,13 @@ router.post('/release', verifyUser, async (req: Request, res: Response) => {
 
 router.get('/release/:repo_id', verifyUser, async (req: Request, res: Response) => {
     const { repo_id } = req.params;
-    
+
     try {
+        const repo = await databases.getDocument(DB_ID, 'repositories', repo_id).catch(() => null);
+        if (!repo || !(await canAccessResource(repo, (req as any).user?.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this repository' });
+        }
+
         const result = await checkReleaseGate(repo_id);
         res.json(result);
     } catch (err: any) {

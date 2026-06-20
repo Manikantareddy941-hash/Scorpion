@@ -47,6 +47,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
 // Delete API Key
 router.delete('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
+        const key = await databases.getDocument(DB_ID, COLLECTIONS.API_KEYS, req.params.id);
+        if (key.user_id !== req.user!.$id) {
+            return res.status(403).json({ error: 'You do not have access to this API key' });
+        }
+
         await databases.deleteDocument(DB_ID, COLLECTIONS.API_KEYS, req.params.id);
         res.json({ message: 'API Key revoked' });
     } catch (err) {

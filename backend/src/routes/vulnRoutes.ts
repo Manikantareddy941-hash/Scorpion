@@ -1,6 +1,8 @@
 import { Router, Response, Request, NextFunction } from 'express';
 import { Models } from 'node-appwrite';
 import { getRemediationFix } from '../services/aiService';
+import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { canAccessResource } from '../services/tenancyService';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -13,7 +15,14 @@ router.post('/:id/remediate', async (req: AuthenticatedRequest, res: Response, n
     try {
         const vulnerabilityId = req.params.id;
         console.log(`[Remediation] Triggering AI remediation for: ${vulnerabilityId}`);
-        
+
+        const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerabilityId);
+        const userId = (req as any).user?.$id;
+        const repo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this vulnerability' });
+        }
+
         const fix = await getRemediationFix(vulnerabilityId);
         
         // Map internal Appwrite document to the format expected by the frontend

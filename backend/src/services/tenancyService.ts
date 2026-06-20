@@ -73,9 +73,30 @@ export const resolveCreationOwnership = async (
  */
 export const canAccessResource = async (
     resource: { user_id?: string; team_id?: string } & Record<string, any>,
-    userId: string
+    userId?: string
 ): Promise<boolean> => {
+    if (!userId) return false;
     if (resource.user_id === userId) return true;
     if (resource.team_id) return isTeamMember(resource.team_id, userId);
     return false;
+};
+
+/**
+ * Fetches the repository identified by repoId and throws TenantAccessError
+ * if userId can't access it (not the owner, not a member of its team).
+ * Use this to guard any route that mutates/reads a resource keyed off
+ * repo_id but doesn't itself carry an owner field (vulnerabilities,
+ * findings, pipeline runs, scans, etc).
+ */
+export const assertRepoAccess = async (repoId: string, userId: string): Promise<any> => {
+    let repo: any;
+    try {
+        repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+    } catch {
+        throw new TenantAccessError('Repository not found');
+    }
+    if (!(await canAccessResource(repo, userId))) {
+        throw new TenantAccessError('Access denied');
+    }
+    return repo;
 };
