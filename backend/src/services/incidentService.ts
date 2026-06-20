@@ -1,6 +1,25 @@
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
-const notifySlack = async (payload: any) => { logger.info('Mock notifySlack', payload); };
+import { sendSlackNotification } from './slackService';
+import { freezeReleaseGateForIncident, isCriticalSeverity } from './incidentActionService';
 import { logger } from './logger';
+
+const notifySlack = async (payload: { title: string; severity: string; source: string; incidentId: string }) => {
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    logger.info('[Incident Service] SLACK_WEBHOOK_URL not configured, skipping Slack notification');
+    return;
+  }
+  try {
+    await sendSlackNotification(webhookUrl, {
+      title: payload.title,
+      severity: payload.severity,
+      rule: payload.source,
+      incidentId: payload.incidentId,
+    });
+  } catch (err) {
+    logger.error('[Incident Service] Failed to send Slack notification:', err);
+  }
+};
 
 export interface Incident {
   title: string;
@@ -32,8 +51,15 @@ export async function createIncident(incident: Incident) {
     );
 
     await notifySlack({
-      message: `🚨 *New Security Incident Generated*\n\n*Title*: ${incident.title}\n*Severity*: ${incident.severity}\n*Source*: ${incident.source}\n*ID*: \`${doc.$id}\`\n\n[View in Dashboard](${process.env.FRONTEND_URL}/dashboard)`
+      title: incident.title,
+      severity: incident.severity,
+      source: incident.source,
+      incidentId: doc.$id,
     });
+
+    if (isCriticalSeverity(incident.severity)) {
+      await freezeReleaseGateForIncident(`${incident.source} incident "${incident.title}" (${doc.$id})`);
+    }
 
     logger.error('incident_created', {
       event: 'incident_created',
