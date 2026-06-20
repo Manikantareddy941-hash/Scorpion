@@ -178,7 +178,7 @@ export const generatePDFReportBuffer = async (reportData: { title: string, stats
         doc.on('end', () => resolve(Buffer.concat(buffers)));
 
         // Header
-        doc.fillColor('#1D4ED8').fontSize(24).text('StackPilot Security Posture Report', { align: 'center' });
+        doc.fillColor('#1D4ED8').fontSize(24).text('SCORPION Security Posture Report', { align: 'center' });
         doc.moveDown();
         doc.fillColor('#334155').fontSize(12).text(`Scope: ${reportData.title}`, { align: 'center' });
         doc.text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });

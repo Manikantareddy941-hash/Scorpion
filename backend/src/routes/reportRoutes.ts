@@ -6,6 +6,7 @@ import PDFDocument from 'pdfkit';
 import { Parser } from 'json2csv';
 import { generateSecuritySummary } from '../services/aiService';
 import { canAccessResource, resolveOwnershipScope } from '../services/tenancyService';
+import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from '../services/reportingService';
 import { PassThrough } from 'stream';
 import { logger } from '../services/logger';
 
@@ -152,5 +153,42 @@ router.get('/export', async (req: Request, res: Response, next) => {
 }, handleExport);
 
 router.post('/export', verifyUser, handleExport);
+
+// GET /api/reports/posture - PDF security posture report (severity/OWASP
+// breakdown + trend), scoped to the caller's own repos/team/project.
+router.get('/posture', verifyUser, async (req: Request, res: Response) => {
+    const userId = (req as any).user?.$id;
+    const scope = (['global', 'team', 'project'].includes(req.query.scope as string) ? req.query.scope : 'global') as 'global' | 'team' | 'project';
+    const id = req.query.id as string | undefined;
+
+    try {
+        const stats = await getSecurityPostureStats(userId, scope, id);
+        if (!stats) {
+            return res.status(404).json({ error: 'No scanned repositories found for this scope' });
+        }
+
+        let repoIds: string[];
+        if (scope === 'project' && id) {
+            repoIds = [id];
+        } else {
+            const ownScope = await resolveOwnershipScope(req, userId);
+            const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(ownScope.field, ownScope.value)]);
+            repoIds = ownedRepos.documents.map((r: any) => r.$id);
+        }
+        const trend = await getTrendData(userId, repoIds);
+
+        await logAuditEvent('REPORT_EXPORTED', `Security posture PDF report generated (scope: ${scope})`, userId, id);
+
+        const title = scope === 'project' && id ? `Project ${id}` : scope === 'team' && id ? `Team ${id}` : 'All accessible repositories';
+        const buffer = await generatePDFReportBuffer({ title, stats, trend });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="scorpion-posture-report.pdf"');
+        res.send(buffer);
+    } catch (err: any) {
+        logger.error('[Posture Report Error]', err);
+        res.status(500).json({ error: 'Failed to generate posture report' });
+    }
+});
 
 export default router;
