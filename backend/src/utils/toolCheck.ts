@@ -13,7 +13,7 @@ export interface ResolvedCommand {
 const cache = new Map<string, ResolvedCommand>();
 
 const getVersionFlag = (toolName: string): string => {
-    if (toolName === 'gitleaks') {
+    if (toolName === 'gitleaks' || toolName === 'opa') {
         return 'version';
     }
     return '--version';
