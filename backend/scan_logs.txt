@@ -1,1 +1,0 @@
-bash: ./run_scan.sh: No such file or directory

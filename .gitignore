@@ -46,6 +46,12 @@ snyk-report*
 # scratch / temp
 backend/tmp/
 starter-for-react/
+scratch/
+*.timestamp-*.mjs
+backend/src/extract_*/
+scan_logs.txt
+final_results.txt
+project_tree.txt
 
 # secrets & keys (CRITICAL)
 *.pem
