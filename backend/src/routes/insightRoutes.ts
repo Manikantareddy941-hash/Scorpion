@@ -57,10 +57,14 @@ router.get('/dashboard/activities', async (req: AuthenticatedRequest, res: Respo
             Query.limit(5)
         ]);
 
-        const scans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        const allRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
+        const repoIds = allRepos.documents.map((r: any) => r.$id);
+
+        const scans = repoIds.length > 0 ? await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('repo_id', repoIds),
             Query.orderDesc('$createdAt'),
             Query.limit(10)
-        ]);
+        ]) : { documents: [] as any[] };
 
         const activities = [
             ...repos.documents.map((r: any) => ({
@@ -88,10 +92,15 @@ router.get('/dashboard/activities', async (req: AuthenticatedRequest, res: Respo
 // Trend Data Endpoint
 router.get('/dashboard/trends', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const scans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        const userId = req.user!.$id;
+        const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
+        const repoIds = repos.documents.map((r: any) => r.$id);
+
+        const scans = repoIds.length > 0 ? await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('repo_id', repoIds),
             Query.orderAsc('$createdAt'),
             Query.limit(20)
-        ]);
+        ]) : { documents: [] as any[] };
 
         const trends = scans.documents.reduce((acc: any[], scan: any) => {
             const date = new Date(scan.$createdAt).toLocaleDateString();

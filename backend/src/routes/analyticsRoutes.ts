@@ -1,6 +1,7 @@
 import { Router, Response, Request, NextFunction } from 'express';
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { resolveOwnershipScope } from '../services/tenancyService';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -16,12 +17,18 @@ router.get('/trends', async (req: AuthenticatedRequest, res: Response, next: Nex
         const dateLimit = new Date();
         dateLimit.setDate(dateLimit.getDate() - days);
 
-        // Fetch vulnerabilities within the date range
+        const userId = (req as any).user?.$id;
+        const scope = await resolveOwnershipScope(req, userId);
+        const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value)]);
+        const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+
+        // Fetch vulnerabilities within the date range, scoped to the caller's repos
         // Note: For scalability, we limit to 5000. In a real system, you might aggregate this in a background job
-        const response = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+        const response = repoIds.length > 0 ? await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('repo_id', repoIds),
             Query.greaterThanEqual('detected_at', dateLimit.toISOString()),
             Query.limit(5000)
-        ]);
+        ]) : { documents: [] as any[] };
 
         // Group by Date (YYYY-MM-DD) and Severity
         const trendsData: Record<string, { Critical: number, High: number, Medium: number, Low: number }> = {};

@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { telemetryBuffer } from '../services/metrics';
+import { resolveOwnershipScope } from '../services/tenancyService';
 
 const router = Router();
 
@@ -19,15 +20,23 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
         };
         const startTime = new Date(Date.now() - rangeOffsets[selectedRange]);
 
-        // 1. Fetch telemetry and database data in parallel
-        const [reposRes, scansRes, notifsRes, metricsRes, healthChecksRes] = await Promise.all([
-            databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.limit(50)]),
-            databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        const userId = (req as any).user?.$id;
+        const scope = await resolveOwnershipScope(req, userId);
+
+        // Resolve the caller's own repos first so scans can be scoped to them
+        const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value), Query.limit(50)]);
+        const repoIds = reposRes.documents.map((r: any) => r.$id);
+
+        // 1. Fetch telemetry and database data in parallel, scoped to the caller's repos
+        const [scansRes, notifsRes, metricsRes, healthChecksRes] = await Promise.all([
+            repoIds.length > 0 ? databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+                Query.equal('repo_id', repoIds),
                 Query.greaterThanEqual('$createdAt', startTime.toISOString()),
                 Query.orderDesc('$createdAt'),
                 Query.limit(100)
-            ]),
+            ]) : Promise.resolve({ documents: [] as any[], total: 0 }),
             databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [
+                Query.equal('user_id', userId),
                 Query.greaterThanEqual('$createdAt', startTime.toISOString()),
                 Query.orderDesc('$createdAt'),
                 Query.limit(50)
