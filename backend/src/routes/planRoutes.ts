@@ -18,6 +18,7 @@ interface Project {
   repoId: string;
   type: 'kanban' | 'scrum';
   createdAt: string;
+  user_id?: string;
 }
 
 interface Epic {
@@ -165,23 +166,69 @@ async function handleQuery<T>(
   }
 }
 
+// Fetches a project's owner (user_id), checking Appwrite then the mock
+// fallback store. Returns null if the project doesn't exist in either.
+async function getProjectOwner(projectId: string): Promise<string | null> {
+  try {
+    const doc = await databases.getDocument(DB_ID, 'plan_projects', projectId);
+    return doc.user_id ?? null;
+  } catch {
+    const db = await readMockDb();
+    const project = db.projects.find(p => p.$id === projectId);
+    return project?.user_id ?? null;
+  }
+}
+
+// Fetches a sprint's projectId, checking Appwrite then the mock fallback.
+async function getSprintProjectId(sprintId: string): Promise<string | null> {
+  try {
+    const doc = await databases.getDocument(DB_ID, 'plan_sprints', sprintId);
+    return doc.projectId ?? null;
+  } catch {
+    const db = await readMockDb();
+    const sprint = db.sprints.find(s => s.$id === sprintId);
+    return sprint?.projectId ?? null;
+  }
+}
+
+// Fetches an issue's projectId, checking Appwrite then the mock fallback.
+async function getIssueProjectId(issueId: string): Promise<string | null> {
+  try {
+    const doc = await databases.getDocument(DB_ID, 'plan_issues', issueId);
+    return doc.projectId ?? null;
+  } catch {
+    const db = await readMockDb();
+    const issue = db.issues.find(i => i.$id === issueId);
+    return issue?.projectId ?? null;
+  }
+}
+
+// Throws-by-returning-false unless userId owns the project a resource
+// belongs to. Used to gate every projectId-scoped route below.
+async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
+  if (!userId) return false;
+  const ownerId = await getProjectOwner(projectId);
+  return ownerId === userId;
+}
+
 /* ==========================================================================
    PROJECTS
    ========================================================================== */
 
 // GET projects
 router.get('/projects', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.$id;
   const data = await handleQuery(
     async () => {
-      // In Appwrite, we'd look up the collection. Since we might not have it:
       const docList = await databases.listDocuments(DB_ID, 'plan_projects', [
+        Query.equal('user_id', userId || ''),
         Query.orderDesc('createdAt')
       ]);
       return docList.documents;
     },
     async () => {
       const db = await readMockDb();
-      return db.projects;
+      return db.projects.filter(p => p.user_id === userId);
     }
   );
   res.json(data);
@@ -191,13 +238,15 @@ router.get('/projects', async (req: AuthenticatedRequest, res: Response) => {
 router.post('/projects', async (req: AuthenticatedRequest, res: Response) => {
   const { name, repoId, type } = req.body;
   if (!name) return res.status(400).json({ error: 'Project name is required' });
+  const userId = req.user?.$id;
 
   const newProj = {
     $id: 'proj-' + Math.random().toString(36).substr(2, 9),
     name,
     repoId: repoId || 'all',
     type: type || 'kanban',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    user_id: userId
   };
 
   const data = await handleQuery(
@@ -206,7 +255,8 @@ router.post('/projects', async (req: AuthenticatedRequest, res: Response) => {
         name: newProj.name,
         repoId: newProj.repoId,
         type: newProj.type,
-        createdAt: newProj.createdAt
+        createdAt: newProj.createdAt,
+        user_id: userId
       });
     },
     async () => {
@@ -226,6 +276,9 @@ router.post('/projects', async (req: AuthenticatedRequest, res: Response) => {
 // GET epics
 router.get('/projects/:projectId/epics', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const data = await handleQuery(
     async () => {
       const docList = await databases.listDocuments(DB_ID, 'plan_epics', [
@@ -244,6 +297,9 @@ router.get('/projects/:projectId/epics', async (req: AuthenticatedRequest, res: 
 // POST epic
 router.post('/projects/:projectId/epics', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const { title, color, startDate, endDate } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
 
@@ -285,6 +341,9 @@ router.post('/projects/:projectId/epics', async (req: AuthenticatedRequest, res:
 // GET sprints
 router.get('/projects/:projectId/sprints', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const data = await handleQuery(
     async () => {
       const docList = await databases.listDocuments(DB_ID, 'plan_sprints', [
@@ -303,6 +362,9 @@ router.get('/projects/:projectId/sprints', async (req: AuthenticatedRequest, res
 // POST sprint
 router.post('/projects/:projectId/sprints', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const { name, goal, startDate, endDate } = req.body;
   if (!name) return res.status(400).json({ error: 'Sprint name is required' });
 
@@ -340,6 +402,11 @@ router.post('/projects/:projectId/sprints', async (req: AuthenticatedRequest, re
 // PATCH sprint (start/complete/delete)
 router.patch('/sprints/:sprintId', async (req: AuthenticatedRequest, res: Response) => {
   const { sprintId } = req.params;
+  const sprintProjectId = await getSprintProjectId(sprintId);
+  if (!sprintProjectId) return res.status(404).json({ error: 'Sprint not found' });
+  if (!(await assertProjectAccess(sprintProjectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this sprint' });
+  }
   const updates = req.body;
 
   const data = await handleQuery(
@@ -380,6 +447,9 @@ router.patch('/sprints/:sprintId', async (req: AuthenticatedRequest, res: Respon
 // GET issues
 router.get('/projects/:projectId/issues', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const data = await handleQuery(
     async () => {
       const docList = await databases.listDocuments(DB_ID, 'plan_issues', [
@@ -398,6 +468,9 @@ router.get('/projects/:projectId/issues', async (req: AuthenticatedRequest, res:
 // POST issue
 router.post('/projects/:projectId/issues', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const {
     type, title, description, priority, status, assignee,
     storyPoints, timeEstimate, epicId, sprintId, vulnId, labels, dueDate
@@ -459,6 +532,11 @@ router.post('/projects/:projectId/issues', async (req: AuthenticatedRequest, res
 // PATCH issue
 router.patch('/issues/:issueId', async (req: AuthenticatedRequest, res: Response) => {
   const { issueId } = req.params;
+  const issueProjectId = await getIssueProjectId(issueId);
+  if (!issueProjectId) return res.status(404).json({ error: 'Issue not found' });
+  if (!(await assertProjectAccess(issueProjectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this issue' });
+  }
   const updates = req.body;
 
   const data = await handleQuery(
@@ -484,6 +562,11 @@ router.patch('/issues/:issueId', async (req: AuthenticatedRequest, res: Response
 // DELETE issue
 router.delete('/issues/:issueId', async (req: AuthenticatedRequest, res: Response) => {
   const { issueId } = req.params;
+  const issueProjectId = await getIssueProjectId(issueId);
+  if (!issueProjectId) return res.status(404).json({ error: 'Issue not found' });
+  if (!(await assertProjectAccess(issueProjectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this issue' });
+  }
 
   const ok = await handleQuery(
     async () => {
@@ -514,6 +597,11 @@ router.delete('/issues/:issueId', async (req: AuthenticatedRequest, res: Respons
 // GET comments for an issue
 router.get('/issues/:issueId/comments', async (req: AuthenticatedRequest, res: Response) => {
   const { issueId } = req.params;
+  const issueProjectId = await getIssueProjectId(issueId);
+  if (!issueProjectId) return res.status(404).json({ error: 'Issue not found' });
+  if (!(await assertProjectAccess(issueProjectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this issue' });
+  }
   const data = await handleQuery(
     async () => {
       const docList = await databases.listDocuments(DB_ID, 'plan_comments', [
@@ -532,6 +620,11 @@ router.get('/issues/:issueId/comments', async (req: AuthenticatedRequest, res: R
 // POST comment
 router.post('/issues/:issueId/comments', async (req: AuthenticatedRequest, res: Response) => {
   const { issueId } = req.params;
+  const issueProjectId = await getIssueProjectId(issueId);
+  if (!issueProjectId) return res.status(404).json({ error: 'Issue not found' });
+  if (!(await assertProjectAccess(issueProjectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this issue' });
+  }
   const { body } = req.body;
   if (!body) return res.status(400).json({ error: 'Body is required' });
 
@@ -569,6 +662,9 @@ router.post('/issues/:issueId/comments', async (req: AuthenticatedRequest, res: 
 // GET automation rules
 router.get('/projects/:projectId/automation-rules', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const data = await handleQuery(
     async () => {
       const docList = await databases.listDocuments(DB_ID, 'plan_automation_rules', [
@@ -587,6 +683,9 @@ router.get('/projects/:projectId/automation-rules', async (req: AuthenticatedReq
 // POST automation rule
 router.post('/projects/:projectId/automation-rules', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const { trigger, conditions, action } = req.body;
   if (!trigger || !action) return res.status(400).json({ error: 'Trigger and action are required' });
 
@@ -624,7 +723,13 @@ router.post('/projects/:projectId/automation-rules', async (req: AuthenticatedRe
 // GET vulnerabilities/findings from system DB to allow linking them
 router.get('/vulnerabilities', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userId = req.user?.$id;
+    const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId || '')]);
+    const repoIds = repos.documents.map((r: any) => r.$id);
+    if (repoIds.length === 0) return res.json([]);
+
     const list = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS || 'findings', [
+      Query.equal('repo_id', repoIds),
       Query.limit(100)
     ]);
     res.json(list.documents);
@@ -641,6 +746,9 @@ router.get('/vulnerabilities', async (req: AuthenticatedRequest, res: Response) 
 // GET threats for a project
 router.get('/projects/:projectId/threats', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const data = await handleQuery(
     async () => {
       const docList = await databases.listDocuments(DB_ID, 'plan_threats', [
@@ -659,6 +767,9 @@ router.get('/projects/:projectId/threats', async (req: AuthenticatedRequest, res
 // POST threat
 router.post('/projects/:projectId/threats', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const { title, strideCategory, severity, description, mitigation } = req.body;
   if (!title || !strideCategory || !severity) {
     return res.status(400).json({ error: 'Title, strideCategory, and severity are required' });
@@ -700,7 +811,10 @@ router.post('/projects/:projectId/threats', async (req: AuthenticatedRequest, re
 
 // PATCH threat
 router.patch('/projects/:projectId/threats/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
+  const { id, projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
   const updates = req.body;
 
   const data = await handleQuery(
@@ -726,7 +840,10 @@ router.patch('/projects/:projectId/threats/:id', async (req: AuthenticatedReques
 
 // DELETE threat
 router.delete('/projects/:projectId/threats/:id', async (req: AuthenticatedRequest, res: Response) => {
-  const { id } = req.params;
+  const { id, projectId } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
 
   const ok = await handleQuery(
     async () => {
@@ -753,6 +870,9 @@ router.delete('/projects/:projectId/threats/:id', async (req: AuthenticatedReque
 // POST convert threat to ticket
 router.post('/projects/:projectId/threats/:id/convert', async (req: AuthenticatedRequest, res: Response) => {
   const { projectId, id } = req.params;
+  if (!(await assertProjectAccess(projectId, req.user?.$id))) {
+    return res.status(403).json({ error: 'You do not have access to this project' });
+  }
 
   // 1. Fetch threat details
   const threat = await handleQuery(
