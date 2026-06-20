@@ -13,6 +13,7 @@ import { logger } from './logger';
 import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
 import { containerizedTrivyService } from './containerizedTrivyService';
+import { getImageDigest, signImageDigest } from './cosignService';
 
 
 
@@ -229,6 +230,23 @@ export async function runPipeline(runId: string) {
       const imageTag = `repo-${runDoc.repoId}:${runId}`;
       await execFileCommand('docker', ['build', '-t', imageTag, '.'], workspaceDir, pipeLogger);
       await pipeLogger.log(`Docker image ${imageTag} built.`);
+
+      try {
+        const digest = await getImageDigest(imageTag);
+        const signed = await signImageDigest(digest);
+        if (signed) {
+          await databases.updateDocument(DB_ID, 'pipeline_runs', runId, {
+            imageDigest: digest,
+            imageSignature: signed.signature,
+          });
+          await pipeLogger.log(`Image digest signed: ${digest}`);
+        } else {
+          await pipeLogger.log('Image signing skipped (cosign/COSIGN_KEY_PATH not configured).');
+        }
+      } catch (signErr: any) {
+        logger.warn(`[PipelineService] Image signing step failed for ${imageTag}:`, signErr.message);
+        await pipeLogger.log(`Image signing step failed: ${signErr.message}`);
+      }
     } else if (buildTool === 'gradle') {
       const executionImage = getRuntimeImageForTool(buildTool);
       const executionOutcome = await dockerRunnerService.runInContainer({

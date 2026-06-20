@@ -1,6 +1,7 @@
 import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
+import { verifyImageDigest } from '../services/cosignService';
 import { logger } from '../services/logger';
 import { execFile } from 'child_process';
 import util from 'util';
@@ -134,17 +135,26 @@ export async function triggerDeploy(buildId: string, environment: 'dev' | 'stagi
   try {
     let repoId = '';
     let imageTag = '';
+    let imageDigest: string | undefined;
+    let imageSignature: string | undefined;
 
     // 1. Fetch details from Pipeline Runs or legacy builds
     try {
       const run = await databases.getDocument(DB_ID, 'pipeline_runs', buildId);
       repoId = run.repoId;
       imageTag = `repo-${repoId}:${buildId}`;
+      imageDigest = run.imageDigest;
+      imageSignature = run.imageSignature;
     } catch {
       try {
         const build = await databases.getDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, buildId);
         repoId = build.repoId;
-        imageTag = `repo-${repoId}:latest`;
+        // Must match buildService.ts's `repo-${repoId}:${pipelineId}` tag
+        // (pipelineId there IS this buildId) - ':latest' was never the
+        // actual tag buildService.ts produces.
+        imageTag = `repo-${repoId}:${buildId}`;
+        imageDigest = build.imageDigest;
+        imageSignature = build.imageSignature;
       } catch (err) {
         logger.error(`[DeployService] Failed to resolve build/run for ID ${buildId}`);
         throw new Error(`Failed to resolve build/run for ID ${buildId}`);
@@ -234,6 +244,36 @@ export async function triggerDeploy(buildId: string, environment: 'dev' | 'stagi
       }
       
       return { deploymentId, status: 'failed', reason: 'Critical vulnerabilities found' };
+    }
+
+    // 5b. Verify the build's image signature, if one was recorded and
+    // verification is configured. Skips gracefully when signing wasn't set
+    // up (most installs) - only blocks when a signature WAS recorded but
+    // fails to verify, which means the image was tampered with or
+    // substituted after the build signed it.
+    if (imageDigest && imageSignature && process.env.COSIGN_PUB_KEY_PATH) {
+      let verified = false;
+      try {
+        verified = await verifyImageDigest(imageDigest, imageSignature);
+      } catch (err: any) {
+        logger.warn(`[DeployService] Could not attempt image signature verification for ${deploymentId}:`, err.message);
+        verified = true; // couldn't attempt verification (tool/config issue) - don't block on that alone
+      }
+
+      if (!verified) {
+        logger.error(`[DeployService] Deployment blocked for ${deploymentId}: image signature verification failed.`);
+        await databases.updateDocument(DB_ID, 'deployments', deploymentId, { status: 'failed' });
+
+        await createIncident({
+          title: `Deployment Blocked: Image signature verification failed for ${imageTag}`,
+          severity: 'CRITICAL',
+          source: 'ci_pipeline',
+          description: `Deployment ${deploymentId} to ${environment} was blocked: the image digest ${imageDigest} does not match its recorded build signature, indicating possible tampering or substitution.`,
+          userId: await resolveRepoOwner(repoId)
+        });
+
+        return { deploymentId, status: 'failed', reason: 'Image signature verification failed' };
+      }
     }
 
     // 6. Proceed with Deployment

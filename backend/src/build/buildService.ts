@@ -4,6 +4,7 @@ import { logger } from '../services/logger';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
+import { getImageDigest, signImageDigest } from '../services/cosignService';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -130,10 +131,31 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
         const res2 = await execWithLogs('npm run build --if-present', tempDir, pipelineId, logs);
         logs = res2.logs;
       } else if (buildTool === 'docker') {
-        const imageName = `repo-${repoId}:${randomId}`;
+        // Must match the tag deployService.ts reconstructs as `repo-${repoId}:${buildId}`
+        // (buildId there IS this pipelineId) - using randomId here instead meant the
+        // image deployService.ts later tried to scan/run never actually existed under
+        // that tag, silently no-opping the pre-deploy Trivy CVE gate.
+        const imageName = `repo-${repoId}:${pipelineId}`;
         const res1 = await execWithLogs(`docker build -t ${imageName} .`, tempDir, pipelineId, logs);
         logs = res1.logs;
         logs += `Docker image ${imageName} built successfully.\n`;
+
+        try {
+          const digest = await getImageDigest(imageName);
+          const signed = await signImageDigest(digest);
+          if (signed) {
+            await databases.updateDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, pipelineId, {
+              imageDigest: digest,
+              imageSignature: signed.signature,
+            });
+            logs += `Image digest signed: ${digest}\n`;
+          } else {
+            logs += `Image signing skipped (cosign/COSIGN_KEY_PATH not configured).\n`;
+          }
+        } catch (signErr: any) {
+          logger.warn(`[BuildService] Image signing step failed for ${imageName}:`, signErr.message);
+          logs += `Image signing step failed: ${signErr.message}\n`;
+        }
       } else if (buildTool === 'gradle') {
         const res1 = await execWithLogs('./gradlew build -x test', tempDir, pipelineId, logs);
         logs = res1.logs;
