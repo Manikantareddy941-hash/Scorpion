@@ -69,7 +69,8 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       container_image: containerImage,
       status: 'open',
       timestamp: event.time || new Date().toISOString(),
-      correlated_scan_id: correlatedScanId
+      correlated_scan_id: correlatedScanId,
+      ...(ownerUserId ? { user_id: ownerUserId } : {})
     });
 
     await auditLog({
@@ -97,7 +98,8 @@ export async function handleFalcoEvent(event: FalcoEvent) {
         severity: event.priority,
         source: 'falco',
         relatedScanId: correlatedScanId,
-        description: event.output
+        description: event.output,
+        userId: ownerUserId || undefined
       });
 
       // 3. Trigger Slack Alert dynamically via INTEGRATIONS collection

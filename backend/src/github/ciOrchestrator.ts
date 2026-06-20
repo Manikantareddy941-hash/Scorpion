@@ -3,7 +3,7 @@ import { Octokit } from '@octokit/rest';
 import { setCommitStatus } from './statusService';
 import { evaluatePolicy } from './policyEngine';
 import { runScanPipeline } from '../scanners/pipeline';
-import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logScanCompleted, logCIGateBlocked } from '../services/logEvents';
 import { scansTotal, ciGateDecisions, scanDuration, activeScans } from '../services/metrics';
 import { withSpan } from '../services/tracing';
@@ -130,9 +130,22 @@ export async function triggerCIScan(options: CIJobOptions) {
       logCIGateBlocked(options.repo, options.sha, `${criticalCount} critical CVEs`);
     }
 
-    // Compliance Evaluation
-    const { evaluateCompliance } = await import('../services/complianceEngine');
-    evaluateCompliance().catch(err => console.error('[Compliance] Auto-eval failed:', err));
+    // Compliance Evaluation -- best-effort, only runs if this GitHub repo is
+    // linked to a platform repository record so we know whose posture to update.
+    (async () => {
+      try {
+        const linked = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+          Query.contains('url', `${options.owner}/${options.repo}`),
+          Query.limit(1)
+        ]);
+        if (linked.total > 0) {
+          const { evaluateCompliance } = await import('../services/complianceEngine');
+          await evaluateCompliance(linked.documents[0].user_id);
+        }
+      } catch (err) {
+        console.error('[Compliance] Auto-eval failed:', err);
+      }
+    })();
 
   } catch (err) {
     console.error(`[CI] Error during scan for ${options.repo}:`, err);

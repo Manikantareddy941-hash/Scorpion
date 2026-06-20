@@ -21,11 +21,20 @@ const ISO27001_CONTROLS = [
     check: (_: any[], incidents: any[]) => incidents.length >= 0 },
 ];
 
-export async function evaluateCompliance() {
+export async function evaluateCompliance(userId: string) {
   try {
+    const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
+    const repoIds = reposRes.documents.map((r: any) => r.$id);
+
     const [scansRes, incidentsRes] = await Promise.all([
-      databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [Query.orderDesc('$createdAt'), Query.limit(50)]),
-      databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [Query.limit(100)])
+      repoIds.length > 0
+        ? databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('repo_id', repoIds),
+            Query.orderDesc('$createdAt'),
+            Query.limit(50)
+          ])
+        : Promise.resolve({ documents: [] as any[] }),
+      databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [Query.equal('user_id', userId), Query.limit(100)])
     ]);
 
     const scans = scansRes.documents;
@@ -38,13 +47,15 @@ export async function evaluateCompliance() {
       const evidence = scans.slice(0, 5).map(s => s.$id);
 
       const existing = await databases.listDocuments(DB_ID, COLLECTIONS.COMPLIANCE_CONTROLS, [
-        Query.equal('controlId', control.controlId)
+        Query.equal('controlId', control.controlId),
+        Query.equal('scopeId', userId)
       ]);
 
       const payload = {
         framework: control.framework,
         controlId: control.controlId,
         title: control.title,
+        scopeId: userId,
         status: passing ? 'passing' : 'failing',
         lastEvaluated: new Date().toISOString(),
         evidence: JSON.stringify(evidence)

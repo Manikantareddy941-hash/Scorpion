@@ -6,8 +6,12 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
+    const userId = (req as any).user?.$id;
     const { status } = req.query;
-    const filters = status ? [Query.equal('status', status as string)] : [Query.orderDesc('$createdAt'), Query.limit(100)];
+    const filters = [
+      Query.equal('user_id', userId),
+      ...(status ? [Query.equal('status', status as string)] : [Query.orderDesc('$createdAt'), Query.limit(100)])
+    ];
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, filters);
     res.json(result);
   } catch (error) {
@@ -17,6 +21,12 @@ router.get('/', async (req, res) => {
 
 router.patch('/:id/status', async (req, res) => {
   try {
+    const userId = (req as any).user?.$id;
+    const existing = await databases.getDocument(DB_ID, COLLECTIONS.INCIDENTS, req.params.id);
+    if (existing.user_id !== userId) {
+      return res.status(403).json({ error: 'You do not have access to this incident' });
+    }
+
     const { status, assignee } = req.body;
     const doc = await updateIncidentStatus(req.params.id, status, assignee);
     res.json(doc);
@@ -27,6 +37,12 @@ router.patch('/:id/status', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    const userId = (req as any).user?.$id;
+    const existing = await databases.getDocument(DB_ID, COLLECTIONS.INCIDENTS, req.params.id);
+    if (existing.user_id !== userId) {
+      return res.status(403).json({ error: 'You do not have access to this incident' });
+    }
+
     await databases.deleteDocument(DB_ID, COLLECTIONS.INCIDENTS, req.params.id);
     res.json({ deleted: true });
   } catch (error) {

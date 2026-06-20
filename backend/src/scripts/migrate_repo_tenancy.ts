@@ -32,6 +32,9 @@ async function migrate() {
     try {
         await addAttribute('repositories', 'team_id');
         await addAttribute('scans', 'user_id');
+        await addAttribute('incidents', 'user_id');
+        await addAttribute('compliance_controls', 'scopeId');
+        await addAttribute('plan_projects', 'user_id');
         process.exit(0);
     } catch (err: any) {
         console.error('Migration failed:', err.message);

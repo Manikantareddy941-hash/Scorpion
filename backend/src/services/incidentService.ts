@@ -8,17 +8,25 @@ export interface Incident {
   source: 'falco' | 'ci_pipeline' | 'gitops';
   relatedScanId?: string;
   description: string;
+  // Owning user, when derivable (e.g. correlated from a scan's repo owner).
+  // Left unset for sources that don't yet resolve to a platform user
+  // (raw GitOps/ArgoCD app names aren't linked to repository records) --
+  // such incidents are intentionally invisible via the regular incidents
+  // API until that integration exists, rather than visible to everyone.
+  userId?: string;
 }
 
 export async function createIncident(incident: Incident) {
   try {
+    const { userId, ...rest } = incident;
     const doc = await databases.createDocument(
-      DB_ID, 
-      COLLECTIONS.INCIDENTS, 
+      DB_ID,
+      COLLECTIONS.INCIDENTS,
       ID.unique(),
-      { 
-        ...incident, 
-        status: 'open', 
+      {
+        ...rest,
+        ...(userId ? { user_id: userId } : {}),
+        status: 'open',
         timestamp: new Date().toISOString() // for legacy field
       }
     );
