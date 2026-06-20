@@ -1,4 +1,5 @@
 import { Router, Response, Request, NextFunction } from 'express';
+import { z } from 'zod';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
@@ -9,6 +10,7 @@ import { cloneRepo } from '../utils/git';
 import { randomBytes } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import { validateBody } from '../middleware/validate';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -16,10 +18,26 @@ interface AuthenticatedRequest extends Request {
 
 const router = Router();
 
+const addRepoSchema = z.object({
+    url: z.string().trim().url('url must be a valid URL'),
+});
+
+const externalScanSchema = z.object({
+    provider: z.string().trim().min(1),
+    repoFullName: z.string().trim().min(1),
+    cloneUrl: z.string().trim().url('cloneUrl must be a valid URL'),
+    branch: z.string().trim().min(1).max(255).optional(),
+});
+
+const triggerScanSchema = z.object({
+    scanType: z.enum(['full', 'incremental', 'quick']).optional(),
+    scanDepth: z.enum(['standard', 'deep']).optional(),
+    branch: z.string().trim().min(1).max(255).optional(),
+});
+
 // Add/Sync repository
-router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/', validateBody(addRepoSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'URL is required' });
 
     try {
         const userId = req.user!.$id;
@@ -93,12 +111,12 @@ router.get('/external', async (req: AuthenticatedRequest, res: Response, next: N
 });
 
 // Trigger scan on any provider repo (Directly)
-router.post('/external/scan', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/external/scan', validateBody(externalScanSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { provider, repoFullName, cloneUrl, branch = 'main' } = req.body;
     const token = req.headers['x-provider-token'] as string;
-    
-    if (!provider || !token || !repoFullName || !cloneUrl) {
-        return res.status(400).json({ error: 'Missing required parameters or x-provider-token header' });
+
+    if (!token) {
+        return res.status(400).json({ error: 'x-provider-token header is required' });
     }
 
     try {
@@ -131,7 +149,7 @@ router.post('/external/scan', async (req: AuthenticatedRequest, res: Response, n
 });
 
 // Trigger scan — fire and forget (respond immediately, scan runs in background)
-router.post('/:id/scan', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/:id/scan', validateBody(triggerScanSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const repoId = req.params.id;
         const { scanType, scanDepth, branch } = req.body;

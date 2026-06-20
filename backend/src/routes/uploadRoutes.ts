@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { z } from 'zod';
 import { Models } from 'node-appwrite';
 import { Request } from 'express';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
@@ -11,6 +12,10 @@ interface AuthenticatedRequest extends Request {
 }
 
 const router = Router();
+
+const zipUploadSchema = z.object({
+    projectId: z.string().trim().min(1, 'projectId is required'),
+});
 
 // Configure storage for uploads
 const uploadDir = path.join(__dirname, '../../uploads');
@@ -42,16 +47,18 @@ const upload = multer({
 
 // ZIP Upload Endpoint
 router.post('/zip', upload.single('project_zip'), async (req: AuthenticatedRequest, res: Response) => {
-    const { projectId } = req.body;
-
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    if (!projectId) {
+    // multer parses multipart text fields into req.body alongside the file, so
+    // validation has to happen here rather than as a pre-multer middleware.
+    const parsed = zipUploadSchema.safeParse(req.body);
+    if (!parsed.success) {
         cleanupWorkspace(req.file.path);
-        return res.status(400).json({ error: 'projectId is required' });
+        return res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
     }
+    const { projectId } = parsed.data;
 
     try {
         const result = await ingestZip(req.file.path, projectId, req.user!.$id);
