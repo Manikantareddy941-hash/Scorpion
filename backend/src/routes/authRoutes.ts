@@ -6,6 +6,9 @@ import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite
 
 const router = express.Router();
 
+if (!process.env.RESET_TOKEN_SECRET && process.env.NODE_ENV === 'production') {
+    throw new Error('RESET_TOKEN_SECRET must be set in production');
+}
 const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'your-fallback-secret';
 
 // 1. Request Password Reset
