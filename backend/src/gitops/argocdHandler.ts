@@ -1,7 +1,7 @@
 import { scanImage } from '../scanners/imageScanner';
 import { evaluatePolicy } from '../github/policyEngine';
 import { triggerRollback } from './rollbackService';
-import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logDeployBlocked, logRollbackTriggered } from '../services/logEvents';
 import { deploymentBlocks, scansTotal } from '../services/metrics';
 import { withSpan } from '../services/tracing';
@@ -15,6 +15,25 @@ export interface ArgoCDSyncPayload {
   revision: string;
   repo: string;
   namespace: string;
+}
+
+// ArgoCD app specs only carry the git source URL, not a platform
+// Repository id -- best-effort match against repositories.url (with and
+// without a trailing .git) to resolve who owns this deployment's incidents.
+async function resolveRepoOwnerByUrl(repoUrl: string): Promise<string | undefined> {
+  const candidates = [repoUrl, repoUrl.replace(/\.git$/, ''), `${repoUrl.replace(/\.git$/, '')}.git`];
+  for (const url of candidates) {
+    try {
+      const matches = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.equal('url', url),
+        Query.limit(1)
+      ]);
+      if (matches.total > 0) return matches.documents[0].user_id;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return undefined;
 }
 
 export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
@@ -73,7 +92,8 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
         title: `Deployment blocked: ${payload.app}`,
         severity: 'Critical',
         source: 'gitops',
-        description: `Detected ${criticalCount} critical vulnerabilities in image: ${payload.image}`
+        description: `Detected ${criticalCount} critical vulnerabilities in image: ${payload.image}`,
+        userId: await resolveRepoOwnerByUrl(payload.repo)
       });
 
       // 4. Trigger automated rollback PR

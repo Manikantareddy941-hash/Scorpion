@@ -13,6 +13,17 @@ const execFileAsync = util.promisify(execFile);
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 
+// repoId here is a real platform Repository document id (sourced from
+// pipeline_runs.repoId / builds.repoId), so the owner is a direct lookup.
+async function resolveRepoOwner(repoId: string): Promise<string | undefined> {
+  try {
+    const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+    return repo.user_id;
+  } catch {
+    return undefined;
+  }
+}
+
 async function scanDockerImage(imageTag: string): Promise<boolean> {
   logger.info(`[DeployService] Running Trivy scan on image: ${imageTag}`);
   try {
@@ -209,7 +220,8 @@ export async function triggerDeploy(buildId: string, environment: 'dev' | 'stagi
         title: `Deployment Blocked: Critical CVEs in ${imageTag}`,
         severity: 'CRITICAL',
         source: 'ci_pipeline',
-        description: `Deployment ${deploymentId} to ${environment} was blocked by GitOps gate due to critical vulnerabilities in the Docker image.`
+        description: `Deployment ${deploymentId} to ${environment} was blocked by GitOps gate due to critical vulnerabilities in the Docker image.`,
+        userId: await resolveRepoOwner(repoId)
       });
 
       if (SLACK_WEBHOOK_URL) {
@@ -294,7 +306,8 @@ async function performHealthCheck(deploymentId: string, environment: string, ima
         title: `Health Check Failed: ${environment}`,
         severity: 'HIGH',
         source: 'gitops',
-        description: `Deployment ${deploymentId} failed health checks after 60 seconds. Auto-rollback initiated.`
+        description: `Deployment ${deploymentId} failed health checks after 60 seconds. Auto-rollback initiated.`,
+        userId: await resolveRepoOwner(deployment.repoId)
       });
 
       await rollbackDeploy(deploymentId);
