@@ -127,11 +127,21 @@ const port = process.env.PORT || 3001;
 // --- Middleware ---
 app.use(morgan('dev'));
 app.use(helmet());
+// Explicit origin allowlist: the deployed frontend, plus any extra origins
+// (staging/preview deployments) via comma-separated ALLOWED_ORIGINS.
+const allowedOrigins = [process.env.FRONTEND_URL, ...(process.env.ALLOWED_ORIGINS || '').split(',')]
+    .map(o => o?.trim())
+    .filter((o): o is string => !!o);
+
 app.use(cors({
-    origin: (origin, callback) => callback(null, true),
+    origin: (origin, callback) => {
+        // Same-origin/non-browser requests (curl, server-to-server) send no Origin header
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY', 'X-USER-ID', 'X-TENANT-ID']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-KEY', 'X-USER-ID', 'X-TENANT-ID', 'X-Active-Team-Id']
 }));
 // --- GitHub Webhook (MUST be before express.json() for raw body access) ---
 app.use('/api/github/webhook', createNodeMiddleware(githubWebhooks, { path: '/api/github/webhook' }));

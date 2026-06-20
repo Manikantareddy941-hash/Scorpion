@@ -2,6 +2,7 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
+import { resolveOwnershipScope, resolveCreationOwnership, canAccessResource, TenantAccessError } from '../services/tenancyService';
 import { getProvider } from '../services/repoProviders';
 import { runScanPipeline } from '../scanners/pipeline';
 import { cloneRepo } from '../utils/git';
@@ -23,10 +24,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
     try {
         const userId = req.user!.$id;
         const name = url.split('/').pop();
+        const ownership = await resolveCreationOwnership(req, userId);
 
-        // Check if repo already exists for this user
+        // Check if repo already exists within this tenant scope (team if active, else personal)
         const existingRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.equal('user_id', userId),
+            Query.equal(ownership.team_id ? 'team_id' : 'user_id', ownership.team_id || userId),
             Query.equal('url', url),
             Query.limit(1)
         ]);
@@ -40,7 +42,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
         }
 
         const data = await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, ID.unique(), {
-            user_id: userId,
+            ...ownership,
             url,
             name,
             visibility: 'public',
@@ -50,6 +52,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
 
         res.json(data);
     } catch (error: unknown) {
+        if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
         next(error);
     }
 });
@@ -58,14 +61,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
 router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const userId = req.user!.$id;
+        const scope = await resolveOwnershipScope(req, userId);
 
         const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.equal('user_id', userId),
+            Query.equal(scope.field, scope.value),
             Query.orderDesc('updated_at')
         ]);
 
         res.json(ownedRepos.documents);
     } catch (error: unknown) {
+        if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
         next(error);
     }
 });
@@ -144,7 +149,7 @@ router.post('/:id/scan', async (req: AuthenticatedRequest, res: Response, next: 
         // Create the scan record immediately so we have a scanId to return
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
         if (!repo || !repo.url) return res.status(400).json({ error: 'Repository not found or missing URL' });
-        if (repo.user_id !== req.user!.$id) return res.status(403).json({ error: 'Access denied' });
+        if (!(await canAccessResource(repo, req.user!.$id))) return res.status(403).json({ error: 'Access denied' });
 
         const scanStartedAt = new Date().toISOString();
         const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
@@ -191,7 +196,7 @@ router.get('/scans/:scanId', async (req: AuthenticatedRequest, res: Response, ne
         if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scan.repo_id);
-        if (!repo || repo.user_id !== req.user!.$id) return res.status(403).json({ error: 'Access denied' });
+        if (!repo || !(await canAccessResource(repo, req.user!.$id))) return res.status(403).json({ error: 'Access denied' });
 
         // Parse details JSON
         let details: any = {};

@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logAuditEvent } from '../utils/auditLogger';
+import { canAccessResource } from '../services/tenancyService';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
         const userId = (req as any).user?.$id;
         const existingFinding = await databases.getDocument(DB_ID, 'findings', id);
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, existingFinding.repo_id);
-        if (repo.user_id !== userId) {
+        if (!(await canAccessResource(repo, userId))) {
             return res.status(403).json({ error: 'You do not have access to this finding' });
         }
 

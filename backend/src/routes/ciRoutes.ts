@@ -2,6 +2,7 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
+import { resolveOwnershipScope, canAccessResource, TenantAccessError } from '../services/tenancyService';
 import { linkCommitToScan } from '../services/gitTraceabilityService';
 
 interface AuthenticatedRequest extends Request {
@@ -17,8 +18,9 @@ router.post('/scan', async (req: AuthenticatedRequest, res: Response, next: Next
 
     try {
         const userId = req.user!.$id;
+        const scope = await resolveOwnershipScope(req, userId);
         const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.equal('user_id', userId),
+            Query.equal(scope.field, scope.value),
             Query.equal('url', repo_url),
             Query.limit(1)
         ]);
@@ -66,6 +68,7 @@ router.post('/scan', async (req: AuthenticatedRequest, res: Response, next: Next
 
         res.json({ scanId, message: 'CI scan queued', status: 'pending' });
     } catch (err) {
+        if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
         next(err);
     }
 });
@@ -77,7 +80,7 @@ router.get('/scans/:id/status', async (req: AuthenticatedRequest, res: Response,
         if (!scan) return res.status(404).json({ error: 'Scan not found' });
 
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scan.repo_id);
-        if (repo.user_id !== req.user!.$id) {
+        if (!(await canAccessResource(repo, req.user!.$id))) {
             return res.status(403).json({ error: 'Access denied' });
         }
 

@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { databases, DB_ID, Query, COLLECTIONS, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueScan } from '../queues/scanQueue';
+import { canAccessResource } from '../services/tenancyService';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.post('/trigger', verifyUser, async (req: Request, res: Response) => {
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repo_id);
 
         // Check ownership
-        if (repo.user_id !== (req as any).user?.$id) {
+        if (!(await canAccessResource(repo, (req as any).user?.$id))) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
