@@ -183,7 +183,7 @@ export const DEFAULT_IAM_POLICY: IAMStatement[] = [
   },
   {
     Effect: 'Deny',
-    Actions: ['gate:bypass', 'policy:edit'],
+    Actions: ['gate:bypass', 'policy:edit', 'repo:delete', 'repo:deploy'],
     Resources: ['*']
   }
 ];

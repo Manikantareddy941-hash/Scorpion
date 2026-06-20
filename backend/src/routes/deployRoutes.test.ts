@@ -52,8 +52,9 @@ describe('deployRoutes ownership checks', () => {
 
     it('POST /trigger deploys when the caller owns the build\'s repo', async () => {
         (databases.getDocument as jest.Mock)
-            .mockResolvedValueOnce({ $id: 'build-1', repoId: 'repo-1' })
-            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' });
+            .mockResolvedValueOnce({ $id: 'build-1', repoId: 'repo-1' }) // build doc (route handler)
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' }) // repo doc (assertRepoAccess)
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' }); // repo doc again (hasPermission's ownership check)
         (triggerDeploy as jest.Mock).mockResolvedValue({ deploymentId: 'deploy-1', status: 'pending' });
 
         const res = await request(buildApp())
@@ -94,6 +95,19 @@ describe('deployRoutes ownership checks', () => {
 
         expect(res.statusCode).toBe(403);
         expect(rollbackDeploy).not.toHaveBeenCalled();
+    });
+
+    it('POST /:id/rollback rolls back when the caller owns the deployment\'s repo', async () => {
+        (databases.getDocument as jest.Mock)
+            .mockResolvedValueOnce({ $id: 'deploy-1', repoId: 'repo-1', status: 'success' })
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' })
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' });
+        (rollbackDeploy as jest.Mock).mockResolvedValue({ deploymentId: 'deploy-2', status: 'success' });
+
+        const res = await request(buildApp()).post('/api/deployments/deploy-1/rollback');
+
+        expect(res.statusCode).toBe(200);
+        expect(rollbackDeploy).toHaveBeenCalledWith('deploy-1');
     });
 
     it('GET / scopes the unfiltered list to the caller\'s accessible repos', async () => {

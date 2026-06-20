@@ -2,6 +2,7 @@ import express from 'express';
 import { triggerDeploy, rollbackDeploy } from '../deploy/deployService';
 import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import { assertRepoAccess, resolveOwnershipScope, TenantAccessError } from '../services/tenancyService';
+import { hasPermission } from '../middleware/iamMiddleware';
 
 const router = express.Router();
 
@@ -24,6 +25,10 @@ router.post(['/', '/trigger'], async (req, res) => {
 
     const build = await databases.getDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, buildId);
     await assertRepoAccess(build.repoId, userId);
+
+    if (!(await hasPermission(req, userId, 'repo:deploy', build.repoId))) {
+      return res.status(403).json({ error: 'You do not have permission to deploy this repository' });
+    }
 
     // Trigger deployment async (doesn't await completion)
     const result = await triggerDeploy(buildId, environment as 'dev' | 'staging' | 'production', triggeredBy);
@@ -119,6 +124,9 @@ router.post('/:id/rollback', async (req, res) => {
 
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.DEPLOYMENTS, deploymentId);
     await assertRepoAccess(doc.repoId, userId);
+    if (!(await hasPermission(req, userId, 'repo:deploy', doc.repoId))) {
+      return res.status(403).json({ error: 'You do not have permission to roll back deployments for this repository' });
+    }
     if (doc.status !== 'success') {
       return res.status(400).json({ error: `Cannot rollback a deployment with status: ${doc.status}` });
     }

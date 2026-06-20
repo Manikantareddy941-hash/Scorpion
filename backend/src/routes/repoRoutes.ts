@@ -13,6 +13,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { validateBody } from '../middleware/validate';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
+import { hasPermission } from '../middleware/iamMiddleware';
 import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
@@ -83,6 +84,10 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response, next: Nex
     try {
         const repoId = req.params.id;
         const repo = await assertRepoAccess(repoId, req.user!.$id);
+
+        if (!(await hasPermission(req, req.user!.$id, 'repo:delete', repoId))) {
+            return res.status(403).json({ error: 'You do not have permission to delete this repository' });
+        }
 
         const activeScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repo_id', repoId),
