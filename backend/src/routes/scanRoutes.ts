@@ -3,12 +3,13 @@ import { databases, DB_ID, Query, COLLECTIONS, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueScan } from '../queues/scanQueue';
 import { canAccessResource } from '../services/tenancyService';
+import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
 
 const router = Router();
 
 // Trigger immediate scan for a repo
-router.post('/trigger', verifyUser, async (req: Request, res: Response) => {
+router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
     try {
         const { repo_id } = req.body;
         if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });

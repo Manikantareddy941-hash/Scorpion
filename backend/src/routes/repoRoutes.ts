@@ -12,6 +12,7 @@ import { randomBytes } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { validateBody } from '../middleware/validate';
+import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
@@ -143,7 +144,7 @@ router.get('/external', async (req: AuthenticatedRequest, res: Response, next: N
 });
 
 // Trigger scan on any provider repo (Directly)
-router.post('/external/scan', validateBody(externalScanSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/external/scan', scanTriggerLimiter, validateBody(externalScanSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { provider, repoFullName, cloneUrl, branch = 'main' } = req.body;
     const token = req.headers['x-provider-token'] as string;
 
@@ -181,7 +182,7 @@ router.post('/external/scan', validateBody(externalScanSchema), async (req: Auth
 });
 
 // Trigger scan — fire and forget (respond immediately, scan runs in background)
-router.post('/:id/scan', validateBody(triggerScanSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/:id/scan', scanTriggerLimiter, validateBody(triggerScanSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const repoId = req.params.id;
         const { scanType, scanDepth, branch } = req.body;

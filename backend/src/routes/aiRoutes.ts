@@ -5,6 +5,7 @@ import { getRemediationFix, recordFeedback } from '../services/aiService';
 import { recordAIEvent, getAIAggregates, getAITrends } from '../services/metricsService';
 import { createPullRequest } from '../services/gitProviderService';
 import { canAccessResource } from '../services/tenancyService';
+import { aiLimiter } from '../middleware/rateLimiters';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -36,7 +37,7 @@ const assertFixAccess = async (fixId: string, userId?: string): Promise<boolean>
 };
 
 // Remediation
-router.post('/vulns/:id/remediate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/vulns/:id/remediate', aiLimiter, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
         if (!(await assertVulnAccess(id, req.user?.$id))) {
@@ -103,7 +104,7 @@ router.get('/metrics/trends', async (req: AuthenticatedRequest, res: Response, n
 });
 
 // PR Generation
-router.post('/fixes/:id/pr', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/fixes/:id/pr', aiLimiter, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { id } = req.params;
         if (!(await assertFixAccess(id, req.user?.$id))) {
@@ -142,7 +143,7 @@ router.get('/fixes/:id/pr/status', async (req: AuthenticatedRequest, res: Respon
 });
 
 // AI Chat Proxy
-router.post('/chat', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/chat', aiLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { messages, systemPrompt } = req.body;
         const apiKey = process.env.GEMINI_API_KEY;

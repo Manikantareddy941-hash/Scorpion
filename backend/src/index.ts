@@ -151,7 +151,6 @@ app.use(express.json());
 
 // --- Rate Limiting ---
 const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
-const scanLimiter = rateLimit({ windowMs: 60 * 1000, max: 5 });
 
 // --- Authentication Middleware ---
 interface AuthenticatedRequest extends Request {

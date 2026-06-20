@@ -4,6 +4,7 @@ import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { verifyUser } from '../middleware/auth';
 import { getRemediationFix } from '../services/aiService';
 import { canAccessResource } from '../services/tenancyService';
+import { aiLimiter, scanTriggerLimiter } from '../middleware/rateLimiters';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../services/logger';
@@ -12,7 +13,7 @@ const router = Router();
 const workspaceDir = 'c:\\Users\\manik\\OneDrive\\Desktop\\Scorpion';
 
 // POST /api/remediate/generate
-router.post('/generate', verifyUser, async (req: Request, res: Response) => {
+router.post('/generate', verifyUser, aiLimiter, async (req: Request, res: Response) => {
     const { vulnerability_id } = req.body;
     if (!vulnerability_id) return res.status(400).json({ error: 'vulnerability_id is required' });
 
@@ -55,7 +56,7 @@ router.post('/generate', verifyUser, async (req: Request, res: Response) => {
 });
 
 // POST /api/remediate/apply
-router.post('/apply', verifyUser, async (req: Request, res: Response) => {
+router.post('/apply', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
     const { vulnerability_id, diff } = req.body;
     if (!vulnerability_id) return res.status(400).json({ error: 'vulnerability_id is required' });
 
@@ -148,7 +149,7 @@ router.post('/apply', verifyUser, async (req: Request, res: Response) => {
 });
 
 // POST /api/remediate/revert
-router.post('/revert', verifyUser, async (req: Request, res: Response) => {
+router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
     const { vulnerability_id } = req.body;
     if (!vulnerability_id) return res.status(400).json({ error: 'vulnerability_id is required' });
 

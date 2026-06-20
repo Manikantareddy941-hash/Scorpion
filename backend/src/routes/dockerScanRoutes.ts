@@ -3,11 +3,12 @@ import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { spawnSync } from 'child_process';
 import { sendFindingAlert } from '../utils/alertDispatcher';
+import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
 
 const router = Router();
 
-router.post('/docker', verifyUser, async (req: Request, res: Response) => {
+router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
     const { image_name } = req.body;
     if (!image_name) return res.status(400).json({ error: 'image_name is required' });
 

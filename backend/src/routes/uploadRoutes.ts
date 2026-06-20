@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Models } from 'node-appwrite';
 import { Request } from 'express';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
+import { uploadLimiter } from '../middleware/rateLimiters';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -46,7 +47,7 @@ const upload = multer({
 });
 
 // ZIP Upload Endpoint
-router.post('/zip', upload.single('project_zip'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/zip', uploadLimiter, upload.single('project_zip'), async (req: AuthenticatedRequest, res: Response) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }

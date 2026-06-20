@@ -5,6 +5,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { logger } from '../services/logger';
+import { aiLimiter } from '../middleware/rateLimiters';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ interface CreatePRBody {
   severity: string;
 }
 
-router.post('/create-pr', async (req: Request, res: Response) => {
+router.post('/create-pr', aiLimiter, async (req: Request, res: Response) => {
   const {
     findingId,
     repoUrl,
