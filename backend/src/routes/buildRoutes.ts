@@ -2,6 +2,7 @@ import express from 'express';
 import { startBuild } from '../build/buildService';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
+import { assertRepoAccess, resolveOwnershipScope, TenantAccessError } from '../services/tenancyService';
 
 const router = express.Router();
 
@@ -12,11 +13,14 @@ const router = express.Router();
 router.post('/trigger', async (req, res) => {
   try {
     const { repoId, branch } = req.body;
+    const userId = (req as any).user?.$id;
     const triggeredBy = (req as any).user?.email || 'unknown';
 
     if (!repoId || !branch) {
       return res.status(400).json({ error: 'repoId and branch are required' });
     }
+
+    await assertRepoAccess(repoId, userId);
 
     const pipelineId = await startBuild(repoId, branch, triggeredBy);
 
@@ -30,11 +34,12 @@ router.post('/trigger', async (req, res) => {
       details: { repoId, branch }
     });
 
-    res.status(202).json({ 
-      message: 'Build triggered successfully', 
-      pipelineId 
+    res.status(202).json({
+      message: 'Build triggered successfully',
+      pipelineId
     });
   } catch (err: any) {
+    if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
     res.status(500).json({ error: 'Failed to trigger build', details: err.message });
   }
 });
@@ -46,18 +51,31 @@ router.post('/trigger', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const { repoId, status, limit = 50 } = req.query;
-    
+    const userId = (req as any).user?.$id;
+
+    if (repoId) {
+      await assertRepoAccess(String(repoId), userId);
+    }
+
     const queries: string[] = [
       Query.orderDesc('$createdAt'),
       Query.limit(Number(limit))
     ];
 
-    if (repoId) queries.push(Query.equal('repoId', String(repoId)));
+    if (repoId) {
+      queries.push(Query.equal('repoId', String(repoId)));
+    } else {
+      const scope = await resolveOwnershipScope(req, userId);
+      const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value)]);
+      const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+      queries.push(Query.equal('repoId', repoIds.length > 0 ? repoIds : ['__none__']));
+    }
     if (status) queries.push(Query.equal('status', String(status)));
 
     const results = await databases.listDocuments(DB_ID, COLLECTIONS.BUILD_PIPELINES, queries);
     res.json(results);
   } catch (err: any) {
+    if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
     res.status(500).json({ error: 'Failed to fetch builds', details: err.message });
   }
 });
@@ -68,9 +86,12 @@ router.get('/', async (req, res) => {
  */
 router.get('/:id', async (req, res) => {
   try {
+    const userId = (req as any).user?.$id;
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, req.params.id);
+    await assertRepoAccess(doc.repoId, userId);
     res.json(doc);
   } catch (err: any) {
+    if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
     res.status(404).json({ error: 'Build not found', details: err.message });
   }
 });
@@ -82,9 +103,11 @@ router.get('/:id', async (req, res) => {
 router.post('/:id/cancel', async (req, res) => {
   try {
     const buildId = req.params.id;
+    const userId = (req as any).user?.$id;
     const userEmail = (req as any).user?.email || 'unknown';
 
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, buildId);
+    await assertRepoAccess(doc.repoId, userId);
     if (doc.status !== 'running') {
       return res.status(400).json({ error: `Cannot cancel a build in status: ${doc.status}` });
     }
@@ -107,6 +130,7 @@ router.post('/:id/cancel', async (req, res) => {
 
     res.json({ message: 'Build cancelled', build: updated });
   } catch (err: any) {
+    if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
     res.status(500).json({ error: 'Failed to cancel build', details: err.message });
   }
 });
@@ -118,6 +142,11 @@ router.post('/:id/cancel', async (req, res) => {
 router.get('/:id/artifacts', async (req, res) => {
   try {
     const buildId = req.params.id;
+    const userId = (req as any).user?.$id;
+
+    const build = await databases.getDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, buildId);
+    await assertRepoAccess(build.repoId, userId);
+
     const queries = [
       Query.equal('buildId', buildId),
       Query.limit(100)
@@ -126,6 +155,7 @@ router.get('/:id/artifacts', async (req, res) => {
     const results = await databases.listDocuments(DB_ID, COLLECTIONS.BUILD_ARTIFACTS, queries);
     res.json(results);
   } catch (err: any) {
+    if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
     res.status(500).json({ error: 'Failed to fetch artifacts', details: err.message });
   }
 });
