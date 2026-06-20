@@ -12,12 +12,7 @@ export interface ScanPipelineResult {
   gitleaks: any;
 }
 
-// Mocks to satisfy TS compiler for missing scan execution modules
-const runTrivy = async (dir: string): Promise<{stdout: string}> => ({ stdout: '{}' });
-const runSemgrep = async (dir: string): Promise<{stdout: string}> => ({ stdout: '{}' });
-const runGitleaks = async (dir: string): Promise<{stdout: string}> => ({ stdout: '{}' });
-
-export async function runScanPipeline(options: { owner?: string; repo?: string; branch?: string; cloneUrl?: string; localPath?: string }): Promise<ScanPipelineResult> {
+export async function runScanPipeline(options: { owner?: string; repo?: string; branch?: string; cloneUrl?: string; localPath?: string; scanType?: 'full' | 'sast' | 'sca' | 'secrets' }): Promise<ScanPipelineResult> {
   const randomId = crypto.randomBytes(6).toString('hex');
   const tempDir = options.localPath || path.join(os.tmpdir(), `scorpion-ci-${options.owner}-${options.repo}-${randomId}`);
 
@@ -33,20 +28,19 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
       throw new Error('Either localPath or cloneUrl/branch must be provided');
     }
 
-    // 2. Run all scanners in parallel
+    // 2. Run the real scanners (Docker-based, same orchestrator scanService.ts uses
+    // for the main repo-scan flow). This used to call local stub functions that
+    // always returned `{}` - every call site silently got zero findings.
     logger.info(`[Pipeline] Starting multi-tool scan in ${tempDir}`);
-    const [trivyRes, semgrepRes, gitleaksRes] = await Promise.allSettled([
-      runTrivy(tempDir),
-      runSemgrep(tempDir),
-      runGitleaks(tempDir)
-    ]);
+    const results = await orchestrateScan(tempDir, { scanType: options.scanType || 'full' });
+    const findResult = (tool: string) => results.find(r => r.tool === tool);
 
     // 3. Process results
     // We return the raw objects, the orchestrator/policy engine will handle the parsing logic
     return {
-      trivy:    trivyRes.status    === 'fulfilled' ? parseJsonSafe((trivyRes as any).value.stdout) : { error: (trivyRes as any).reason },
-      semgrep:  semgrepRes.status  === 'fulfilled' ? parseJsonSafe((semgrepRes as any).value.stdout) : { error: (semgrepRes as any).reason },
-      gitleaks: gitleaksRes.status === 'fulfilled' ? parseJsonSafe((gitleaksRes as any).value.stdout) : { error: (gitleaksRes as any).reason }
+      trivy:    parseJsonSafe(findResult('trivy')?.stdout ?? '{}'),
+      semgrep:  parseJsonSafe(findResult('semgrep')?.stdout ?? '{}'),
+      gitleaks: parseJsonSafe(findResult('gitleaks')?.stdout ?? '[]')
     };
 
   } catch (error) {
