@@ -5,6 +5,7 @@ import { logAuditEvent } from '../utils/auditLogger';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { sendSecurityAlert } from '../services/notificationService';
 import { getDynamicPolicy } from '../services/policyService';
+import { evaluatePolicy } from '../services/opaService';
 import { checkPermission } from '../middleware/iamMiddleware';
 import { canAccessResource } from '../services/tenancyService';
 import { logger } from '../services/logger';
@@ -58,19 +59,43 @@ export async function checkReleaseGate(repoId: string) {
     score = Math.max(0, score);
 
     const hasCritical = blockers.some((b: any) => (b.severity || '').toLowerCase() === 'critical');
-    
+    const criticalCount = blockers.filter((b: any) => (b.severity || '').toLowerCase() === 'critical').length;
+    const highCount = blockers.filter((b: any) => (b.severity || '').toLowerCase() === 'high').length;
+
     // Fetch Dynamic Policy from centralized service
     const policy = await getDynamicPolicy(repoId);
-    
+
     // Evaluate compliance thresholds dynamically
-    const allowed = score >= policy.minSecurityScore && !(policy.blockOnCritical && hasCritical);
+    let allowed = score >= policy.minSecurityScore && !(policy.blockOnCritical && hasCritical);
+    let regoDenyReasons: string[] = [];
+
+    // Additive policy-as-code check: a repo can opt into a custom Rego
+    // policy (PROJECT_POLICIES.regoCode) evaluated alongside the threshold
+    // check above - either one failing blocks the release. Skips silently
+    // if no custom policy is set, or if opa isn't installed/configured -
+    // this must never be the reason a gate check itself fails.
+    if (policy.regoCode) {
+        try {
+            const opaResult = await evaluatePolicy(
+                { critical_count: criticalCount, high_count: highCount, security_score: score, environment: 'production' },
+                { regoCode: policy.regoCode }
+            );
+            if (!opaResult.allow) {
+                allowed = false;
+                regoDenyReasons = opaResult.denyReasons;
+            }
+        } catch (err: any) {
+            logger.warn(`[Gate] Custom Rego policy evaluation skipped for ${repoId}:`, err.message);
+        }
+    }
 
     return {
         allowed,
         score,
         blocker_count: blockerCount,
         blockers: blockers,
-        minSecurityScore: policy.minSecurityScore
+        minSecurityScore: policy.minSecurityScore,
+        ...(regoDenyReasons.length > 0 ? { regoDenyReasons } : {})
     };
 }
 

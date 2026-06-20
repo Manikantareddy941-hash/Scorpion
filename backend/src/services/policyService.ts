@@ -7,6 +7,9 @@ export interface PolicyConfig {
   blockOnCritical: boolean;
   allowedSnoozeDays: number;
   blockedFalcoRules: string[];
+  // Optional custom Rego policy (see opaService.ts) evaluated alongside the
+  // threshold checks above in checkReleaseGate - additive, not a replacement.
+  regoCode?: string;
 }
 
 export const DEFAULT_POLICY: PolicyConfig = {
@@ -48,9 +51,10 @@ export const getDynamicPolicy = async (repoId: string): Promise<PolicyConfig> =>
         minSecurityScore: typeof doc.minSecurityScore === 'number' ? doc.minSecurityScore : (doc.min_risk_score || 80),
         blockOnCritical: typeof doc.blockOnCritical === 'boolean' ? doc.blockOnCritical : true,
         allowedSnoozeDays: typeof doc.allowedSnoozeDays === 'number' ? doc.allowedSnoozeDays : 14,
-        blockedFalcoRules: doc.blockedFalcoRules 
-          ? (typeof doc.blockedFalcoRules === 'string' ? JSON.parse(doc.blockedFalcoRules) : doc.blockedFalcoRules) 
-          : DEFAULT_POLICY.blockedFalcoRules
+        blockedFalcoRules: doc.blockedFalcoRules
+          ? (typeof doc.blockedFalcoRules === 'string' ? JSON.parse(doc.blockedFalcoRules) : doc.blockedFalcoRules)
+          : DEFAULT_POLICY.blockedFalcoRules,
+        regoCode: typeof doc.regoCode === 'string' ? doc.regoCode : undefined
       };
     }
   } catch (err: any) {
