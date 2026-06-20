@@ -7,6 +7,7 @@ import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
+import { respondToLeakedKeys } from './leakedKeyResponseService';
 import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
@@ -320,6 +321,11 @@ export const triggerScan = async (
                 scanResults[r.tool] = r.tool === 'gitleaks' ? [] : {};
             }
         });
+
+        // Check raw (pre-redaction) Gitleaks matches against the repo owner's
+        // API keys and auto-revoke any that were leaked, before the Match
+        // field gets redacted by normalizeGitleaks below for storage.
+        await respondToLeakedKeys(scanResults.gitleaks || [], repo.user_id, repoId);
 
         const issues = [
             ...normalizeTrivy(scanResults.trivy || {}, scanPath),

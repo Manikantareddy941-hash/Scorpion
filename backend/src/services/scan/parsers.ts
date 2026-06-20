@@ -97,7 +97,9 @@ export const parseTrivy = (stdout: string): Finding[] => {
                 findings.push({
                     tool: 'trivy',
                     severity: mapTrivySeverity(s.Severity),
-                    message: `[SECRET] ${s.Title}: ${s.Match || 'Credential detected'}`,
+                    // Never persist the actual matched secret value - storing it
+                    // in plaintext findings turns a DB breach into a secrets leak too.
+                    message: `[SECRET] ${s.Title || 'Credential detected'}`,
                     file_path: res.Target,
                     line_number: s.StartLine
                 });
