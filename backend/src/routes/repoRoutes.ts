@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
-import { resolveOwnershipScope, resolveCreationOwnership, canAccessResource, TenantAccessError } from '../services/tenancyService';
+import { resolveOwnershipScope, resolveCreationOwnership, canAccessResource, assertRepoAccess, TenantAccessError } from '../services/tenancyService';
 import { getProvider } from '../services/repoProviders';
 import { runScanPipeline } from '../scanners/pipeline';
 import { cloneRepo } from '../utils/git';
+import { cleanupWorkspace } from '../services/ingestionService';
 import { randomBytes } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -70,6 +71,36 @@ router.post('/', validateBody(addRepoSchema), async (req: AuthenticatedRequest, 
         });
 
         res.json(data);
+    } catch (error: unknown) {
+        if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
+        next(error);
+    }
+});
+
+// Delete a repository, cleaning up its on-disk workspace if it was a ZIP upload
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoId = req.params.id;
+        const repo = await assertRepoAccess(repoId, req.user!.$id);
+
+        const activeScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('repo_id', repoId),
+            Query.equal('status', ['pending', 'running']),
+            Query.limit(1)
+        ]);
+        if (activeScans.total > 0) {
+            return res.status(409).json({ error: 'Cannot delete a repository with a scan in progress' });
+        }
+
+        await databases.deleteDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+
+        // Uploaded ZIP repos persist their extraction directory as local_path
+        // (see ingestZip in ingestionService.ts) - nothing else ever cleans it up.
+        if (repo.local_path) {
+            cleanupWorkspace(repo.local_path);
+        }
+
+        res.status(204).end();
     } catch (error: unknown) {
         if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
         next(error);
