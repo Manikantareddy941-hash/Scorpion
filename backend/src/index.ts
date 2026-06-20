@@ -296,13 +296,22 @@ initScanQueueWorker();
 initUptimeScheduler();
 
 // --- Error Handler ---
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    logger.error(`[Error Handler] ${err.stack || err.message}`);
-    const statusCode = err.status || err.statusCode || 500;
+interface HttpError extends Error {
+    status?: number;
+    statusCode?: number;
+}
+
+const isHttpError = (err: unknown): err is HttpError => err instanceof Error;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+    const error = isHttpError(err) ? err : new Error(typeof err === 'string' ? err : 'Unknown error');
+    logger.error(`[Error Handler] ${error.stack || error.message}`);
+    const statusCode = (isHttpError(err) && (err.status || err.statusCode)) || 500;
     const isProd = process.env.NODE_ENV === 'production';
     res.status(statusCode).json({
-        error: isProd ? 'Internal Server Error' : err.message,
-        ...(isProd ? {} : { stack: err.stack })
+        error: isProd ? 'Internal Server Error' : error.message,
+        ...(isProd ? {} : { stack: error.stack })
     });
 });
 
