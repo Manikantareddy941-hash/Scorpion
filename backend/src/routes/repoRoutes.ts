@@ -1,7 +1,7 @@
 import { Router, Response, Request, NextFunction } from 'express';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { triggerScan } from '../services/scanService';
+import { enqueueScan } from '../queues/scanQueue';
 import { getProvider } from '../services/repoProviders';
 import { runScanPipeline } from '../scanners/pipeline';
 import { cloneRepo } from '../utils/git';
@@ -144,6 +144,7 @@ router.post('/:id/scan', async (req: AuthenticatedRequest, res: Response, next: 
         // Create the scan record immediately so we have a scanId to return
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
         if (!repo || !repo.url) return res.status(400).json({ error: 'Repository not found or missing URL' });
+        if (repo.user_id !== req.user!.$id) return res.status(403).json({ error: 'Access denied' });
 
         const scanStartedAt = new Date().toISOString();
         const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
@@ -170,8 +171,8 @@ router.post('/:id/scan', async (req: AuthenticatedRequest, res: Response, next: 
         const scanId = scan.$id;
 
         // 🔥 Fire and forget — do NOT await
-        triggerScan(repoId, { scanType, scanDepth, branch }, scanId).catch(err => {
-            console.error(`[RepoRoutes] Background scan failed for scanId=${scanId}:`, err.message);
+        enqueueScan(repoId, { scanType, scanDepth, branch }, scanId).catch(err => {
+            console.error(`[RepoRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
         });
 
         // Respond immediately with scanId
@@ -188,6 +189,9 @@ router.get('/scans/:scanId', async (req: AuthenticatedRequest, res: Response, ne
         const { scanId } = req.params;
         const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
         if (!scan) return res.status(404).json({ error: 'Scan not found' });
+
+        const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scan.repo_id);
+        if (!repo || repo.user_id !== req.user!.$id) return res.status(403).json({ error: 'Access denied' });
 
         // Parse details JSON
         let details: any = {};
