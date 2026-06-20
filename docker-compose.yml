@@ -3,9 +3,19 @@ version: '3.9'
 # SCORPION DevSecOps platform.
 # Backend (Express API on 3001) + frontend (Vite build served by nginx on 80).
 # State lives in Appwrite Cloud, so no local database service is required.
+# Redis backs the BullMQ scan-execution queue (backend/src/queues/).
 # Secrets/config are read from the local .env file (see backend/.env.example).
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: scorpion_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   backend:
     build:
       context: .
@@ -16,6 +26,9 @@ services:
       - .env
     environment:
       PORT: "3001"
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - redis
     ports:
       - "3001:3001"
 
@@ -29,3 +42,6 @@ services:
       - "8080:80"
     depends_on:
       - backend
+
+volumes:
+  redis_data:

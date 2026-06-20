@@ -1,7 +1,7 @@
 import { Router, Response, Request, NextFunction } from 'express';
 import { Models } from 'node-appwrite';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { triggerScan } from '../services/scanService';
+import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
+import { enqueueScan } from '../queues/scanQueue';
 import { linkCommitToScan } from '../services/gitTraceabilityService';
 
 interface AuthenticatedRequest extends Request {
@@ -29,14 +29,42 @@ router.post('/scan', async (req: AuthenticatedRequest, res: Response, next: Next
 
         const repo = repos.documents[0];
 
-        const { scanId, error: scanErr } = await triggerScan(repo.$id);
-        if (scanErr) return res.status(400).json({ error: scanErr });
-
-        if (commit_hash) {
-            await linkCommitToScan(scanId as string, repo.$id, { commit_hash, branch, pr_number });
+        const activeScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+            Query.equal('repo_id', repo.$id),
+            Query.equal('status', ['pending', 'running']),
+            Query.limit(1)
+        ]);
+        if (activeScans.total > 0) {
+            return res.status(409).json({ error: 'A scan is already in progress for this repository' });
         }
 
-        res.json({ scanId, message: 'CI scan triggered successfully' });
+        const startedAt = new Date().toISOString();
+        const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
+            repo_id: repo.$id,
+            status: 'pending',
+            scan_type: 'full',
+            repoUrl: repo.url,
+            startedAt,
+            timestamp: startedAt,
+            scannerVersion: '1.0.0',
+            visibility: 'public',
+            criticalCount: 0,
+            highCount: 0,
+            mediumCount: 0,
+            lowCount: 0,
+            details: JSON.stringify({ started_at: startedAt, target: repo.url, branch: branch || 'main' })
+        });
+        const scanId = scan.$id;
+
+        enqueueScan(repo.$id, { branch }, scanId).catch(err => {
+            console.error(`[CiRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
+        });
+
+        if (commit_hash) {
+            await linkCommitToScan(scanId, repo.$id, { commit_hash, branch, pr_number });
+        }
+
+        res.json({ scanId, message: 'CI scan queued', status: 'pending' });
     } catch (err) {
         next(err);
     }

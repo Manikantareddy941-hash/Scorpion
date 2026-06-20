@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
-import { triggerScan } from '../services/scanService';
+import { enqueueScan } from '../queues/scanQueue';
 import { triggerPipelineRun } from '../services/pipelineService';
 
 const router = Router();
@@ -72,8 +72,8 @@ router.post('/github', async (req: Request, res: Response) => {
                 }
 
                 if (status === 'success') {
-                    triggerScan(repo.$id, {}).catch(err => {
-                        console.error(`[Webhook] Failed to trigger scan for ${repo.$id}:`, err);
+                    enqueueScan(repo.$id, {}).catch(err => {
+                        console.error(`[Webhook] Failed to enqueue scan for ${repo.$id}:`, err);
                     });
                 }
             }
@@ -345,7 +345,7 @@ router.post('/tests/report', async (req: Request, res: Response) => {
             });
 
             if (!hasFailed) {
-               triggerScan(repo.$id, {}).catch(e => console.error(e));
+               enqueueScan(repo.$id, {}).catch(e => console.error(e));
             } else {
                console.warn(`[Test Webhook] Skipping scan for ${repo.$id} due to failed tests`);
             }

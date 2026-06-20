@@ -59,6 +59,7 @@ import crypto from 'crypto';
 import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
+import { initScanQueueWorker } from './queues/scanQueueWorker';
 
 // --- Startup Diagnostic ---
 console.log('🚀 [Startup] System Diagnostic Initiated');
@@ -280,6 +281,7 @@ import { initUptimeScheduler } from './services/monitorService';
 initScheduler();
 initReportScheduler();
 initScanWorker();
+initScanQueueWorker();
 initUptimeScheduler();
 
 // --- Error Handler ---

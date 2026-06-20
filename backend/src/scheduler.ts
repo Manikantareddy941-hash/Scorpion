@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
-import { triggerScan } from './services/scanService';
+import { enqueueScan } from './queues/scanQueue';
 
 // Map to keep track of active cron jobs by repo ID
 const activeJobs = new Map<string, cron.ScheduledTask>();
@@ -59,13 +59,11 @@ export const initScheduler = () => {
                     if (cron.validate(schedule)) {
                         console.log(`[Scheduler] Scheduling scan for repo: ${repoId} with cron: ${schedule}`);
                         const task = cron.schedule(schedule, async () => {
-                            console.log(`[Scheduler] Executing scheduled scan for repo: ${repoId}`);
+                            console.log(`[Scheduler] Enqueuing scheduled scan for repo: ${repoId}`);
                             try {
-                                // Calls internal scan service directly which is equivalent to POST /api/scan
-                                await triggerScan(repoId, repo.visibility || 'public');
-                                console.log(`[Scheduler] Scan triggered successfully for repo: ${repoId}`);
+                                await enqueueScan(repoId, {});
                             } catch (error) {
-                                console.error(`[Scheduler] Error triggering scan for repo ${repoId}:`, error);
+                                console.error(`[Scheduler] Error enqueuing scan for repo ${repoId}:`, error);
                             }
                         });
                         activeJobs.set(jobKey, task);
