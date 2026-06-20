@@ -1,79 +1,34 @@
-import { useEffect, useState, memo, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { client, databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-  Shield, Activity, AlertCircle, FileText, XCircle, TrendingUp, ShieldX,
-  ShieldCheck, ShieldAlert, Zap, Bug, Sparkles, RefreshCw
+  Activity, AlertCircle, FileText, XCircle, ShieldX,
+  ShieldCheck, ShieldAlert, Zap, Bug, RefreshCw, GitPullRequest, Clock, ArrowRight
 } from 'lucide-react';
 import RemediationPanel from './RemediationPanel';
-import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip as RechartsTooltip
-} from 'recharts';
 import toast from 'react-hot-toast';
 import PostureRoadmap from './PostureRoadmap';
-import RuntimeThreatStream from './RuntimeThreatStream';
+import { StatCard, ThreatRadar, HeatmapGrid, type HeatmapDatum, type Severity } from './ui';
 
 const SEVERITY_COLOR: Record<string, string> = {
-  CRITICAL: '#ff5252', HIGH: '#ff8a00',
-  MEDIUM: '#ffd740', LOW: '#6db87a', INFO: '#40c4ff'
+  CRITICAL: '#E24B4A',
+  HIGH: '#EF9F27',
+  MEDIUM: '#378ADD',
+  LOW: '#639922',
+  INFO: '#888780',
 };
 
-const SecurityRadarChart = memo(({ data }: { data: any[] }) => {
-  // Normalize data for the radar chart to ensure it doesn't appear flat
-  // Score is already 0-100, but counts need to be scaled
-  const maxCount = Math.max(...data.filter(d => d.axis !== 'Security').map(d => d.Observed), 10);
-  const normalizedData = data.map(d => ({
-    ...d,
-    // Scale counts to 0-100 range for visual consistency, while keeping Security as is
-    fullValue: d.axis === 'Security' ? d.Observed : (d.Observed / maxCount) * 100,
-    actualValue: d.Observed
-  }));
-
-  return (
-    <div style={{ background: 'var(--chart-bg)', width: '100%', height: '100%', borderRadius: 'inherit' }}>
-      <ResponsiveContainer width="100%" height="100%" minHeight={400}>
-        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={normalizedData}>
-          <PolarGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
-          <PolarAngleAxis
-            dataKey="axis"
-            tick={{ fill: 'var(--chart-label)', fontSize: 11, fontWeight: 'bold' }}
-          />
-          <PolarRadiusAxis
-            angle={30}
-            domain={[0, 100]}
-            tick={false}
-          />
-          <Radar
-            name="Observed"
-            dataKey="fullValue"
-            stroke="var(--chart-fill)"
-            fill="var(--chart-fill)"
-            fillOpacity={0.4}
-            isAnimationActive={true}
-          />
-          <RechartsTooltip
-            formatter={(_value: any, name: any, props: any) => [props.payload.actualValue, name]}
-            contentStyle={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '12px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              textTransform: 'uppercase',
-              color: 'var(--text-primary)'
-            }}
-          />
-        </RadarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-});
+const SEVERITY_BG: Record<string, string> = {
+  CRITICAL: '#FCEBEB',
+  HIGH: '#FAEEDA',
+  MEDIUM: '#E6F1FB',
+  LOW: '#EAF3DE',
+  INFO: '#F1EFE8',
+};
 
 export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: { isSidebarCollapsed: boolean }) {
-  const { getJWT } = useAuth();
-  const { theme } = useTheme();
+  const { getJWT, user } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -110,17 +65,33 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
   const [qualityGateScore, setQualityGateScore] = useState<number>(0);
   const [lastBuildStatus, setLastBuildStatus] = useState<string>('N/A');
   const [deploymentsToday, setDeploymentsToday] = useState<number>(0);
+  const [byType, setByType] = useState({ secret: 0, dependency: 0, sast: 0, iac: 0 });
+  const [heatmapData, setHeatmapData] = useState<HeatmapDatum[]>([]);
+  const [repoRisk, setRepoRisk] = useState<{ repo_id: string; repo_name: string; critical: number; high: number }[]>([]);
+  const [mttrDays, setMttrDays] = useState<number | null>(null);
+  const [remediationStats, setRemediationStats] = useState({ queueCount: 0, prsCreatedToday: 0, avgDetectionToPrDays: null as number | null });
+  const [auditEntries, setAuditEntries] = useState<{ action: string; resource: string; time: string }[]>([]);
+  const [meshStatus, setMeshStatus] = useState<{ channel: string; configured: boolean }[]>([]);
+
+  const pipelineGateStatus = [
+    { env: 'DEV', icon: '✓', color: '#639922' },
+    { env: 'STAGING', icon: '⚠', color: '#BA7517' },
+    { env: 'PRODUCTION', icon: '✗', color: '#E24B4A' },
+  ];
+
+  const recentSecretEntries = latestVulnerabilities
+    .filter((v: any) => (v.category || v.type || '').toLowerCase().includes('secret'))
+    .map((v: any) => v.title || v.message)
+    .filter(Boolean);
+
+  // ── All data-fetching logic preserved exactly ──────────────────────────────
 
   const fetchDashboardData = useCallback(async (isAuto = false) => {
-    // Note: handleRefresh may set isFetchingRef.current to true before calling this
     if (isFetchingRef.current && !isRefreshingRef.current) return;
-    
-    const CACHE_MS = 5 * 60 * 1000; // 5 minutes
+    const CACHE_MS = 5 * 60 * 1000;
     if (!isAuto && Date.now() - lastFetch.current < CACHE_MS && !isRefreshingRef.current) return;
     lastFetch.current = Date.now();
-    
     isFetchingRef.current = true;
-
     if (!isAuto && loadingRef.current && !isRefreshingRef.current) setLoading(true);
 
     const timeout = setTimeout(() => {
@@ -132,32 +103,83 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
     try {
       const token = await getJWT();
 
-      // Fetch Gate Summary
       let gateSummaryData: any[] = [];
       try {
-        const gateRes = await fetch('/api/gates/summary', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (gateRes.ok) {
-          const gateData = await gateRes.json();
-          gateSummaryData = gateData.failedRepos || [];
-        }
-      } catch (err) {
-        console.warn('Failed to fetch gate summary:', err);
-      }
+        const gateRes = await fetch('/api/gates/summary', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (gateRes.ok) { const gateData = await gateRes.json(); gateSummaryData = gateData.failedRepos || []; }
+      } catch (err) { console.warn('Failed to fetch gate summary:', err); }
       setGateSummary(gateSummaryData);
 
-      // 1. Fetch User's Repositories
+      try {
+        const secRes = await fetch('/api/dashboard/security', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (secRes.ok) {
+          const secData = await secRes.json();
+          const t = secData?.by_type || {};
+          setByType({ secret: Number(t.secret ?? 0), dependency: Number(t.dependency ?? 0), sast: Number(t.sast ?? 0), iac: Number(t.iac ?? 0) });
+          setMttrDays(secData?.mttr_days ?? null);
+          const repos = (secData?.by_repo || []) as { repo_id: string; repo_name: string; count: number; critical: number; high: number }[];
+          setRepoRisk(
+            [...repos]
+              .sort((a, b) => (b.critical * 10 + b.high) - (a.critical * 10 + a.high))
+              .slice(0, 5)
+          );
+        }
+      } catch (err) { console.warn('Failed to fetch security breakdown:', err); }
+
+      try {
+        const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+        const [queueRes, remediatedTodayRes] = await Promise.all([
+          databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [Query.equal('status', 'open'), Query.limit(1)]),
+          databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+            Query.equal('resolution_status', 'remediated'),
+            Query.greaterThanEqual('$updatedAt', startOfDay.toISOString()),
+            Query.limit(50),
+          ]),
+        ]);
+        const detectionToPrDurationsMs = remediatedTodayRes.documents
+          .map((d: any) => new Date(d.$updatedAt).getTime() - new Date(d.$createdAt).getTime())
+          .filter((ms: number) => ms > 0);
+        const avgDetectionToPrDays = detectionToPrDurationsMs.length > 0
+          ? Math.round((detectionToPrDurationsMs.reduce((sum, ms) => sum + ms, 0) / detectionToPrDurationsMs.length / (1000 * 60 * 60 * 24)) * 10) / 10
+          : null;
+        setRemediationStats({
+          queueCount: queueRes.total,
+          prsCreatedToday: remediatedTodayRes.total,
+          avgDetectionToPrDays,
+        });
+      } catch (err) { console.warn('Failed to fetch remediation queue stats:', err); }
+
+      try {
+        const auditRes = await fetch('/api/audit', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (auditRes.ok) {
+          const auditDocs = await auditRes.json();
+          setAuditEntries(
+            auditDocs.slice(0, 3).map((d: any) => ({
+              action: `${d.action || 'action'} · ${d.resource || d.resourceId || 'system'}`,
+              resource: d.actorEmail || d.actor || 'system',
+              time: new Date(d.timestamp || d.$createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+            }))
+          );
+        }
+      } catch (err) { console.warn('Failed to fetch audit log:', err); }
+
+      try {
+        if (user) {
+          const integrationsRes = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [Query.equal('userId', user.$id), Query.limit(1)]);
+          const integration = integrationsRes.documents[0];
+          setMeshStatus([
+            { channel: 'Slack', configured: !!integration?.slack_webhook },
+            { channel: 'Discord', configured: !!integration?.discord_webhook },
+            { channel: 'PagerDuty', configured: !!integration?.pagerduty_key },
+          ]);
+        }
+      } catch (err) { console.warn('Failed to fetch integration status:', err); }
+
       let reposDocuments: any[] = [];
       try {
-        const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-          Query.orderDesc('$createdAt'),
-          Query.limit(20)
-        ]);
+        const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.orderDesc('$createdAt'), Query.limit(20)]);
         reposDocuments = reposRes.documents;
-      } catch (err) {
-        console.warn('Failed to fetch repositories from Appwrite:', err);
-      }
+      } catch (err) { console.warn('Failed to fetch repositories from Appwrite:', err); }
 
       if (reposDocuments.length === 0 && localStorage.getItem('scorpion_demo_seeded') === 'true') {
         const { MOCK_REPOSITORIES } = await import('../lib/demoData');
@@ -167,63 +189,32 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
       const repoIds = reposDocuments.map(r => r.$id);
       const repoUrls = reposDocuments.map(r => r.url).filter(Boolean);
 
-      if (repoIds.length === 0) {
-        setLoading(false);
-        return;
-      }
+      if (repoIds.length === 0) { setLoading(false); return; }
 
-      // 2. Fetch Latest Completed Scan (The Source of Truth for Stats)
       let scansDocuments: any[] = [];
       try {
         const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-          Query.or([
-            Query.equal('repo_id', repoIds),
-            Query.equal('repoUrl', repoUrls)
-          ]),
-          Query.equal('status', 'completed'),
-          Query.orderDesc('$createdAt'),
-          Query.limit(1)
+          Query.or([Query.equal('repo_id', repoIds), Query.equal('repoUrl', repoUrls)]),
+          Query.equal('status', 'completed'), Query.orderDesc('$createdAt'), Query.limit(1)
         ]);
         scansDocuments = scansRes.documents;
-      } catch (err) {
-        console.warn('Failed to fetch scans from Appwrite:', err);
-      }
+      } catch (err) { console.warn('Failed to fetch scans from Appwrite:', err); }
 
       if (scansDocuments.length === 0 && localStorage.getItem('scorpion_demo_seeded') === 'true') {
         const { MOCK_SCANS } = await import('../lib/demoData');
-        scansDocuments = [MOCK_SCANS[1]] as any; // Using index 1 (73% posture score)
+        scansDocuments = [MOCK_SCANS[1]] as any;
       }
 
       const latestCompletedScan = scansDocuments[0] || null;
 
-      // --- DIAGNOSTIC LOGGING ---
-      console.log('Latest scan ID:', latestCompletedScan?.$id);
-      console.log('Latest scan data:', {
-        status: latestCompletedScan?.status,
-        critical: latestCompletedScan?.criticalCount || latestCompletedScan?.critical,
-        high: latestCompletedScan?.highCount || latestCompletedScan?.high,
-        medium: latestCompletedScan?.mediumCount || latestCompletedScan?.medium,
-        low: latestCompletedScan?.lowCount || latestCompletedScan?.low,
-        total: latestCompletedScan?.vulnerabilities,
-        createdAt: latestCompletedScan?.$createdAt
-      });
-      // -------------------------
-
-      // 3. Fetch Recent Scans for Charts/Activity (Separate query to avoid interference)
       let activityDocuments: any[] = [];
       try {
         const activityRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-          Query.or([
-            Query.equal('repo_id', repoIds),
-            Query.equal('repoUrl', repoUrls)
-          ]),
-          Query.orderDesc('$createdAt'),
-          Query.limit(10)
+          Query.or([Query.equal('repo_id', repoIds), Query.equal('repoUrl', repoUrls)]),
+          Query.orderDesc('$createdAt'), Query.limit(90)
         ]);
         activityDocuments = activityRes.documents;
-      } catch (err) {
-        console.warn('Failed to fetch activity scans from Appwrite:', err);
-      }
+      } catch (err) { console.warn('Failed to fetch activity scans from Appwrite:', err); }
 
       if (activityDocuments.length === 0 && localStorage.getItem('scorpion_demo_seeded') === 'true') {
         const { MOCK_SCANS } = await import('../lib/demoData');
@@ -232,18 +223,21 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
 
       const scans = activityDocuments;
 
-      let passed = 0; let blocked = 0; let active = 0;
+      const countByDay = new Map<string, number>();
+      scans.forEach((s: any) => {
+        const created = s.$createdAt || s.createdAt;
+        if (!created) return;
+        const day = new Date(created).toISOString().slice(0, 10);
+        countByDay.set(day, (countByDay.get(day) ?? 0) + 1);
+      });
+      setHeatmapData(Array.from(countByDay, ([date, count]) => ({ date, count })));
 
-      // Process scans for activity and gate stats (Global)
+      let passed = 0; let blocked = 0; let active = 0;
       scans.forEach(s => {
         let gate = s.gateStatus || s.gate_status;
         if (s.details && typeof s.details === 'string') {
-          try {
-            const d = JSON.parse(s.details);
-            if (d.gate_status) gate = d.gate_status;
-          } catch (e) { }
+          try { const d = JSON.parse(s.details); if (d.gate_status) gate = d.gate_status; } catch (e) {}
         }
-
         if (gate === 'passed') passed++;
         if (gate === 'failed' || gate === 'blocked') blocked++;
         if (s.status === 'running' || s.status === 'pending') active++;
@@ -252,40 +246,18 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
       setCiGateStats({ passed, blocked, rate: (passed + blocked) > 0 ? Math.round((passed / (passed + blocked)) * 100) : 0 });
       setActiveScansCount(active);
 
-      // 4. Extract Stats from LATEST COMPLETED scan only
       if (latestCompletedScan) {
         setLatestScanId(latestCompletedScan.$id);
         setLatestScan(latestCompletedScan);
-
         const scan = latestCompletedScan;
-
-        // Appwrite fields use camelCase: criticalCount, highCount, etc.
         let crit = Number(scan.criticalCount ?? scan.critical ?? 0);
         let high = Number(scan.highCount ?? scan.high ?? 0);
         let med = Number(scan.mediumCount ?? scan.medium ?? 0);
         let low = Number(scan.lowCount ?? scan.low ?? 0);
         let bugs = Number(scan.bugs ?? 0);
         let lines = 0;
-
-        let total = scan.total ?? scan.totalIssues ?? scan.vulnerabilities ??
-          ((scan.critical ?? scan.criticalCount ?? 0) + 
-           (scan.high ?? scan.highCount ?? 0) + 
-           (scan.medium ?? scan.mediumCount ?? 0) + 
-           (scan.low ?? scan.lowCount ?? 0));
-
-        let score = scan.score ?? scan.securityScore ?? scan.security_score ?? scan.security_rating ?? 
-          Math.max(15, Math.round(100 - (crit * 8) - (high * 1.5) - (med * 0.3) - (low * 0.05)));
-
-        // Warning alerts for missing fields
-        if (scan.total === undefined && scan.totalIssues === undefined && scan.vulnerabilities === undefined) {
-          console.warn("Fallback triggered: 'total' field was missing in the scan document. Computed from individual counts:", total);
-        }
-        if (scan.score === undefined && scan.securityScore === undefined && scan.security_score === undefined && scan.security_rating === undefined) {
-          console.warn("Fallback triggered: 'score' field was missing in the scan document. Computed using formula:", score);
-        }
-
-        // Diagnostic log
-        console.log('Processed Scan Metrics:', { crit, high, med, low, score, total });
+        let total = scan.total ?? scan.totalIssues ?? scan.vulnerabilities ?? ((scan.critical ?? scan.criticalCount ?? 0) + (scan.high ?? scan.highCount ?? 0) + (scan.medium ?? scan.mediumCount ?? 0) + (scan.low ?? scan.lowCount ?? 0));
+        let score = scan.score ?? scan.securityScore ?? scan.security_score ?? scan.security_rating ?? Math.max(15, Math.round(100 - (crit * 8) - (high * 1.5) - (med * 0.3) - (low * 0.05)));
 
         if (latestCompletedScan.details && typeof latestCompletedScan.details === 'string') {
           try {
@@ -295,20 +267,15 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
             if (d.medium_count !== undefined) med = Math.max(med, Number(d.medium_count));
             if (d.low_count !== undefined) low = Math.max(low, Number(d.low_count));
             if (d.total_vulnerabilities !== undefined) total = Math.max(total, Number(d.total_vulnerabilities));
-            if (d.security_score !== undefined) {
-              score = Number(d.security_score) === 0 ? Math.max(15, Math.round(100 - (crit * 8) - (high * 1.5) - (med * 0.3) - (low * 0.05))) : Number(d.security_score);
-            }
+            if (d.security_score !== undefined) score = Number(d.security_score) === 0 ? Math.max(15, Math.round(100 - (crit * 8) - (high * 1.5) - (med * 0.3) - (low * 0.05))) : Number(d.security_score);
             if (d.bugs !== undefined) bugs = Math.max(bugs, Number(d.bugs));
             if (d.total_lines !== undefined) lines = Number(d.total_lines);
-          } catch (e) { }
+          } catch (e) {}
         }
 
         if (total === 0) total = crit + high + med + low;
         const finalScore = score !== undefined && score !== null ? Math.round(Number(score)) : Math.max(0, Math.round(100 - (crit * 10) - (high * 4) - (med * 1) - (low * 0.25)));
-
-        setVulnStats({
-          critical: crit, high, medium: med, low, bugs, total, score: finalScore, linesScanned: lines, codeSmells: 0
-        });
+        setVulnStats({ critical: crit, high, medium: med, low, bugs, total, score: finalScore, linesScanned: lines, codeSmells: 0 });
         setPolicyPassRate(finalScore > 85 ? 100 : finalScore > 65 ? 80 : finalScore > 40 ? 60 : 30);
         setQualityGateScore(localStorage.getItem('scorpion_demo_seeded') === 'true' ? 68 : Math.max(0, finalScore - 5));
       } else {
@@ -317,17 +284,11 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
         setQualityGateScore(0);
       }
 
-      // Fetch Latest Vulnerabilities
       let vulnsDocuments: any[] = [];
       try {
-        const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.orderDesc('$createdAt'),
-          Query.limit(5)
-        ]);
+        const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [Query.orderDesc('$createdAt'), Query.limit(5)]);
         vulnsDocuments = vulnsRes.documents;
-      } catch (err) {
-        console.warn('Failed to fetch vulnerabilities from Appwrite:', err);
-      }
+      } catch (err) { console.warn('Failed to fetch vulnerabilities from Appwrite:', err); }
 
       if (vulnsDocuments.length === 0 && localStorage.getItem('scorpion_demo_seeded') === 'true') {
         const { MOCK_FINDINGS } = await import('../lib/demoData');
@@ -337,35 +298,18 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
       setLatestVulnerabilities(vulnsDocuments.slice(0, 5));
       setRemediationQueue(vulnsDocuments.slice(0, 5));
 
-      // Fetch Last Build
       try {
-        const buildRes = await databases.listDocuments(DB_ID, COLLECTIONS.BUILD_PIPELINES, [
-          Query.orderDesc('$createdAt'),
-          Query.limit(1)
-        ]);
-        if (buildRes.documents.length > 0) {
-          setLastBuildStatus(buildRes.documents[0].status);
-        } else {
-          setLastBuildStatus('N/A');
-        }
-      } catch (err) {
-        console.warn('Failed to fetch builds:', err);
-      }
+        const buildRes = await databases.listDocuments(DB_ID, COLLECTIONS.BUILD_PIPELINES, [Query.orderDesc('$createdAt'), Query.limit(1)]);
+        setLastBuildStatus(buildRes.documents.length > 0 ? buildRes.documents[0].status : 'N/A');
+      } catch (err) { console.warn('Failed to fetch builds:', err); }
 
-      // Fetch Deployments Today
       try {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const deployRes = await databases.listDocuments(DB_ID, COLLECTIONS.DEPLOYMENTS, [
-          Query.greaterThanEqual('$createdAt', startOfDay.toISOString()),
-          Query.limit(100)
-        ]);
+        const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+        const deployRes = await databases.listDocuments(DB_ID, COLLECTIONS.DEPLOYMENTS, [Query.greaterThanEqual('$createdAt', startOfDay.toISOString()), Query.limit(100)]);
         setDeploymentsToday(deployRes.documents.length || 0);
-      } catch (err) {
-        console.warn('Failed to fetch deployments:', err);
-      }
+      } catch (err) { console.warn('Failed to fetch deployments:', err); }
 
-      if (isAuto) toast.success('Data updated', { id: 'auto-refresh', style: { background: '#1a1a1a', color: '#6db87a', fontSize: '10px' } });
+      if (isAuto) toast.success('Data updated', { id: 'auto-refresh' });
       setError(null);
     } catch (err: any) {
       console.error('[Dashboard] Fetch error:', err);
@@ -375,35 +319,22 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [getJWT]);
+  }, [getJWT, user]);
 
   useEffect(() => {
     fetchDashboardData();
-
-    // Manual refresh listener for external triggers (e.g. Scan Modal)
     const handleManualRefresh = () => fetchDashboardData(true);
     window.addEventListener('refresh-dashboard', handleManualRefresh);
-
-    // Simplified Realtime Subscription (Relying on SDK internal reconnect + polling fallback)
     let realtimeDebounce: NodeJS.Timeout;
-    const unsubscribe = client.subscribe(
-      [
-        `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`
-      ],
-      (response) => {
-        if (response.events.some(e => e.includes('.create') || e.includes('.update'))) {
-          // Only refresh if it's a completed scan
-          const payload = response.payload as any;
-          if (payload?.status === 'completed') {
-            clearTimeout(realtimeDebounce);
-            realtimeDebounce = setTimeout(() => {
-              fetchDashboardData(true);
-            }, 10000);
-          }
+    const unsubscribe = client.subscribe([`databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`], (response) => {
+      if (response.events.some(e => e.includes('.create') || e.includes('.update'))) {
+        const payload = response.payload as any;
+        if (payload?.status === 'completed') {
+          clearTimeout(realtimeDebounce);
+          realtimeDebounce = setTimeout(() => fetchDashboardData(true), 10000);
         }
       }
-    );
-
+    });
     return () => {
       if (unsubscribe) unsubscribe();
       window.removeEventListener('refresh-dashboard', handleManualRefresh);
@@ -411,26 +342,32 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
     };
   }, [fetchDashboardData]);
 
-  const threatData = [
-    { axis: 'Critical', Observed: vulnStats.critical },
-    { axis: 'High', Observed: vulnStats.high },
-    { axis: 'Medium', Observed: vulnStats.medium },
-    { axis: 'Low', Observed: vulnStats.low },
-    { axis: 'Bugs', Observed: vulnStats.bugs },
-    { axis: 'Vulnerabilities', Observed: vulnStats.total },
-    { axis: 'Lines', Observed: Math.min(Math.round(vulnStats.linesScanned / 100), 100) },
-    { axis: 'Security', Observed: vulnStats.score },
+  // ── Derived values ──────────────────────────────────────────────────────────
+
+  const radarMax = Math.max(10, vulnStats.total, byType.secret, byType.dependency, byType.sast, byType.iac);
+  const threatRadarData = [
+    { axis: 'Secrets', value: byType.secret },
+    { axis: 'Vulnerabilities', value: vulnStats.total },
+    { axis: 'SAST', value: byType.sast },
+    { axis: 'Dependencies', value: byType.dependency },
+    { axis: 'IaC', value: byType.iac },
   ];
 
-  const metrics = [
-    { id: 'critical', label: 'Critical Vulnerabilities', value: vulnStats.critical, icon: ShieldX, color: 'var(--status-error)', path: `/scans/${latestScanId}/sast?filter=critical` },
-    { id: 'high', label: 'High Vulnerabilities', value: vulnStats.high, icon: ShieldAlert, color: 'var(--severity-high)', path: `/scans/${latestScanId}/sast?filter=high` },
-    { id: 'medium', label: 'Medium Vulnerabilities', value: vulnStats.medium, icon: AlertCircle, color: 'var(--status-warning)', path: `/scans/${latestScanId}/sast?filter=medium` },
-    { id: 'low', label: 'Low Risk', value: vulnStats.low, icon: ShieldCheck, color: 'var(--status-success)', path: `/scans/${latestScanId}/sast?filter=low` },
-    { id: 'bugs', label: vulnStats.bugs > 0 ? 'Bugs (Bandit)' : 'Bugs (Python only)', value: vulnStats.bugs, icon: Bug, color: 'var(--severity-info)', path: `/scans/${latestScanId}/antipatterns` },
-    { id: 'vulns', label: 'Vulnerabilities', value: vulnStats.total, icon: Activity, color: 'var(--accent-primary)', path: `/scans/${latestScanId}/sast` },
-    { id: 'lines', label: 'Lines Scanned', value: vulnStats.linesScanned?.toLocaleString() || '0', icon: FileText, color: 'var(--accent-primary)' },
-    { id: 'posture', label: 'Security Posture', value: `${vulnStats.score}%`, icon: Zap, color: 'var(--status-success)', path: `/scans/${latestScanId}/sast` },
+  const ringMetrics: { id: string; label: string; value: number; max: number; severity: Severity; icon: typeof ShieldX; path?: string }[] = [
+    { id: 'critical', label: 'Critical', value: vulnStats.critical, max: 10, severity: 'critical', icon: ShieldX, path: `/scans/${latestScanId}/sast?filter=critical` },
+    { id: 'high', label: 'High', value: vulnStats.high, max: 25, severity: 'high', icon: ShieldAlert, path: `/scans/${latestScanId}/sast?filter=high` },
+    { id: 'medium', label: 'Medium', value: vulnStats.medium, max: 50, severity: 'medium', icon: AlertCircle, path: `/scans/${latestScanId}/sast?filter=medium` },
+    { id: 'low', label: 'Low', value: vulnStats.low, max: 100, severity: 'low', icon: ShieldCheck, path: `/scans/${latestScanId}/sast?filter=low` },
+    { id: 'bugs', label: 'Bugs', value: vulnStats.bugs, max: 50, severity: 'info', icon: Bug, path: `/scans/${latestScanId}/antipatterns` },
+    { id: 'vulns', label: 'Open vulns', value: vulnStats.total, max: 150, severity: vulnStats.total > 100 ? 'high' : vulnStats.total > 30 ? 'medium' : 'low', icon: Activity, path: `/scans/${latestScanId}/sast` },
+  ];
+
+  const gateRows = [
+    { id: 'ci', label: 'CI Gate', value: `${ciGateStats.rate}%`, sub: `${ciGateStats.passed} passed · ${ciGateStats.blocked} blocked`, color: '#185FA5' },
+    { id: 'quality', label: 'Quality Gate', value: `${qualityGateScore || 0}/100`, sub: qualityGateScore > 70 ? 'Passed' : qualityGateScore > 50 ? 'Warning' : 'Failed', color: qualityGateScore > 70 ? '#639922' : qualityGateScore > 50 ? '#BA7517' : '#E24B4A' },
+    { id: 'policy', label: 'Policy Pass', value: `${policyPassRate}%`, sub: 'Compliance', color: '#639922' },
+    { id: 'build', label: 'Last Build', value: lastBuildStatus.toUpperCase(), sub: 'Status', color: lastBuildStatus === 'success' ? '#639922' : lastBuildStatus === 'failed' ? '#E24B4A' : '#BA7517' },
+    { id: 'deploy', label: 'Deployments', value: deploymentsToday.toString(), sub: 'Today', color: '#185FA5' },
   ];
 
   const handleRefresh = async () => {
@@ -439,22 +376,29 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
     setPolicyPassRate(0);
     setLastBuildStatus('N/A');
     setDeploymentsToday(0);
-
-    // Block auto-triggered fetches during manual refresh
     isFetchingRef.current = true;
-
     await fetchDashboardData();
-    // isFetchingRef.current is reset to false inside fetchDashboardData's finally block
   };
+
+  // ── Skeleton ────────────────────────────────────────────────────────────────
+
+  const SkeletonCard = ({ className = '' }: { className?: string }) => (
+    <div className={`p-4 bg-white rounded-2xl border border-gray-100 animate-pulse ${className}`}>
+      <div className="mb-3 w-1/2 h-3 bg-gray-100 rounded" />
+      <div className="w-1/3 h-7 bg-gray-100 rounded" />
+    </div>
+  );
+
+  // ── Error state ─────────────────────────────────────────────────────────────
 
   if (error) {
     return (
-      <div className="flex-1 w-full pl-0 pr-0 pb-8 flex items-center justify-center min-h-[400px]">
+      <div className="flex-1 flex items-center justify-center min-h-[400px] bg-gray-50">
         <div className="text-center">
-          <XCircle size={48} className="mx-auto text-[var(--status-error)] mb-4" />
-          <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">Failed to load dashboard data</h2>
-          <p className="text-sm text-[var(--text-secondary)] mb-4">{error}</p>
-          <button onClick={handleRefresh} className="px-4 py-2 bg-[var(--accent-primary)] text-white rounded-lg text-sm font-bold shadow-sm hover:brightness-110">
+          <XCircle size={40} className="mx-auto mb-3 text-red-400" />
+          <h2 className="mb-1 text-base font-medium text-gray-900">Failed to load dashboard</h2>
+          <p className="mb-4 text-sm text-gray-500">{error}</p>
+          <button onClick={handleRefresh} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-2xl transition-colors hover:bg-blue-700">
             Retry
           </button>
         </div>
@@ -462,500 +406,391 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
     );
   }
 
-  const SkeletonCard = ({ h }: { h: string }) => (
-    <div className={`bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] animate-pulse ${h}`}>
-      <div className="w-1/2 h-4 bg-gray-200 rounded mb-4"></div>
-      <div className="w-1/3 h-8 bg-gray-200 rounded"></div>
-    </div>
-  );
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="w-full min-h-screen px-4 md:px-8 lg:px-10 transition-colors duration-300" style={{ backgroundColor: theme === 'dark' ? '#0a0a0a' : 'var(--bg-primary)', padding: '12px 0' }}>
-      <div className="w-full max-w-full space-y-6">
+    <div className="min-h-screen bg-gray-50">
 
-        {/* Top Header Console Banner */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[var(--bg-card)] rounded-[16px] py-3 px-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
+      <div className="px-6 py-5 mx-auto space-y-5 max-w-screen-2xl">
+
+        {/* ── Inline header (replaces sticky top bar) ── */}
+        <div className="flex justify-between items-center">
           <div>
-            <div className="flex items-center gap-2">
-              <Shield className="text-[var(--accent-primary)] animate-pulse" size={18} />
-              <h1 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">SCORPION SECURITY CONTROL PLANE</h1>
-            </div>
-            <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 font-mono">GLOBAL OPERATOR TELEMETRY ORCHESTRATOR // BOUNDARY_ACTIVE</p>
+            <p className="text-sm font-semibold text-gray-900">Dashboard</p>
+            <p className="text-xs text-gray-400">Monitor your security posture</p>
           </div>
-
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 items-center">
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:border-[var(--accent-primary)]/30 transition-all flex items-center justify-center"
+              className="p-2 text-gray-400 rounded-2xl border border-gray-200 transition-colors hover:text-gray-600 hover:border-gray-300"
+              aria-label="Refresh dashboard"
             >
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
             </button>
             <button
               onClick={() => navigate('/repos')}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-[9px] tracking-widest uppercase transition-all shadow-[0_4px_12px_rgba(16,185,129,0.2)] flex items-center gap-2"
+              className="flex gap-2 items-center px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-2xl transition-colors hover:bg-blue-700"
             >
-              <Activity size={12} />
-              + INITIALIZE NEW SCAN
+              <Zap size={12} />
+              New scan
             </button>
           </div>
         </div>
 
-        {/* 1. Top Section: Core Security Posture (Full Width Summary Matrix) */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch w-full">
-          {/* Col 1: Postural Health Breakdown */}
-          <div className="xl:col-span-3 w-full h-full min-h-[400px] group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
-            <PostureRoadmap compact ciGateRate={ciGateStats.rate} hasScans={latestScan !== null} />
-          </div>
-
-          {/* Col 2: Threat Dimension Analysis & Runtime Threat Stream Side-Panel */}
-          <div className="xl:col-span-6 w-full h-full">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full h-full">
-              <div className="lg:col-span-8 w-full h-full">
-                <div className="bg-[var(--bg-card)] rounded-[16px] p-6 shadow-[0_4px_16px_rgba(0,0,0,0.04)] w-full h-full flex flex-col border border-[var(--border-subtle)] group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
-                  <div className="mb-4">
-                    <h3 className="text-[11px] font-black text-[var(--text-primary)] uppercase tracking-wider">Threat Dimension Analysis</h3>
-                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Continuous Scanner Footprint Map</p>
-                  </div>
-                  <div style={{ width: '100%', minHeight: 420 }} className="flex-1 flex items-center justify-center w-full h-full">
-                    <SecurityRadarChart data={threatData} />
-                  </div>
-                </div>
-              </div>
-                <div className="lg:col-span-4 w-full h-full group relative transition-all duration-300 ease-in-out hover:scale-[1.03] hover:z-30 hover:shadow-2xl">
-                <RuntimeThreatStream />
-              </div>
-            </div>
-          </div>
-
-          {/* Col 3: Core Compliance Gates Stack */}
-            <div className="xl:col-span-3 w-full h-full flex flex-col gap-4 overflow-visible">
-            {[
-              { id: 'ci', label: 'CI Gate Integrity', value: `${ciGateStats.rate}%`, trend: 'Success Rate', color: 'var(--status-success)', counts: `Passed: ${ciGateStats.passed} | Blocked: ${ciGateStats.blocked}` },
-              { 
-                id: 'quality', 
-                label: 'QUALITY GATE', 
-                value: `${qualityGateScore || 0}/100`, 
-                trend: qualityGateScore > 70 ? 'PASSED' : qualityGateScore > 50 ? 'WARNING' : 'FAILED', 
-                color: qualityGateScore > 70 ? 'var(--status-success)' : qualityGateScore > 50 ? 'var(--status-warning)' : 'var(--status-error)' 
-              },
-              { id: 'policy', label: 'Policy Pass', value: `${policyPassRate}%`, trend: 'Compliance', color: 'var(--status-success)' },
-              { id: 'build', label: 'Last Build', value: lastBuildStatus.toUpperCase(), trend: 'Status', color: lastBuildStatus === 'success' ? 'var(--status-success)' : lastBuildStatus === 'failed' ? 'var(--status-error)' : 'var(--status-warning)' },
-              { id: 'deploy', label: 'Deployments', value: deploymentsToday.toString(), trend: 'Today', color: 'var(--accent-primary)' }
-            ].map((stat, i) => (
-              loading ? <SkeletonCard key={i} h="h-20" /> :
-              <div key={i}
-                onClick={() => {
-                  if (stat.id === 'ci') setShowGateSummary(true);
-                }}
-                className="mb-4 rounded-[12px] p-6 shadow-lg flex flex-col justify-between flex-1 min-h-[90px] border border-[var(--border-subtle)] relative transition-all duration-300 ease-out group hover:z-50 hover:scale-[1.04] hover:shadow-2xl hover:-translate-y-1 bg-white"
-              >
-                <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: stat.color }}></div>
-
-                {stat.id === 'quality' ? (
-                  <div className="flex flex-col h-full w-full justify-between">
-                    <div className="flex justify-between items-start">
-                      <h3 className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">QUALITY GATE</h3>
-                      <div className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-wider ${
-                        qualityGateScore > 70 
-                          ? 'bg-emerald-500/10 text-emerald-500' 
-                          : qualityGateScore > 50 
-                            ? 'bg-amber-500/10 text-amber-500' 
-                            : 'bg-red-500/10 text-red-500'
-                      }`}>{qualityGateScore > 70 ? 'PASSED' : qualityGateScore > 50 ? 'WARNING' : 'FAILED'}</div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 my-1">
-                      <div className={`w-6 h-6 rounded-full border flex items-center justify-center font-black text-[10px] ${
-                        qualityGateScore > 70 
-                          ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' 
-                          : qualityGateScore > 50 
-                            ? 'border-amber-500/30 text-amber-500 bg-amber-500/5' 
-                            : 'border-red-500/30 text-red-500 bg-red-500/5'
-                      }`}>{qualityGateScore > 70 ? '✓' : '✗'}</div>
-                      <div>
-                        <p className="text-[16px] font-black text-[var(--text-primary)] leading-none">{qualityGateScore || 0}/100</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="h-1 w-full bg-[var(--bg-primary)] rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-500 ${
-                          qualityGateScore > 70 
-                            ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' 
-                            : qualityGateScore > 50 
-                              ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]' 
-                              : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'
-                        }`} style={{ width: `${qualityGateScore}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between items-start">
-                      <h3 className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">{stat.label}</h3>
-                      {individualErrors[stat.id] && (
-                        <Activity size={14} className="text-[var(--status-error)]" />
-                      )}
-                    </div>
-
-                    <div className="flex justify-between items-end mt-2">
-                      <div>
-                        <span className="text-[18px] font-black text-[var(--text-primary)] leading-none">{stat.value}</span>
-                        {stat.counts && <div className="text-[8px] font-bold text-[var(--text-secondary)] mt-0.5 opacity-80">{stat.counts}</div>}
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-[8px] font-bold uppercase tracking-wider" style={{ color: stat.color }}>{stat.trend}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 2. Middle Section: Dynamic Vulnerability Telemetry (The Grid Matrix Board) */}
-        <div className="bg-[var(--bg-card)] rounded-[16px] p-6 border border-[var(--border-subtle)] shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-          <div className="flex justify-between items-center mb-6 border-b border-[var(--border-subtle)] pb-3">
+        {/* ── AI Remediation Queue (hero) ── */}
+        <div className="p-6 bg-gray-900 rounded-2xl border border-gray-800">
+          <div className="flex flex-wrap justify-between items-start gap-4 mb-5">
             <div>
-              <h3 className="text-[12px] font-black uppercase tracking-wider flex items-center gap-2">
-                <Activity className="text-[var(--accent-primary)] animate-pulse" size={14} />
-                Continuous Ingestion Telemetry Stream
-              </h3>
-              <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Real-Time Core Scanner Feed</p>
+              <p className="text-xs font-semibold tracking-wider text-blue-300 uppercase mb-1.5 flex items-center gap-1.5">
+                <Zap size={12} />
+                AI Remediation Queue
+              </p>
+              <p className="text-sm text-gray-400">Findings auto-triaged for a fix PR</p>
             </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">INGESTION_ACTIVE</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Column A: Static Analysis Vulnerabilities */}
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest border-l-2 border-emerald-500 pl-2">Static Analysis Vulnerabilities</h4>
-              <div className="grid grid-cols-2 gap-3">
-                {metrics.slice(0, 4).map((m, i) => (
-                  loading ? <SkeletonCard key={i} h="h-20" /> :
-                  <div key={i}
-                    onClick={() => {
-                      if (m.path?.includes('null')) return;
-                      m.path && navigate(m.path);
-                    }}
-                    className={`bg-[var(--bg-primary)]/40 rounded-[12px] p-3 border border-[var(--border-subtle)] flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:scale-[1.02] hover:bg-[var(--bg-primary)]/80 hover:border-[var(--accent-primary)]/30'} transition-all`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: `${m.color}15`, color: m.color }}>
-                        <m.icon size={12} />
-                      </div>
-                      <span className="text-[8px] font-mono opacity-60 uppercase font-black">sast</span>
-                    </div>
-                    <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-0.5 group-hover:text-[var(--accent-primary)] transition-colors">{m.label}</p>
-                    <div className="flex justify-between items-end mt-auto">
-                      <span className="text-[18px] font-black text-[var(--text-primary)] leading-none">{m.value}</span>
-                      <TrendingUp size={14} className="text-zinc-400" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Column B: Infrastructure Telemetry */}
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest border-l-2 border-emerald-600 pl-2">Infrastructure Telemetry</h4>
-              <div className="grid grid-cols-2 gap-3">
-                {metrics.slice(4, 8).map((m, i) => (
-                  loading ? <SkeletonCard key={i} h="h-20" /> :
-                  <div key={i}
-                    onClick={() => {
-                      if (m.path?.includes('null')) return;
-                      m.path && navigate(m.path);
-                    }}
-                    className={`bg-[var(--bg-primary)]/40 rounded-[12px] p-3 border border-[var(--border-subtle)] flex flex-col justify-between ${!m.path ? 'cursor-default' : m.path.includes('null') ? 'cursor-wait opacity-80' : 'cursor-pointer group hover:scale-[1.02] hover:bg-[var(--bg-primary)]/80 hover:border-[var(--accent-primary)]/30'} transition-all`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: `${m.color}15`, color: m.color }}>
-                        <m.icon size={12} />
-                      </div>
-                      <span className="text-[8px] font-mono opacity-60 uppercase font-black">infra</span>
-                    </div>
-                    <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-0.5 group-hover:text-[var(--accent-primary)] transition-colors">{m.label}</p>
-                    <div className="flex justify-between items-end mt-auto">
-                      <span className="text-[18px] font-black text-[var(--text-primary)] leading-none">{m.value}</span>
-                      <TrendingUp size={14} className="text-zinc-400" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Bottom Section: Active Remediation & Core Priorities (Split Panel View) */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Left Panel (60% / 3 cols): TONY's Remediation Roadmap Staging Queue */}
-          <div className="lg:col-span-3 flex flex-col bg-[var(--bg-card)] rounded-[16px] p-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center justify-between mb-6 pb-3 border-b border-[var(--border-subtle)]">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600">
-                  <Sparkles size={12} />
-                </div>
-                <div>
-                  <h3 className="text-[12px] font-black uppercase italic tracking-wider">TONY Remediation Roadmap</h3>
-                  <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Automated Intelligence Staging Queue</p>
-                </div>
-              </div>
-              <span className="text-[8px] font-black font-mono bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded uppercase">Staging</span>
-            </div>
-
-            <div className="flex-1 flex flex-col gap-3 justify-center">
-              {loading ? (
-                <div className="space-y-3">
-                  <div className="h-16 bg-[var(--bg-primary)] animate-pulse rounded-xl"></div>
-                  <div className="h-16 bg-[var(--bg-primary)] animate-pulse rounded-xl"></div>
-                </div>
-              ) : remediationQueue.length > 0 ? (
-                remediationQueue.map((v: any) => (
-                  <div key={v.$id} className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-3 bg-[var(--bg-primary)]/40 hover:bg-[var(--bg-primary)]/80 border border-[var(--border-subtle)] rounded-xl transition-all group">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider"
-                          style={{
-                            background: `${SEVERITY_COLOR[v.severity] ?? '#888'}15`,
-                            color: SEVERITY_COLOR[v.severity] ?? '#888',
-                            border: `1px solid ${SEVERITY_COLOR[v.severity] ?? '#888'}30`
-                          }}
-                        >
-                          {v.severity}
-                        </span>
-                        <p className="text-[11px] font-black truncate text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">{v.title || v.message}</p>
-                      </div>
-                      <p className="text-[9px] text-[var(--text-secondary)] font-mono truncate">{v.file_path || v.location || v.file || 'unknown'}</p>
-                      {v.fixedVersion && (
-                        <p className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Upgrade path available: v{v.installedVersion || '1.0.0'} → v{v.fixedVersion}</p>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => setSelectedRemediationFindingId(v.$id)}
-                      className="shrink-0 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all flex items-center gap-1.5 shadow-[0_2px_8px_rgba(16,185,129,0.15)] align-self-end md:align-self-auto"
-                    >
-                      <Zap size={10} />
-                      REMEDIATE
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-12 text-[10px] text-[var(--text-secondary)] uppercase tracking-widest italic">
-                  No pending remediation vectors
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Panel (40% / 2 cols): Critical Real-Time Findings (Chronological Timeline) */}
-          <div className="lg:col-span-2 flex flex-col bg-[var(--bg-card)] rounded-[16px] p-6 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center justify-between mb-6 pb-3 border-b border-[var(--border-subtle)]">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="text-emerald-500" size={14} />
-                <h3 className="text-[12px] font-black uppercase italic tracking-wider">Critical Real-Time Findings</h3>
-              </div>
-              <Link to="/issues" className="text-[9px] text-[var(--accent-primary)] font-black uppercase hover:underline transition-all tracking-wider">View All →</Link>
-            </div>
-
-            <div className="flex-1 flex flex-col gap-4">
-              {loading ? (
-                <div className="space-y-4">
-                  <div className="h-12 bg-[var(--bg-primary)] animate-pulse rounded-xl"></div>
-                  <div className="h-12 bg-[var(--bg-primary)] animate-pulse rounded-xl"></div>
-                </div>
-              ) : latestVulnerabilities.length > 0 ? (
-                latestVulnerabilities.map((v: any) => (
-                  <div key={v.$id} className="relative pl-6 border-l border-[var(--border-subtle)] pb-2 last:pb-0">
-                    <div className="absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--bg-card)]"
-                      style={{ background: SEVERITY_COLOR[v.severity] ?? '#888' }} />
-                    
-                    <div className="flex justify-between items-start mb-1">
-                      <p className="text-[11px] font-black truncate text-[var(--text-primary)] pr-2">{v.title || v.message}</p>
-                      <span className="text-[8px] font-black uppercase tracking-wider shrink-0"
-                        style={{ color: SEVERITY_COLOR[v.severity] ?? '#888' }}
-                      >
-                        {v.severity}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[9px] text-[var(--text-secondary)] font-mono truncate max-w-[70%]">{v.file?.split('/').pop() || 'unknown'}{v.line ? `:${v.line}` : ''}</p>
-                      <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase font-mono">Telemetry Active</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-8">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)]">Compliance Delta Sweep</span>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">100% SECURE</span>
-                  </div>
-                  <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden my-4">
-                    <div className="h-full bg-emerald-600 w-full shadow-[0_0_12px_rgba(5,150,105,0.4)]"></div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-6 text-[10px] font-mono text-stone-500">
-                    <div className="flex items-center">
-                      <span>OWASP TOP 10 SECURE:</span>
-                      <span className="text-emerald-600 font-bold ml-auto">100% PASSED</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span>SECRETS & KEY LEAKS:</span>
-                      <span className="text-emerald-600 font-bold ml-auto">0 DETECTED</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span>DEPENDENCY DELTA VULNS:</span>
-                      <span className="text-emerald-600 font-bold ml-auto">0 OPEN</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span>CONTAINER BASELINE RUNTIME:</span>
-                      <span className="text-emerald-600 font-bold ml-auto">VERIFIED</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Progressive Disclosure: Collapsible Detailed View Section */}
-        <div className="flex flex-col gap-6 mt-6">
-          <div className="flex items-center justify-between border-t border-[var(--border-subtle)] pt-6">
-            <div>
-              <h3 className="text-[11px] font-black uppercase tracking-wider text-[var(--text-secondary)]">Advanced Telemetry Diagnostics</h3>
-              <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase mt-0.5">Deep inspection of secondary parameters</p>
-            </div>
-            <button
-              onClick={() => {
-                const nextVal = !detailsExpanded;
-                setDetailsExpanded(nextVal);
-                localStorage.setItem('scorpion_dashboard_details_expanded', String(nextVal));
-              }}
-              className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/30 text-[9px] font-black uppercase tracking-widest text-[var(--text-primary)] rounded-xl transition-all hover:scale-[1.02]"
+            <Link
+              to="/issues"
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-300 hover:text-white transition-colors"
             >
-              {detailsExpanded ? 'Hide Details' : 'Show Details'}
-            </button>
+              Open queue <ArrowRight size={12} />
+            </Link>
           </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <p className="text-[10px] font-semibold tracking-wider text-gray-500 uppercase mb-1">Open queue</p>
+              {loading ? <div className="w-12 h-8 bg-gray-800 rounded animate-pulse" /> : (
+                <p className="text-3xl font-semibold text-white">{remediationStats.queueCount}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold tracking-wider text-gray-500 uppercase mb-1 flex items-center gap-1">
+                <GitPullRequest size={11} /> PRs created today
+              </p>
+              {loading ? <div className="w-12 h-8 bg-gray-800 rounded animate-pulse" /> : (
+                <p className="text-3xl font-semibold text-emerald-400">{remediationStats.prsCreatedToday}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold tracking-wider text-gray-500 uppercase mb-1 flex items-center gap-1">
+                <Clock size={11} /> Avg detection → PR
+              </p>
+              {loading ? <div className="w-12 h-8 bg-gray-800 rounded animate-pulse" /> : (
+                <p className="text-3xl font-semibold text-white">
+                  {remediationStats.avgDetectionToPrDays !== null ? `${remediationStats.avgDetectionToPrDays}d` : '—'}
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold tracking-wider text-gray-500 uppercase mb-1">Acceptance rate</p>
+              <p className="text-sm font-medium text-gray-500 mt-2" title="No PR merge/reject status is recorded yet — add a field to track this">Not yet tracked</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Key metric cards ── */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {gateRows.map((row) => (
+            <div
+              key={row.id}
+              onClick={() => row.id === 'ci' ? setShowGateSummary(true) : undefined}
+              className={`bg-white border border-gray-100 rounded-2xl px-4 py-3.5 ${row.id === 'ci' ? 'cursor-pointer hover:border-gray-200 transition-colors' : ''}`}
+            >
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{row.label}</p>
+              {loading ? (
+                <div className="w-16 h-7 bg-gray-100 rounded animate-pulse" />
+              ) : (
+                <>
+                  <p className="text-2xl font-semibold leading-none" style={{ color: row.color }}>{row.value}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">{row.sub}</p>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* ── Security posture + Threat radar ── */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="p-5 bg-white rounded-xl border border-gray-100 aspect-square flex flex-col">
+            <p className="mb-3 text-xs font-semibold tracking-wider text-gray-400 uppercase shrink-0">Security posture</p>
+            <div className="flex-1 min-h-0">
+              <PostureRoadmap
+                compact
+                ciGateRate={ciGateStats.rate}
+                hasScans={latestScan !== null}
+                vulnStats={{ critical: vulnStats.critical, high: vulnStats.high, medium: vulnStats.medium, score: vulnStats.score }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col p-5 bg-white rounded-xl border border-gray-100 aspect-square">
+            <p className="mb-3 text-xs font-semibold tracking-wider text-gray-400 uppercase shrink-0">Coverage — threat radar</p>
+            <div className="flex flex-1 justify-center items-center min-h-0">
+              <ThreatRadar data={threatRadarData} max={radarMax} size={220} className="w-full" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Expanded details toggle ── */}
+        <div>
+          <button
+            onClick={() => {
+              const next = !detailsExpanded;
+              setDetailsExpanded(next);
+              localStorage.setItem('scorpion_dashboard_details_expanded', String(next));
+            }}
+            className="flex gap-2 items-center py-2 w-full text-xs font-medium text-left text-gray-400 border-t border-gray-100 transition-colors hover:text-gray-600"
+          >
+            <span>{detailsExpanded ? '▾' : '▸'}</span>
+            <span className="tracking-wider uppercase">More signal — attack sources, scan heatmap, secrets, MTTR, pipeline gates</span>
+          </button>
 
           {detailsExpanded && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 transition-all duration-300 items-start">
-              
-              {/* 1. Geo Attack Origins */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 relative">
-                <div>
-                  <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Geo Attack Origins</h4>
-                  <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Live Ingress Threat Feeds</p>
-                  
-                  <div className="space-y-2">
-                    {[
-                      { city: 'Kyiv, Ukraine', type: 'High Severity', ip: '185.220.101.5', status: 'Blocked' },
-                      { city: 'Beijing, China', type: 'Medium Threat', ip: '221.229.204.12', status: 'Monitored' },
-                      { city: 'Frankfurt, Germany', type: 'Low Activity', ip: '80.12.19.143', status: 'Allowed' }
-                    ].map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-[9px] font-mono p-1 rounded hover:bg-[var(--bg-primary)]/40">
-                        <div>
-                          <p className="text-[10px] font-bold text-[var(--text-primary)]">{item.city}</p>
-                          <p className="text-[8px] text-zinc-500">{item.ip}</p>
+            <div className="mt-4 space-y-4">
+
+              {/* ── Scan health — ring metrics ── */}
+              <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                <p className="mb-4 text-xs font-semibold tracking-wider text-gray-400 uppercase">Scan health</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {ringMetrics.map((m) =>
+                    loading ? <SkeletonCard key={m.id} /> : (
+                      <StatCard
+                        key={m.id}
+                        title={m.label}
+                        icon={<m.icon size={14} />}
+                        accent={m.severity}
+                        onClick={m.path && !m.path.includes('null') ? () => navigate(m.path!) : undefined}
+                      >
+                        <div className="flex flex-col gap-2 items-center mt-1">
+                          <span className="text-2xl font-semibold text-gray-900">{m.value}</span>
+                          {(() => {
+                            const ratio = m.max > 0 ? m.value / m.max : 0;
+                            const status = ratio === 0 ? 'Healthy' : ratio < 0.5 ? 'Warning' : 'Failing';
+                            const cls = ratio === 0 ? 'bg-emerald-50 text-emerald-600' : ratio < 0.5 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600';
+                            return <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase ${cls}`}>{status}</span>;
+                          })()}
                         </div>
-                        <span className={`text-[7px] font-black uppercase px-1 rounded ${
-                          item.status === 'Blocked' 
-                            ? 'bg-red-500/10 text-red-500 border border-red-500/20' 
-                            : item.status === 'Monitored'
-                              ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                        }`}>{item.status}</span>
+                      </StatCard>
+                    )
+                  )}
+                  {loading ? <SkeletonCard /> : (
+                    <StatCard title="Lines scanned" icon={<FileText size={14} />} accent="primary">
+                      <div className="flex justify-center items-center h-[78px]">
+                        <span className="text-2xl font-semibold text-gray-900">{vulnStats.linesScanned?.toLocaleString() || '0'}</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-[7px] font-mono text-zinc-500 border-t border-[var(--border-subtle)] pt-2 mt-3">
-                  Updated: 2 mins ago
+                    </StatCard>
+                  )}
+                  {loading ? <SkeletonCard /> : (
+                    <StatCard title="Active scans" icon={<Zap size={14} />} accent="primary" onClick={() => navigate('/repos')}>
+                      <div className="flex justify-center items-center h-[78px]">
+                        <span className="text-2xl font-semibold text-gray-900">{activeScansCount}</span>
+                      </div>
+                    </StatCard>
+                  )}
                 </div>
               </div>
 
-              {/* 2. Protocol Breakdown */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
-                <div>
-                  <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Protocol Breakdown</h4>
-                  <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">API Route Ingress Share</p>
-                  
+              {/* ── Findings & recent activity (Signal stream) ── */}
+              <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-0.5">Findings & recent activity</p>
+                    <p className="text-sm font-medium text-gray-900">Signal stream</p>
+                  </div>
+                  <Link to="/issues" className="text-xs font-medium text-blue-600 hover:underline">View all →</Link>
+                </div>
+
+                {loading ? (
                   <div className="space-y-3">
-                    {[
-                      { protocol: 'HTTPS', share: 84, color: 'bg-emerald-500' },
-                      { protocol: 'SSH', share: 11, color: 'bg-amber-500' },
-                      { protocol: 'DNS', share: 5, color: 'bg-blue-500' }
-                    ].map((item, idx) => (
-                      <div key={idx} className="space-y-1">
-                        <div className="flex justify-between text-[9px] font-mono">
-                          <span className="font-bold text-[var(--text-primary)]">{item.protocol}</span>
-                          <span className="text-zinc-500">{item.share}%</span>
+                    {[1, 2, 3].map(i => <div key={i} className="h-14 bg-gray-50 rounded-2xl animate-pulse" />)}
+                  </div>
+                ) : latestVulnerabilities.length > 0 ? (
+                  <div className="divide-y divide-gray-50">
+                    {latestVulnerabilities.map((v: any) => (
+                      <div key={v.$id} className="flex gap-3 items-center py-3">
+                        <div className="w-0.5 h-10 rounded-full shrink-0" style={{ background: SEVERITY_COLOR[v.severity] ?? '#888780' }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+                              style={{ color: SEVERITY_COLOR[v.severity], background: SEVERITY_BG[v.severity] ?? '#F1EFE8' }}
+                            >
+                              {v.severity}
+                            </span>
+                            <p className="text-sm text-gray-900 truncate">{v.title || v.message}</p>
+                          </div>
+                          <p className="font-mono text-xs text-gray-400 truncate">
+                            {v.file_path || v.location || v.file || 'unknown'}{v.line ? `:${v.line}` : ''}
+                          </p>
+                          {v.fixedVersion && (
+                            <p className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                              Upgrade path: v{v.installedVersion || '?'} → v{v.fixedVersion}
+                            </p>
+                          )}
                         </div>
-                        <div className="w-full bg-[var(--bg-primary)] h-1 rounded-full overflow-hidden">
-                          <div className={`h-full ${item.color}`} style={{ width: `${item.share}%` }} />
-                        </div>
+                        <button
+                          onClick={() => setSelectedRemediationFindingId(v.$id)}
+                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 rounded-2xl hover:border-gray-300 hover:bg-gray-50 transition-colors"
+                        >
+                          <Zap size={11} />
+                          Fix
+                        </button>
                       </div>
                     ))}
                   </div>
-                </div>
-                <div className="text-[7px] font-mono text-zinc-500 border-t border-[var(--border-subtle)] pt-2 mt-3">
-                  TOTAL REQS: 4.8M
-                </div>
-              </div>
-
-              {/* 3. Audit Feed */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
-                <div>
-                  <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Audit Ledger Stream</h4>
-                  <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Recent Security Actions</p>
-                  
-                  <div className="space-y-2.5 max-h-[120px] overflow-y-auto pr-1">
-                    {[
-                      { action: 'Policy updated by Commander', time: '10 mins' },
-                      { action: 'DevSecOps secrets scan run on food-delivery', time: '1 hr' },
-                      { action: 'New team battalion initialized', time: '2 hrs' }
-                    ].map((item, idx) => (
-                      <div key={idx} className="text-[9px] font-mono leading-tight hover:text-[var(--accent-primary)] cursor-pointer">
-                        <span className="text-emerald-500 font-bold">&gt; </span>
-                        <span className="text-[var(--text-primary)]">{item.action}</span>
-                        <span className="text-[8px] text-zinc-500 block">{item.time} ago</span>
-                      </div>
-                    ))}
+                ) : (
+                  <div className="py-6">
+                    <div className="flex justify-between items-center mb-3">
+                      <p className="text-sm font-medium text-gray-700">Compliance delta sweep</p>
+                      <span className="text-xs font-semibold text-emerald-600">100% secure</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden mb-5">
+                      <div className="w-full h-full rounded-full" style={{ background: 'var(--severity-low)' }} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {[
+                        ['OWASP Top 10', '100% passed'],
+                        ['Secrets & key leaks', '0 detected'],
+                        ['Dependency delta vulns', '0 open'],
+                        ['Container baseline runtime', 'Verified'],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex justify-between items-center px-3 py-2 text-xs text-gray-500 bg-gray-50 rounded-2xl">
+                          <span>{label}</span>
+                          <span className="font-medium text-emerald-600">{value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="text-[7px] font-mono text-zinc-500 border-t border-[var(--border-subtle)] pt-2 mt-3">
-                  INTEGRITY: COMPLIANT
-                </div>
+                )}
               </div>
 
-              {/* 4. Alert Mesh summary */}
-              <div className="bg-[var(--bg-card)] rounded-[16px] p-5 border border-[var(--border-subtle)] shadow-[0_4px_16px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[220px] relative transition-all duration-300 ease-out hover:scale-[1.04] hover:-translate-y-1 hover:shadow-2xl hover:border-[var(--accent-primary)]/30 hover:z-30 will-change-transform">
-                <div>
-                  <h4 className="text-[10px] font-black uppercase text-[var(--text-primary)] tracking-widest mb-1">Alert Mesh Nodes</h4>
-                  <p className="text-[8px] text-[var(--text-secondary)] uppercase tracking-wide border-b border-[var(--border-subtle)] pb-2 mb-3">Webhook Sync Status</p>
-                  
+              {/* ── Repo risk ranking ── */}
+              <div className="p-5 bg-white rounded-xl border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-xs font-semibold tracking-wider text-gray-400 uppercase">Repo risk ranking</p>
+                  <Link to="/repos" className="text-xs font-medium text-blue-600 hover:underline">View all repos →</Link>
+                </div>
+                {loading ? (
                   <div className="space-y-2">
-                    {[
-                      { channel: 'Slack Integrations', status: 'Connected', dot: 'bg-emerald-500' },
-                      { channel: 'Discord Mesh', status: 'Online', dot: 'bg-emerald-500' },
-                      { channel: 'PagerDuty Gateway', status: 'Active', dot: 'bg-emerald-500' }
-                    ].map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-[9px] font-mono p-1 rounded hover:bg-[var(--bg-primary)]/40">
-                        <span className="font-bold text-[var(--text-primary)]">{item.channel}</span>
+                    {[1, 2, 3].map(i => <div key={i} className="h-10 bg-gray-50 rounded-2xl animate-pulse" />)}
+                  </div>
+                ) : repoRisk.length > 0 ? (
+                  <div className="divide-y divide-gray-50">
+                    {repoRisk.map((r, i) => (
+                      <div key={r.repo_id} className="flex items-center justify-between py-2.5">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xs font-semibold text-gray-400 w-5 shrink-0">#{i + 1}</span>
+                          <span className="text-sm text-gray-900 truncate">{r.repo_name}</span>
+                        </div>
+                        <span className="font-mono text-xs font-medium shrink-0" style={{ color: r.critical > 0 ? '#E24B4A' : r.high > 0 ? '#EF9F27' : '#639922' }}>
+                          {r.critical}C · {r.high}H
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-4 text-sm text-gray-400">No open findings across monitored repos.</p>
+                )}
+              </div>
+
+              {/* ── Secrets / MTTR / Pipeline ── */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                  <p className="mb-3 text-xs font-semibold tracking-wider text-gray-400 uppercase">Open secrets</p>
+                  <div className="flex gap-3 items-center">
+                    <span className="text-3xl font-semibold" style={{ color: byType.secret > 0 ? '#E24B4A' : '#639922' }}>
+                      {byType.secret ?? 0}
+                    </span>
+                    <div className="space-y-1 min-w-0 text-xs text-gray-400">
+                      {(recentSecretEntries.length > 0 ? recentSecretEntries : ['No recent secrets detected']).slice(0, 2).map((s: string, i: number) => (
+                        <p key={i} className="truncate">• {s}</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                  <p className="mb-3 text-xs font-semibold tracking-wider text-gray-400 uppercase">MTTR</p>
+                  {mttrDays !== null ? (
+                    <div className="flex gap-3 items-center">
+                      <span className="text-3xl font-semibold" style={{ color: mttrDays <= 1 ? '#639922' : mttrDays <= 3 ? '#BA7517' : '#E24B4A' }}>
+                        {mttrDays}d
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-400 mb-1.5">vs &lt;1d target</p>
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round((mttrDays / 5) * 100))}%`, background: mttrDays <= 1 ? 'var(--severity-low)' : mttrDays <= 3 ? 'var(--severity-medium)' : 'var(--severity-critical)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400">No resolved findings yet to measure.</p>
+                  )}
+                </div>
+
+                <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                  <p className="mb-3 text-xs font-semibold tracking-wider text-gray-400 uppercase">Pipeline gate status</p>
+                  <div className="space-y-2.5">
+                    {pipelineGateStatus.map((g) => (
+                      <div key={g.env} className="flex justify-between items-center">
+                        <span className="text-xs font-medium text-gray-700">{g.env}</span>
+                        <span className="text-sm font-semibold" style={{ color: g.color }}>{g.icon}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Audit / mesh ── */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                  <p className="mb-1 text-xs font-semibold tracking-wider text-gray-400 uppercase">Audit ledger</p>
+                  <p className="text-[10px] text-gray-400 mb-3">Recent security actions</p>
+                  {auditEntries.length > 0 ? (
+                    <div className="space-y-3">
+                      {auditEntries.map((item, idx) => (
+                        <div key={idx} className="text-xs leading-tight text-gray-700">
+                          <p>{item.action} <span className="text-gray-400">by {item.resource}</span></p>
+                          <p className="text-[10px] text-gray-400">{item.time}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">No audited actions recorded yet.</p>
+                  )}
+                </div>
+
+                <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold tracking-wider text-gray-400 uppercase">Alert mesh nodes</p>
+                    <Link to="/alerts" className="text-[10px] font-medium text-blue-600 hover:underline">Configure →</Link>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mb-3">Webhook configuration status</p>
+                  <div className="space-y-3">
+                    {meshStatus.map((item) => (
+                      <div key={item.channel} className="flex justify-between items-center">
+                        <span className="text-xs text-gray-700">{item.channel}</span>
                         <div className="flex items-center gap-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${item.dot} animate-pulse`} />
-                          <span className="text-zinc-500 text-[8px] uppercase">{item.status}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${item.configured ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                          <span className="text-[10px] text-gray-400">{item.configured ? 'Configured' : 'Not configured'}</span>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-                <div className="text-[7px] font-mono text-zinc-500 border-t border-[var(--border-subtle)] pt-2 mt-3">
-                  MESH SYSTEM: SECURE
+              </div>
+
+              {/* ── Scan heatmap — last, least important ── */}
+              <div className="p-5 bg-white rounded-2xl border border-gray-100">
+                <p className="mb-3 text-xs font-semibold tracking-wider text-gray-400 uppercase">Scan activity — last 12 weeks</p>
+                <div className="overflow-x-auto">
+                  <HeatmapGrid data={heatmapData} days={84} cellSize={14} label="" />
+                </div>
+                <div className="flex items-center justify-end gap-1.5 mt-3 text-[10px] text-gray-400">
+                  <span>Less</span>
+                  {[0.1, 0.3, 0.5, 0.7, 1].map((o) => (
+                    <div key={o} className="w-2.5 h-2.5 rounded-sm border border-gray-100" style={{ background: `rgba(55,138,221,${o})` }} />
+                  ))}
+                  <span>More</span>
                 </div>
               </div>
 
@@ -965,46 +800,45 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
 
       </div>
 
-      {/* Gate Summary Modal */}
+      {/* ── CI gate modal ── */}
       {showGateSummary && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[var(--bg-card)] w-full max-w-lg rounded-2xl p-8 border border-[var(--border-subtle)] shadow-2xl">
-            <h2 className="text-lg font-black text-[var(--text-primary)] uppercase tracking-wider mb-6 flex items-center gap-2">
-              <ShieldAlert className="text-[var(--status-error)]" size={20} /> Policy Blocking Summary
-            </h2>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+        <div className="flex fixed inset-0 z-50 justify-center items-center p-4 bg-black/40">
+          <div className="p-6 w-full max-w-lg bg-white rounded-2xl shadow-xl">
+            <div className="flex gap-2 items-center mb-5">
+              <ShieldAlert size={18} className="text-red-500" />
+              <h2 className="text-sm font-semibold text-gray-900">Policy blocking summary</h2>
+            </div>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               {gateSummary.length > 0 ? gateSummary.map((repo, i) => (
-                <div key={i} className="p-4 rounded-xl bg-[var(--bg-primary)] border border-[var(--border-subtle)]">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[12px] font-bold text-[var(--text-primary)]">{repo.name}</span>
-                    <span className="text-[10px] font-black text-[var(--status-error)] uppercase">Blocked</span>
+                <div key={i} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-sm font-medium text-gray-900">{repo.name}</span>
+                    <span className="text-[10px] font-semibold text-red-500 uppercase">Blocked</span>
                   </div>
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">{repo.reason}</p>
+                  <p className="text-xs leading-relaxed text-gray-500">{repo.reason}</p>
                 </div>
               )) : (
-                <div className="text-center py-12">
-                  <ShieldCheck className="mx-auto text-[var(--status-success)] mb-3" size={32} />
-                  <p className="text-[13px] font-bold text-[var(--text-primary)]">All monitored assets are compliant.</p>
+                <div className="py-10 text-center">
+                  <ShieldCheck size={28} className="mx-auto mb-2 text-emerald-500" />
+                  <p className="text-sm font-medium text-gray-700">All monitored assets are compliant.</p>
                 </div>
               )}
             </div>
-            <button
-              onClick={() => setShowGateSummary(false)}
-              className="w-full mt-8 py-3 bg-[var(--accent-primary)] text-white font-black uppercase tracking-widest rounded-xl hover:brightness-110 transition-all"
-            >
+            <button onClick={() => setShowGateSummary(false)} className="w-full mt-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-2xl hover:bg-gray-800 transition-colors">
               Acknowledge
             </button>
           </div>
         </div>
       )}
 
-      {/* TONY Remediation Intelligence Modal */}
+      {/* ── Remediation panel ── */}
       {selectedRemediationFindingId && (
         <RemediationPanel
           documentId={selectedRemediationFindingId}
           onClose={() => setSelectedRemediationFindingId(null)}
         />
       )}
+
     </div>
   );
 }

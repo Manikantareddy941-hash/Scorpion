@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import {
     Shield, Scale,
-    Plus
+    Plus, Check, X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import robotMascot from '../assets/tony-ai.png';
+
+const FRAMEWORK_COLORS: Record<string, string> = {
+    'SOC 2': '#4FC3F7',
+    'ISO 27001': '#9575CD',
+    'OWASP TOP 10': '#E57373',
+    'SOC 2 Trust Criteria': '#4FC3F7',
+};
+const frameworkColor = (fw: string) => FRAMEWORK_COLORS[fw] ?? 'var(--accent-primary)';
 
 export interface GovernancePolicy {
     id: string;
@@ -65,7 +72,9 @@ export default function Governance() {
                         <div>
                             <div className="flex items-center gap-4">
                                 <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Governance Engine</h1>
-                                <img src={robotMascot} alt="TONY AI" className="w-12 h-12 object-contain drop-shadow-none" />
+                                <div className="w-12 h-12 rounded-2xl bg-[var(--accent-primary)]/10 border border-[var(--border-subtle)] flex items-center justify-center">
+                                    <Shield className="text-[var(--accent-primary)]" size={22} />
+                                </div>
                             </div>
                             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Policy-as-Code & Security Guardrails</p>
                         </div>
@@ -105,25 +114,43 @@ export default function Governance() {
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight">{policy.name}</h3>
-                                            <div className="flex items-center gap-2 mt-2">
+                                            <div className="flex items-center gap-2 mt-2 flex-wrap">
                                                 {policy.frameworks.map(fw => (
-                                                    <span key={fw} className="px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[9px] font-mono font-bold text-[var(--text-secondary)] tracking-wider">
+                                                    <span
+                                                        key={fw}
+                                                        className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold tracking-wider border"
+                                                        style={{
+                                                            color: frameworkColor(fw),
+                                                            backgroundColor: `color-mix(in srgb, ${frameworkColor(fw)} 12%, transparent)`,
+                                                            borderColor: `color-mix(in srgb, ${frameworkColor(fw)} 35%, transparent)`,
+                                                        }}
+                                                    >
                                                         {fw}
                                                     </span>
                                                 ))}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[9px] font-black uppercase tracking-widest ${policy.isEnabled ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                                            {policy.isEnabled ? 'ON' : 'OFF'}
+                                        </span>
                                         <button
+                                            type="button"
                                             onClick={() => handleTogglePolicy(policy.id)}
-                                            className={`w-10 h-6 rounded-full transition-all duration-200 relative cursor-pointer border-none outline-none ${policy.isEnabled
-                                                    ? 'bg-[var(--accent-primary)] shadow-none'
-                                                    : 'bg-[var(--border-subtle)]'
+                                            aria-label={policy.isEnabled ? 'Disable policy' : 'Enable policy'}
+                                            aria-pressed={policy.isEnabled ? 'true' : 'false'}
+                                            className={`w-12 h-6 rounded-full transition-all duration-200 relative cursor-pointer border outline-none ${policy.isEnabled
+                                                    ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)]'
+                                                    : 'bg-[var(--border-subtle)] border-[var(--border-subtle)]'
                                                 }`}
                                         >
-                                            <div className={`w-4 h-4 rounded-full bg-[var(--bg-card)] absolute top-1 transition-all ${policy.isEnabled ? 'right-1' : 'left-1'
-                                                }`} />
+                                            <div className={`w-4 h-4 rounded-full bg-white shadow-sm absolute top-1 flex items-center justify-center transition-all ${policy.isEnabled ? 'right-1' : 'left-1'
+                                                }`}>
+                                                {policy.isEnabled
+                                                    ? <Check size={10} className="text-[var(--accent-primary)]" strokeWidth={3} />
+                                                    : <X size={10} className="text-[var(--text-secondary)]" strokeWidth={3} />}
+                                            </div>
                                         </button>
                                     </div>
                                 </div>

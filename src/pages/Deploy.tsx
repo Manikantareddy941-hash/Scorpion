@@ -135,10 +135,9 @@ export default function Deploy() {
                   </div>
                 )}
                 
-                <button 
+                <button
                   onClick={() => triggerDeploy(env)}
                   className="btn-premium w-full flex items-center justify-center gap-2 relative z-10 mt-auto"
-                  style={{ background: 'var(--bg-primary)' }}
                 >
                   <Rocket className="w-4 h-4" /> Deploy to {env}
                 </button>

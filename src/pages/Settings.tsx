@@ -4,12 +4,20 @@ import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
     Save, Loader2, LogOut, Moon, Sun,
-    Terminal, Github, Eye, Camera, Upload, Waves, Activity, Cpu
+    Terminal, Github, Eye, Camera, Upload, Waves, Activity, Cpu, Crosshair
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
-import robotMascot from '../assets/tony-ai.png';
 import { Bot, Globe, Droplets } from 'lucide-react';
+
+const THEME_SWATCHES: Record<string, { bg: string; card: string; accent: string }> = {
+    light: { bg: '#f5f5f5', card: '#ffffff', accent: '#10b981' },
+    dark: { bg: '#0f1115', card: '#1a1d24', accent: '#10b981' },
+    'eye-protection': { bg: '#f5f0e8', card: '#ffffff', accent: '#6db87a' },
+    underwater: { bg: '#0a2540', card: '#0e3a5f', accent: '#4fc3f7' },
+    matrix: { bg: '#000000', card: '#0a0f0a', accent: '#00ff41' },
+    'liquid-glass': { bg: '#e8edf2', card: 'rgba(255,255,255,0.5)', accent: '#7c9cff' },
+};
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
 import { useTerminology } from '../contexts/TerminologyContext';
@@ -17,7 +25,7 @@ import { useTerminology } from '../contexts/TerminologyContext';
 export default function Settings() {
     const { t } = useTranslation();
     const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT, signInWithOAuth } = useAuth();
-    const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled } = useTheme();
+    const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled, echoFreeRoam, setEchoFreeRoam } = useTheme();
     const { uiMode, setUiMode } = useTerminology();
     const [isGithubConnected, setIsGithubConnected] = useState(false);
     const [preferences, setPreferences] = useState({});
@@ -275,10 +283,11 @@ export default function Settings() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {[
-                                { id: 'tactical', label: 'Tactical Mode', desc: 'Syntax: Tactical Battalions · Battalion Commander · Deploy Force' },
-                                { id: 'standard', label: 'Standard Mode', desc: 'Syntax: Teams · Team Lead · Deploy' },
+                                { id: 'tactical', label: 'Tactical Mode', desc: 'Syntax: Tactical Battalions · Battalion Commander · Deploy Force', icon: Crosshair },
+                                { id: 'standard', label: 'Standard Mode', desc: 'Syntax: Teams · Team Lead · Deploy', icon: Terminal },
                             ].map((modeOption) => (
                                 <button
+                                    type="button"
                                     key={modeOption.id}
                                     onClick={() => setUiMode(modeOption.id as any)}
                                     className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-start gap-4 text-left group
@@ -286,7 +295,7 @@ export default function Settings() {
                                 >
                                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors
                                         ${uiMode === modeOption.id ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)]'}`}>
-                                        <Terminal size={20} />
+                                        <modeOption.icon size={20} />
                                     </div>
                                     <div>
                                         <p className={`text-[11px] font-black uppercase italic tracking-wider mb-1 ${uiMode === modeOption.id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
@@ -323,16 +332,28 @@ export default function Settings() {
                                 { id: 'underwater', label: t('settings.theme_underwater', 'Underwater'), icon: Waves, desc: t('settings.theme_underwater_desc', 'Deep sea stealth mode with caustic light') },
                                 { id: 'matrix', label: t('settings.theme_matrix', 'Matrix'), icon: Cpu, desc: t('settings.theme_matrix_desc', 'Particle globe · green terminal · cyber ops') },
                                 { id: 'liquid-glass', label: t('settings.theme_liquid_glass', 'Liquid Glass'), icon: Droplets, desc: t('settings.theme_liquid_glass_desc', 'Premium frosted aesthetic with dynamic refraction') },
-                            ].map((themeOption) => (
+                            ].map((themeOption) => {
+                                const swatch = THEME_SWATCHES[themeOption.id];
+                                return (
                                 <button
+                                    type="button"
                                     key={themeOption.id}
                                     onClick={() => setTheme(themeOption.id as Theme)}
                                     className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-start gap-4 text-left group
                                         ${theme === themeOption.id ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/5 shadow-lg shadow-[var(--accent-primary)]/10' : 'border-[var(--border-subtle)] bg-[var(--bg-primary)] hover:border-[var(--accent-primary)]/30'}`}
                                 >
-                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-colors
-                                        ${theme === themeOption.id ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)]'}`}>
-                                        <themeOption.icon size={20} />
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-10 h-10 rounded-2xl flex items-center justify-center border border-black/10 overflow-hidden relative shrink-0"
+                                            style={{ background: swatch?.bg }}
+                                        >
+                                            <span className="absolute bottom-0 right-0 w-5 h-5 rounded-tl-lg" style={{ background: swatch?.card }} />
+                                            <span className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full" style={{ background: swatch?.accent }} />
+                                        </div>
+                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors
+                                            ${theme === themeOption.id ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-card)] text-[var(--text-secondary)] group-hover:text-[var(--accent-primary)]'}`}>
+                                            <themeOption.icon size={16} />
+                                        </div>
                                     </div>
                                     <div>
                                         <p className={`text-[11px] font-black uppercase italic tracking-wider mb-1 ${theme === themeOption.id ? 'text-[var(--accent-primary)]' : 'text-[var(--text-primary)]'}`}>
@@ -343,7 +364,8 @@ export default function Settings() {
                                         </p>
                                     </div>
                                 </button>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -753,7 +775,9 @@ export default function Settings() {
 
                                 <div className={`relative transition-all duration-1000 ${echoMovementEnabled ? 'animate-[floating_4s_ease-in-out_infinite]' : ''}`}>
                                     <div className="w-20 h-20 relative">
-                                        <img src={robotMascot} alt="Echo Preview" className="w-full h-full object-contain relative z-10" />
+                                        <div className="w-full h-full rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center relative z-10">
+                                            <Bot className="w-9 h-9 text-cyan-500" />
+                                        </div>
                                         <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-500 ${echoMovementEnabled ? 'bg-cyan-400/30 opacity-100' : 'bg-gray-400/10 opacity-0'}`} />
                                     </div>
                                 </div>
@@ -770,6 +794,41 @@ export default function Settings() {
                                     <span className="text-[8px] font-black uppercase tracking-[0.3em] text-cyan-500 animate-pulse">{echoMovementEnabled ? t('settings.live_status', 'LIVE') : t('settings.idle_status', 'IDLE')}</span>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+
+                    {/* Echo Movement: Free roam vs Fixed position */}
+                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                        <div className="flex items-center gap-5 mb-8">
+                            <div className="w-12 h-12 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/20">
+                                <Bot className="w-5 h-5 text-cyan-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">Echo Movement</h3>
+                                <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">Choose whether Echo can be dragged anywhere on screen</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {[
+                                { id: 'free', label: 'Free Roam', desc: 'Drag Echo anywhere on screen. Position is remembered.' },
+                                { id: 'fixed', label: 'Fixed Position', desc: 'Echo stays locked to the bottom-right corner.' },
+                            ].map((opt) => (
+                                <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setEchoFreeRoam(opt.id === 'free')}
+                                    className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-start gap-2 text-left
+                                        ${(opt.id === 'free') === echoFreeRoam ? 'border-cyan-500 bg-cyan-500/5 shadow-lg shadow-cyan-500/10' : 'border-[var(--border-subtle)] bg-[var(--bg-primary)] hover:border-cyan-500/30'}`}
+                                >
+                                    <p className={`text-[11px] font-black uppercase italic tracking-wider ${(opt.id === 'free') === echoFreeRoam ? 'text-cyan-500' : 'text-[var(--text-primary)]'}`}>
+                                        {opt.label}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-tight italic">
+                                        {opt.desc}
+                                    </p>
+                                </button>
+                            ))}
                         </div>
                     </section>
 

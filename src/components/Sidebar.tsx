@@ -139,7 +139,11 @@ export default function Sidebar({
           logoSubtext: '#00c8ff',
           collapseBtnBg: 'rgba(0,40,80,0.8)',
           collapseBtnText: '#00c8ff',
-          collapseBtnHover: '#00c8ff'
+          collapseBtnHover: '#00c8ff',
+          collapsedActiveBg: 'rgba(109,184,122,0.1)',
+          collapsedActiveBorder: '#6db87a',
+          collapsedHoverBg: 'rgba(109,184,122,0.05)',
+          collapsedActiveIconColor: '#6db87a'
         };
       case 'liquid-glass':
         return {
@@ -158,7 +162,11 @@ export default function Sidebar({
           accentBar: 'rgba(255, 255, 255, 0.8)',
           collapseBtnBg: 'rgba(255, 255, 255, 0.1)',
           collapseBtnText: 'rgba(255, 255, 255, 0.8)',
-          collapseBtnHover: 'rgba(255, 255, 255, 0.3)'
+          collapseBtnHover: 'rgba(255, 255, 255, 0.3)',
+          collapsedActiveBg: 'rgba(109,184,122,0.1)',
+          collapsedActiveBorder: '#6db87a',
+          collapsedHoverBg: 'rgba(109,184,122,0.05)',
+          collapsedActiveIconColor: '#6db87a'
         };
       case 'matrix':
         return {
@@ -176,7 +184,11 @@ export default function Sidebar({
           logoSubtext: '#008f11',
           collapseBtnBg: '#001100',
           collapseBtnText: '#008f11',
-          collapseBtnHover: '#00ff41'
+          collapseBtnHover: '#00ff41',
+          collapsedActiveBg: 'rgba(109,184,122,0.1)',
+          collapsedActiveBorder: '#6db87a',
+          collapsedHoverBg: 'rgba(109,184,122,0.05)',
+          collapsedActiveIconColor: '#6db87a'
         };
       case 'dark':
         return {
@@ -194,7 +206,11 @@ export default function Sidebar({
           logoSubtext: '#6db87a',
           collapseBtnBg: '#1e1e1e',
           collapseBtnText: '#888888',
-          collapseBtnHover: '#6db87a'
+          collapseBtnHover: '#6db87a',
+          collapsedActiveBg: 'rgba(109,184,122,0.1)',
+          collapsedActiveBorder: '#6db87a',
+          collapsedHoverBg: 'rgba(109,184,122,0.05)',
+          collapsedActiveIconColor: '#6db87a'
         };
       case 'eye-protection':
         return {
@@ -212,7 +228,33 @@ export default function Sidebar({
           logoSubtext: '#6db87a',
           collapseBtnBg: '#f8faf5',
           collapseBtnText: '#5a7a4a',
-          collapseBtnHover: '#6db87a'
+          collapseBtnHover: '#6db87a',
+          collapsedActiveBg: 'rgba(109,184,122,0.1)',
+          collapsedActiveBorder: '#6db87a',
+          collapsedHoverBg: 'rgba(109,184,122,0.05)',
+          collapsedActiveIconColor: '#6db87a'
+        };
+      case 'light':
+        return {
+          sidebarBg: 'var(--bg-card)',
+          sidebarBorder: '1px solid var(--border-subtle)',
+          sectionLabel: 'color-mix(in srgb, var(--text-secondary) 70%, transparent)',
+          navText: 'var(--text-secondary)',
+          activeBg: 'var(--accent-primary)',
+          activeText: 'var(--accent-primary)',
+          hoverBg: 'color-mix(in srgb, var(--accent-primary) 6%, transparent)',
+          newScanBg: 'var(--accent-primary)',
+          logoRing: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)',
+          logoIcon: 'var(--accent-primary)',
+          logoText: 'var(--text-primary)',
+          logoSubtext: 'var(--accent-primary)',
+          collapseBtnBg: 'color-mix(in srgb, var(--accent-primary) 8%, transparent)',
+          collapseBtnText: 'var(--accent-primary)',
+          collapseBtnHover: 'var(--accent-primary)',
+          collapsedActiveBg: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)',
+          collapsedActiveBorder: 'var(--accent-primary)',
+          collapsedHoverBg: 'color-mix(in srgb, var(--accent-primary) 5%, transparent)',
+          collapsedActiveIconColor: 'var(--accent-primary)'
         };
       default:
         return {
@@ -230,7 +272,11 @@ export default function Sidebar({
           logoSubtext: '#6db87a',
           collapseBtnBg: '#f0fdf4',
           collapseBtnText: '#16a34a',
-          collapseBtnHover: '#6db87a'
+          collapseBtnHover: '#6db87a',
+          collapsedActiveBg: 'rgba(109,184,122,0.1)',
+          collapsedActiveBorder: '#6db87a',
+          collapsedHoverBg: 'rgba(109,184,122,0.05)',
+          collapsedActiveIconColor: '#6db87a'
         };
     }
   };
@@ -318,21 +364,24 @@ export default function Sidebar({
                       <Link
                         to={path}
                         id={tourId}
-                        className={isCollapsed 
-                          ? `flex items-center justify-center transition-all relative w-full h-[44px] ${active ? 'opacity-100 bg-[#6db87a]/10 border-l-[3px] border-l-[#6db87a]' : 'opacity-70 hover:opacity-100 hover:bg-[#6db87a]/5 border-l-[3px] border-l-transparent'}`
-                          : `flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100 hover:bg-[rgba(109,184,122,0.1)]'}`
+                        className={isCollapsed
+                          ? `flex items-center justify-center transition-all relative w-full h-[44px] ${active ? 'opacity-100 border-l-[3px]' : 'opacity-70 hover:opacity-100 border-l-[3px] border-l-transparent'}`
+                          : `flex items-center gap-2.5 px-3 h-10 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`
                         }
-                        style={{ 
+                        style={{
                           transition: 'all 0.2s ease',
                           margin: isCollapsed ? '0' : '0 4px',
                           position: 'relative',
                           overflow: 'hidden',
-                          boxShadow: !isCollapsed && active && theme !== 'liquid-glass' && theme !== 'underwater' ? '0 4px 12px rgba(109,184,122,0.3)' : 'none',
+                          backgroundColor: isCollapsed
+                            ? (active ? s.collapsedActiveBg : 'transparent')
+                            : (active ? `color-mix(in srgb, ${s.activeBg} 14%, transparent)` : 'transparent'),
+                          borderLeftColor: isCollapsed ? (active ? s.collapsedActiveBorder : 'transparent') : undefined,
                         }}
-                        onMouseOver={(e) => { 
+                        onMouseOver={(e) => {
                           if (!active) {
-                            e.currentTarget.style.background = isCollapsed ? 'rgba(109,184,122,0.05)' : s.hoverBg; 
-                          } 
+                            e.currentTarget.style.background = isCollapsed ? s.collapsedHoverBg! : s.hoverBg;
+                          }
                         }}
                         onMouseOut={(e) => { 
                           if (!active) {
@@ -346,13 +395,13 @@ export default function Sidebar({
                         <Icon 
                           size={isCollapsed ? 20 : 16} 
                           style={{ 
-                            color: active ? (isCollapsed ? '#6db87a' : s.activeText) : 'inherit',
+                            color: active ? (isCollapsed ? s.collapsedActiveIconColor : s.activeText) : 'inherit',
                             margin: isCollapsed ? '0 auto' : '0'
                           }} 
                           className="transition-colors" 
                         />
                         {!isCollapsed && (
-                          <span className={`truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
+                          <span className={`flex-1 min-w-0 truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
                             {label}
                           </span>
                         )}

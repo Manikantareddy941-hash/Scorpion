@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:wght@700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 @layer base {
   html {
     font-size: 13.5px;
@@ -6,7 +6,10 @@
 }
 
 :root {
-  --color-primary: #6db87a;
+  --color-primary: #2563eb;
+  --font-display: 'Big Shoulders', 'Arial Narrow', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
 }
 
 @tailwind base;
@@ -24,46 +27,51 @@
   display: none;
 }
 
+/* Night Ops — primary console theme. Carapace/Plate base, Venom amber accent,
+   Strike red reserved for true criticals. See design-system notes in CLAUDE context. */
 html.dark {
-  --background: #111111;
-  --card-background: #1a1a1a;
-  --primary: var(--color-primary);
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
-  --border: #2a2a2a;
-  --accent: var(--color-primary);
-  --danger: #e57373;
-  --warning: #ffb74d;
+  --background: #14171c;
+  --card-background: #1c2128;
+  --primary: #e8a33d;
+  --text-primary: #c9cdd3;
+  --text-secondary: #7a828e;
+  --border: #2a3038;
+  --accent: #5fd4c4;
+  --danger: #e0473a;
+  --warning: #e8a33d;
 
   --bg-primary: var(--background);
-  --bg-page: #0f0f0f;
-  --bg-surface: #1a1a1a;
+  --bg-page: #14171c;
+  --bg-surface: #1c2128;
   --bg-card: var(--card-background);
-  --bg-secondary: #141414;
+  --bg-secondary: #181c22;
   --border-subtle: var(--border);
   --border-color: var(--border);
-  --text-on-accent: #ffffff;
+  --text-on-accent: #14171c;
   --accent-primary: var(--primary);
   --accent-secondary: var(--accent);
-  --status-success: var(--primary);
+  --status-success: var(--accent);
   --status-error: var(--danger);
   --status-warning: var(--warning);
-  --severity-critical: var(--danger);
-  --severity-high: #ff8a80;
-  --severity-medium: var(--warning);
-  --severity-low: var(--primary);
-  --severity-info: var(--primary);
-  --card-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  --severity-critical: #e0473a;
+  --severity-high: #d9622e;
+  --severity-medium: #e8a33d;
+  --severity-low: #5fd4c4;
+  --severity-info: #7fa8c9;
+  --glass-blur: none;
+  --glass-border: var(--border);
+  --glass-shadow: none;
+  --card-shadow: none;
 }
 
-html.dark .card, 
-html.dark [class*='card'], 
-html.dark [class*='widget'], 
+html.dark .card,
+html.dark [class*='card'],
+html.dark [class*='widget'],
 html.dark [class*='panel'] {
   background-color: var(--card-background) !important;
   color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: var(--card-shadow) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: none !important;
   --chart-bg: transparent;
   --chart-grid: var(--border-subtle);
   --chart-label: var(--text-secondary);
@@ -71,71 +79,119 @@ html.dark [class*='panel'] {
   --chart-fill-opacity: 0.4;
 }
 
+/* Catch components that hardcode Tailwind grays instead of theme tokens —
+   without this, those elements stay bright white on the dark background. */
+html.dark .bg-white,
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-gray-200 {
+  background-color: var(--bg-card) !important;
+}
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-gray-700 {
+  color: var(--text-primary) !important;
+}
+html.dark .text-gray-600,
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+html.dark .border-gray-100,
+html.dark .border-gray-200,
+html.dark .border-gray-300 {
+  border-color: var(--border-subtle) !important;
+}
+
+/* Day Ops — daylight console. White/blue base — main app theme.
+   Crisp white plates on a soft blue-tinted steel background, with a
+   single confident blue accent carrying CTAs, focus states, and the
+   primary data series. Same structural language as Night Ops. */
 html.light {
-  --background: #f5f0e8;
+  --background: #eef3fb;
   --card-background: #ffffff;
-  --primary: var(--color-primary);
-  --text-primary: #1a2018;
-  --text-secondary: #5a6359;
-  --border: #e0ddd3;
-  --accent: var(--color-primary);
-  --danger: #e57373;
-  --warning: #ffb74d;
+  --primary: #2563eb;
+  --text-primary: #0f1729;
+  --text-secondary: #5b6b85;
+  --border: #dbe5f3;
+  --accent: #2563eb;
+  --danger: #dc3545;
+  --warning: #d97706;
 
   --bg-primary: var(--background);
+  --bg-page: var(--background);
   --bg-card: var(--card-background);
-  --bg-secondary: #efece1;
+  --bg-secondary: #e4edf9;
   --border-subtle: var(--border);
   --border-color: var(--border);
   --text-on-accent: #ffffff;
   --accent-primary: var(--primary);
-  --accent-secondary: #a3d9a5;
-  --status-success: var(--color-primary);
-  --status-error: #e57373;
-  --status-warning: #ffb74d;
-  --severity-critical: #e57373;
-  --severity-high: #ff8a80;
-  --severity-medium: #ffb74d;
-  --severity-low: var(--color-primary);
-  --severity-info: var(--color-primary);
+  --accent-secondary: #60a5fa;
+  --status-success: #2563eb;
+  --status-error: var(--danger);
+  --status-warning: var(--warning);
+  --severity-critical: #dc3545;
+  --severity-high: #ea580c;
+  --severity-medium: #d97706;
+  --severity-low: #2563eb;
+  --severity-info: #60a5fa;
   --chart-bg: transparent;
   --chart-grid: var(--border-subtle);
   --chart-label: var(--text-secondary);
   --chart-fill: var(--accent-primary);
   --chart-fill-opacity: 0.4;
+  --glass-blur: none;
+  --glass-border: var(--border);
+  --glass-shadow: none;
+  --card-shadow: 0 1px 3px rgba(15, 23, 41, 0.06);
 }
 
-/* Eye Protection Mode */
+html.light .card,
+html.light [class*='card'],
+html.light [class*='widget'],
+html.light [class*='panel'] {
+  background-color: var(--card-background) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+
+/* Phosphor — night-shift scope mode. Monochrome amber on near-black, like an
+   old radar/CRT display. Strike red is the only non-amber color, reserved
+   for true criticals so it still reads instantly in a single-hue room. */
 html.eye-protection {
-  --background: #eef2e6;
-  --card-background: #f8faf5;
+  --background: #1a1206;
+  --card-background: #241b0c;
   --bg-primary: var(--background);
   --bg-page: var(--background);
   --bg-surface: var(--card-background);
   --bg-card: var(--card-background);
-  --bg-secondary: #ddebd0;
-  --border-subtle: #d4e6c3;
-  --border-color: #d4e6c3;
-  --text-primary: #2d4a1e;
-  --text-secondary: #4a6a35;
-  --text-muted: #5a7a4a;
-  --text-on-accent: #ffffff;
-  --accent-primary: #6db87a;
-  --accent-secondary: #8aaa78;
-  --status-success: #6db87a;
-  --status-error: #e57373;
-  --status-warning: #ffb74d;
-  --severity-critical: #e57373;
-  --severity-high: #ff8a80;
-  --severity-medium: #ffb74d;
-  --severity-low: #6db87a;
-  --severity-info: #6db87a;
-  --card-shadow: 0 2px 12px rgba(100,150,80,0.08);
-  --chart-bg: #f0f7ea;
-  --chart-grid: #c8ddb5;
-  --chart-label: #5a7a4a;
-  --chart-fill: #6db87a;
+  --bg-secondary: #1f1609;
+  --border-subtle: #3a2c12;
+  --border-color: #3a2c12;
+  --text-primary: #ffb000;
+  --text-secondary: #8c6a22;
+  --text-muted: #6b5119;
+  --text-on-accent: #1a1206;
+  --accent-primary: #ffb000;
+  --accent-secondary: #8c6a22;
+  --status-success: #ffb000;
+  --status-error: #ff6a3d;
+  --status-warning: #ffb000;
+  --severity-critical: #ff6a3d;
+  --severity-high: #ffb000;
+  --severity-medium: #cf8f1f;
+  --severity-low: #8c6a22;
+  --severity-info: #8c6a22;
+  --chart-bg: #1a1206;
+  --chart-grid: #3a2c12;
+  --chart-label: #8c6a22;
+  --chart-fill: #ffb000;
   --chart-fill-opacity: 0.25;
+  --glass-blur: none;
+  --glass-border: #3a2c12;
+  --glass-shadow: none;
+  --card-shadow: none;
 }
 
 html.eye-protection body {
@@ -164,49 +220,72 @@ html.eye-protection span {
   color: var(--text-secondary) !important;
 }
 
-html.eye-protection .card, 
-html.eye-protection [class*='card'], 
-html.eye-protection [class*='widget'], 
+html.eye-protection .card,
+html.eye-protection [class*='card'],
+html.eye-protection [class*='widget'],
 html.eye-protection [class*='panel'] {
   background-color: var(--card-background) !important;
   color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: var(--card-shadow) !important;
-  border-radius: 16px !important;
-  padding: 2rem !important; /* increased padding for breathing room */
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: none !important;
 }
 
-/* Ocean Theme */
+html.eye-protection .bg-white,
+html.eye-protection .bg-gray-50,
+html.eye-protection .bg-gray-100 {
+  background-color: var(--bg-card) !important;
+}
+
+html.eye-protection .text-gray-900,
+html.eye-protection .text-gray-800,
+html.eye-protection .text-gray-700 {
+  color: var(--text-primary) !important;
+}
+html.eye-protection .text-gray-600,
+html.eye-protection .text-gray-500,
+html.eye-protection .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+html.eye-protection .border-gray-100,
+html.eye-protection .border-gray-200,
+html.eye-protection .border-gray-300 {
+  border-color: var(--border-subtle) !important;
+}
+
+/* Deep Scan (formerly "Ocean") — sonar console. Navy-hull base instead of
+   bright tropical gradient; a single sonar-teal accent instead of bright cyan,
+   consistent with the rest of the console system. Background sonar-ping
+   effect (replacing the bubble animation) lands in the next pass. */
 html.underwater {
-  --background: #003366;
-  --bg-page: linear-gradient(180deg, #003366 0%, #004e8c 40%, #006994 70%, #0099b8 100%);
-  --card-background: rgba(0, 60, 100, 0.6);
-  --card-border: rgba(0, 200, 255, 0.25);
+  --background: #0b1a1f;
+  --bg-page: #0b1a1f;
+  --card-background: #122a30;
+  --card-border: #1e3a40;
   --bg-primary: var(--background);
   --bg-card: var(--card-background);
-  --bg-secondary: #002855;
-  --border-subtle: rgba(0, 200, 255, 0.2);
+  --bg-secondary: #0f2228;
+  --border-subtle: #1e3a40;
   --border-color: var(--card-border);
-  --text-primary: #ffffff;
-  --text-secondary: rgba(180, 230, 255, 0.85);
-  --text-muted: rgba(100, 200, 255, 0.6);
-  --accent-primary: #00c8ff;
-  --accent-secondary: #0077aa;
-  --status-success: #00c8ff;
-  --status-error: #ff4d4d;
-  --status-warning: #ffb74d;
-  --severity-critical: #ff4d4d;
-  --severity-high: #ff8a80;
-  --severity-medium: #ffb74d;
-  --severity-low: #00c8ff;
-  --severity-info: #90e0ef;
-  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  --chart-bg: rgba(0, 40, 80, 0.4);
-  --chart-grid: rgba(0, 200, 255, 0.1);
-  --chart-label: #90e0ef;
-  --chart-fill: #00c8ff;
+  --text-primary: #d3eceb;
+  --text-secondary: #6f9b9a;
+  --text-muted: #547776;
+  --accent-primary: #2fd8c4;
+  --accent-secondary: #1e7a6e;
+  --status-success: #2fd8c4;
+  --status-error: #e0473a;
+  --status-warning: #cf8f1f;
+  --severity-critical: #e0473a;
+  --severity-high: #d9622e;
+  --severity-medium: #cf8f1f;
+  --severity-low: #2fd8c4;
+  --severity-info: #4a8c9b;
+  --card-shadow: none;
+  --chart-bg: transparent;
+  --chart-grid: #1e3a40;
+  --chart-label: #6f9b9a;
+  --chart-fill: #2fd8c4;
   --chart-fill-opacity: 0.3;
-  --glass-blur: blur(8px);
+  --glass-blur: none;
 }
 
 html.underwater body, html.underwater html {
@@ -250,16 +329,19 @@ html.underwater body::after {
   100% { background-position: 50px 0; }
 }
 
+@keyframes globe-rotate {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
 html.underwater .card,
 html.underwater [class*='card'],
 html.underwater [class*='widget'],
 html.underwater [class*='panel'] {
   background: var(--card-background) !important;
-  backdrop-filter: var(--glass-blur) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
   border: 1px solid var(--border-color) !important;
-  box-shadow: var(--card-shadow) !important;
-  color: #ffffff !important;
+  box-shadow: none !important;
+  color: var(--text-primary) !important;
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
   isolation: isolate;
@@ -268,7 +350,7 @@ html.underwater [class*='panel'] {
   -webkit-backface-visibility: hidden;
 }
 
-html.underwater .card b, 
+html.underwater .card b,
 html.underwater .card strong,
 html.underwater [class*='card'] b,
 html.underwater [class*='card'] strong {
@@ -276,19 +358,39 @@ html.underwater [class*='card'] strong {
   font-weight: 800 !important;
 }
 
-/* Global card rounding — all themes */
-.card, .panel, [class*="rounded-md"], [class*="rounded-xl"], [class*="rounded-2xl"] {
-  border-radius: 12px !important;
+html.underwater .bg-white,
+html.underwater .bg-gray-50,
+html.underwater .bg-gray-100,
+html.underwater .bg-gray-200 {
+  background-color: var(--bg-card) !important;
 }
-[class*="rounded-lg"], .premium-card, [class*="rounded-3xl"] {
-  border-radius: 20px !important;
+html.underwater .text-gray-900,
+html.underwater .text-gray-800,
+html.underwater .text-gray-700,
+html.underwater .text-gray-600,
+html.underwater .text-gray-500,
+html.underwater .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+html.underwater .border-gray-100,
+html.underwater .border-gray-200,
+html.underwater .border-gray-300 {
+  border-color: var(--border-subtle) !important;
 }
 
-h1, h2, .serif {
-  font-family: 'Playfair Display', serif;
+/* Console plates are flat by default — no global forced rounding. Liquid
+   Glass is the one theme that keeps soft corners (handled in its own block). */
+h1, h2, h3, .display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
-/* Liquid Glass Theme Overhaul */
+/* Liquid Glass — kept as the one translucent/blur theme of the six, but the
+   photographic-slideshow backdrop and accent are due a heavier rework once
+   Dashboard is approved (it's the most "generic AI/SaaS glassmorphism" piece
+   of the old language). Accent retoned to Signal teal in the meantime so it
+   doesn't clash with the new severity scale. */
 html.liquid-glass {
   --background: transparent;
   --bg-page: transparent;
@@ -297,17 +399,26 @@ html.liquid-glass {
   --glass-bg: var(--card-bg);
   --glass-border: var(--card-border);
   --glass-shadow: 0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(255,255,255,0.1);
+  --card-shadow: var(--glass-shadow);
   --glass-blur: blur(12px);
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.7);
-  --accent: rgba(255, 255, 255, 0.8);
+  --accent: #5fd4c4;
   --accent-primary: var(--accent);
   --border-subtle: rgba(255, 255, 255, 0.35);
   --border-color: rgba(255, 255, 255, 0.35);
+  --severity-critical: #e0473a;
+  --severity-high: #d9622e;
+  --severity-medium: #e8a33d;
+  --severity-low: #5fd4c4;
+  --severity-info: #ffffff;
+  --status-success: #5fd4c4;
+  --status-error: #e0473a;
+  --status-warning: #e8a33d;
   --chart-bg: rgba(255, 255, 255, 0.05);
   --chart-grid: rgba(255, 255, 255, 0.1);
   --chart-label: #ffffff;
-  --chart-fill: #ffffff;
+  --chart-fill: #5fd4c4;
   --chart-fill-opacity: 0.15;
   --sidebar-bg: rgba(255, 255, 255, 0.08);
   --sidebar-active: rgba(255, 255, 255, 0.25);
@@ -363,7 +474,7 @@ html.liquid-glass [class*="dropdown-panel"] {
   -webkit-backface-visibility: hidden;
 }
 
-html.liquid-glass .text-gray-900, 
+html.liquid-glass .text-gray-900,
 html.liquid-glass .text-gray-800,
 html.liquid-glass h1,
 html.liquid-glass h2,
@@ -371,40 +482,57 @@ html.liquid-glass h3 {
   color: #ffffff !important;
 }
 
-/* Matrix Theme */
+html.liquid-glass .text-gray-700,
+html.liquid-glass .text-gray-600,
+html.liquid-glass .text-gray-500,
+html.liquid-glass .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+
+html.liquid-glass .border-gray-100,
+html.liquid-glass .border-gray-200,
+html.liquid-glass .border-gray-300 {
+  border-color: var(--border-subtle) !important;
+}
+
+/* Lattice (formerly "Matrix") — signal-lattice console. Same green-on-void
+   DNA, restrained: one phosphor green, a dim trace tone, Strike red kept for
+   true criticals so severity still reads at a glance. The falling-code rain
+   effect gets reworked into a circuit-lattice motif in the next pass. */
 html.matrix {
-  --background: #000000;
-  --card-background: rgba(0, 255, 65, 0.05);
-  --bg-primary: #000000;
-  --bg-page: #000000;
+  --background: #060a07;
+  --card-background: #0e1712;
+  --bg-primary: #060a07;
+  --bg-page: #060a07;
   --bg-card: var(--card-background);
-  --bg-secondary: #000000;
-  --border-subtle: rgba(0, 255, 65, 0.3);
-  --border-color: rgba(0, 255, 65, 0.3);
+  --bg-secondary: #0a0f0c;
+  --border-subtle: #1d6b3b;
+  --border-color: #1d6b3b;
   --card-border: var(--border-color);
-  --text-primary: #00ff41;
-  --text-secondary: rgba(0, 255, 65, 0.7);
-  --text-muted: #008f11;
-  --text-on-accent: #000000;
-  --accent: #00ff41;
+  --text-primary: #39ff6a;
+  --text-secondary: #2f8a4f;
+  --text-muted: #1d6b3b;
+  --text-on-accent: #060a07;
+  --accent: #39ff6a;
   --accent-primary: var(--accent);
-  --accent-secondary: #00ff41;
-  --status-success: #00ff41;
-  --status-error: #ff0000;
-  --status-warning: #ffff00;
-  --severity-critical: #ff0000;
-  --severity-high: #ff4100;
-  --severity-medium: #ffff00;
-  --severity-low: #00ff41;
-  --severity-info: #00ccff;
-  --glass-shadow: 0 4px 24px rgba(0, 255, 65, 0.1), inset 0 1px 0 rgba(0, 255, 65, 0.5);
-  --glass-blur: blur(3px);
+  --accent-secondary: #1d6b3b;
+  --status-success: #39ff6a;
+  --status-error: #ff4438;
+  --status-warning: #e8a33d;
+  --severity-critical: #ff4438;
+  --severity-high: #d9622e;
+  --severity-medium: #e8a33d;
+  --severity-low: #39ff6a;
+  --severity-info: #2f8a9b;
+  --glass-shadow: none;
+  --card-shadow: none;
+  --glass-blur: none;
   --chart-bg: transparent;
-  --chart-grid: rgba(0, 255, 65, 0.2);
-  --chart-label: #00ff41;
-  --chart-fill: #00ff41;
+  --chart-grid: #1d6b3b;
+  --chart-label: #2f8a4f;
+  --chart-fill: #39ff6a;
   --chart-fill-opacity: 0.12;
-  --sidebar-bg: #000000;
+  --sidebar-bg: #060a07;
 }
 
 html.matrix body {
@@ -463,17 +591,8 @@ html.matrix [class*="dropdown"],
 html.matrix [class*="dropdown-panel"] {
   background: var(--card-background) !important;
   border: 1px solid var(--border-subtle) !important;
-  backdrop-filter: var(--glass-blur) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
-  box-shadow: var(--glass-shadow) !important;
+  box-shadow: none !important;
   color: var(--text-primary) !important;
-  border-radius: 16px !important;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  isolation: isolate;
-  will-change: transform;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 html.matrix * {
@@ -499,6 +618,18 @@ html.matrix .btn-premium {
   color: #000000 !important;
 }
 
+html.matrix .bg-white,
+html.matrix .bg-gray-50,
+html.matrix .bg-gray-100,
+html.matrix .bg-gray-200 {
+  background: var(--card-background) !important;
+}
+html.matrix .border-gray-100,
+html.matrix .border-gray-200,
+html.matrix .border-gray-300 {
+  border-color: var(--border-subtle) !important;
+}
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -506,63 +637,149 @@ body {
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
 }
 
 .mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 @layer components {
+  /* Flat console plate — the base unit of the new design system. No
+     rounding, no soft shadow; a 1px seam border and an L-shaped corner tick
+     stand in for the depth that drop-shadows used to fake. */
+  .plate {
+    position: relative;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+  }
+
+  .plate,
+  [class*='card'] {
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
+  }
+
+  .plate::before,
+  .plate::after {
+    content: '';
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  .plate::before {
+    top: -1px;
+    left: -1px;
+    border-top: 2px solid var(--accent-primary);
+    border-left: 2px solid var(--accent-primary);
+  }
+
+  .plate::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 2px solid var(--accent-primary);
+    border-right: 2px solid var(--accent-primary);
+  }
+
+  /* The rounded white/blue light theme reads as soft and clean — sharp
+     corner-bracket ticks look like glitch artifacts against it, so drop
+     them entirely for html.light. Other themes keep the flat console look. */
+  html.light .plate::before,
+  html.light .plate::after {
+    display: none;
+  }
+
+  .plate-strike::before,
+  .plate-strike::after {
+    border-color: var(--severity-critical);
+    opacity: 1;
+  }
+
+  .plate-header {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+  }
+
+  .plate-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  /* Legacy card classes — still used on pages not yet migrated to .plate.
+     Retoned to the flat console language so they don't clash visually;
+     full replacement happens as each page gets redesigned. */
   .premium-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 20px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border-radius: 0;
+    transition: border-color 0.2s ease;
   }
 
   .premium-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.15);
     border-color: var(--accent-primary);
   }
 
   .glass-card {
-    background-color: rgba(2, 6, 23, 0.4); /* bg-slate-950/40 */
-    backdrop-filter: blur(24px); /* backdrop-blur-xl */
-    border: 1px solid rgba(255, 255, 255, 0.1); /* border-white/10 */
-    box-shadow: 0 0 20px rgba(0, 242, 254, 0.15); /* teal glow */
-    border-radius: 0.75rem; /* rounded-xl */
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 0;
   }
 
   .btn-premium {
     background: var(--accent-primary);
     color: var(--text-on-accent);
-    @apply px-6 py-2.5 rounded-full font-bold uppercase tracking-widest transition-all duration-200;
+    @apply px-6 py-2.5 font-bold tracking-widest uppercase transition-all duration-150;
+    font-family: var(--font-display);
     font-size: 11px;
-    border-radius: 9999px !important;
+    border-radius: 2px;
   }
 
   .btn-premium:hover {
-    filter: brightness(1.1);
-    transform: translateY(-1px);
-    box-shadow: 0 8px 20px -4px var(--accent-primary);
+    filter: brightness(1.12);
   }
 
   .btn-premium:active {
-    transform: scale(0.98);
-    box-shadow: none;
+    filter: brightness(0.95);
   }
 
   .interactive {
-    @apply transition-all duration-200;
+    @apply transition-all duration-150;
   }
 
   .interactive:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    border-color: var(--accent-primary);
   }
+}
+
+/* The Vibration Trace — the dashboard's signature live signal. A scorpion
+   senses danger through vibration, not sight; this strip is SCORPION doing
+   the same across a codebase. Flat when posture is clean, spikes on findings. */
+.vibration-trace {
+  display: block;
+  width: 100%;
+  height: 28px;
+}
+
+.vibration-trace path {
+  fill: none;
+  stroke: var(--accent-primary);
+  stroke-width: 1.25;
+  opacity: 0.85;
+}
+
+.vibration-trace .vt-spike {
+  stroke: var(--severity-critical);
+  opacity: 1;
 }
 
 a[href*="bolt.new"], div[class*="bolt"], [data-bolt], #bolt-watermark, .bolt-watermark, [class*="watermark"], body>a:last-of-type {
@@ -610,7 +827,6 @@ a[href*="bolt.new"], div[class*="bolt"], [data-bolt], #bolt-watermark, .bolt-wat
     filter: invert(0) !important;
   }
 }
-
 
 /* Telemetry Card Hover Effect */
 .tele-card {

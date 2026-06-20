@@ -219,78 +219,84 @@ export default function Monitor() {
         {/* Telemetry Charts */}
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="premium-card p-4 h-[250px]">
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+            <div className="premium-card p-4 h-[250px] flex flex-col">
+              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 shrink-0">
                 <Activity size={14} className="text-[var(--accent-primary)]" /> Infrastructure Health
               </h3>
-              {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={infraData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                    <XAxis dataKey="name" hide />
-                    <YAxis hide domain={[0, 100]} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
-                    />
-                    <Line type="monotone" dataKey="cpu" stroke="#ff5252" strokeWidth={2} dot={false} isAnimationActive={false} />
-                    <Line type="monotone" dataKey="mem" stroke="#40c4ff" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-              <div className="flex justify-center gap-4 mt-2">
+              <div className="flex-1 min-h-0">
+                {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={infraData} height={120}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                      <XAxis dataKey="name" hide />
+                      <YAxis hide domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                      />
+                      <Line type="monotone" dataKey="cpu" stroke="#ff5252" strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="mem" stroke="#40c4ff" strokeWidth={2} dot={false} isAnimationActive={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="flex justify-center gap-4 mt-2 shrink-0">
                 <div className="flex items-center gap-1 text-[8px] font-bold"><div className="w-2 h-2 bg-[#ff5252] rounded-full" /> CPU</div>
                 <div className="flex items-center gap-1 text-[8px] font-bold"><div className="w-2 h-2 bg-[#40c4ff] rounded-full" /> MEM</div>
               </div>
             </div>
 
-            <div className="premium-card p-4 h-[250px]" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+            <div className="premium-card p-4 h-[250px] flex flex-col" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
+              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 shrink-0">
                 <Shield size={14} className="text-[var(--status-success)]" /> Security Events
               </h3>
-              {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={securityData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                    <XAxis dataKey="name" hide />
-                    <YAxis hide />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
-                    />
-                    <Bar dataKey="alerts" fill="var(--accent-primary)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
-                    <Bar dataKey="blocked" fill="var(--status-success)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-              <div className="flex justify-center gap-4 mt-2">
+              <div className="flex-1 min-h-0">
+                {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={securityData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                      <XAxis dataKey="name" hide />
+                      <YAxis hide />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                      />
+                      <Bar dataKey="alerts" fill="var(--accent-primary)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                      <Bar dataKey="blocked" fill="var(--status-success)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="flex justify-center gap-4 mt-2 shrink-0">
                 <div className="flex items-center gap-1 text-[8px] font-bold"><div className="w-2 h-2 bg-[var(--accent-primary)] rounded-full" /> ALERTS</div>
                 <div className="flex items-center gap-1 text-[8px] font-bold"><div className="w-2 h-2 bg-[var(--status-success)] rounded-full" /> BLOCKED</div>
               </div>
             </div>
 
-            <div className="premium-card p-4 h-[250px]" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+            <div className="premium-card p-4 h-[250px] flex flex-col" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
+              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 shrink-0">
                 <Server size={14} className="text-emerald-500" /> Latency & Uptime
               </h3>
-              {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={healthChecksData.length > 0 ? healthChecksData.map(h => ({ name: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), latency: h.latency })) : [{ name: '00:00', latency: 45 }, { name: '04:00', latency: 50 }, { name: '08:00', latency: 42 }, { name: '12:00', latency: 48 }, { name: '16:00', latency: 52 }, { name: '20:00', latency: 44 }]}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                    <XAxis dataKey="name" hide />
-                    <YAxis hide domain={[0, 'auto']} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
-                    />
-                    <Area type="monotone" dataKey="latency" stroke="#10b981" fill="url(#latencyColor)" strokeWidth={2} isAnimationActive={false} />
-                    <defs>
-                      <linearGradient id="latencyColor" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-              <div className="flex justify-center gap-4 mt-2">
+              <div className="flex-1 min-h-0">
+                {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={healthChecksData.length > 0 ? healthChecksData.map(h => ({ name: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), latency: h.latency })) : [{ name: '00:00', latency: 45 }, { name: '04:00', latency: 50 }, { name: '08:00', latency: 42 }, { name: '12:00', latency: 48 }, { name: '16:00', latency: 52 }, { name: '20:00', latency: 44 }]}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                      <XAxis dataKey="name" hide />
+                      <YAxis hide domain={[0, 'auto']} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '8px', fontSize: '10px' }}
+                      />
+                      <Area type="monotone" dataKey="latency" stroke="#10b981" fill="url(#latencyColor)" strokeWidth={2} isAnimationActive={false} />
+                      <defs>
+                        <linearGradient id="latencyColor" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="flex justify-center gap-4 mt-2 shrink-0">
                 <div className="flex items-center gap-1 text-[8px] font-bold"><div className="w-2 h-2 bg-emerald-500 rounded-full" /> LATENCY (ms)</div>
               </div>
             </div>

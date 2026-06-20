@@ -20,6 +20,8 @@ interface ThemeContextType {
     setTheme: (theme: Theme) => void;
     echoMovementEnabled: boolean;
     setEchoMovementEnabled: (enabled: boolean) => void;
+    echoFreeRoam: boolean;
+    setEchoFreeRoam: (enabled: boolean) => void;
     getLogoFilter: () => string;
     getLogoBlendMode: () => 'screen' | 'multiply';
 }
@@ -53,6 +55,8 @@ const ThemeContext = createContext<ThemeContextType>({
     setTheme: () => {},
     echoMovementEnabled: true,
     setEchoMovementEnabled: () => {},
+    echoFreeRoam: true,
+    setEchoFreeRoam: () => {},
     getLogoFilter: () => 'brightness(0) invert(1)',
     getLogoBlendMode: () => 'screen'
 });
@@ -75,6 +79,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const setEchoMovementEnabled = (enabled: boolean) => {
         localStorage.setItem('echoMovementEnabled', String(enabled));
         setEchoMovementEnabledState(enabled);
+    };
+
+    const [echoFreeRoam, setEchoFreeRoamState] = useState<boolean>(() => {
+        const saved = localStorage.getItem('echoFreeRoam');
+        return saved === null ? true : saved === 'true';
+    });
+
+    const setEchoFreeRoam = (enabled: boolean) => {
+        localStorage.setItem('echoFreeRoam', String(enabled));
+        setEchoFreeRoamState(enabled);
     };
 
     const setTheme = (theme: Theme) => {
@@ -114,6 +128,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setTheme, 
             echoMovementEnabled,
             setEchoMovementEnabled,
+            echoFreeRoam,
+            setEchoFreeRoam,
             getLogoFilter: () => getLogoFilter(theme),
             getLogoBlendMode: () => getLogoBlendMode(theme)
         }}>

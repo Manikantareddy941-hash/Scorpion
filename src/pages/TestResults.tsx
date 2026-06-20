@@ -215,7 +215,7 @@ export default function TestResults() {
   const gateBlocked = metrics.failedTests > 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-[#f5f0e8] min-h-screen font-mono">
+    <div className="max-w-full px-6 py-12 bg-[#f5f0e8] min-h-screen font-mono">
 
       {/* ── Header ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-10">

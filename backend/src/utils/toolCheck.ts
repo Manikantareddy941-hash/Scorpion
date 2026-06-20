@@ -134,14 +134,14 @@ export const checkTool = (cmd: string): boolean => {
 };
 
 export const initToolCache = async (): Promise<void> => {
-    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit'];
+    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit', 'opa'];
     for (const tool of tools) {
         await resolveToolCommand(tool);
     }
 };
 
 export const validateTools = async (): Promise<{ tool: string, status: 'installed' | 'missing', version?: string }[]> => {
-    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit'];
+    const tools = ['semgrep', 'gitleaks', 'trivy', 'checkov', 'bandit', 'opa'];
     
     const results = await Promise.all(tools.map(async (name) => {
         const resolved = await resolveToolCommand(name);
@@ -149,7 +149,7 @@ export const validateTools = async (): Promise<{ tool: string, status: 'installe
             logger.info(`[Tools] ✅ ${name} found`);
             return { tool: name, status: 'installed' as const, version: resolved.version };
         } else {
-            logger.error(`[Tools] ❌ ${name} NOT INSTALLED — findings for this engine will be empty`);
+            logger.error(`[Tools] ❌ ${name} NOT INSTALLED — ${name === 'opa' ? 'policy-as-code evaluation will be unavailable' : 'findings for this engine will be empty'}`);
             return { tool: name, status: 'missing' as const };
         }
     }));

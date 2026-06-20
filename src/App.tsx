@@ -31,6 +31,7 @@ import DuplicatesDetail from './pages/DuplicatesDetail';
 import DeadCodeDetail from './pages/DeadCodeDetail';
 import QualityDetail from './pages/QualityDetail';
 import AIChat from './components/AIChat';
+import { EchoFAB } from './components/ui';
 import JourneyMap from './pages/JourneyMap';
 import CodeActivity from './pages/CodeActivity';
 import Build from './pages/Build';
@@ -74,7 +75,7 @@ function App() {
     localStorage.setItem('sidebarCollapsed', String(collapsed));
   };
 
-  const { theme } = useTheme();
+  const { theme, echoFreeRoam } = useTheme();
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/verify-otp', '/reset-password', '/auth/callback', '/auth'].includes(location.pathname);
   const showSidebar = !isAuthPage && user;
 
@@ -211,7 +212,11 @@ function App() {
       {!isAuthPage && <div className="w-full relative z-10"><Footer /></div>}
       
       {!isAuthPage && <AIChat open={isChatOpen} setOpen={setIsChatOpen} />}
-      
+
+      {!isAuthPage && !isChatOpen && (
+        <EchoFAB open={isChatOpen} onClick={() => setIsChatOpen(true)} freeRoam={echoFreeRoam} />
+      )}
+
       {!isAuthPage && user && <ProductTour />}
     </div>
   );
