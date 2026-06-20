@@ -1,5 +1,6 @@
 import { notifyPolicyFailure } from './notificationService';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
+import { logger } from './logger';
 
 export interface PolicyConfig {
   minSecurityScore: number;
@@ -53,7 +54,7 @@ export const getDynamicPolicy = async (repoId: string): Promise<PolicyConfig> =>
       };
     }
   } catch (err: any) {
-    console.warn(`[Policy Engine] Failed to load dynamic policy for ${repoId}:`, err.message);
+    logger.warn(`[Policy Engine] Failed to load dynamic policy for ${repoId}:`, err.message);
   }
 
   // Cache policy entry
@@ -97,7 +98,7 @@ export const getEffectivePolicy = async (repoId: string) => {
             return response.documents[0];
         }
     } catch (err) {
-        console.warn(`[PolicyService] Error fetching policy for repo ${repoId}:`, err);
+        logger.warn(`[PolicyService] Error fetching policy for repo ${repoId}:`, err);
     }
 
     // Default policy
@@ -158,7 +159,7 @@ export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> =>
         created_at: new Date().toISOString()
     });
 
-    console.log(`[PolicyEngine] Evaluation for ${scanId}: ${result}. Reason: ${reason}`);
+    logger.info(`[PolicyEngine] Evaluation for ${scanId}: ${result}. Reason: ${reason}`);
 
     // Notify on failure
     if (result === 'FAIL') {

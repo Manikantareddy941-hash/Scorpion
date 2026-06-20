@@ -7,6 +7,7 @@ import { Parser } from 'json2csv';
 import { generateSecuritySummary } from '../services/aiService';
 import { canAccessResource, resolveOwnershipScope } from '../services/tenancyService';
 import { PassThrough } from 'stream';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.get('/ai-summary', verifyUser, async (req: Request, res: Response) => {
         const summary = await Promise.race([summaryPromise, timeoutPromise]) as string;
         res.status(200).json({ summary });
     } catch (err: any) {
-        console.error('[AI Summary Error]', err.message);
+        logger.error('[AI Summary Error]', err.message);
         const fallback = "### ⚠️ AI Analysis Engine temporarily unreachable\n\n*The security mesh analysis timed out or encountered a network bridge interruption.*\n\n**Action Required**:\n1. Please check your network connectivity.\n2. Verify the Gemini API key status in your environment configuration.\n3. Try refreshing the briefing in a few moments.\n\n*Manual telemetry indicates system health remains within normal operational parameters.*";
         res.status(200).json({ summary: fallback });
     }
@@ -136,7 +137,7 @@ const handleExport = async (req: Request, res: Response) => {
 
         res.status(400).json({ error: 'Invalid format' });
     } catch (err: any) {
-        console.error('[Export Error]', err);
+        logger.error('[Export Error]', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 };

@@ -8,6 +8,7 @@ import { logScanCompleted, logCIGateBlocked } from '../services/logEvents';
 import { scansTotal, ciGateDecisions, scanDuration, activeScans } from '../services/metrics';
 import { withSpan } from '../services/tracing';
 import { auditLog } from '../services/auditService';
+import { logger } from '../services/logger';
 
 export interface CIJobOptions {
   owner: string;
@@ -46,7 +47,7 @@ export async function triggerCIScan(options: CIJobOptions) {
 
   try {
     // 2. Run scan pipeline
-    console.log(`[CI] Starting scan for ${options.owner}/${options.repo} on branch ${options.branch}`);
+    logger.info(`[CI] Starting scan for ${options.owner}/${options.repo} on branch ${options.branch}`);
     const scanResults = await withSpan(
       'ci.scan_pipeline',
       { 
@@ -114,7 +115,7 @@ export async function triggerCIScan(options: CIJobOptions) {
       }
     });
 
-    console.log(`[CI] Scan completed for ${options.repo} (${options.sha}). Passed: ${passed}`);
+    logger.info(`[CI] Scan completed for ${options.repo} (${options.sha}). Passed: ${passed}`);
     
     // Metrics
     scansTotal.inc({ scan_type: 'ci_pipeline', status: passed ? 'passed' : 'failed' });
@@ -143,12 +144,12 @@ export async function triggerCIScan(options: CIJobOptions) {
           await evaluateCompliance(linked.documents[0].user_id);
         }
       } catch (err) {
-        console.error('[Compliance] Auto-eval failed:', err);
+        logger.error('[Compliance] Auto-eval failed:', err);
       }
     })();
 
   } catch (err) {
-    console.error(`[CI] Error during scan for ${options.repo}:`, err);
+    logger.error(`[CI] Error during scan for ${options.repo}:`, err);
     await setCommitStatus(octokit, {
       owner: options.owner,
       repo: options.repo,

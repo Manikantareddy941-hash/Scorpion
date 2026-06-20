@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { handleFalcoEvent } from '../runtime/falcoHandler';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -15,14 +16,14 @@ const verifyFalcoSecret = (req: Request, res: Response, next: any) => {
 router.post('/event', verifyFalcoSecret, async (req: Request, res: Response) => {
   const event = req.body;
   
-  console.log(`[Falco] Received runtime event: ${event.rule} (${event.priority})`);
+  logger.info(`[Falco] Received runtime event: ${event.rule} (${event.priority})`);
   
   // Acknowledge immediately
   res.status(202).json({ status: 'received' });
 
   // Process asynchronously
   handleFalcoEvent(event).catch(err => {
-    console.error('[Falco] Error processing event:', err);
+    logger.error('[Falco] Error processing event:', err);
   });
 });
 

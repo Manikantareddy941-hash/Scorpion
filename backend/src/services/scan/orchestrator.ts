@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import { resolveToolCommand, validateTools } from '../../utils/toolCheck';
+import { logger } from '../logger';
 
 // Safety: 5 minute timeout for any individual tool scan
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -47,14 +48,14 @@ const executeTool = async (toolId: string, userArgs: string[], toolName: ScanRes
 
         let stdout = '';
         let stderr = '';
-        console.log(`[Orchestrator] Executing Docker: docker ${dockerArgs.join(' ')}`);
+        logger.info(`[Orchestrator] Executing Docker: docker ${dockerArgs.join(' ')}`);
         const child = spawn('docker', dockerArgs, { timeout: SCAN_TIMEOUT_MS });
 
         child.stdout?.on('data', (data) => { stdout += data.toString(); });
         child.stderr?.on('data', (data) => { stderr += data.toString(); });
 
         child.on('error', (err: any) => {
-            console.error(`[Orchestrator] ${toolName} Docker execution error:`, err.message);
+            logger.error(`[Orchestrator] ${toolName} Docker execution error:`, err.message);
             const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' :
                 toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
             resolve({ tool: toolName, stdout: emptyOutput, stderr: err.message, status: null });
@@ -84,7 +85,7 @@ export const orchestrateScan = async (
     options: ScanOptions = { scanType: 'full', scanDepth: 'standard' },
     onLog?: (log: string) => void
 ) => {
-    console.log(`[Orchestrator] Starting parallel scans (Type: ${options.scanType}, Depth: ${options.scanDepth}) for: ${targetPath}`);
+    logger.info(`[Orchestrator] Starting parallel scans (Type: ${options.scanType}, Depth: ${options.scanDepth}) for: ${targetPath}`);
     const start = Date.now();
 
     const runWithLogging = async (tool: string, args: string[], toolName: ScanResult['tool']) => {
@@ -126,7 +127,7 @@ export const orchestrateScan = async (
     const results = await Promise.allSettled(tasks);
 
     const duration = ((Date.now() - start) / 1000).toFixed(2);
-    console.log(`[Orchestrator] Scans finalized in ${duration}s`);
+    logger.info(`[Orchestrator] Scans finalized in ${duration}s`);
 
     return results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean) as ScanResult[];
 };

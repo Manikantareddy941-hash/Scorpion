@@ -1,4 +1,5 @@
 import { Threat } from './threatModelService';
+import { logger } from './logger';
 
 export interface DiagramComponent {
   id: string;
@@ -104,7 +105,7 @@ export const generateStrideThreats = async (diagramData: any): Promise<Threat[]>
 
     return parsed.threats || [];
   } catch (err) {
-    console.error('[Threat AI Service] STRIDE analysis failed:', err);
+    logger.error('[Threat AI Service] STRIDE analysis failed:', err);
     throw err;
   }
 };

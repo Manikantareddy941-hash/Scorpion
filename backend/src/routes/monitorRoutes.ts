@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { telemetryBuffer } from '../services/metrics';
 import { resolveOwnershipScope } from '../services/tenancyService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -128,7 +129,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
             }
         });
     } catch (err: any) {
-        console.error('[Monitor API Error]', err.message);
+        logger.error('[Monitor API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

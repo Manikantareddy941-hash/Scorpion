@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
-const notifySlack = async (payload: any) => { console.log('Mock notifySlack', payload); };
+const notifySlack = async (payload: any) => { logger.info('Mock notifySlack', payload); };
 import { logger } from './logger';
 
 export interface Incident {
@@ -43,7 +43,7 @@ export async function createIncident(incident: Incident) {
 
     return doc;
   } catch (error) {
-    console.error('[Incident Service] Failed to create incident:', error);
+    logger.error('[Incident Service] Failed to create incident:', error);
     throw error;
   }
 }

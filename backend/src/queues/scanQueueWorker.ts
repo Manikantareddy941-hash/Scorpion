@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import { redisConnection } from './redisConnection';
 import { SCAN_QUEUE_NAME, ScanJobData } from './scanQueue';
 import { triggerScan } from '../services/scanService';
+import { logger } from '../services/logger';
 
 let queueWorker: Worker<ScanJobData> | null = null;
 
@@ -20,10 +21,10 @@ export const initScanQueueWorker = () => {
     );
 
     queueWorker.on('failed', (job, err) => {
-        console.error(`[ScanQueue] Job ${job?.id} failed:`, err.message);
+        logger.error(`[ScanQueue] Job ${job?.id} failed:`, err.message);
     });
 
-    console.log('[ScanQueue] Worker initialized.');
+    logger.info('[ScanQueue] Worker initialized.');
     return queueWorker;
 };
 

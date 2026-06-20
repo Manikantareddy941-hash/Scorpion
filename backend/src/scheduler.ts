@@ -1,12 +1,13 @@
 import cron from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
 import { enqueueScan } from './queues/scanQueue';
+import { logger } from './services/logger';
 
 // Map to keep track of active cron jobs by repo ID
 const activeJobs = new Map<string, cron.ScheduledTask>();
 
 export const initScheduler = () => {
-    console.log('[Scheduler] Initializing dynamic scan scheduler...');
+    logger.info('[Scheduler] Initializing dynamic scan scheduler...');
 
     // Run a manager task every minute to sync cron jobs from the database
     cron.schedule('* * * * *', async () => {
@@ -22,7 +23,7 @@ export const initScheduler = () => {
             // Stop and remove jobs for repos that are no longer active
             for (const [repoId, job] of activeJobs.entries()) {
                 if (!currentActiveRepoIds.has(repoId)) {
-                    console.log(`[Scheduler] Stopping and removing cron job for repo: ${repoId}`);
+                    logger.info(`[Scheduler] Stopping and removing cron job for repo: ${repoId}`);
                     job.stop();
                     activeJobs.delete(repoId);
                 }
@@ -48,7 +49,7 @@ export const initScheduler = () => {
                             existingJobFound = true;
                         } else {
                             // Schedule changed, stop the old one
-                            console.log(`[Scheduler] Schedule changed for repo: ${repoId}, stopping old job`);
+                            logger.info(`[Scheduler] Schedule changed for repo: ${repoId}, stopping old job`);
                             activeJobs.get(key)?.stop();
                             activeJobs.delete(key);
                         }
@@ -57,24 +58,24 @@ export const initScheduler = () => {
 
                 if (!existingJobFound) {
                     if (cron.validate(schedule)) {
-                        console.log(`[Scheduler] Scheduling scan for repo: ${repoId} with cron: ${schedule}`);
+                        logger.info(`[Scheduler] Scheduling scan for repo: ${repoId} with cron: ${schedule}`);
                         const task = cron.schedule(schedule, async () => {
-                            console.log(`[Scheduler] Enqueuing scheduled scan for repo: ${repoId}`);
+                            logger.info(`[Scheduler] Enqueuing scheduled scan for repo: ${repoId}`);
                             try {
                                 await enqueueScan(repoId, {});
                             } catch (error) {
-                                console.error(`[Scheduler] Error enqueuing scan for repo ${repoId}:`, error);
+                                logger.error(`[Scheduler] Error enqueuing scan for repo ${repoId}:`, error);
                             }
                         });
                         activeJobs.set(jobKey, task);
                     } else {
-                        console.error(`[Scheduler] Invalid cron schedule for repo ${repoId}: ${schedule}`);
+                        logger.error(`[Scheduler] Invalid cron schedule for repo ${repoId}: ${schedule}`);
                     }
                 }
             }
 
         } catch (error) {
-            console.error('[Scheduler] Error syncing cron jobs from database:', error);
+            logger.error('[Scheduler] Error syncing cron jobs from database:', error);
         }
     });
 };

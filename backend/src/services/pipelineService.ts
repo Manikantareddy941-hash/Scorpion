@@ -477,7 +477,7 @@ try {
 
   // 3. Run pipeline asynchronously
   runPipeline(runId).catch(err => {
-    console.error(`[PipelineTrigger] Async execution failed for run ${runId}:`, err);
+    logger.error(`[PipelineTrigger] Async execution failed for run ${runId}:`, err);
   });
 
   return runId;

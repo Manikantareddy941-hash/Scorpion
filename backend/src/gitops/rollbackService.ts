@@ -1,5 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
+import { logger } from '../services/logger';
 
 export interface RollbackOptions {
   app: string;
@@ -10,7 +11,7 @@ export interface RollbackOptions {
 }
 
 export async function triggerRollback(options: RollbackOptions) {
-  console.log(`[Rollback] Initiating rollback for ${options.app} due to ${options.criticalCount} critical CVEs`);
+  logger.info(`[Rollback] Initiating rollback for ${options.app} due to ${options.criticalCount} critical CVEs`);
   
   // Extract owner and repo from URL
   const match = options.repo.match(/github\.com\/([^/]+)\/([^/.]+)/);
@@ -80,10 +81,10 @@ export async function triggerRollback(options: RollbackOptions) {
       base: 'main'
     });
 
-    console.log(`[Rollback] Created PR #${pr.data.number}: ${pr.data.html_url}`);
+    logger.info(`[Rollback] Created PR #${pr.data.number}: ${pr.data.html_url}`);
     return pr.data;
   } catch (error: any) {
-    console.error(`[Rollback] Failed to trigger rollback for ${options.app}:`, error);
+    logger.error(`[Rollback] Failed to trigger rollback for ${options.app}:`, error);
     throw error;
   }
 }

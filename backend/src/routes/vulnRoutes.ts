@@ -3,6 +3,7 @@ import { Models } from 'node-appwrite';
 import { getRemediationFix } from '../services/aiService';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -14,7 +15,7 @@ const router = Router();
 router.post('/:id/remediate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const vulnerabilityId = req.params.id;
-        console.log(`[Remediation] Triggering AI remediation for: ${vulnerabilityId}`);
+        logger.info(`[Remediation] Triggering AI remediation for: ${vulnerabilityId}`);
 
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerabilityId);
         const userId = (req as any).user?.$id;
@@ -35,7 +36,7 @@ router.post('/:id/remediate', async (req: AuthenticatedRequest, res: Response, n
             vulnerability_id: vulnerabilityId
         });
     } catch (err) {
-        console.error(`[Remediation] Error generating fix:`, err);
+        logger.error(`[Remediation] Error generating fix:`, err);
         next(err);
     }
 });

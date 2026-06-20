@@ -7,6 +7,7 @@ import { sendSecurityAlert } from '../services/notificationService';
 import { getDynamicPolicy } from '../services/policyService';
 import { checkPermission } from '../middleware/iamMiddleware';
 import { canAccessResource } from '../services/tenancyService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -16,15 +17,15 @@ async function ensurePipelineStateCollection() {
     await databases.getCollection(DB_ID, 'pipeline_state');
   } catch (err: any) {
     if (err.code === 404 || err.type === 'collection_not_found') {
-      console.log('[Pipeline State Setup] pipeline_state collection not found. Creating it...');
+      logger.info('[Pipeline State Setup] pipeline_state collection not found. Creating it...');
       try {
         await databases.createCollection(DB_ID, 'pipeline_state', 'Pipeline State');
         await databases.createStringAttribute(DB_ID, 'pipeline_state', 'nodeId', 50, true);
         await databases.createStringAttribute(DB_ID, 'pipeline_state', 'status', 50, true);
-        console.log('[Pipeline State Setup] pipeline_state collection created.');
+        logger.info('[Pipeline State Setup] pipeline_state collection created.');
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr) {
-        console.error('[Pipeline State Setup] Error creating pipeline_state collection:', createErr);
+        logger.error('[Pipeline State Setup] Error creating pipeline_state collection:', createErr);
       }
     }
   }
@@ -123,7 +124,7 @@ router.post('/evaluate', verifyUser, async (req: Request, res: Response) => {
             }))
         });
     } catch (err: any) {
-        console.error('[Gate Evaluate Error]', err.message);
+        logger.error('[Gate Evaluate Error]', err.message);
         res.status(500).json({ error: 'Internal server error', details: err.message });
     }
 });
@@ -164,7 +165,7 @@ router.post('/deploy', verifyUser, checkPermission('repo:deploy'), async (req: R
             message: 'Deployment triggered successfully. All release gate validations passed.'
         });
     } catch (err: any) {
-        console.error('[Gate Deploy Error]', err.message);
+        logger.error('[Gate Deploy Error]', err.message);
         res.status(500).json({ error: 'Internal server error', details: err.message });
     }
 });
@@ -201,7 +202,7 @@ router.post('/override', verifyUser, checkPermission('gate:bypass'), async (req:
             message: 'Break Glass Override activated. CI/CD Release Gate has been bypassed and unlocked.'
         });
     } catch (err: any) {
-        console.error('[Gate Override Error]', err.message);
+        logger.error('[Gate Override Error]', err.message);
         res.status(500).json({ error: 'Internal server error', details: err.message });
     }
 });
@@ -218,7 +219,7 @@ router.get('/state', verifyUser, async (req: Request, res: Response) => {
         const status = existingState.total > 0 ? existingState.documents[0].status : 'passing';
         res.json({ status });
     } catch (err: any) {
-        console.error('[GET Gate State Error]', err.message);
+        logger.error('[GET Gate State Error]', err.message);
         res.status(500).json({ error: 'Failed to fetch gate state', details: err.message });
     }
 });
@@ -234,7 +235,7 @@ router.post('/release', verifyUser, async (req: Request, res: Response) => {
         await logAuditEvent('GATE_CHECK', `Release gate checked for ${repo_id}. Result: ${result.allowed ? 'PASSED' : 'BLOCKED'} (${result.blocker_count} blockers)`, userId, repo_id);
         res.json(result);
     } catch (err: any) {
-        console.error('[Gate API Error]', err.message);
+        logger.error('[Gate API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -251,7 +252,7 @@ router.get('/release/:repo_id', verifyUser, async (req: Request, res: Response) 
         const result = await checkReleaseGate(repo_id);
         res.json(result);
     } catch (err: any) {
-        console.error('[Gate API Error]', err.message);
+        logger.error('[Gate API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -278,7 +279,7 @@ router.get('/summary', verifyUser, async (req: Request, res: Response) => {
 
         res.json(summary);
     } catch (err: any) {
-        console.error('[Gate Summary API Error]', err.message);
+        logger.error('[Gate Summary API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

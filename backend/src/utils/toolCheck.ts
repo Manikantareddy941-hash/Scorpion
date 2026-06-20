@@ -1,4 +1,5 @@
 import { spawnSync } from "child_process";
+import { logger } from '../services/logger';
 
 const isWin = process.platform === 'win32';
 
@@ -145,10 +146,10 @@ export const validateTools = async (): Promise<{ tool: string, status: 'installe
     const results = await Promise.all(tools.map(async (name) => {
         const resolved = await resolveToolCommand(name);
         if (resolved.status === 'installed') {
-            console.log(`[Tools] ✅ ${name} found`);
+            logger.info(`[Tools] ✅ ${name} found`);
             return { tool: name, status: 'installed' as const, version: resolved.version };
         } else {
-            console.error(`[Tools] ❌ ${name} NOT INSTALLED — findings for this engine will be empty`);
+            logger.error(`[Tools] ❌ ${name} NOT INSTALLED — findings for this engine will be empty`);
             return { tool: name, status: 'missing' as const };
         }
     }));

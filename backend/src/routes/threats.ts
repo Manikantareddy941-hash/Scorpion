@@ -4,6 +4,7 @@ import { verifyUser } from '../middleware/auth';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { sendSecurityAlert } from '../services/notificationService';
 import { isFalcoRuleBlocked } from '../services/policyService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -23,7 +24,7 @@ async function ensureThreatsCollection() {
     await databases.getCollection(DB_ID, 'threats');
   } catch (err: any) {
     if (err.code === 404 || err.type === 'collection_not_found') {
-      console.log('[Threats Setup] THREATS collection not found. Creating it...');
+      logger.info('[Threats Setup] THREATS collection not found. Creating it...');
       try {
         await databases.createCollection(DB_ID, 'threats', 'Threats');
         
@@ -35,14 +36,14 @@ async function ensureThreatsCollection() {
         await databases.createStringAttribute(DB_ID, 'threats', 'status', 50, true);
         await databases.createStringAttribute(DB_ID, 'threats', 'timestamp', 255, true);
         
-        console.log('[Threats Setup] THREATS collection and attributes created successfully.');
+        logger.info('[Threats Setup] THREATS collection and attributes created successfully.');
         // Wait 3 seconds for attributes to propagate in Appwrite
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr: any) {
-        console.error('[Threats Setup] Error creating collection or attributes:', createErr);
+        logger.error('[Threats Setup] Error creating collection or attributes:', createErr);
       }
     } else {
-      console.error('[Threats Setup] Unexpected error checking threats collection:', err);
+      logger.error('[Threats Setup] Unexpected error checking threats collection:', err);
     }
   }
 }
@@ -53,15 +54,15 @@ async function ensurePipelineStateCollection() {
     await databases.getCollection(DB_ID, 'pipeline_state');
   } catch (err: any) {
     if (err.code === 404 || err.type === 'collection_not_found') {
-      console.log('[Pipeline State Setup] pipeline_state collection not found. Creating it...');
+      logger.info('[Pipeline State Setup] pipeline_state collection not found. Creating it...');
       try {
         await databases.createCollection(DB_ID, 'pipeline_state', 'Pipeline State');
         await databases.createStringAttribute(DB_ID, 'pipeline_state', 'nodeId', 50, true);
         await databases.createStringAttribute(DB_ID, 'pipeline_state', 'status', 50, true);
-        console.log('[Pipeline State Setup] pipeline_state collection created.');
+        logger.info('[Pipeline State Setup] pipeline_state collection created.');
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr) {
-        console.error('[Pipeline State Setup] Error creating pipeline_state collection:', createErr);
+        logger.error('[Pipeline State Setup] Error creating pipeline_state collection:', createErr);
       }
     }
   }
@@ -74,7 +75,7 @@ ensurePipelineStateCollection();
 // POST /api/threats/falco
 router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => {
   const event = req.body;
-  console.log(`[Falco Webhook] Received event: ${event.rule} (${event.priority})`);
+  logger.info(`[Falco Webhook] Received event: ${event.rule} (${event.priority})`);
 
   try {
     await ensureThreatsCollection();
@@ -99,7 +100,7 @@ router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => 
       timestamp: event.time || new Date().toISOString()
     });
 
-    console.log(`[Falco Webhook] Threat successfully persisted to DB: ${threatDoc.$id}`);
+    logger.info(`[Falco Webhook] Threat successfully persisted to DB: ${threatDoc.$id}`);
 
     // 2. Real-time Pipeline Broadcast (pipeline_state collection update)
     if (status === 'compromised') {
@@ -122,16 +123,16 @@ router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => 
           await databases.updateDocument(DB_ID, 'pipeline_state', existingState.documents[0].$id, {
             status: 'compromised'
           });
-          console.log('[Falco Webhook] Updated existing monitor node state to compromised.');
+          logger.info('[Falco Webhook] Updated existing monitor node state to compromised.');
         } else {
           await databases.createDocument(DB_ID, 'pipeline_state', ID.unique(), {
             nodeId: 'monitor',
             status: 'compromised'
           });
-          console.log('[Falco Webhook] Created monitor node state as compromised.');
+          logger.info('[Falco Webhook] Created monitor node state as compromised.');
         }
       } catch (stateErr: any) {
-        console.error('[Falco Webhook] Failed to update pipeline_state collection:', stateErr.message);
+        logger.error('[Falco Webhook] Failed to update pipeline_state collection:', stateErr.message);
       }
     }
 
@@ -142,7 +143,7 @@ router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => 
       nodeStatus: status
     });
   } catch (err: any) {
-    console.error('[Falco Webhook] Failed to process webhook event:', err);
+    logger.error('[Falco Webhook] Failed to process webhook event:', err);
     res.status(500).json({ error: 'Webhook processing failed', details: err.message });
   }
 });
@@ -157,7 +158,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
     ]);
     res.json(threatsRes.documents);
   } catch (err: any) {
-    console.error('[GET Threats API] Failed to retrieve threats:', err);
+    logger.error('[GET Threats API] Failed to retrieve threats:', err);
     res.status(500).json({ error: 'Failed to retrieve threats', details: err.message });
   }
 });
@@ -199,7 +200,7 @@ router.post('/clear', verifyUser, async (req: Request, res: Response) => {
 
     res.json({ status: 'success', message: 'All pipeline threats cleared and reset.' });
   } catch (err: any) {
-    console.error('[Clear Threats API] Failed to reset states:', err);
+    logger.error('[Clear Threats API] Failed to reset states:', err);
     res.status(500).json({ error: 'Clear operation failed', details: err.message });
   }
 });

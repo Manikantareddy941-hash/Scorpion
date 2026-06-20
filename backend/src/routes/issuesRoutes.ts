@@ -1,6 +1,7 @@
 import express from 'express';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query } from 'node-appwrite';
+import { logger } from '../services/logger';
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get('/', async (req: any, res) => {
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, filters);
     res.json(result);
   } catch (err: any) {
-    console.error('[IssuesRoute] Error:', err);
+    logger.error('[IssuesRoute] Error:', err);
     res.status(500).json({ error: err.message });
   }
 });

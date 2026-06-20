@@ -3,6 +3,7 @@ import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { spawnSync } from 'child_process';
 import { sendFindingAlert } from '../utils/alertDispatcher';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.post('/docker', verifyUser, async (req: Request, res: Response) => {
     }
 
     try {
-        console.log(`[DockerScan] Scanning image: ${image_name}...`);
+        logger.info(`[DockerScan] Scanning image: ${image_name}...`);
         const result = spawnSync('trivy', [
             'image',
             '--format', 'json',
@@ -75,7 +76,7 @@ router.post('/docker', verifyUser, async (req: Request, res: Response) => {
         res.json(stats);
 
     } catch (err: any) {
-        console.error('[Docker API Error]', err.message);
+        logger.error('[Docker API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

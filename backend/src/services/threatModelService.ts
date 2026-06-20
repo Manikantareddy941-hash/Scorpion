@@ -1,5 +1,6 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { auditLog } from './auditService';
+import { logger } from './logger';
 
 export interface ThreatModel {
   $id?: string;
@@ -29,7 +30,7 @@ async function ensureThreatModelsCollection() {
     await databases.getCollection(DB_ID, COLLECTIONS.THREAT_MODELS);
   } catch (err: any) {
     if (err.code === 404 || err.type === 'collection_not_found') {
-      console.log('[Threat Model Service] THREAT_MODELS collection not found. Creating it...');
+      logger.info('[Threat Model Service] THREAT_MODELS collection not found. Creating it...');
       try {
         await databases.createCollection(DB_ID, COLLECTIONS.THREAT_MODELS, 'Threat Models');
         
@@ -41,14 +42,14 @@ async function ensureThreatModelsCollection() {
         await databases.createStringAttribute(DB_ID, COLLECTIONS.THREAT_MODELS, 'createdBy', 255, true);
         await databases.createStringAttribute(DB_ID, COLLECTIONS.THREAT_MODELS, 'status', 50, true);
         
-        console.log('[Threat Model Service] THREAT_MODELS collection and attributes created successfully.');
+        logger.info('[Threat Model Service] THREAT_MODELS collection and attributes created successfully.');
         // Wait 3 seconds for attributes to propagate in Appwrite
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr: any) {
-        console.error('[Threat Model Service] Error creating collection or attributes:', createErr);
+        logger.error('[Threat Model Service] Error creating collection or attributes:', createErr);
       }
     } else {
-      console.error('[Threat Model Service] Unexpected error checking threat_models collection:', err);
+      logger.error('[Threat Model Service] Unexpected error checking threat_models collection:', err);
     }
   }
 }
@@ -98,7 +99,7 @@ export const createThreatModel = async (
       status: document.status
     };
   } catch (err: any) {
-    console.error('[Threat Model Service] Failed to create threat model:', err);
+    logger.error('[Threat Model Service] Failed to create threat model:', err);
     throw err;
   }
 };
@@ -121,7 +122,7 @@ export const getThreatModel = async (id: string): Promise<ThreatModel | null> =>
     };
   } catch (err: any) {
     if (err.code === 404) return null;
-    console.error('[Threat Model Service] Failed to get threat model:', err);
+    logger.error('[Threat Model Service] Failed to get threat model:', err);
     throw err;
   }
 };
@@ -149,7 +150,7 @@ export const listThreatModels = async (userId?: string): Promise<ThreatModel[]> 
       status: doc.status
     }));
   } catch (err: any) {
-    console.error('[Threat Model Service] Failed to list threat models:', err);
+    logger.error('[Threat Model Service] Failed to list threat models:', err);
     throw err;
   }
 };
@@ -197,7 +198,7 @@ export const updateThreatModel = async (
       status: document.status
     };
   } catch (err: any) {
-    console.error('[Threat Model Service] Failed to update threat model:', err);
+    logger.error('[Threat Model Service] Failed to update threat model:', err);
     throw err;
   }
 };
@@ -223,7 +224,7 @@ export const deleteThreatModel = async (
       details: { name: model?.name }
     });
   } catch (err: any) {
-    console.error('[Threat Model Service] Failed to delete threat model:', err);
+    logger.error('[Threat Model Service] Failed to delete threat model:', err);
     throw err;
   }
 };
@@ -264,7 +265,7 @@ export const updateThreats = async (
       status: document.status
     };
   } catch (err: any) {
-    console.error('[Threat Model Service] Failed to update threats:', err);
+    logger.error('[Threat Model Service] Failed to update threats:', err);
     throw err;
   }
 };

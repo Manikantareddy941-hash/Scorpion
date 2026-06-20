@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { databases, DB_ID, COLLECTIONS, ID, Query, users } from '../lib/appwrite';
+import { logger } from './logger';
 
 export interface GitMetadata {
     commit_hash: string;
@@ -12,7 +13,7 @@ export interface GitMetadata {
  */
 export const linkCommitToScan = async (scanId: string, repoId: string, metadata: GitMetadata) => {
     try {
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCAN_COMMITS}`);
+        logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCAN_COMMITS}`);
         if (!COLLECTIONS.SCAN_COMMITS) throw new Error("collectionId is undefined");
         await databases.createDocument(DB_ID, COLLECTIONS.SCAN_COMMITS, ID.unique(), {
             scan_id: scanId,
@@ -22,9 +23,9 @@ export const linkCommitToScan = async (scanId: string, repoId: string, metadata:
             pr_number: metadata.pr_number,
             created_at: new Date().toISOString()
         });
-        console.log(`[GitTraceability] Scan ${scanId} linked to commit ${metadata.commit_hash.substring(0, 7)}`);
+        logger.info(`[GitTraceability] Scan ${scanId} linked to commit ${metadata.commit_hash.substring(0, 7)}`);
     } catch (err) {
-        console.error(`[GitTraceability] Failed to link commit to scan ${scanId}:`, err);
+        logger.error(`[GitTraceability] Failed to link commit to scan ${scanId}:`, err);
         throw err;
     }
 };
@@ -34,7 +35,7 @@ export const linkCommitToScan = async (scanId: string, repoId: string, metadata:
  */
 export const getFindingHistory = async (findingId: string) => {
     try {
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.FINDING_RESOLUTIONS}`);
+        logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.FINDING_RESOLUTIONS}`);
         if (!COLLECTIONS.FINDING_RESOLUTIONS) throw new Error("collectionId is undefined");
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.FINDING_RESOLUTIONS, [
             Query.equal('finding_id', findingId),
@@ -50,7 +51,7 @@ export const getFindingHistory = async (findingId: string) => {
                     email = user.email;
                 }
             } catch (userErr) {
-                console.warn(`[GitTraceability] Could not fetch user ${doc.user_id} for finding history:`, userErr);
+                logger.warn(`[GitTraceability] Could not fetch user ${doc.user_id} for finding history:`, userErr);
             }
             return {
                 ...doc,
@@ -60,7 +61,7 @@ export const getFindingHistory = async (findingId: string) => {
 
         return resolutions;
     } catch (err) {
-        console.error(`[GitTraceability] Error fetching finding history for ${findingId}:`, err);
+        logger.error(`[GitTraceability] Error fetching finding history for ${findingId}:`, err);
         throw err;
     }
 };

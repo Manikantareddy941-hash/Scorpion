@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { JiraConfig, JiraSyncResult, Ticket } from '../../../shared/types';
 import { getTicket, updateTicket, listTickets } from '../models/ticketModel';
+import { logger } from './logger';
 
 // In-memory JiraConfig store
 let currentJiraConfig: JiraConfig | null = null;
@@ -195,7 +196,7 @@ export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult
 
     return { ok: true, jiraKey, jiraId };
   } catch (err: any) {
-    console.error('Error syncing to Jira:', err?.response?.data || err.message);
+    logger.error('Error syncing to Jira:', err?.response?.data || err.message);
     const errorMsg = err?.response?.data?.errorMessages?.join(', ') || 
                      JSON.stringify(err?.response?.data?.errors) || 
                      err.message;
@@ -241,10 +242,10 @@ async function transitionJiraIssue(jiraKey: string, targetStatus: Ticket['status
         transition: { id: transition.id }
       });
     } else {
-      console.warn(`Jira transition for status "${targetStatus}" (Mapped: "${targetTransitionName}") not found on issue ${jiraKey}.`);
+      logger.warn(`Jira transition for status "${targetStatus}" (Mapped: "${targetTransitionName}") not found on issue ${jiraKey}.`);
     }
   } catch (err: any) {
-    console.error(`Failed to transition Jira issue ${jiraKey}:`, err?.response?.data || err.message);
+    logger.error(`Failed to transition Jira issue ${jiraKey}:`, err?.response?.data || err.message);
   }
 }
 
@@ -292,7 +293,7 @@ export async function pullFromJira(jiraKey: string): Promise<{ ok: boolean; tick
 
     return { ok: true, ticket: updated };
   } catch (err: any) {
-    console.error(`Error pulling from Jira for ${jiraKey}:`, err?.response?.data || err.message);
+    logger.error(`Error pulling from Jira for ${jiraKey}:`, err?.response?.data || err.message);
     const errorMsg = err?.response?.data?.errorMessages?.join(', ') || err.message;
     return { ok: false, error: errorMsg };
   }
@@ -311,7 +312,7 @@ export async function testConnection(): Promise<{ ok: boolean; projectName?: str
     const response = await jiraRequest('GET', `/rest/api/3/project/${projectKey}`);
     return { ok: true, projectName: response.name };
   } catch (err: any) {
-    console.error('Jira Connection Test Failed:', err?.response?.data || err.message);
+    logger.error('Jira Connection Test Failed:', err?.response?.data || err.message);
     const errorMsg = err?.response?.data?.errorMessages?.join(', ') || 
                      JSON.stringify(err?.response?.data?.errors) || 
                      err.message;

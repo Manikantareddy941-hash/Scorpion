@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logger } from './logger';
 
 interface Finding {
     vulnerability_id?: string;
@@ -56,7 +57,7 @@ export class AlertService {
                     embeds: chunk
                 });
             } catch (error: any) {
-                console.error(`Failed to send Discord alert: ${error.message}`);
+                logger.error(`Failed to send Discord alert: ${error.message}`);
             }
         }
     }
@@ -132,7 +133,7 @@ export class AlertService {
         try {
             await axios.post(webhookUrl, { blocks });
         } catch (error: any) {
-            console.error(`Failed to send Slack alert: ${error.message}`);
+            logger.error(`Failed to send Slack alert: ${error.message}`);
         }
     }
 }

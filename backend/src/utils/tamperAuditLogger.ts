@@ -1,5 +1,6 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import crypto from 'crypto';
+import { logger } from '../services/logger';
 
 // Helper to ensure the secure audit log collection exists
 export async function ensureAuditLogsV2Collection() {
@@ -7,7 +8,7 @@ export async function ensureAuditLogsV2Collection() {
     await databases.getCollection(DB_ID, 'audit_logs_v2');
   } catch (err: any) {
     if (err.code === 404 || err.type === 'collection_not_found') {
-      console.log('[Audit Logs Setup] audit_logs_v2 collection not found. Creating it...');
+      logger.info('[Audit Logs Setup] audit_logs_v2 collection not found. Creating it...');
       try {
         await databases.createCollection(DB_ID, 'audit_logs_v2', 'AUDIT_LOGS');
         
@@ -19,10 +20,10 @@ export async function ensureAuditLogsV2Collection() {
         await databases.createStringAttribute(DB_ID, 'audit_logs_v2', 'details', 5000, true);
         await databases.createStringAttribute(DB_ID, 'audit_logs_v2', 'tamper_hash', 255, true);
         
-        console.log('[Audit Logs Setup] audit_logs_v2 collection and attributes created.');
+        logger.info('[Audit Logs Setup] audit_logs_v2 collection and attributes created.');
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr) {
-        console.error('[Audit Logs Setup] Error creating collection or attributes:', createErr);
+        logger.error('[Audit Logs Setup] Error creating collection or attributes:', createErr);
       }
     }
   }
@@ -57,7 +58,7 @@ export async function logSecureAuditEvent(
         previousHash = lastLogs.documents[0].tamper_hash || 'GENESIS_HASH';
       }
     } catch (fetchErr) {
-      console.error('[Secure Audit Log] Failed to fetch last audit log to chain hash:', fetchErr);
+      logger.error('[Secure Audit Log] Failed to fetch last audit log to chain hash:', fetchErr);
     }
 
     // 2. Build current payload block
@@ -77,9 +78,9 @@ export async function logSecureAuditEvent(
       tamper_hash
     });
 
-    console.log(`[Secure Audit Log] Ledger block successfully chained & persisted: ${doc.$id} (Hash: ${tamper_hash.substring(0, 10)}...)`);
+    logger.info(`[Secure Audit Log] Ledger block successfully chained & persisted: ${doc.$id} (Hash: ${tamper_hash.substring(0, 10)}...)`);
     return doc;
   } catch (err: any) {
-    console.error('[Secure Audit Log Error]', err.message);
+    logger.error('[Secure Audit Log Error]', err.message);
   }
 }

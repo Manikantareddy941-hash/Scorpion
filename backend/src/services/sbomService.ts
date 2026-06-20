@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { logger } from './logger';
 
 const execFileAsync = promisify(execFile);
 const SBOM_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
@@ -24,7 +25,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
         let isTemporary = false;
 
         if (repo.url.startsWith('http')) {
-            console.log('[SBOM] Cloning remote repo:', repo.url);
+            logger.info('[SBOM] Cloning remote repo:', repo.url);
             await execFileAsync('git', ['clone', '--depth', '1', repo.url, tempDir], { timeout: 60000 });
             scanPath = tempDir;
             isTemporary = true;
@@ -32,7 +33,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
             scanPath = repo.local_path;
         }
 
-        console.log(`[SBOM] Running Trivy SBOM for: ${scanPath}`);
+        logger.info(`[SBOM] Running Trivy SBOM for: ${scanPath}`);
         
         // Use CycloneDX format as it's standard for SBOM
         const outputFormat = format === 'json' ? 'cyclonedx' : 'csv';
@@ -74,7 +75,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
         const outputPath = `${tempDir}_out.${format}`;
         if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
         
-        console.error('[SBOM] Error:', err);
+        logger.error('[SBOM] Error:', err);
         throw err;
     }
 };

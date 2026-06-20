@@ -9,6 +9,7 @@ import morgan from 'morgan';
 import { initScheduler } from './scheduler';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
+import { logger } from './services/logger';
 
 // Route Imports
 import authRoutes from './routes/authRoutes';
@@ -62,7 +63,7 @@ import { initScanWorker } from './workers/scanWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
 
 // --- Startup Diagnostic ---
-console.log('🚀 [Startup] System Diagnostic Initiated');
+logger.info('🚀 [Startup] System Diagnostic Initiated');
 
 const requiredEnv = [
     'APPWRITE_ENDPOINT',
@@ -73,21 +74,21 @@ const requiredEnv = [
 ];
 
 requiredEnv.forEach(env => {
-    if (!process.env[env]) console.warn(`⚠️  [Startup] WARNING: Missing environment variable "${env}"`);
-    else console.log(`✅ [Startup] Environment variable "${env}" is configured`);
+    if (!process.env[env]) logger.warn(`⚠️  [Startup] WARNING: Missing environment variable "${env}"`);
+    else logger.info(`✅ [Startup] Environment variable "${env}" is configured`);
 });
 
 import { validateTools } from './services/scan/orchestrator';
 import { initToolCache } from './utils/toolCheck';
 
 (async () => {
-    console.log("🛡️  Security Tool Chain Diagnostic:");
+    logger.info("🛡️  Security Tool Chain Diagnostic:");
     await initToolCache();
     await validateTools();
 
     // --- Recovery Mechanism ---
     try {
-        console.log('🔄 [Recovery] Checking for stalled scans...');
+        logger.info('🔄 [Recovery] Checking for stalled scans...');
         if (COLLECTIONS.SCANS) {
             const stalledScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
                 Query.equal('status', 'running'),
@@ -95,7 +96,7 @@ import { initToolCache } from './utils/toolCheck';
             ]);
 
             for (const scan of stalledScans.documents) {
-                console.log(JSON.stringify({
+                logger.info(JSON.stringify({
                     scanId: scan.$id,
                     repoId: scan.repo_id,
                     stage: 'fail_recovery',
@@ -111,13 +112,13 @@ import { initToolCache } from './utils/toolCheck';
                 });
             }
             if (stalledScans.total > 0) {
-                console.log(`✅ [Recovery] Recovered ${stalledScans.total} stalled scans.`);
+                logger.info(`✅ [Recovery] Recovered ${stalledScans.total} stalled scans.`);
             } else {
-                console.log(`✅ [Recovery] No stalled scans found.`);
+                logger.info(`✅ [Recovery] No stalled scans found.`);
             }
         }
     } catch (err: any) {
-        console.error('❌ [Recovery] Failed to run crash recovery:', err);
+        logger.error('❌ [Recovery] Failed to run crash recovery:', err);
     }
 })();
 
@@ -296,7 +297,7 @@ initUptimeScheduler();
 
 // --- Error Handler ---
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    console.error(`[Error Handler] ${err.stack || err.message}`);
+    logger.error(`[Error Handler] ${err.stack || err.message}`);
     const statusCode = err.status || err.statusCode || 500;
     const isProd = process.env.NODE_ENV === 'production';
     res.status(statusCode).json({
@@ -306,5 +307,5 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 app.listen(port, () => {
-    console.log(`[Backend] Service running on http://localhost:${port}`);
+    logger.info(`[Backend] Service running on http://localhost:${port}`);
 });

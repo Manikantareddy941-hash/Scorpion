@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { logger } from '../services/logger';
 
 export interface ScanPipelineResult {
   trivy: any;
@@ -33,7 +34,7 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
     }
 
     // 2. Run all scanners in parallel
-    console.log(`[Pipeline] Starting multi-tool scan in ${tempDir}`);
+    logger.info(`[Pipeline] Starting multi-tool scan in ${tempDir}`);
     const [trivyRes, semgrepRes, gitleaksRes] = await Promise.allSettled([
       runTrivy(tempDir),
       runSemgrep(tempDir),
@@ -49,7 +50,7 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
     };
 
   } catch (error) {
-    console.error(`[Pipeline] Global failure for ${options.repo}:`, error);
+    logger.error(`[Pipeline] Global failure for ${options.repo}:`, error);
     throw error;
   } finally {
     // 4. Always clean up (ONLY if it was a generated temp clone, NEVER a local IDE scan)
@@ -57,9 +58,9 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
     if (!options.localPath && isGeneratedTemp) {
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
-        console.log(`[Pipeline] Cleaned up temp workspace: ${tempDir}`);
+        logger.info(`[Pipeline] Cleaned up temp workspace: ${tempDir}`);
       } catch (cleanupErr) {
-        console.error(`[Pipeline] Failed to clean up ${tempDir}:`, cleanupErr);
+        logger.error(`[Pipeline] Failed to clean up ${tempDir}:`, cleanupErr);
       }
     }
   }

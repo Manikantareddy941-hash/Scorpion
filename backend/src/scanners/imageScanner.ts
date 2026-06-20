@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { logger } from '../services/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -9,7 +10,7 @@ export interface ImageScanResult {
 }
 
 export async function scanImage(image: string): Promise<ImageScanResult> {
-  console.log(`[Image Scanner] Scanning image: ${image}`);
+  logger.info(`[Image Scanner] Scanning image: ${image}`);
   try {
     const { stdout } = await execFileAsync(
       'trivy', ['image', '--format', 'json', '--quiet', image]
@@ -24,7 +25,7 @@ export async function scanImage(image: string): Promise<ImageScanResult> {
 
     return { vulnerabilities, raw: result };
   } catch (error: any) {
-    console.error(`[Image Scanner] Failed to scan image ${image}:`, error);
+    logger.error(`[Image Scanner] Failed to scan image ${image}:`, error);
     throw error;
   }
 }

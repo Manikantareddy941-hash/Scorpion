@@ -1,6 +1,7 @@
 import { Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse, TicketLink, TicketLinkType } from '../../../shared/types';
 import crypto from 'crypto';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
+import { logger } from '../services/logger';
 
 // In-memory stores for comments and activity log (these remain local for now)
 const commentsMap = new Map<string, TicketComment[]>();
@@ -133,7 +134,7 @@ export async function getUnsyncedTickets(): Promise<Ticket[]> {
     const tickets = response.documents.map(mapDocumentToTicket);
     return tickets.filter(t => !t.jiraKey || t.jiraSyncStatus === 'error');
   } catch (err) {
-    console.error('Error getting unsynced tickets:', err);
+    logger.error('Error getting unsynced tickets:', err);
     return [];
   }
 }
@@ -200,7 +201,7 @@ export async function updateTicket(id: string, updates: Partial<Ticket>, actor: 
 
     return updatedTicket;
   } catch (err) {
-    console.error('Error updating ticket in Appwrite:', err);
+    logger.error('Error updating ticket in Appwrite:', err);
     throw err;
   }
 }
@@ -212,7 +213,7 @@ export async function deleteTicket(id: string): Promise<boolean> {
     activityMap.delete(id);
     return true;
   } catch (err) {
-    console.error('Error deleting ticket in Appwrite:', err);
+    logger.error('Error deleting ticket in Appwrite:', err);
     return false;
   }
 }
@@ -304,7 +305,7 @@ export async function listTickets(filters: TicketFilters): Promise<PaginatedResp
       totalPages
     };
   } catch (err) {
-    console.error('Error listing tickets from Appwrite:', err);
+    logger.error('Error listing tickets from Appwrite:', err);
     return {
       data: [],
       total: 0,
@@ -417,7 +418,7 @@ export async function getStats() {
       agingTickets
     };
   } catch (err) {
-    console.error('Error getting ticket stats:', err);
+    logger.error('Error getting ticket stats:', err);
     return {
       total: 0,
       open: 0,

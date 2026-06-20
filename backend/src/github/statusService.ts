@@ -1,4 +1,5 @@
 import { Octokit } from '@octokit/rest';
+import { logger } from '../services/logger';
 
 export interface CommitStatusOptions {
   owner: string;
@@ -22,6 +23,6 @@ export async function setCommitStatus(octokit: Octokit, options: CommitStatusOpt
       ...(options.target_url && { target_url: options.target_url })
     });
   } catch (error) {
-    console.error(`[GitHub] Error setting commit status for ${options.repo} (${options.sha}):`, error);
+    logger.error(`[GitHub] Error setting commit status for ${options.repo} (${options.sha}):`, error);
   }
 }

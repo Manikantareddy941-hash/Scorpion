@@ -1,4 +1,5 @@
 import { databases, DB_ID, ID } from '../lib/appwrite';
+import { logger } from '../services/logger';
 
 /**
  * Logs a security event to the audit trail
@@ -32,6 +33,6 @@ export async function logAuditEvent(
             }
         );
     } catch (err: any) {
-        console.error('[Audit Log Error]', err.message);
+        logger.error('[Audit Log Error]', err.message);
     }
 }

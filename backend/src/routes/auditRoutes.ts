@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
             );
             docs = response.documents;
         } catch (err: any) {
-            console.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy:', err.message);
+            logger.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy:', err.message);
             // Fallback to legacy audit_logs
             const legacyResponse = await databases.listDocuments(
                 DB_ID,
@@ -38,7 +39,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
 
         res.json(docs);
     } catch (err: any) {
-        console.error('[Audit API Error]', err.message, err.stack);
+        logger.error('[Audit API Error]', err.message, err.stack);
         res.status(500).json({ error: 'Internal server error', message: err.message });
     }
 });
@@ -70,7 +71,7 @@ router.post('/', verifyUser, async (req: Request, res: Response) => {
 
         res.status(201).json(response);
     } catch (err: any) {
-        console.error('[Audit Create Error]', err.message, err.response || err);
+        logger.error('[Audit Create Error]', err.message, err.response || err);
         res.status(500).json({ 
             error: 'Failed to create audit log', 
             message: err.message,

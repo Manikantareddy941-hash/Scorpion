@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logAuditEvent } from '../utils/auditLogger';
 import { canAccessResource } from '../services/tenancyService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -34,7 +35,7 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
 
         res.json(updatedFinding);
     } catch (err: any) {
-        console.error('[Finding API Error]', err.message);
+        logger.error('[Finding API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

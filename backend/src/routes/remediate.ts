@@ -6,6 +6,7 @@ import { getRemediationFix } from '../services/aiService';
 import { canAccessResource } from '../services/tenancyService';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from '../services/logger';
 
 const router = Router();
 const workspaceDir = 'c:\\Users\\manik\\OneDrive\\Desktop\\Scorpion';
@@ -48,7 +49,7 @@ router.post('/generate', verifyUser, async (req: Request, res: Response) => {
         });
 
     } catch (err: any) {
-        console.error('[Remediate Generate Error]', err.message);
+        logger.error('[Remediate Generate Error]', err.message);
         res.status(500).json({ error: 'Failed to generate patch', details: err.message });
     }
 });
@@ -77,7 +78,7 @@ router.post('/apply', verifyUser, async (req: Request, res: Response) => {
                     localPath = repo.local_path;
                 }
             } catch (err) {
-                console.warn('[Remediate Apply] Could not fetch repository context, using workspace fallback:', err);
+                logger.warn('[Remediate Apply] Could not fetch repository context, using workspace fallback:', err);
             }
         }
 
@@ -115,10 +116,10 @@ router.post('/apply', verifyUser, async (req: Request, res: Response) => {
             if (fileLines.length > idx) {
                 fileLines[idx] = fixedLine;
                 fs.writeFileSync(absoluteFilePath, fileLines.join('\n'), 'utf8');
-                console.log(`[Remediate Apply] Successfully patched file: ${absoluteFilePath}`);
+                logger.info(`[Remediate Apply] Successfully patched file: ${absoluteFilePath}`);
             }
         } else {
-            console.warn(`[Remediate Apply] File not found at path: ${absoluteFilePath}`);
+            logger.warn(`[Remediate Apply] File not found at path: ${absoluteFilePath}`);
         }
 
         // 4. Update status in Appwrite
@@ -141,7 +142,7 @@ router.post('/apply', verifyUser, async (req: Request, res: Response) => {
         });
 
     } catch (err: any) {
-        console.error('[Remediate Apply Error]', err.message);
+        logger.error('[Remediate Apply Error]', err.message);
         res.status(500).json({ error: 'Failed to apply patch', details: err.message });
     }
 });
@@ -170,7 +171,7 @@ router.post('/revert', verifyUser, async (req: Request, res: Response) => {
                     localPath = repo.local_path;
                 }
             } catch (err) {
-                console.warn('[Remediate Revert] Could not fetch repository context, using workspace fallback:', err);
+                logger.warn('[Remediate Revert] Could not fetch repository context, using workspace fallback:', err);
             }
         }
 
@@ -211,7 +212,7 @@ router.post('/revert', verifyUser, async (req: Request, res: Response) => {
         });
 
     } catch (err: any) {
-        console.error('[Remediate Revert Error]', err.message);
+        logger.error('[Remediate Revert Error]', err.message);
         res.status(500).json({ error: 'Failed to revert patch', details: err.message });
     }
 });

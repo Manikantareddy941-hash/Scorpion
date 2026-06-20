@@ -4,6 +4,7 @@ import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
 import { resolveOwnershipScope, canAccessResource, TenantAccessError } from '../services/tenancyService';
 import { linkCommitToScan } from '../services/gitTraceabilityService';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -59,7 +60,7 @@ router.post('/scan', async (req: AuthenticatedRequest, res: Response, next: Next
         const scanId = scan.$id;
 
         enqueueScan(repo.$id, { branch }, scanId).catch(err => {
-            console.error(`[CiRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
+            logger.error(`[CiRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
         });
 
         if (commit_hash) {

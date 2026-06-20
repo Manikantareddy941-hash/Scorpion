@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { runZapScan } from '../workers/zapWorker';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ router.post('/dast', verifyUser, async (req: Request, res: Response) => {
         const scanId = ID.unique();
         const userId = (req as any).user?.$id || 'system';
 
-        console.log(`[DAST API] Initializing ZAP scan for ${target_url} (Mode: ${scanMode})...`);
+        logger.info(`[DAST API] Initializing ZAP scan for ${target_url} (Mode: ${scanMode})...`);
         
         // Create initial scan document
         await databases.createDocument(
@@ -41,13 +42,13 @@ router.post('/dast', verifyUser, async (req: Request, res: Response) => {
             scanId,
             userId
         }).catch(err => {
-            console.error('[DAST API Worker Error]', err);
+            logger.error('[DAST API Worker Error]', err);
         });
 
         res.json({ scanId, status: 'started' });
 
     } catch (err: any) {
-        console.error('[DAST API Error]', err.message);
+        logger.error('[DAST API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -68,7 +69,7 @@ router.get('/dast/:scanId/status', verifyUser, async (req: Request, res: Respons
         });
     } catch (err: any) {
         if (err.code === 404) return res.status(404).json({ error: 'Scan not found' });
-        console.error('[DAST API Status Error]', err.message);
+        logger.error('[DAST API Status Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

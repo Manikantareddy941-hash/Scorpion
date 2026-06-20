@@ -2,6 +2,7 @@ import { zapService } from '../services/zapService';
 import { ingestVulnerabilitiesDelta } from '../services/scanService';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { logger } from '../services/logger';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -26,7 +27,7 @@ export const runZapScan = async (payload: ZapWorkerPayload) => {
     const { targetUrl, scanMode, scanId, userId } = payload;
     
     try {
-        console.log(`[ZAP Worker] Starting ${scanMode} scan for ${targetUrl} (Scan ID: ${scanId})`);
+        logger.info(`[ZAP Worker] Starting ${scanMode} scan for ${targetUrl} (Scan ID: ${scanId})`);
         
         await logSecureAuditEvent(
             userId || 'system',
@@ -45,35 +46,35 @@ export const runZapScan = async (payload: ZapWorkerPayload) => {
         }
 
         // Spidering is prerequisite for active scanning as well, to discover URLs
-        console.log(`[ZAP Worker] Initiating Spider for ${targetUrl}`);
+        logger.info(`[ZAP Worker] Initiating Spider for ${targetUrl}`);
         const spiderId = await zapService.startSpider(targetUrl);
         
         let spiderStatus = 0;
         while (spiderStatus < 100) {
             await delay(5000);
             spiderStatus = await zapService.getSpiderStatus(spiderId);
-            console.log(`[ZAP Worker] Spider progress: ${spiderStatus}%`);
+            logger.info(`[ZAP Worker] Spider progress: ${spiderStatus}%`);
         }
 
         if (scanMode === 'active') {
-            console.log(`[ZAP Worker] Initiating Active Scan for ${targetUrl}`);
+            logger.info(`[ZAP Worker] Initiating Active Scan for ${targetUrl}`);
             const ascanId = await zapService.startActiveScan(targetUrl);
             
             let ascanStatus = 0;
             while (ascanStatus < 100) {
                 await delay(5000);
                 ascanStatus = await zapService.getActiveScanStatus(ascanId);
-                console.log(`[ZAP Worker] Active Scan progress: ${ascanStatus}%`);
+                logger.info(`[ZAP Worker] Active Scan progress: ${ascanStatus}%`);
             }
         }
 
         // Wait a brief moment for passive scanners to finish analyzing spider traffic
         await delay(5000);
 
-        console.log(`[ZAP Worker] Fetching alerts for ${targetUrl}`);
+        logger.info(`[ZAP Worker] Fetching alerts for ${targetUrl}`);
         const alerts = await zapService.getAlerts(targetUrl);
 
-        console.log(`[ZAP Worker] Found ${alerts.length} alerts.`);
+        logger.info(`[ZAP Worker] Found ${alerts.length} alerts.`);
         
         // Normalize findings
         const findings = alerts.map((alert: any) => ({
@@ -112,10 +113,10 @@ export const runZapScan = async (payload: ZapWorkerPayload) => {
             `DAST ${scanMode} scan completed for ${targetUrl}. Found ${findings.length} issues.`
         );
 
-        console.log(`[ZAP Worker] Scan ${scanId} completed successfully.`);
+        logger.info(`[ZAP Worker] Scan ${scanId} completed successfully.`);
 
     } catch (error: any) {
-        console.error(`[ZAP Worker] Scan failed: ${error.message}`);
+        logger.error(`[ZAP Worker] Scan failed: ${error.message}`);
         
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
             status: 'failed',

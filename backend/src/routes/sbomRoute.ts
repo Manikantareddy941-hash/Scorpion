@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
 import crypto from 'crypto';
+import { logger } from '../services/logger';
 
 function getHighestSeverity(severities: string[]): string {
     const order = ['critical', 'high', 'medium', 'low', 'unknown'];
@@ -23,7 +24,7 @@ router.get('/:repoId', async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'You do not have access to this repository' });
         }
 
-        console.log(`[SBOM] Generating SBOM from database for repo: ${repoId}`);
+        logger.info(`[SBOM] Generating SBOM from database for repo: ${repoId}`);
 
         // 1. Get the latest completed scan for this repo to get the scanId
         const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
@@ -154,7 +155,7 @@ router.get('/:repoId', async (req: Request, res: Response) => {
         }
 
     } catch (err: any) {
-        console.error('[SBOM Route] Error:', err);
+        logger.error('[SBOM Route] Error:', err);
         res.status(500).json({ error: err.message || 'Failed to generate SBOM' });
     }
 });

@@ -1,6 +1,7 @@
 import { sendScanCompletionEmail, sendCriticalAlertEmail } from './emailService';
 import { sendSlackWebhook, sendDiscordWebhook } from './webhookService';
 import { databases, DB_ID, COLLECTIONS, ID, users } from '../lib/appwrite';
+import { logger } from './logger';
 
 export const enqueueNotification = async (payload: {
     user_id: string;
@@ -23,7 +24,7 @@ export const enqueueNotification = async (payload: {
         // Process immediately in background
         processNotification(notification.$id);
     } catch (err) {
-        console.error('[NotificationQueue] Failed to enqueue:', err);
+        logger.error('[NotificationQueue] Failed to enqueue:', err);
     }
 };
 
@@ -81,6 +82,6 @@ export const processNotification = async (id: string) => {
             }
         }
     } catch (err) {
-        console.error(`[NotificationQueue] Error processing notification ${id}:`, err);
+        logger.error(`[NotificationQueue] Error processing notification ${id}:`, err);
     }
 };

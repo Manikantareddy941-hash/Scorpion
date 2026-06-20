@@ -1,4 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
+import { logger } from './logger';
 
 export interface AIEvent {
     finding_id: string;
@@ -34,7 +35,7 @@ export const recordAIEvent = async (event: AIEvent) => {
             created_at: new Date().toISOString()
         });
     } catch (err) {
-        console.error('[MetricsService] Failed to record AI event:', err);
+        logger.error('[MetricsService] Failed to record AI event:', err);
         throw err;
     }
 };
@@ -69,7 +70,7 @@ export const getAIAggregates = async (userId: string) => {
             avg_confidence_accepted: avgConfidenceAccepted
         };
     } catch (err) {
-        console.error('[MetricsService] Failed to get aggregates:', err);
+        logger.error('[MetricsService] Failed to get aggregates:', err);
         return {
             total_events: 0,
             viewed: 0,
@@ -104,7 +105,7 @@ export const getAITrends = async () => {
 
         return Object.values(trendsMap).sort((a, b) => a.date.localeCompare(b.date));
     } catch (err) {
-        console.error('[MetricsService] Failed to get trends:', err);
+        logger.error('[MetricsService] Failed to get trends:', err);
         return [];
     }
 };

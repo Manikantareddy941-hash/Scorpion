@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
         );
         res.json(response.documents);
     } catch (err: any) {
-        console.error('[Policy API Error]', err.message);
+        logger.error('[Policy API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -39,7 +40,7 @@ router.post('/', verifyUser, async (req: Request, res: Response) => {
         );
         res.json(policy);
     } catch (err: any) {
-        console.error('[Policy Create Error]', err.message);
+        logger.error('[Policy Create Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -66,7 +67,7 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
         );
         res.json(policy);
     } catch (err: any) {
-        console.error('[Policy Update Error]', err.message);
+        logger.error('[Policy Update Error]', err.message);
         if (err.code === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -86,7 +87,7 @@ router.delete('/:id', verifyUser, async (req: Request, res: Response) => {
         await databases.deleteDocument(DB_ID, 'policies', id);
         res.json({ message: 'Policy deleted' });
     } catch (err: any) {
-        console.error('[Policy Delete Error]', err.message);
+        logger.error('[Policy Delete Error]', err.message);
         if (err.code === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }

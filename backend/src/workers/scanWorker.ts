@@ -1,4 +1,5 @@
 import { resolveToolCommand } from '../utils/toolCheck';
+import { logger } from '../services/logger';
 
 // Tracks whether the startup tool-availability check has run; surfaced via
 // healthRoutes.ts's /health endpoint.
@@ -11,7 +12,7 @@ export let isWorkerRunning = false;
  */
 export async function initScanWorker() {
     isWorkerRunning = true;
-    console.log('🛡️  [Scan Worker] Checking scan engine availability...');
+    logger.info('🛡️  [Scan Worker] Checking scan engine availability...');
 
     try {
         const tools = ['semgrep', 'checkov', 'gitleaks', 'trivy', 'bandit'];
@@ -20,12 +21,12 @@ export async function initScanWorker() {
             const tool = await resolveToolCommand(toolName);
             const displayName = toolName.charAt(0).toUpperCase() + toolName.slice(1);
             if (tool.status === 'missing') {
-                console.warn(`❌ [Scan Worker] ${displayName} NOT found`);
+                logger.warn(`❌ [Scan Worker] ${displayName} NOT found`);
             } else {
-                console.log(`✅ [Scan Worker] ${displayName} detected and active`);
+                logger.info(`✅ [Scan Worker] ${displayName} detected and active`);
             }
         }
     } catch (err) {
-        console.warn('⚠️  [Scan Worker] WARN: tool check failed');
+        logger.warn('⚠️  [Scan Worker] WARN: tool check failed');
     }
 }

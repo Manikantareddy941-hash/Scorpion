@@ -3,6 +3,7 @@ import { databases, DB_ID, Query, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { canAccessResource } from '../services/tenancyService';
 import { Octokit } from 'octokit';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
     // Check cache
     const cached = dashboardCache.get(userId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        console.log(`[Dashboard] Serving cached data for ${userId}`);
+        logger.info(`[Dashboard] Serving cached data for ${userId}`);
         return res.json(cached.data);
     }
 
@@ -214,7 +215,7 @@ router.get('/security', verifyUser, async (req: Request, res: Response) => {
         res.json(stats);
 
     } catch (err: any) {
-        console.error('[Dashboard API Error]', err.message);
+        logger.error('[Dashboard API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -271,7 +272,7 @@ router.get('/posture-breakdown', verifyUser, async (req: Request, res: Response)
             recommendations: recommendations.slice(0, 3)
         });
     } catch (err: any) {
-        console.error('[Posture API Error]', err.message);
+        logger.error('[Posture API Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -312,7 +313,7 @@ router.post('/tasks/:id/ai-blueprint', verifyUser, async (req: Request, res: Res
         
         res.json({ blueprint: text || 'Failed to generate blueprint' });
     } catch (err: any) {
-        console.error('[Dashboard] AI Blueprint error:', err);
+        logger.error('[Dashboard] AI Blueprint error:', err);
         res.status(500).json({ error: 'Failed to generate AI blueprint' });
     }
 });
@@ -357,7 +358,7 @@ router.post('/tasks/:id/github-sync', verifyUser, async (req: Request, res: Resp
 
         res.json({ success: true, url: issue.data.html_url });
     } catch (err: any) {
-        console.error('[Dashboard] GitHub Sync error:', err);
+        logger.error('[Dashboard] GitHub Sync error:', err);
         try {
             const taskId = req.params.id;
             await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, taskId, {

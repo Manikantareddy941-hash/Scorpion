@@ -1,3 +1,4 @@
+import { logger } from '../logger';
 export interface Finding {
     tool: string;
     severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -24,7 +25,7 @@ export const parseSemgrep = (stdout: string): Finding[] => {
             fixVersion: undefined
         }));
     } catch (e) {
-        console.error('[Parser] Semgrep error:', e);
+        logger.error('[Parser] Semgrep error:', e);
         return [];
     }
 };
@@ -54,7 +55,7 @@ export const parseGitleaks = (stdout: string): Finding[] => {
             fixVersion: undefined
         }));
     } catch (e) {
-        console.error('[Parser] Gitleaks error:', e);
+        logger.error('[Parser] Gitleaks error:', e);
         return [];
     }
 };
@@ -105,7 +106,7 @@ export const parseTrivy = (stdout: string): Finding[] => {
 
         return findings;
     } catch (e) {
-        console.error('[Parser] Trivy error:', e);
+        logger.error('[Parser] Trivy error:', e);
         return [];
     }
 };
@@ -132,7 +133,7 @@ export const parseCheckov = (stdout: string): Finding[] => {
 
         return findings;
     } catch (e) {
-        console.error('[Parser] Checkov error:', e);
+        logger.error('[Parser] Checkov error:', e);
         return [];
     }
 };
@@ -159,7 +160,7 @@ export const parseBandit = (stdout: string): Finding[] => {
             line_number: r.line_number,
         }));
     } catch (e) {
-        console.error('[Parser] Bandit error:', e);
+        logger.error('[Parser] Bandit error:', e);
         return [];
     }
 };

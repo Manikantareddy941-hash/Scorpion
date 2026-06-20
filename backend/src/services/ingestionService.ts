@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import unzipper from 'unzipper';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
+import { logger } from './logger';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_EXTENSIONS = ['.ts', '.js', '.py', '.go', '.java', '.cpp', '.h', '.md', '.json', '.yml', '.yaml'];
@@ -21,7 +22,7 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
         for (const entry of directory.files) {
             const targetPath = path.resolve(extractionPath, entry.path);
             if (!targetPath.startsWith(resolvedExtractionPath)) {
-                console.warn(`[IngestionService] Skipping zip entry with path traversal: ${entry.path}`);
+                logger.warn(`[IngestionService] Skipping zip entry with path traversal: ${entry.path}`);
                 continue;
             }
             if (entry.type === 'Directory') {
@@ -77,7 +78,7 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
         };
 
     } catch (err) {
-        console.error('[IngestionService] Error:', err);
+        logger.error('[IngestionService] Error:', err);
         throw err;
     }
 };
@@ -86,9 +87,9 @@ export const cleanupWorkspace = (dirPath: string) => {
     try {
         if (fs.existsSync(dirPath)) {
             fs.rmSync(dirPath, { recursive: true, force: true });
-            console.log(`[IngestionService] Cleaned up: ${dirPath}`);
+            logger.info(`[IngestionService] Cleaned up: ${dirPath}`);
         }
     } catch (err) {
-        console.error('[IngestionService] Cleanup error:', err);
+        logger.error('[IngestionService] Cleanup error:', err);
     }
 };

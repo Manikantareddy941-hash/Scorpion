@@ -3,6 +3,7 @@ import { runScanPipeline } from '../scanners/pipeline';
 import { parseSemgrep, parseGitleaks, parseTrivy, Finding as BaseFinding } from '../services/scan/parsers';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { deduplicateFindings } from '../deduplication';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -138,7 +139,7 @@ router.post('/scan', async (req: Request, res: Response) => {
 // Duplicate processing block removed – deduplication already performed above
 
   } catch (error: any) {
-    console.error('[IDE Route] Scan failed:', error);
+    logger.error('[IDE Route] Scan failed:', error);
     res.status(500).json({ error: error.message });
   }
 });

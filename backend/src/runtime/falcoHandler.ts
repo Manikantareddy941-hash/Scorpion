@@ -6,6 +6,7 @@ import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
 import { auditLog } from '../services/auditService';
 import { sendSlackNotification } from '../services/slackService';
+import { logger } from '../services/logger';
 
 export interface FalcoEvent {
   rule: string;
@@ -23,7 +24,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
   const containerId = event.output_fields?.['container.id'] || 'unknown';
   const containerImage = event.output_fields?.['container.image.repository'] || 'unknown';
   
-  console.log(`[Falco Handler] Processing incident: ${event.rule} on ${containerImage}`);
+  logger.info(`[Falco Handler] Processing incident: ${event.rule} on ${containerImage}`);
 
   try {
     // 1. Correlate with existing scan data
@@ -42,7 +43,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
           ]);
           
           if (latestScans.documents.length > 0) {
-            console.log(`[Falco Handler] Correlated with scan: ${latestScans.documents[0].$id}`);
+            logger.info(`[Falco Handler] Correlated with scan: ${latestScans.documents[0].$id}`);
             // Extract user_id from scan or repository to route the alert later
             const scanDoc = latestScans.documents[0];
             if (scanDoc.user_id) {
@@ -118,13 +119,13 @@ export async function handleFalcoEvent(event: FalcoEvent) {
                      rule: event.rule,
                      incidentId: incidentDoc.$id
                  });
-                 console.log('[Falco Handler] Dynamic Slack notification dispatched successfully.');
+                 logger.info('[Falco Handler] Dynamic Slack notification dispatched successfully.');
              }
          }
       }
     }
 
   } catch (error) {
-    console.error('[Falco Handler] Failed to process runtime event:', error);
+    logger.error('[Falco Handler] Failed to process runtime event:', error);
   }
 }

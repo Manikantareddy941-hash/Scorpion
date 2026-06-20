@@ -1,4 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { logger } from './logger';
 
 export interface SecurityEvent {
   type: 'threat' | 'gate_blocked';
@@ -14,7 +15,7 @@ export async function sendSecurityAlert(event: SecurityEvent) {
   const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
   const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
 
-  console.log(`[Notification Router] Event Dispatched: ${event.title} (Severity: ${event.severity})`);
+  logger.info(`[Notification Router] Event Dispatched: ${event.title} (Severity: ${event.severity})`);
 
   // Fetch Repository Name if not provided
   let repoName = event.repo_name || event.repo_id;
@@ -26,7 +27,7 @@ export async function sendSecurityAlert(event: SecurityEvent) {
       }
     }
   } catch (err: any) {
-    console.warn(`[Notification Router] Failed to resolve repo name for ${event.repo_id}:`, err.message);
+    logger.warn(`[Notification Router] Failed to resolve repo name for ${event.repo_id}:`, err.message);
   }
 
   // 1. Structure Slack Block Kit Payload
@@ -109,14 +110,14 @@ export async function sendSecurityAlert(event: SecurityEvent) {
     })
       .then(res => {
         clearTimeout(timeout);
-        console.log(`[Notification Router] Slack dispatch result status: ${res.status}`);
+        logger.info(`[Notification Router] Slack dispatch result status: ${res.status}`);
       })
       .catch(err => {
         clearTimeout(timeout);
-        console.error('[Notification Router] Slack dispatch aborted or failed:', err.message);
+        logger.error('[Notification Router] Slack dispatch aborted or failed:', err.message);
       });
   } else {
-    console.log('[Notification Router] SLACK_WEBHOOK_URL not configured. Skipping Slack dispatch.');
+    logger.info('[Notification Router] SLACK_WEBHOOK_URL not configured. Skipping Slack dispatch.');
   }
 
   // 4. Dispatch to Discord Webhook (Fail-safe, async with AbortController)
@@ -131,34 +132,34 @@ export async function sendSecurityAlert(event: SecurityEvent) {
     })
       .then(res => {
         clearTimeout(timeout);
-        console.log(`[Notification Router] Discord dispatch result status: ${res.status}`);
+        logger.info(`[Notification Router] Discord dispatch result status: ${res.status}`);
       })
       .catch(err => {
         clearTimeout(timeout);
-        console.error('[Notification Router] Discord dispatch aborted or failed:', err.message);
+        logger.error('[Notification Router] Discord dispatch aborted or failed:', err.message);
       });
   } else {
-    console.log('[Notification Router] DISCORD_WEBHOOK_URL not configured. Skipping Discord dispatch.');
+    logger.info('[Notification Router] DISCORD_WEBHOOK_URL not configured. Skipping Discord dispatch.');
   }
 }
 
 // Support for other backend modules' notification requirements
 export async function checkOverdueTasks() {
-  console.log('[Notification Router] Running hourly check for overdue tasks...');
+  logger.info('[Notification Router] Running hourly check for overdue tasks...');
   try {
     const response = await databases.listDocuments(DB_ID, COLLECTIONS.TASKS, [
       Query.equal('status', 'todo'),
       Query.limit(50)
     ]);
     const overdue = response.documents.filter(doc => doc.due_date && new Date(doc.due_date) < new Date());
-    console.log(`[Notification Router] Found ${overdue.length} overdue tasks.`);
+    logger.info(`[Notification Router] Found ${overdue.length} overdue tasks.`);
   } catch (err: any) {
-    console.error('[Notification Router] Failed to check overdue tasks:', err.message);
+    logger.error('[Notification Router] Failed to check overdue tasks:', err.message);
   }
 }
 
 export async function notifyPolicyFailure(repoId: string, scanId: string, result: string, reason: string) {
-  console.log(`[Notification Router] Policy evaluation failed for repo: ${repoId}`);
+  logger.info(`[Notification Router] Policy evaluation failed for repo: ${repoId}`);
   await sendSecurityAlert({
     type: 'gate_blocked',
     title: 'Policy Evaluation Failure',
@@ -169,5 +170,5 @@ export async function notifyPolicyFailure(repoId: string, scanId: string, result
 }
 
 export async function notifyScanCompletion(scanId: string, repoId?: string, status?: string) {
-  console.log(`[Notification Router] Scan completion event triggered for scan: ${scanId}, repo: ${repoId || 'N/A'}, status: ${status || 'N/A'}`);
+  logger.info(`[Notification Router] Scan completion event triggered for scan: ${scanId}, repo: ${repoId || 'N/A'}, status: ${status || 'N/A'}`);
 }

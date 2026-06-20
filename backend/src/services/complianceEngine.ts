@@ -78,7 +78,7 @@ export async function evaluateCompliance(userId: string) {
     
     return results;
   } catch (error) {
-    console.error('[Compliance Engine] Evaluation failed:', error);
+    logger.error('[Compliance Engine] Evaluation failed:', error);
     throw error;
   }
 }

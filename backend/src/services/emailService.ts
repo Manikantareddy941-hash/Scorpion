@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logger } from './logger';
 
 // Resend's constructor throws synchronously if the key is missing, which would
 // crash the whole process at import time. Initialize lazily so a missing key
@@ -7,7 +8,7 @@ let resend: Resend;
 const getResendClient = (): Resend => {
   if (!resend) {
     if (!process.env.RESEND_API_KEY) {
-      console.error('[Email] RESEND_API_KEY is not set - email sending is disabled');
+      logger.error('[Email] RESEND_API_KEY is not set - email sending is disabled');
     }
     resend = new Resend(process.env.RESEND_API_KEY || 're_disabled');
   }
@@ -42,14 +43,14 @@ export const sendOtpEmail = async (email: string, otp: string) => {
       throw error;
     }
 
-    console.log(`[Email] OTP sent to ${email} via Resend. ID: ${data?.id}`);
+    logger.info(`[Email] OTP sent to ${email} via Resend. ID: ${data?.id}`);
     return { success: true, data };
   } catch (error) {
-    console.error(`[Email] Error sending OTP to ${email} via Resend:`, error);
+    logger.error(`[Email] Error sending OTP to ${email} via Resend:`, error);
 
     // In development mode, we still log the OTP so testing isn't blocked by API errors (e.g. invalid key)
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[Email-DEV] OTP for ${email} is: ${otp}`);
+      logger.info(`[Email-DEV] OTP for ${email} is: ${otp}`);
     }
 
     return { success: false, error };
@@ -81,9 +82,9 @@ export const sendCriticalAlertEmail = async (email: string, repoName: string, vu
         </div>
       `,
     });
-    console.log(`[Email] Critical alert sent to ${email} for repo ${repoName}`);
+    logger.info(`[Email] Critical alert sent to ${email} for repo ${repoName}`);
   } catch (err) {
-    console.error(`[Email] Failed to send critical alert:`, err);
+    logger.error(`[Email] Failed to send critical alert:`, err);
   }
 };
 
@@ -108,7 +109,7 @@ export const sendScanCompletionEmail = async (email: string, repoName: string, s
       `,
     });
   } catch (err) {
-    console.error(`[Email] Failed to send completion email:`, err);
+    logger.error(`[Email] Failed to send completion email:`, err);
   }
 };
 
@@ -134,9 +135,9 @@ export const sendAiReportEmail = async (email: string, reportHtml: string, range
         </div>
       `,
     });
-    console.log(`[Email] AI Report sent to ${email}`);
+    logger.info(`[Email] AI Report sent to ${email}`);
   } catch (err) {
-    console.error(`[Email] Failed to send AI Report:`, err);
+    logger.error(`[Email] Failed to send AI Report:`, err);
     throw err;
   }
 };

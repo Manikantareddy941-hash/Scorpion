@@ -11,6 +11,7 @@ import { randomBytes } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { validateBody } from '../middleware/validate';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -105,7 +106,7 @@ router.get('/external', async (req: AuthenticatedRequest, res: Response, next: N
         const repos = await p.listRepos(token);
         res.json({ repos });
     } catch (error: any) {
-        console.error(`[RepoRoutes] Failed to list ${provider} repos:`, error.message);
+        logger.error(`[RepoRoutes] Failed to list ${provider} repos:`, error.message);
         res.status(500).json({ error: `Failed to list ${provider} repositories` });
     }
 });
@@ -133,11 +134,11 @@ router.post('/external/scan', validateBody(externalScanSchema), async (req: Auth
                 await fs.mkdir(path.dirname(workDir), { recursive: true });
                 await cloneRepo({ cloneUrl: authenticatedUrl, branch, destination: workDir });
                 
-                console.log(`[RepoRoutes] Starting scan for ${repoFullName} at ${workDir}`);
+                logger.info(`[RepoRoutes] Starting scan for ${repoFullName} at ${workDir}`);
                 await runScanPipeline({ localPath: workDir,  });
                 
             } catch (err: any) {
-                console.error(`[RepoRoutes] External scan failed for ${repoFullName}:`, err.message);
+                logger.error(`[RepoRoutes] External scan failed for ${repoFullName}:`, err.message);
             } finally {
                 await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
             }
@@ -195,7 +196,7 @@ router.post('/:id/scan', validateBody(triggerScanSchema), async (req: Authentica
 
         // 🔥 Fire and forget — do NOT await
         enqueueScan(repoId, { scanType, scanDepth, branch }, scanId).catch(err => {
-            console.error(`[RepoRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
+            logger.error(`[RepoRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
         });
 
         // Respond immediately with scanId

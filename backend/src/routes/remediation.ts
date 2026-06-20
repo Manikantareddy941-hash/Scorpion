@@ -4,6 +4,7 @@ import simpleGit from 'simple-git';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -95,7 +96,7 @@ router.post('/create-pr', async (req: Request, res: Response) => {
     });
 
   } catch (err: any) {
-    console.error('[SCORPION] PR creation failed:', err.message);
+    logger.error('[SCORPION] PR creation failed:', err.message);
     return res.status(500).json({ error: err.message });
   } finally {
     // Always clean up the temp clone

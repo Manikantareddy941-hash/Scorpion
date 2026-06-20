@@ -9,6 +9,7 @@ import {
   updateThreats
 } from '../services/threatModelService';
 import { generateStrideThreats } from '../services/threatAiService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     res.status(201).json(model);
   } catch (err: any) {
-    console.error('[Threat Model Routes] Failed to create threat model:', err);
+    logger.error('[Threat Model Routes] Failed to create threat model:', err);
     res.status(500).json({ error: 'Failed to create threat model', details: err.message });
   }
 });
@@ -53,7 +54,7 @@ router.get('/', async (req: Request, res: Response) => {
     const models = await listThreatModels(userId);
     res.json(models);
   } catch (err: any) {
-    console.error('[Threat Model Routes] Failed to list threat models:', err);
+    logger.error('[Threat Model Routes] Failed to list threat models:', err);
     res.status(500).json({ error: 'Failed to list threat models', details: err.message });
   }
 });
@@ -74,7 +75,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     res.json(model);
   } catch (err: any) {
-    console.error('[Threat Model Routes] Failed to get threat model:', err);
+    logger.error('[Threat Model Routes] Failed to get threat model:', err);
     res.status(500).json({ error: 'Failed to get threat model', details: err.message });
   }
 });
@@ -103,7 +104,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     const model = await updateThreatModel(id, updates, userId, userEmail);
     res.json(model);
   } catch (err: any) {
-    console.error('[Threat Model Routes] Failed to update threat model:', err);
+    logger.error('[Threat Model Routes] Failed to update threat model:', err);
     res.status(500).json({ error: 'Failed to update threat model', details: err.message });
   }
 });
@@ -124,7 +125,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await deleteThreatModel(id, userId, userEmail);
     res.json({ success: true, message: 'Threat model deleted successfully' });
   } catch (err: any) {
-    console.error('[Threat Model Routes] Failed to delete threat model:', err);
+    logger.error('[Threat Model Routes] Failed to delete threat model:', err);
     res.status(500).json({ error: 'Failed to delete threat model', details: err.message });
   }
 });
@@ -153,7 +154,7 @@ router.post('/:id/analyze', async (req: Request, res: Response) => {
 
     res.json(updatedModel);
   } catch (err: any) {
-    console.error('[Threat Model Routes] Failed to analyze threat model:', err);
+    logger.error('[Threat Model Routes] Failed to analyze threat model:', err);
     res.status(500).json({ error: 'Failed to analyze threat model', details: err.message });
   }
 });

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
 import { triggerPipelineRun } from '../services/pipelineService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ const validateGitHubSignature = (req: Request): { isValid: boolean; error?: stri
 router.post('/github', async (req: Request, res: Response) => {
     const { isValid, error } = validateGitHubSignature(req);
     if (!isValid) {
-        if (error === 'GITHUB_WEBHOOK_SECRET not configured') console.error(`[Webhook] ${error}`);
+        if (error === 'GITHUB_WEBHOOK_SECRET not configured') logger.error(`[Webhook] ${error}`);
         return res.status(error === 'Missing signature' || error === 'Invalid signature' ? 401 : 500).json({ error });
     }
 
@@ -68,19 +69,19 @@ router.post('/github', async (req: Request, res: Response) => {
                         timestamp: workflowRun.updated_at || workflowRun.created_at || new Date().toISOString()
                     });
                 } catch (err) {
-                    console.error('[Webhook] Failed to log build:', err);
+                    logger.error('[Webhook] Failed to log build:', err);
                 }
 
                 if (status === 'success') {
                     enqueueScan(repo.$id, {}).catch(err => {
-                        console.error(`[Webhook] Failed to enqueue scan for ${repo.$id}:`, err);
+                        logger.error(`[Webhook] Failed to enqueue scan for ${repo.$id}:`, err);
                     });
                 }
             }
 
             return res.json({ message: `Logged workflow_run and handled triggers for ${repos.total} repository(ies)` });
         } catch (err) {
-            console.error('[Webhook] Error processing workflow_run:', err);
+            logger.error('[Webhook] Error processing workflow_run:', err);
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -145,7 +146,7 @@ router.post('/github', async (req: Request, res: Response) => {
                             is_sensitive: isSensitive
                         });
                     } catch (err) {
-                        console.error('[Webhook] Failed to log commit:', err);
+                        logger.error('[Webhook] Failed to log commit:', err);
                     }
                 }
             }
@@ -168,7 +169,7 @@ router.post('/github', async (req: Request, res: Response) => {
             runs: triggeredRuns 
         });
     } catch (err: any) {
-        console.error('[Webhook] Error processing webhook:', err);
+        logger.error('[Webhook] Error processing webhook:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -236,7 +237,7 @@ router.post('/gitlab', async (req: Request, res: Response) => {
             runs: triggeredRuns 
         });
     } catch (err: any) {
-        console.error('[GitLab Webhook Error]', err.message);
+        logger.error('[GitLab Webhook Error]', err.message);
         res.status(500).json({ error: 'Internal server error', details: err.message });
     }
 });
@@ -266,7 +267,7 @@ router.post('/github/app-install', async (req: Request, res: Response) => {
         const targetUser = allUsers.users.find((u: any) => u.prefs?.github_user_id === githubUserId);
 
         if (!targetUser) {
-            console.warn(`[Webhook] No SCORPION user found for GitHub ID: ${githubUserId}`);
+            logger.warn(`[Webhook] No SCORPION user found for GitHub ID: ${githubUserId}`);
             return res.status(404).json({ error: 'User correlation failed' });
         }
 
@@ -303,7 +304,7 @@ router.post('/github/app-install', async (req: Request, res: Response) => {
 
         res.json({ message: 'Installation processed and repositories synchronized' });
     } catch (err: any) {
-        console.error('[Webhook] App installation error:', err);
+        logger.error('[Webhook] App installation error:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -345,15 +346,15 @@ router.post('/tests/report', async (req: Request, res: Response) => {
             });
 
             if (!hasFailed) {
-               enqueueScan(repo.$id, {}).catch(e => console.error(e));
+               enqueueScan(repo.$id, {}).catch(e => logger.error(e));
             } else {
-               console.warn(`[Test Webhook] Skipping scan for ${repo.$id} due to failed tests`);
+               logger.warn(`[Test Webhook] Skipping scan for ${repo.$id} due to failed tests`);
             }
         }
 
         res.json({ message: 'Test report recorded' });
     } catch (err) {
-        console.error('[Webhook] Error processing test report:', err);
+        logger.error('[Webhook] Error processing test report:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

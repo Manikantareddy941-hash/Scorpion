@@ -3,6 +3,7 @@ import { databases, DB_ID, Query, COLLECTIONS, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueScan } from '../queues/scanQueue';
 import { canAccessResource } from '../services/tenancyService';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -50,12 +51,12 @@ router.post('/trigger', verifyUser, async (req: Request, res: Response) => {
 
         // Trigger scan in background via the scan queue
         enqueueScan(repo_id, {}, scanId).catch(err => {
-            console.error(`[ScanRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
+            logger.error(`[ScanRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
         });
 
         res.json({ scanId, message: 'Scan triggered successfully', status: 'pending' });
     } catch (err: any) {
-        console.error('[Scan Trigger Error]', err.message);
+        logger.error('[Scan Trigger Error]', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

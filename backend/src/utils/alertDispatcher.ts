@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { Databases, Query, Models } from 'node-appwrite';
 import client, { DB_ID } from '../lib/appwrite';
+import { logger } from '../services/logger';
 
 const databases = new Databases(client);
 
@@ -53,7 +54,7 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
         const minLevel = SEVERITY_LEVELS[minSeverity.toLowerCase()] || 0;
 
         if (currentLevel < minLevel) {
-            console.log(`[Alert] Skipping alert for ${finding.title} (Severity: ${finding.severity} < ${minSeverity})`);
+            logger.info(`[Alert] Skipping alert for ${finding.title} (Severity: ${finding.severity} < ${minSeverity})`);
             return;
         }
 
@@ -74,9 +75,9 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                         timestamp: new Date().toISOString()
                     }]
                 });
-                console.log(`[Alert] Discord notification sent for ${finding.title}`);
+                logger.info(`[Alert] Discord notification sent for ${finding.title}`);
             } catch (err: any) {
-                console.error(`[Alert Error] Discord:`, err.message);
+                logger.error(`[Alert Error] Discord:`, err.message);
             }
         }
 
@@ -92,9 +93,9 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                         }
                     }]
                 });
-                console.log(`[Alert] Slack notification sent for ${finding.title}`);
+                logger.info(`[Alert] Slack notification sent for ${finding.title}`);
             } catch (err: any) {
-                console.error(`[Alert Error] Slack:`, err.message);
+                logger.error(`[Alert Error] Slack:`, err.message);
             }
         }
 
@@ -122,9 +123,9 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                         }
                     }
                 });
-                console.log(`[Alert] PagerDuty event triggered for ${finding.title}`);
+                logger.info(`[Alert] PagerDuty event triggered for ${finding.title}`);
             } catch (err: any) {
-                console.error(`[Alert Error] PagerDuty:`, err.message);
+                logger.error(`[Alert Error] PagerDuty:`, err.message);
             }
         }
 
@@ -147,13 +148,13 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                         'Authorization': `GenieKey ${integration.opsgenie_key}`
                     }
                 });
-                console.log(`[Alert] OpsGenie alert created for ${finding.title}`);
+                logger.info(`[Alert] OpsGenie alert created for ${finding.title}`);
             } catch (err: any) {
-                console.error(`[Alert Error] OpsGenie:`, err.message);
+                logger.error(`[Alert Error] OpsGenie:`, err.message);
             }
         }
 
     } catch (err: any) {
-        console.error(`[Alert Dispatcher Error]`, err.message);
+        logger.error(`[Alert Dispatcher Error]`, err.message);
     }
 }

@@ -25,6 +25,7 @@ import {
   testConnection
 } from '../services/jiraService';
 import { TicketFilters, TicketLinkType } from '../../../shared/types';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -281,7 +282,7 @@ router.patch('/:id', validateBody(updateTicketSchema), asyncHandler(async (req: 
     }
     res.json(updated);
   } catch (err: any) {
-    console.error('Error in PATCH ticket:', err);
+    logger.error('Error in PATCH ticket:', err);
     res.status(500).json({ error: err.message || 'Failed to update ticket' });
   }
 }));

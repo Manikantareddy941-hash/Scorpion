@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { evaluateIAM, DEFAULT_IAM_POLICY, ADMIN_IAM_POLICY, IAMStatement } from '../services/policyService';
+import { logger } from '../services/logger';
 
 export interface IAMRequest extends Request {
     user?: {
@@ -60,7 +61,7 @@ export const checkPermission = (action: string) => {
                         });
                     }
                 } catch (err: any) {
-                    console.warn(`[IAM Middleware] Failed to retrieve team policy for ${activeTeamId}:`, err.message);
+                    logger.warn(`[IAM Middleware] Failed to retrieve team policy for ${activeTeamId}:`, err.message);
                     statements = DEFAULT_IAM_POLICY;
                 }
             } else {
@@ -80,7 +81,7 @@ export const checkPermission = (action: string) => {
 
             next();
         } catch (err: any) {
-            console.error('[IAM Middleware] Enforcement failure:', err);
+            logger.error('[IAM Middleware] Enforcement failure:', err);
             return res.status(500).json({ error: 'Internal policy enforcement failure' });
         }
     };

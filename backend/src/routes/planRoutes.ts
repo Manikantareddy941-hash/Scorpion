@@ -3,6 +3,7 @@ import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import fs from 'fs/promises';
 import path from 'path';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
   user?: Models.User<Models.Preferences> & { $id: string };
@@ -161,7 +162,7 @@ async function handleQuery<T>(
     return await appwriteCall();
   } catch (err: any) {
     // Falls back if connection refused, collection not found, or configuration missing
-    console.warn('[PlanRoutes] Appwrite database operation failed, using local JSON fallback store:', err.message || err);
+    logger.warn('[PlanRoutes] Appwrite database operation failed, using local JSON fallback store:', err.message || err);
     return await mockCall();
   }
 }

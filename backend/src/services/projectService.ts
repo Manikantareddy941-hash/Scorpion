@@ -1,5 +1,6 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { enqueueScan } from '../queues/scanQueue';
+import { logger } from './logger';
 
 // -----------------------------------------------------------------------------
 // CREATE PROJECT
@@ -130,7 +131,7 @@ export const importRepoToProject = async (
         try {
             await enqueueScan(repo.$id);
         } catch (scanErr) {
-            console.error('Auto scan enqueue failed:', scanErr);
+            logger.error('Auto scan enqueue failed:', scanErr);
         }
 
         return { data: repo, error: null };

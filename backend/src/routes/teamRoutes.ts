@@ -2,6 +2,7 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query, users } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -68,7 +69,7 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
 
         res.json(team);
     } catch (err: any) {
-        console.error("[Backend Team Crash Log]:", err);
+        logger.error("[Backend Team Crash Log]:", err);
         return res.status(400).json({ error: err.message });
     }
 });

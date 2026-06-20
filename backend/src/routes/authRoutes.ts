@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { sendOtpEmail } from '../services/emailService';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
+import { logger } from '../services/logger';
 
 const router = express.Router();
 
@@ -31,7 +32,7 @@ router.post('/request-reset', async (req: Request, res: Response) => {
                 userId = userList.users[0].$id;
             }
         } catch (err: any) {
-            console.warn('[Auth] Appwrite error checking user existence:', err.message);
+            logger.warn('[Auth] Appwrite error checking user existence:', err.message);
             // In dev mode, assume user exists to allow testing
             if (process.env.NODE_ENV !== 'production') {
                 userExists = true;
@@ -71,7 +72,7 @@ router.post('/request-reset', async (req: Request, res: Response) => {
                 });
             }
         } catch (dbError: any) {
-            console.warn('[Auth] Database operation failed:', dbError.message);
+            logger.warn('[Auth] Database operation failed:', dbError.message);
             if (process.env.NODE_ENV === 'production') throw dbError;
         }
 
@@ -79,14 +80,14 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         try {
             await sendOtpEmail(email, otp);
         } catch (emailError: any) {
-            console.error('[Auth] Email sending failed:', emailError.message);
+            logger.error('[Auth] Email sending failed:', emailError.message);
             if (process.env.NODE_ENV === 'production') throw emailError;
-            console.log(`[DEV-OTP] Password reset OTP for ${email}: ${otp}`);
+            logger.info(`[DEV-OTP] Password reset OTP for ${email}: ${otp}`);
         }
 
         res.json({ message: 'If an account exists, an OTP has been sent.' });
     } catch (error: any) {
-        console.error('[Auth] Error in request-reset:', error);
+        logger.error('[Auth] Error in request-reset:', error);
         res.status(500).json({ error: error.message || 'Failed to process request' });
     }
 });
@@ -132,7 +133,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
 
         res.json({ resetToken, message: 'OTP verified successfully' });
     } catch (error: any) {
-        console.error('[Auth] Error in verify-otp:', error);
+        logger.error('[Auth] Error in verify-otp:', error);
         res.status(500).json({ error: error.message || 'Failed to verify OTP' });
     }
 });
@@ -168,7 +169,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
         res.json({ message: 'Password updated successfully' });
     } catch (error: any) {
-        console.error('[Auth] Error in reset-password:', error);
+        logger.error('[Auth] Error in reset-password:', error);
         if (error.name === 'JsonWebTokenError') {
             return res.status(401).json({ error: 'Invalid or expired reset token' });
         }

@@ -8,6 +8,7 @@ import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
 import axios from 'axios';
 import { auditLog } from '../services/auditService';
+import { logger } from '../services/logger';
 
 export interface ArgoCDSyncPayload {
   app: string;
@@ -37,7 +38,7 @@ async function resolveRepoOwnerByUrl(repoUrl: string): Promise<string | undefine
 }
 
 export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
-  console.log(`[ArgoCD Handler] Processing sync event for ${payload.app} (${payload.image})`);
+  logger.info(`[ArgoCD Handler] Processing sync event for ${payload.app} (${payload.image})`);
   
   try {
     // 1. Scan the deployed image using Trivy
@@ -81,7 +82,7 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
 
     scansTotal.inc({ scan_type: 'gitops_deploy', status: passed ? 'passed' : 'failed' });
 
-    console.log(`[ArgoCD Handler] Deployment policy evaluation: ${passed ? 'PASSED' : 'FAILED'}`);
+    logger.info(`[ArgoCD Handler] Deployment policy evaluation: ${passed ? 'PASSED' : 'FAILED'}`);
 
     if (!passed) {
       deploymentBlocks.inc();
@@ -128,6 +129,6 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
     }
 
   } catch (error: any) {
-    console.error(`[ArgoCD Handler] Error processing sync:`, error);
+    logger.error(`[ArgoCD Handler] Error processing sync:`, error);
   }
 }

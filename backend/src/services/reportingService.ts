@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { logger } from './logger';
 
 // Heuristic mapping of tool results to OWASP Top 10 categories
 const MAP_OWASP = (finding: any) => {
@@ -32,21 +33,21 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         if (scope === 'project' && id) {
             repoIds = [id];
         } else if (scope === 'team' && id) {
-            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
+            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
             if (!COLLECTIONS.PROJECT_ACCESS) throw new Error("collectionId is undefined");
             const accessDocs = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
                 Query.equal('team_id', id)
             ]);
             repoIds = accessDocs.documents.map(a => a.repo_id);
         } else {
-            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
+            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
             if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
             const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
                 Query.equal('user_id', userId)
             ]);
             repoIds = ownedRepos.documents.map(r => r.$id);
 
-            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.TEAM_MEMBERS}`);
+            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.TEAM_MEMBERS}`);
             if (!COLLECTIONS.TEAM_MEMBERS) throw new Error("collectionId is undefined");
             const memberships = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
                 Query.equal('user_id', userId)
@@ -54,7 +55,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
 
             if (memberships.total > 0) {
                 const teamIds = memberships.documents.map(m => m.team_id);
-                console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
+                logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
                 if (!COLLECTIONS.PROJECT_ACCESS) throw new Error("collectionId is undefined");
                 const teamAccess = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
                     Query.equal('team_id', teamIds)
@@ -67,7 +68,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         if (repoIds.length === 0) return null;
 
         // Fetch Repo details
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
+        logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
         if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
         const reposDocs = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
             Query.equal('$id', repoIds)
@@ -77,7 +78,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         // 1️⃣ Find the LATEST COMPLETED scan for EACH repo
         const latestScanIds: string[] = [];
         for (const rid of repoIds) {
-            console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
             if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
                 Query.equal('repo_id', rid),
@@ -102,7 +103,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         }
 
         // 2️⃣ Fetch Vulnerabilities ONLY for those specific scan IDs
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
+        logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
         if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
         const vulnsDocs = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
             Query.equal('scanId', latestScanIds),
@@ -113,7 +114,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         const vulns = vulnsDocs.documents;
 
         // Mandatory Log: Fetched report data
-        console.log(`[VERIFICATION] Fetched Report Data (Vulns) for Scans ${JSON.stringify(latestScanIds)}:`, JSON.stringify(vulns, null, 2));
+        logger.info(`[VERIFICATION] Fetched Report Data (Vulns) for Scans ${JSON.stringify(latestScanIds)}:`, JSON.stringify(vulns, null, 2));
 
         const stats = {
             total_repos: repos.length,
@@ -137,7 +138,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
 
         return stats;
     } catch (err) {
-        console.error('[Reporting] Error generating stats:', err);
+        logger.error('[Reporting] Error generating stats:', err);
         return null;
     }
 };
@@ -147,7 +148,7 @@ export const getTrendData = async (userId: string, repoIds: string[]) => {
     try {
         if (repoIds.length === 0) return [];
 
-        console.log(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
+        logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
         if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
         const scansDocs = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repo_id', repoIds),
@@ -164,7 +165,7 @@ export const getTrendData = async (userId: string, repoIds: string[]) => {
             };
         });
     } catch (err) {
-        console.error('[Reporting] Error getting trend data:', err);
+        logger.error('[Reporting] Error getting trend data:', err);
         return [];
     }
 };
