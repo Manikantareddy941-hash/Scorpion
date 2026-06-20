@@ -13,7 +13,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
-  signInWithOAuth: (provider: string) => void;
+  signInWithOAuth: (provider: OAuthProvider) => void;
 
   requestReset: (email: string) => Promise<{ error?: string; message?: string }>;
   verifyResetOtp: (email: string, otp: string) => Promise<{ error?: string; resetToken?: string }>;
@@ -113,16 +113,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithOAuth = (provider: string) => {
+  const signInWithOAuth = (provider: OAuthProvider) => {
     const baseUrl = window.location.origin;
     const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
     sessionStorage.setItem('oauth_return_to', returnTo);
 
     account.createOAuth2Token(
-      provider === 'google' ? OAuthProvider.Google : OAuthProvider.Github,
+      provider,
       `${baseUrl}/auth/callback`,
       `${baseUrl}/login`,
-      provider === 'github' ? ['repo', 'user:email'] : []
+      provider === OAuthProvider.Github ? ['repo', 'user:email'] : []
     );
   };
 

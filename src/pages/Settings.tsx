@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { account, databases, DB_ID, ID, Query, storage, COLLECTIONS } from '../lib/appwrite';
+import { OAuthProvider } from 'appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
@@ -434,7 +435,7 @@ export default function Settings() {
                                 <button
                                     onClick={() => {
                                         sessionStorage.setItem('oauth_return_to', '/settings');
-                                        signInWithOAuth('github');
+                                        signInWithOAuth(OAuthProvider.Github);
                                     }}
                                     className={`px-8 py-3 rounded-2xl text-xs font-black uppercase italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl
                                         ${isGithubConnected ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10' : 'bg-[var(--accent-primary)] text-black shadow-[var(--accent-primary)]/20 hover:shadow-[var(--accent-primary)]/40'}`}
