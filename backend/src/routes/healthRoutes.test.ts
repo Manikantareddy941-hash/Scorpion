@@ -1,6 +1,8 @@
 import request from 'supertest';
 import express from 'express';
 
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules() + jest.doMock() per test requires re-`require()`ing modules to pick up fresh mocks; static imports are hoisted and would bypass that. */
+
 jest.mock('../lib/appwrite', () => ({
     databases: { listDocuments: jest.fn() },
     DB_ID: 'test-db',
