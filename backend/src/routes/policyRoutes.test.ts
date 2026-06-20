@@ -7,6 +7,7 @@ jest.mock('../lib/appwrite', () => ({
         createDocument: jest.fn(),
         updateDocument: jest.fn(),
         deleteDocument: jest.fn(),
+        getDocument: jest.fn(),
     },
     DB_ID: 'test-db',
     ID: { unique: () => 'generated-id' },
@@ -74,7 +75,8 @@ describe('policyRoutes', () => {
         );
     });
 
-    it('PATCH /:id updates the given policy', async () => {
+    it('PATCH /:id updates the given policy when the caller owns it', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'p1', userId: 'user-1' });
         (databases.updateDocument as jest.Mock).mockResolvedValue({ $id: 'p1', name: 'Updated' });
 
         const res = await request(buildApp())
@@ -85,12 +87,44 @@ describe('policyRoutes', () => {
         expect(databases.updateDocument).toHaveBeenCalledWith('test-db', 'policies', 'p1', { name: 'Updated' });
     });
 
-    it('DELETE /:id removes the given policy', async () => {
+    it('PATCH /:id rejects updates to a policy owned by another user', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'p1', userId: 'someone-else' });
+
+        const res = await request(buildApp())
+            .patch('/api/policies/p1')
+            .send({ name: 'Updated' });
+
+        expect(res.statusCode).toBe(403);
+        expect(databases.updateDocument).not.toHaveBeenCalled();
+    });
+
+    it('PATCH /:id ignores attempts to reassign ownership via the request body', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'p1', userId: 'user-1' });
+        (databases.updateDocument as jest.Mock).mockResolvedValue({ $id: 'p1', name: 'Updated' });
+
+        await request(buildApp())
+            .patch('/api/policies/p1')
+            .send({ name: 'Updated', userId: 'someone-else' });
+
+        expect(databases.updateDocument).toHaveBeenCalledWith('test-db', 'policies', 'p1', { name: 'Updated' });
+    });
+
+    it('DELETE /:id removes the given policy when the caller owns it', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'p1', userId: 'user-1' });
         (databases.deleteDocument as jest.Mock).mockResolvedValue(undefined);
 
         const res = await request(buildApp()).delete('/api/policies/p1');
 
         expect(res.statusCode).toBe(200);
         expect(databases.deleteDocument).toHaveBeenCalledWith('test-db', 'policies', 'p1');
+    });
+
+    it('DELETE /:id rejects deleting a policy owned by another user', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'p1', userId: 'someone-else' });
+
+        const res = await request(buildApp()).delete('/api/policies/p1');
+
+        expect(res.statusCode).toBe(403);
+        expect(databases.deleteDocument).not.toHaveBeenCalled();
     });
 });
