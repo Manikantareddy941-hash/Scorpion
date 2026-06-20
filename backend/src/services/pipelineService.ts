@@ -12,7 +12,7 @@ import { triggerDeploy } from '../deploy/deployService';
 import { logger } from './logger';
 import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
-import { securityScanService } from './securityScanService';
+import { containerizedTrivyService } from './containerizedTrivyService';
 
 
 
@@ -283,7 +283,7 @@ export async function runPipeline(runId: string) {
     await notifyUpdate('security_scan', { securityScanStatus: 'running', currentStage: 'security_scan' });
     
     try {
-      const criticalThreats = await securityScanService.runTrivyScan(
+      const criticalThreats = await containerizedTrivyService.runTrivyScan(
         runDoc.$id,
         workspaceDir,
         pipeLogger,

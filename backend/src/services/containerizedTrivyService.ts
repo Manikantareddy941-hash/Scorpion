@@ -1,10 +1,14 @@
-// backend/src/services/securityScanService.ts
+// backend/src/services/containerizedTrivyService.ts
+//
+// Distinct from scanService.ts: that runs the main Semgrep/Trivy/Gitleaks pass
+// directly via execFile. This runs a separate, Docker-sandboxed Trivy deep-scan
+// step as one stage inside pipelineService.ts's orchestration.
 import { dockerRunnerService } from './dockerRunnerService';
 import { Databases, ID } from 'node-appwrite';
 import fs from 'fs';
 import path from 'path';
 
-export class SecurityScanService {
+export class ContainerizedTrivyService {
   public async runTrivyScan(runId: string, workspacePath: string, logger: any, databases: Databases): Promise<number> {
     logger.log('[Security] Initializing containerized filesystem vulnerability scan...');
     
@@ -59,4 +63,4 @@ export class SecurityScanService {
   }
 }
 
-export const securityScanService = new SecurityScanService();
+export const containerizedTrivyService = new ContainerizedTrivyService();
