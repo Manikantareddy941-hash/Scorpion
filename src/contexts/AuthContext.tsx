@@ -77,6 +77,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = await account.get();
       setUser(currentUser);
 
+      // Kick off email verification. Non-fatal: if the Appwrite project has no
+      // SMTP configured this throws, and we don't want that to fail signup —
+      // verification can be re-requested later from the account page.
+      try {
+        await account.createVerification(`${window.location.origin}/verify-email`);
+      } catch (verifyErr) {
+        console.warn("Could not send verification email:", verifyErr);
+      }
+
       const { auditLogger } = await import("../lib/auditLogger");
       auditLogger.log({
         userId: currentUser.$id,

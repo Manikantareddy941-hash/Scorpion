@@ -4,7 +4,8 @@ import unzipper from 'unzipper';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { logger } from './logger';
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_ENTRY_SIZE = 50 * 1024 * 1024;         // 50MB per extracted file
+const MAX_TOTAL_UNCOMPRESSED = 300 * 1024 * 1024; // 300MB total — zip-bomb guard
 const ALLOWED_EXTENSIONS = ['.ts', '.js', '.py', '.go', '.java', '.cpp', '.h', '.md', '.json', '.yml', '.yaml'];
 
 export const ingestZip = async (filePath: string, projectId: string, userId: string) => {
@@ -16,9 +17,12 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
             fs.mkdirSync(extractionPath, { recursive: true });
         }
 
-        // 2. Extract ZIP, validating each entry stays within extractionPath (zip-slip guard)
+        // 2. Extract ZIP, validating each entry stays within extractionPath (zip-slip
+        //    guard) and enforcing per-entry and total uncompressed size caps so a
+        //    small "zip bomb" can't decompress into hundreds of GB and fill the disk.
         const resolvedExtractionPath = path.resolve(extractionPath) + path.sep;
         const directory = await unzipper.Open.file(filePath);
+        let totalUncompressed = 0;
         for (const entry of directory.files) {
             const targetPath = path.resolve(extractionPath, entry.path);
             if (!targetPath.startsWith(resolvedExtractionPath)) {
@@ -28,6 +32,17 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
             if (entry.type === 'Directory') {
                 fs.mkdirSync(targetPath, { recursive: true });
                 continue;
+            }
+            const entrySize = (entry as any).uncompressedSize || 0;
+            if (entrySize > MAX_ENTRY_SIZE) {
+                // With unzipper's Open.file API, entries are read on demand, so
+                // simply not calling entry.stream() skips it — no drain needed.
+                logger.warn(`[IngestionService] Skipping oversized zip entry (${entrySize} bytes): ${entry.path}`);
+                continue;
+            }
+            totalUncompressed += entrySize;
+            if (totalUncompressed > MAX_TOTAL_UNCOMPRESSED) {
+                throw new Error('Archive exceeds maximum uncompressed size limit');
             }
             fs.mkdirSync(path.dirname(targetPath), { recursive: true });
             await new Promise<void>((resolve, reject) => {

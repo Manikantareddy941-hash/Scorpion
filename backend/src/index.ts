@@ -125,9 +125,18 @@ import { initToolCache } from './utils/toolCheck';
 const app = express();
 const port = process.env.PORT || 3001;
 
+// Trust the first proxy (nginx/load balancer). Without this, req.ip is the
+// proxy's address — which breaks per-client rate limiting (every request keys to
+// the proxy) and audit/IP logging behind a reverse proxy.
+app.set('trust proxy', 1);
+
 // --- Middleware ---
 app.use(morgan('dev'));
-app.use(helmet());
+// helmet sets secure response headers (X-Frame-Options, X-Content-Type-Options,
+// etc.). HSTS is made explicit so browsers pin HTTPS for a year once served over TLS.
+app.use(helmet({
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
+}));
 // Explicit origin allowlist: the deployed frontend, plus any extra origins
 // (staging/preview deployments) via comma-separated ALLOWED_ORIGINS.
 const allowedOrigins = [process.env.FRONTEND_URL, ...(process.env.ALLOWED_ORIGINS || '').split(',')]
@@ -150,6 +159,18 @@ app.use('/api/github/webhook', createNodeMiddleware(githubWebhooks, { path: '/ap
 app.use(express.json());
 
 // --- Rate Limiting ---
+// Baseline per-IP ceiling across the whole API to blunt scraping / bot hammering.
+// Generous enough for normal dashboard polling (a few requests every few seconds);
+// cost-/abuse-sensitive routes layer their own tighter limiters on top.
+const globalApiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many requests, please slow down.'
+});
+app.use('/api', globalApiLimiter);
+
 const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
 
 // --- Authentication Middleware ---
@@ -159,7 +180,10 @@ interface AuthenticatedRequest extends Request {
 
 const authenticate = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Missing authorization header' });
+    if (!authHeader) {
+        logger.warn(`[Auth] Missing authorization header for ${req.method} ${req.originalUrl} from ${req.ip}`);
+        return res.status(401).json({ error: 'Missing authorization header' });
+    }
 
     const token = authHeader.split(' ')[1];
     try {
@@ -170,11 +194,17 @@ const authenticate = async (req: AuthenticatedRequest, res: Response, next: Next
 
         const account = new AppwriteAccount(client);
         const user = await account.get();
-        if (!user) return res.status(401).json({ error: 'Invalid or expired token' });
+        if (!user) {
+            logger.warn(`[Auth] Invalid token for ${req.method} ${req.originalUrl} from ${req.ip}`);
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
         req.user = user;
         next();
     } catch (err: any) {
-        if (err?.code === 401) return res.status(401).json({ error: 'Invalid or expired token' });
+        if (err?.code === 401) {
+            logger.warn(`[Auth] Rejected expired/invalid token for ${req.method} ${req.originalUrl} from ${req.ip}`);
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
         next(err);
     }
 };

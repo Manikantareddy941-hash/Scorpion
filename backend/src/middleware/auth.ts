@@ -22,10 +22,19 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
     }
 
     const ip = req.ip || req.socket.remoteAddress || '';
-    const isLocal = ip.includes('127.0.0.1') || ip.includes('::1') || ip.includes('localhost') || process.env.NODE_ENV !== 'production';
+
+    // The local-developer bypass is now strictly opt-in: it only activates when
+    // ALLOW_DEV_AUTH_BYPASS is explicitly set AND we're not in production. The old
+    // behaviour (bypass whenever NODE_ENV !== 'production', or whenever the request
+    // looked local) was unsafe: a deploy that simply forgot to set NODE_ENV, or any
+    // setup where the app sits behind a same-host proxy that makes req.ip look local,
+    // would silently disable authentication.
+    const devBypassAllowed =
+      process.env.ALLOW_DEV_AUTH_BYPASS === 'true' && process.env.NODE_ENV !== 'production';
 
     if (!token) {
-      if (isLocal) {
+      if (devBypassAllowed) {
+        logger.warn(`[Auth] DEV AUTH BYPASS active for ${req.method} ${req.path} from ${ip} — never set ALLOW_DEV_AUTH_BYPASS in production`);
         (req as any).user = {
           $id: 'mock-local-developer',
           userId: 'mock-local-developer',
@@ -33,6 +42,7 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
         };
         return next();
       }
+      logger.warn(`[Auth] Rejected unauthenticated request to ${req.method} ${req.path} from ${ip}`);
       return res.status(401).json({ error: "No token provided" });
     }
 
