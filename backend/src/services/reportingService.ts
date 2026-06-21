@@ -33,21 +33,18 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         if (scope === 'project' && id) {
             repoIds = [id];
         } else if (scope === 'team' && id) {
-            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
             if (!COLLECTIONS.PROJECT_ACCESS) throw new Error("collectionId is undefined");
             const accessDocs = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
                 Query.equal('team_id', id)
             ]);
             repoIds = accessDocs.documents.map(a => a.repo_id);
         } else {
-            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
             if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
             const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
                 Query.equal('user_id', userId)
             ]);
             repoIds = ownedRepos.documents.map(r => r.$id);
 
-            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.TEAM_MEMBERS}`);
             if (!COLLECTIONS.TEAM_MEMBERS) throw new Error("collectionId is undefined");
             const memberships = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
                 Query.equal('user_id', userId)
@@ -55,7 +52,6 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
 
             if (memberships.total > 0) {
                 const teamIds = memberships.documents.map(m => m.team_id);
-                logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.PROJECT_ACCESS}`);
                 if (!COLLECTIONS.PROJECT_ACCESS) throw new Error("collectionId is undefined");
                 const teamAccess = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
                     Query.equal('team_id', teamIds)
@@ -68,7 +64,6 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         if (repoIds.length === 0) return null;
 
         // Fetch Repo details
-        logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.REPOSITORIES}`);
         if (!COLLECTIONS.REPOSITORIES) throw new Error("collectionId is undefined");
         const reposDocs = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
             Query.equal('$id', repoIds)
@@ -78,7 +73,6 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         // 1️⃣ Find the LATEST COMPLETED scan for EACH repo
         const latestScanIds: string[] = [];
         for (const rid of repoIds) {
-            logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.SCANS}`);
             if (!COLLECTIONS.SCANS) throw new Error("collectionId is undefined");
             const scans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
                 Query.equal('repo_id', rid),

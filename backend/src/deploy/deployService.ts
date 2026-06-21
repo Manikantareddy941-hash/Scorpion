@@ -335,8 +335,9 @@ async function performHealthCheck(deploymentId: string, environment: string, ima
         isHealthy = true;
       }
     } catch (_) {
-      // Simple fallback check in simulated dev mode so it doesn't always fail if no docker is running
-      isHealthy = Math.random() > 0.15;
+      // A connection failure means the deployment isn't actually serving traffic -
+      // treat it as unhealthy rather than guessing, even in local/no-docker setups.
+      isHealthy = false;
     }
 
     if (!isHealthy) {

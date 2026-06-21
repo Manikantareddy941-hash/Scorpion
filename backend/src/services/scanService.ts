@@ -15,7 +15,8 @@ import { logger } from './logger';
 
 /**
  * Consistent security score formula — used here and must match Dashboard fallback.
- * Dashboard's derived formula: 100 - (crit*15) - (high*8) - (med*3) - (low*1)
+ * Dashboard's final fallback (src/components/Dashboard.tsx) uses this exact
+ * formula: 100 - (crit*10) - (high*4) - (med*1) - (low*0.25)
  */
 const computeSecurityScore = (critical: number, high: number, medium: number, low: number): number => {
     const penalty = (critical * 10) + (high * 4) + (medium * 1) + (low * 0.25);

@@ -358,16 +358,70 @@ router.post('/tasks/:id/github-sync', verifyUser, async (req: Request, res: Resp
 
         res.json({ success: true, url: issue.data.html_url });
     } catch (err: any) {
+        // Surface the real failure instead of silently writing a fake issue URL.
         logger.error('[Dashboard] GitHub Sync error:', err);
-        try {
-            const taskId = req.params.id;
-            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, taskId, {
-                github_issue_url: 'https://github.com/mock/mock/issues/1'
-            });
-            res.json({ success: true, url: 'https://github.com/mock/mock/issues/1', mock: true });
-        } catch (e) {
-            res.status(500).json({ error: 'Failed to sync with GitHub' });
+        res.status(502).json({ error: `Failed to sync with GitHub: ${err.message || 'unknown error'}` });
+    }
+});
+
+// GET /api/dashboard/metrics - compliance/MTTR summary derived from the caller's
+// own open findings (scoped to repos they own).
+router.get('/metrics', verifyUser, async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).user?.$id;
+
+        const reposResponse = await databases.listDocuments(DB_ID, 'repositories', [
+            Query.equal('user_id', userId),
+            Query.limit(500),
+        ]);
+        const repoIds = reposResponse.documents.map(r => r.$id);
+
+        if (repoIds.length === 0) {
+            return res.json({ noiseReductionPercentage: 0, complianceMapping: {}, averageMTTRMinutes: 0 });
         }
+
+        const findingsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+            Query.equal('repo_id', repoIds),
+            Query.limit(5000),
+        ]);
+        const findings = findingsResponse.documents;
+
+        // Compliance mapping: group OPEN findings into compliance-relevant buckets.
+        const complianceMapping: Record<string, number> = {};
+        const resolutionDurationsMs: number[] = [];
+        let resolved = 0;
+
+        for (const f of findings) {
+            const isResolved = f.status === 'resolved' || f.status === 'remediated';
+            if (isResolved) {
+                resolved++;
+                const created = new Date(f.$createdAt).getTime();
+                const closed = new Date(f.$updatedAt).getTime();
+                if (closed > created) resolutionDurationsMs.push(closed - created);
+                continue;
+            }
+            const tool = (f.tool || '').toLowerCase();
+            let key = 'general';
+            if (tool.includes('gitleaks') || tool.includes('secret')) key = 'secret';
+            else if (tool.includes('semgrep') || tool.includes('sast')) key = 'sast';
+            else if (tool.includes('trivy')) key = 'dependency';
+            else if (tool.includes('checkov')) key = 'iac';
+            complianceMapping[key] = (complianceMapping[key] || 0) + 1;
+        }
+
+        // Noise reduction = share of all findings already resolved/auto-closed.
+        const noiseReductionPercentage = findings.length > 0
+            ? Math.round((resolved / findings.length) * 1000) / 10
+            : 0;
+
+        const averageMTTRMinutes = resolutionDurationsMs.length > 0
+            ? Math.round(resolutionDurationsMs.reduce((s, ms) => s + ms, 0) / resolutionDurationsMs.length / 60000)
+            : 0;
+
+        res.json({ noiseReductionPercentage, complianceMapping, averageMTTRMinutes });
+    } catch (err: any) {
+        logger.error('[Dashboard Metrics Error]', err.message);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
