@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Shield, Scale,
     Plus, Check, X
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import { account } from '../lib/appwrite';
 
 const FRAMEWORK_COLORS: Record<string, string> = {
     'SOC 2': '#4FC3F7',
@@ -24,7 +25,10 @@ export interface GovernancePolicy {
     ruleDetail: string;
 }
 
-const activeGuardrails: GovernancePolicy[] = [
+// Seed defaults - per-user enabled/disabled overrides are persisted to the
+// Appwrite account's prefs (account.updatePrefs) under governance_guardrails,
+// merged onto these defaults on load.
+const DEFAULT_GUARDRAILS: GovernancePolicy[] = [
     {
         id: "pol-1",
         name: "SAST ZERO-CRITICAL GATEKEEPER",
@@ -56,11 +60,41 @@ const activeGuardrails: GovernancePolicy[] = [
 
 export default function Governance() {
     const { t } = useTranslation();
-    const [policies, setPolicies] = useState<GovernancePolicy[]>(activeGuardrails);
+    const [policies, setPolicies] = useState<GovernancePolicy[]>(DEFAULT_GUARDRAILS);
 
-    const handleTogglePolicy = (policyId: string) => {
-        setPolicies(prev => prev.map(p => p.id === policyId ? { ...p, isEnabled: !p.isEnabled } : p));
-        toast.success('Policy enforcement updated');
+    useEffect(() => {
+        const loadOverrides = async () => {
+            try {
+                const user = await account.get();
+                const stored = user.prefs?.governance_guardrails;
+                if (stored) {
+                    const overrides: Record<string, boolean> = JSON.parse(stored);
+                    setPolicies(DEFAULT_GUARDRAILS.map(p => ({
+                        ...p,
+                        isEnabled: overrides[p.id] ?? p.isEnabled,
+                    })));
+                }
+            } catch {
+                // keep defaults if prefs can't be loaded
+            }
+        };
+        loadOverrides();
+    }, []);
+
+    const handleTogglePolicy = async (policyId: string) => {
+        const previous = policies;
+        const next = policies.map(p => p.id === policyId ? { ...p, isEnabled: !p.isEnabled } : p);
+        setPolicies(next);
+        try {
+            const user = await account.get();
+            const overrides: Record<string, boolean> = {};
+            next.forEach(p => { overrides[p.id] = p.isEnabled; });
+            await account.updatePrefs({ ...user.prefs, governance_guardrails: JSON.stringify(overrides) });
+            toast.success('Policy enforcement updated');
+        } catch (err) {
+            setPolicies(previous);
+            toast.error('Failed to save policy change');
+        }
     };
 
     try {
