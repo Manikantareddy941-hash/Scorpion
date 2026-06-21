@@ -5,8 +5,22 @@ import { URL } from 'url';
 import fs from 'fs';
 import zlib from 'zlib';
 import tar from 'tar';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import path from 'path';
+
+// Only http(s) git/repo URLs are accepted, and the value is always passed as a
+// single argv element to execFileSync (never interpolated into a shell string),
+// so this is defense-in-depth against argument-injection (e.g. a "repoUrl" that
+// starts with "-" being parsed as a CLI flag) rather than a shell-injection guard.
+function validateRepoUrl(url) {
+    let parsed;
+    try { parsed = new URL(url); } catch (e) { throw new Error('Invalid repository URL'); }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Repository URL must use http or https');
+    }
+    if (url.startsWith('-')) throw new Error('Invalid repository URL');
+    return url;
+}
 
 const TRIVY_URL = 'https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-64bit.tar.gz';
 const TRIVY_DIR = '/trivy-bin';
@@ -59,11 +73,11 @@ async function ensureTrivy(log) {
 
 function ensureCheckov(log) {
     try {
-        execSync('checkov --version');
+        execFileSync('checkov', ['--version']);
     } catch {
         log('Installing checkov via pip...');
         try {
-            execSync('pip3 install checkov --user', { stdio: 'pipe' });
+            execFileSync('pip3', ['install', 'checkov', '--user'], { stdio: 'pipe' });
             log('Checkov installed');
         } catch (e) {
             log('Failed to install checkov: ' + e.message);
@@ -87,6 +101,11 @@ export default async ({ req, res, log, error }) => {
     const userId = payload.userId;
 
     if (!repoUrl) return res.json({ success: false, error: 'repoUrl is required' }, 400);
+    try {
+        validateRepoUrl(repoUrl);
+    } catch (err) {
+        return res.json({ success: false, error: err.message }, 400);
+    }
 
     const client = new Client()
         .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT || process.env.VITE_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
@@ -118,7 +137,7 @@ export default async ({ req, res, log, error }) => {
     log(`Running Trivy...`);
     let trivyOutput = '';
     try {
-        trivyOutput = execSync(`${TRIVY_PATH} repo --format json ${repoUrl}`, { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 });
+        trivyOutput = execFileSync(TRIVY_PATH, ['repo', '--format', 'json', repoUrl], { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 });
     } catch (execErr) {
         trivyOutput = execErr.stdout ? execErr.stdout.toString() : '';
         if (!trivyOutput) log(`Trivy error warning: ${execErr.message}`);
@@ -167,22 +186,22 @@ export default async ({ req, res, log, error }) => {
             if (policiesRes.total > 0) {
                 // Determine checkov executable path (could be local to user)
                 let checkovBin = 'checkov';
-                try { checkovBin = execSync('python3 -m site --user-base').toString().trim() + '/bin/checkov'; } catch(e){}
+                try { checkovBin = execFileSync('python3', ['-m', 'site', '--user-base']).toString().trim() + '/bin/checkov'; } catch(e){}
 
                 fs.mkdirSync(cloneDir, { recursive: true });
                 fs.mkdirSync(policiesDir, { recursive: true });
-                
+
                 policiesRes.documents.forEach((p, idx) => {
                     fs.writeFileSync(path.join(policiesDir, `policy_${idx}.yaml`), p.code);
                 });
 
                 log(`Cloning repository for Checkov...`);
-                execSync(`git clone ${repoUrl} ${cloneDir} --depth 1`, { stdio: 'pipe' });
+                execFileSync('git', ['clone', repoUrl, cloneDir, '--depth', '1'], { stdio: 'pipe' });
 
                 log(`Running Checkov...`);
                 let checkovOutput = '';
                 try {
-                    checkovOutput = execSync(`${checkovBin} -d ${cloneDir} --external-checks-dir ${policiesDir} -o json`, { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 });
+                    checkovOutput = execFileSync(checkovBin, ['-d', cloneDir, '--external-checks-dir', policiesDir, '-o', 'json'], { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 });
                 } catch (execErr) {
                     checkovOutput = execErr.stdout ? execErr.stdout.toString() : '';
                 }
@@ -222,7 +241,9 @@ export default async ({ req, res, log, error }) => {
         } catch (policyErr) {
             log(`Policy enforcement error: ${policyErr.message}`);
         } finally {
-            try { execSync(`rm -rf ${cloneDir} ${policiesDir}`); } catch(e){} // Cleanup
+            // Cleanup: remove directly via fs rather than shelling out to rm -rf.
+            try { fs.rmSync(cloneDir, { recursive: true, force: true }); } catch(e){}
+            try { fs.rmSync(policiesDir, { recursive: true, force: true }); } catch(e){}
         }
     }
 
