@@ -75,6 +75,37 @@ interface AutomationRule {
   trigger: string;
   conditions?: string;
   action: string;
+  enabled?: boolean;
+  runCount?: number;
+  lastRunAt?: string | null;
+}
+
+interface AutomationRun {
+  $id: string;
+  ruleId: string;
+  trigger: string;
+  action: string;
+  status: 'success' | 'error';
+  message: string;
+  createdAt: string;
+}
+
+interface SprintSnapshot {
+  $id: string;
+  sprintId: string;
+  sprintName: string;
+  committedPoints: number;
+  completedPoints: number;
+  closedAt: string;
+}
+
+interface Worklog {
+  $id: string;
+  issueId: string;
+  author: string;
+  minutes: number;
+  comment?: string;
+  createdAt: string;
 }
 
 interface Vulnerability {
@@ -107,6 +138,8 @@ export default function PlanWorkspace() {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
+  const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([]);
+  const [sprintSnapshots, setSprintSnapshots] = useState<SprintSnapshot[]>([]);
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [threats, setThreats] = useState<Threat[]>([]);
 
@@ -116,6 +149,10 @@ export default function PlanWorkspace() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentBody, setNewCommentBody] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
+  const [worklogs, setWorklogs] = useState<Worklog[]>([]);
+  const [logHours, setLogHours] = useState('');
+  const [logComment, setLogComment] = useState('');
+  const [loggingWork, setLoggingWork] = useState(false);
   const [createThreatOpen, setCreateThreatOpen] = useState(false);
 
   // New Threat Form States
@@ -215,6 +252,14 @@ export default function PlanWorkspace() {
       // Fetch Rules
       const resRules = await fetch(`/api/plan/projects/${projId}/automation-rules`, { headers });
       if (resRules.ok) setAutomationRules(await resRules.json());
+
+      // Fetch Automation run history (proof rules actually fired)
+      const resRuns = await fetch(`/api/plan/projects/${projId}/automation-runs`, { headers });
+      if (resRuns.ok) setAutomationRuns(await resRuns.json());
+
+      // Fetch historical sprint velocity snapshots
+      const resSnaps = await fetch(`/api/plan/projects/${projId}/sprint-snapshots`, { headers });
+      if (resSnaps.ok) setSprintSnapshots(await resSnaps.json());
 
       // Fetch Threats
       const resThreats = await fetch(`/api/plan/projects/${projId}/threats`, { headers });
@@ -403,6 +448,23 @@ export default function PlanWorkspace() {
     }
   };
 
+  const handleDeleteRule = async (ruleId: string) => {
+    const previous = automationRules;
+    setAutomationRules(prev => prev.filter(r => r.$id !== ruleId));
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/projects/${selectedProjId}/automation-rules/${ruleId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('delete failed');
+      toast.success('Automation rule removed');
+    } catch (err) {
+      setAutomationRules(previous);
+      toast.error('Failed to delete rule');
+    }
+  };
+
   const handleImportVulnerability = async (vuln: Vulnerability) => {
     try {
       const token = await getJWT();
@@ -532,6 +594,52 @@ export default function PlanWorkspace() {
     }
   };
 
+  // Load worklogs whenever an issue detail panel opens.
+  useEffect(() => {
+    if (!selectedIssue) { setWorklogs([]); return; }
+    let active = true;
+    (async () => {
+      try {
+        const token = await getJWT();
+        const res = await fetch(`/api/plan/issues/${selectedIssue.$id}/worklogs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok && active) setWorklogs(await res.json());
+      } catch { /* non-fatal */ }
+    })();
+    return () => { active = false; };
+  }, [selectedIssue, getJWT]);
+
+  const handleLogWork = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedIssue) return;
+    const hours = Number(logHours);
+    if (!hours || hours <= 0) { toast.error('Enter hours greater than 0'); return; }
+    setLoggingWork(true);
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/issues/${selectedIssue.$id}/worklogs`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: Math.round(hours * 60), comment: logComment })
+      });
+      if (!res.ok) throw new Error('log failed');
+      const wl = await res.json();
+      setWorklogs(prev => [...prev, wl]);
+      // Reflect the new logged total locally (backend stores timeLogged in hours).
+      const newLogged = (Number(selectedIssue.timeLogged) || 0) + hours;
+      setSelectedIssue({ ...selectedIssue, timeLogged: newLogged });
+      setIssues(prev => prev.map(i => i.$id === selectedIssue.$id ? { ...i, timeLogged: newLogged } : i));
+      setLogHours('');
+      setLogComment('');
+      toast.success(`Logged ${hours}h`);
+    } catch {
+      toast.error('Failed to log work');
+    } finally {
+      setLoggingWork(false);
+    }
+  };
+
   const handleCreateComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentBody || !selectedIssue) return;
@@ -568,6 +676,55 @@ export default function PlanWorkspace() {
   // Filters application
   const currentProject = projects.find(p => p.$id === selectedProjId);
   const activeSprint = sprints.find(s => s.status === 'active');
+
+  // Real velocity from persisted sprint-close snapshots (true history). Falls
+  // back to recomputing live for any active/never-snapshotted sprint so the
+  // chart isn't empty before the first sprint closes.
+  const velocityData = (() => {
+    const fromSnapshots = sprintSnapshots.map(s => ({
+      sprint: s.sprintName,
+      committed: s.committedPoints,
+      completed: s.completedPoints,
+    }));
+    const snapshottedSprintNames = new Set(sprintSnapshots.map(s => s.sprintName));
+    const liveActive = sprints
+      .filter(s => !snapshottedSprintNames.has(s.name))
+      .map(s => {
+        const sprintIssues = issues.filter(i => i.sprintId === s.$id);
+        return {
+          sprint: s.name,
+          committed: sprintIssues.reduce((acc, i) => acc + (Number(i.storyPoints) || 0), 0),
+          completed: sprintIssues.filter(i => i.status === 'done').reduce((acc, i) => acc + (Number(i.storyPoints) || 0), 0),
+        };
+      })
+      .filter(d => d.committed > 0);
+    return [...fromSnapshots, ...liveActive];
+  })();
+
+  // Real burndown for the active sprint: ideal line interpolated across the real
+  // sprint dates, actual = today's remaining points (the one real data point we
+  // have — no fabricated multi-day curve).
+  const burndownData = (() => {
+    if (!activeSprint?.startDate || !activeSprint?.endDate) return [];
+    const sprintIssues = issues.filter(i => i.sprintId === activeSprint.$id);
+    const totalPoints = sprintIssues.reduce((acc, i) => acc + (Number(i.storyPoints) || 0), 0);
+    const remainingPoints = sprintIssues.filter(i => i.status !== 'done').reduce((acc, i) => acc + (Number(i.storyPoints) || 0), 0);
+    const start = new Date(activeSprint.startDate);
+    const end = new Date(activeSprint.endDate);
+    const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+    const elapsedDays = Math.min(totalDays, Math.max(0, Math.round((Date.now() - start.getTime()) / 86400000)));
+    const points: { day: string; ideal: number; remaining?: number }[] = [];
+    for (let d = 0; d <= totalDays; d++) {
+      const date = new Date(start.getTime() + d * 86400000);
+      const point: { day: string; ideal: number; remaining?: number } = {
+        day: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        ideal: Math.max(0, Math.round(totalPoints - (totalPoints / totalDays) * d)),
+      };
+      if (d === elapsedDays) point.remaining = remainingPoints;
+      points.push(point);
+    }
+    return points;
+  })();
 
   const filteredIssues = issues.filter(iss => {
     if (searchQuery && !iss.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -1458,31 +1615,27 @@ export default function PlanWorkspace() {
                   </span>
                 </div>
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={[
-                        { day: 'Day 1', remaining: 40, ideal: 40 },
-                        { day: 'Day 3', remaining: 35, ideal: 32 },
-                        { day: 'Day 5', remaining: 28, ideal: 24 },
-                        { day: 'Day 7', remaining: 28, ideal: 16 },
-                        { day: 'Day 9', remaining: 15, ideal: 8 },
-                        { day: 'Day 10', remaining: 2, ideal: 0 }
-                      ]}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
-                      <Legend wrapperStyle={{ fontSize: 9 }} />
-                      <Line type="monotone" dataKey="remaining" stroke="#ef4444" name="Actual Remaining" strokeWidth={2} />
-                      <Line type="monotone" dataKey="ideal" stroke="#10b981" name="Ideal Burn" strokeDasharray="5 5" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  {burndownData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
+                      No active sprint with start/end dates
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={burndownData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
+                        <Legend wrapperStyle={{ fontSize: 9 }} />
+                        <Line type="monotone" dataKey="remaining" stroke="#ef4444" name="Actual Remaining" strokeWidth={2} connectNulls={false} dot={{ r: 4 }} />
+                        <Line type="monotone" dataKey="ideal" stroke="#10b981" name="Ideal Burn" strokeDasharray="5 5" dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
-              {/* Velocity Chart Simulation */}
+              {/* Velocity Chart — real per-sprint snapshot history */}
               <div className="premium-card p-6 space-y-4">
                 <div>
                   <h4 className="text-xs font-black uppercase italic tracking-wider text-[var(--text-primary)]">
@@ -1493,25 +1646,23 @@ export default function PlanWorkspace() {
                   </span>
                 </div>
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[
-                        { sprint: 'Sprint 1', committed: 32, completed: 30 },
-                        { sprint: 'Sprint 2', committed: 35, completed: 35 },
-                        { sprint: 'Sprint 3', committed: 40, completed: 32 },
-                        { sprint: 'Sprint 4', committed: 45, completed: 42 }
-                      ]}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="sprint" stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
-                      <Legend wrapperStyle={{ fontSize: 9 }} />
-                      <Bar dataKey="committed" fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" name="Committed" />
-                      <Bar dataKey="completed" fill="rgba(16, 185, 129, 0.4)" stroke="#10b981" name="Completed" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {velocityData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
+                      No sprint data yet
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={velocityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="sprint" stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
+                        <Legend wrapperStyle={{ fontSize: 9 }} />
+                        <Bar dataKey="committed" fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" name="Committed" />
+                        <Bar dataKey="completed" fill="rgba(16, 185, 129, 0.4)" stroke="#10b981" name="Completed" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
@@ -1719,15 +1870,54 @@ export default function PlanWorkspace() {
                 <div className="space-y-2">
                   {automationRules.map(rule => (
                     <div key={rule.$id} className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] px-4 py-3 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <Zap size={14} className="text-yellow-500 shrink-0" />
-                        <div className="text-[10px] font-bold text-[var(--text-secondary)] font-mono">
-                          IF <span className="text-[var(--text-primary)] font-black uppercase">{rule.trigger}</span> THEN <span className="text-[var(--text-primary)] font-black uppercase">{rule.action}</span>
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold text-[var(--text-secondary)] font-mono truncate">
+                            IF <span className="text-[var(--text-primary)] font-black uppercase">{rule.trigger}</span> THEN <span className="text-[var(--text-primary)] font-black uppercase">{rule.action}</span>
+                          </div>
+                          <div className="text-[8px] font-bold uppercase tracking-wider text-[var(--text-secondary)] mt-0.5">
+                            Fired {rule.runCount ?? 0}×
+                            {rule.lastRunAt ? ` · last ${new Date(rule.lastRunAt).toLocaleString()}` : ' · never'}
+                          </div>
                         </div>
                       </div>
-                      <button className="text-[var(--status-error)] opacity-60 hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleDeleteRule(rule.$id)}
+                        aria-label="Delete rule"
+                        className="text-[var(--status-error)] opacity-60 hover:opacity-100 transition-opacity shrink-0"
+                      >
                         <Trash2 size={13} />
                       </button>
+                    </div>
+                  ))}
+                  {automationRules.length === 0 && (
+                    <div className="text-center py-3 text-[9px] uppercase italic text-[var(--text-secondary)] opacity-50">
+                      No automation rules yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Automation Activity — real execution history */}
+              <div className="space-y-3 border-t border-[var(--border-subtle)] pt-5">
+                <h4 className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-secondary)]">
+                  Recent Automation Activity
+                </h4>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                  {automationRuns.length === 0 ? (
+                    <div className="text-center py-3 text-[9px] uppercase italic text-[var(--text-secondary)] opacity-50">
+                      No rules have fired yet. Create a critical issue or resolve one to see activity.
+                    </div>
+                  ) : automationRuns.map(run => (
+                    <div key={run.$id} className="bg-[var(--bg-primary)] border border-[var(--border-subtle)] px-3 py-2 rounded-lg">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${run.status === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                          {run.trigger} → {run.action}
+                        </span>
+                        <span className="text-[8px] font-mono text-[var(--text-secondary)] shrink-0">{new Date(run.createdAt).toLocaleTimeString()}</span>
+                      </div>
+                      <p className="text-[9px] text-[var(--text-secondary)] mt-1 leading-relaxed">{run.message}</p>
                     </div>
                   ))}
                 </div>
@@ -2175,6 +2365,71 @@ export default function PlanWorkspace() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Time Tracking */}
+              <div className="space-y-3">
+                <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-primary)] border-b border-[var(--border-subtle)] pb-2 block">
+                  Time Tracking
+                </span>
+
+                {(() => {
+                  const estimate = Number(selectedIssue.timeEstimate) || 0;
+                  const logged = Number(selectedIssue.timeLogged) || 0;
+                  const pct = estimate > 0 ? Math.min(100, Math.round((logged / estimate) * 100)) : 0;
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[9px] font-black uppercase tracking-wider text-[var(--text-secondary)]">
+                        <span>Logged: <span className="text-[var(--text-primary)]">{logged.toFixed(1)}h</span></span>
+                        <span>Estimate: <span className="text-[var(--text-primary)]">{estimate.toFixed(1)}h</span></span>
+                      </div>
+                      <div className="w-full h-2 bg-[var(--bg-secondary)] rounded-full overflow-hidden border border-[var(--border-subtle)]">
+                        <div
+                          className={`h-full rounded-full transition-all ${logged > estimate && estimate > 0 ? 'bg-red-500' : 'bg-[var(--accent-primary)]'}`}
+                          style={{ width: `${estimate > 0 ? pct : (logged > 0 ? 100 : 0)}%` }}
+                        />
+                      </div>
+                      {estimate > 0 && logged > estimate && (
+                        <p className="text-[8px] font-black uppercase tracking-wider text-red-500">Over estimate by {(logged - estimate).toFixed(1)}h</p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <form onSubmit={handleLogWork} className="flex gap-2 items-end">
+                  <div className="w-24">
+                    <label className="block text-[8px] font-black uppercase italic text-[var(--text-secondary)] mb-1">Hours</label>
+                    <input
+                      type="number" min="0" step="0.25" value={logHours}
+                      onChange={e => setLogHours(e.target.value)}
+                      placeholder="2"
+                      className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] outline-none"
+                    />
+                  </div>
+                  <input
+                    type="text" value={logComment}
+                    onChange={e => setLogComment(e.target.value)}
+                    placeholder="What did you work on? (optional)"
+                    className="flex-grow bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] outline-none"
+                  />
+                  <button type="submit" disabled={loggingWork} className="btn-premium px-4 py-2 text-[9px] disabled:opacity-50">
+                    {loggingWork ? 'Logging…' : 'Log Work'}
+                  </button>
+                </form>
+
+                {worklogs.length > 0 && (
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                    {worklogs.slice().reverse().map(w => (
+                      <div key={w.$id} className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] p-2.5 rounded-lg flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-black uppercase italic text-[var(--accent-primary)]">{w.author.split('@')[0]}</span>
+                          {w.comment && <p className="text-[9px] text-[var(--text-primary)] leading-relaxed mt-0.5">{w.comment}</p>}
+                        </div>
+                        <span className="text-[9px] font-black text-[var(--text-primary)] shrink-0">{(w.minutes / 60).toFixed(2)}h</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Comments Feed */}
