@@ -205,6 +205,46 @@ flowchart TD
 
 ---
 
+### 7. Multi-Tenancy, RBAC & Enterprise SSO
+
+Every repo, scan, vulnerability, incident, and policy is scoped to a tenant team via the Appwrite-backed Team model, closing cross-tenant IDOR gaps. Enterprise customers authenticate via Okta/Microsoft SSO through Appwrite OAuth2, with fine-grained IAM roles enforced on every route.
+
+* **File Path**: [`backend/src/services/tenancyService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/tenancyService.ts) & [`backend/src/middleware/iamMiddleware.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/middleware/iamMiddleware.ts)
+
+---
+
+### 8. Async Scan Queue (BullMQ + Redis)
+
+Scan execution moved off the request thread onto a Redis-backed BullMQ queue, replacing the old synchronous pipeline so scans survive API restarts and scale horizontally across workers.
+
+* **File Path**: [`backend/src/workers/scanWorker.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/workers/scanWorker.ts)
+
+---
+
+### 9. DAST & Threat Modeling
+
+A DAST engine drives OWASP ZAP against running targets, and a STRIDE-based Threat Modeling module (React Flow canvas + Gemini AI) lets teams diagram and analyze architecture risk.
+
+* **File Path**: [`backend/src/services/zapService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/zapService.ts) & [`backend/src/services/threatModelService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/threatModelService.ts)
+
+---
+
+### 10. Policy-as-Code Gate, Container Signing & Compliance Export
+
+Real release-gate decisions are evaluated against OPA/Rego policies, container images are signed and verified with cosign, and SOC 2 / ISO 27001 compliance evidence can be exported on demand.
+
+* **File Path**: [`backend/src/services/opaService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/opaService.ts), [`backend/src/services/cosignService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/cosignService.ts) & [`backend/src/services/complianceEngine.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/complianceEngine.ts)
+
+---
+
+### 11. Incident Response: Slack Alerts & Secret Auto-Revoke
+
+Critical incidents trigger real Slack notifications and automated containment; secrets leaked into scanned repos are automatically revoked via the provider API instead of just flagged.
+
+* **File Path**: [`backend/src/services/slackService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/slackService.ts)
+
+---
+
 ## 💻 Tech Stack & Dependencies
 
 ### Frontend Command Center
@@ -218,9 +258,12 @@ flowchart TD
 ### Orchestration Backend
 
 * **Core gateway**: Express `^4.18.2` (Node.js, TypeScript `^5.3.3`)
-* **Integrations & Git**: Octokit `^5.0.5`, `@octokit/rest` `^22.0.1`, simple-git `^3.36.0`
-* **Background Scheduling**: node-cron `^3.0.3`, bullmq `^5.70.1`, node-appwrite `^22.1.3`
-* **Observability & Analytics**: prom-client `^15.1.3`, winston `^3.19.0`, `@opentelemetry/api` `^1.9.1`
+* **Integrations & Git**: Octokit `^5.0.5`, `@octokit/rest` `^22.0.1`, `@octokit/auth-app`, `@octokit/webhooks`, simple-git `^3.36.0`, dockerode, ssh2
+* **Async Queue & Realtime**: bullmq `^5.70.1` + ioredis (Redis-backed scan queue), socket.io, node-cron `^3.0.3`, node-appwrite `^22.1.3`
+* **Validation & Security**: zod, helmet, express-rate-limit, bcrypt, jsonwebtoken
+* **AI & Documents**: openai, json2csv, pdfkit, archiver, adm-zip, unzipper, marked
+* **Notifications**: nodemailer, resend, slackService (Slack webhooks)
+* **Observability & Analytics**: prom-client `^15.1.3`, winston `^3.19.0` + winston-loki, `@opentelemetry/api` `^1.9.1`
 
 ---
 
@@ -280,3 +323,8 @@ npm install
 * **DEP0190 Argument Sanitization**: All subprocess spawns in [`scanWorker.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/workers/scanWorker.ts) and [`orchestrator.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/scan/orchestrator.ts) run with arrays of arguments without shell interpretation (`shell: false`), completely eliminating argument injection.
 * **Cryptographic Tamper-Proofing**: The Audit Ledger creates deterministic cryptographic hash checks for all scanner inputs, securing compliance trails from manual database alterations.
 * **Least-Privilege RBAC**: Platform access is separated into Developer, Security Operator, and Admin roles managed by node-appwrite, enforcing zero-trust data retrieval.
+* **Tenant Isolation (IDOR Hardening)**: Repos, scans, vulnerabilities, builds, deployments, incidents, compliance posture, policies, and Plan/Jira-style entities are all scoped to the caller's team/tenant — closed across multiple hardening passes.
+* **Auth & Secret Hygiene**: Dev-auth bypass removed, `RESET_TOKEN_SECRET` fails fast in production if unset, email verification enforced, GitOps webhook secrets no longer logged, and leaked API keys are auto-revoked at the source provider.
+* **Request Hardening**: Baseline rate-limiting (extended to scan/upload/AI endpoints), `trust proxy` configured correctly, HSTS enabled, structured auth logging, and Zod schema validation on high-risk write routes.
+* **Upload & SSRF Defense**: File uploads are validated by actual content (not just extension) with zip-bomb guards; outbound webhook/alert URLs are checked to block SSRF via client-supplied `webhookUrl`.
+* **Supply Chain**: Container images are signed and verified with cosign before deploy; release-gate decisions are evaluated through an OPA/Rego policy engine instead of hardcoded thresholds.
