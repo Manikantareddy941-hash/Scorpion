@@ -6,8 +6,35 @@ import * as path from 'path';
 import * as os from 'os';
 import { logger } from '../services/logger';
 import { aiLimiter } from '../middleware/rateLimiters';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { canAccessResource } from '../services/tenancyService';
 
 const router = Router();
+
+// repoUrl is free-form (no canonical repo_id is sent by the caller), so ownership
+// is resolved by matching it against the caller's registered repositories - trying
+// a couple of common URL variants (trailing .git, trailing slash) since a Repository
+// document's stored `url` may not byte-for-byte match what was passed here.
+async function findOwnedRepoByUrl(repoUrl: string, userId?: string) {
+  const candidates = Array.from(new Set([
+    repoUrl,
+    repoUrl.replace(/\.git$/, ''),
+    repoUrl.replace(/\/$/, ''),
+    `${repoUrl.replace(/\/$/, '')}.git`,
+  ]));
+
+  for (const candidate of candidates) {
+    const matches = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+      Query.equal('url', candidate),
+      Query.limit(1),
+    ]);
+    if (matches.total > 0) {
+      const repo = matches.documents[0];
+      return (await canAccessResource(repo, userId)) ? repo : null;
+    }
+  }
+  return null;
+}
 
 interface CreatePRBody {
   findingId: string;
@@ -37,6 +64,12 @@ router.post('/create-pr', aiLimiter, async (req: Request, res: Response) => {
   // Validate required fields
   if (!repoUrl || !filePath || !fixedContent || !findingId) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const userId = (req as any).user?.$id;
+  const ownedRepo = await findOwnedRepoByUrl(repoUrl, userId);
+  if (!ownedRepo) {
+    return res.status(403).json({ error: 'You do not have access to this repository' });
   }
 
   // Parse owner/repo from URL

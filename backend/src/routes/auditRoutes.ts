@@ -8,12 +8,14 @@ const router = Router();
 // Get audit logs
 router.get('/', verifyUser, async (req: Request, res: Response) => {
     try {
+        const userId = (req as any).user?.$id;
         let docs: any[] = [];
         try {
             const response = await databases.listDocuments(
                 DB_ID,
                 'audit_logs_v2',
                 [
+                    Query.equal('actor', userId),
                     Query.orderDesc('timestamp'),
                     Query.limit(100)
                 ]
@@ -26,6 +28,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
                 DB_ID,
                 'audit_logs',
                 [
+                    Query.equal('actor', userId),
                     Query.orderDesc('$createdAt'),
                     Query.limit(100)
                 ]
@@ -37,6 +40,8 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
             }));
         }
 
+        // Scoped to the caller's own actions, so one tenant can never read
+        // another tenant's audit trail through this route.
         res.json(docs);
     } catch (err: any) {
         logger.error('[Audit API Error]', err.message, err.stack);

@@ -181,7 +181,8 @@ router.post('/gitlab', async (req: Request, res: Response) => {
     const gitlabToken = req.headers['x-gitlab-token'] as string;
     const expectedToken = process.env.GITLAB_WEBHOOK_SECRET;
 
-    if (expectedToken && gitlabToken !== expectedToken) {
+    // Fails closed: an unconfigured secret must never leave this endpoint open.
+    if (!expectedToken || gitlabToken !== expectedToken) {
         return res.status(401).json({ error: 'Invalid GitLab webhook token' });
     }
 

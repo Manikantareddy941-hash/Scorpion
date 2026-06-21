@@ -1,72 +1,58 @@
 // src/components/RuntimeThreatStream.tsx
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
 
-/**
- * Mock Falco event schema – mirrors the real Falco JSON payload.
- */
-type FalcoEvent = {
-  timestamp: string; // ISO string
-  rule: string; // description of the triggered rule
-  priority: "Critical" | "Warning" | "Notice"; // severity levels we care about
-  container: string; // container/pod identifier
-};
-
-/** Utility to pick a random item from an array */
-const sample = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
-/** Generate a random mock Falco event */
-const generateMockEvent = (): FalcoEvent => {
-  const rules = [
-    "Terminal shell spawned in container",
-    "Unexpected outbound network connection",
-    "Privileged container started",
-    "File opened for write in read‑only filesystem",
-    "Process executed with sudo inside container",
-  ];
-  const priorities: FalcoEvent["priority"][] = ["Critical", "Warning", "Notice"];
-  const containers = [
-    "scorpion-backend-pod-7f",
-    "scorpion-frontend-pod-2a",
-    "scorpion-worker-pod-9c",
-    "scorpion-db-pod-1d",
-  ];
-
-  return {
-    timestamp: new Date().toISOString(),
-    rule: sample(rules),
-    priority: sample(priorities),
-    container: sample(containers),
-  };
+type RuntimeThreat = {
+  id: string;
+  timestamp: string;
+  rule: string;
+  priority: string;
+  containerId: string;
 };
 
 /**
- * RuntimeThreatStream – glass‑morphic scrolling log of live Falco alerts.
+ * RuntimeThreatStream – glass‑morphic scrolling log of live Falco alerts,
+ * backed by GET /api/threats (tenant-scoped runtime threat feed).
  */
 export const RuntimeThreatStream: React.FC = () => {
-  const [events, setEvents] = useState<FalcoEvent[]>([]);
+  const { getJWT } = useAuth();
+  const [events, setEvents] = useState<RuntimeThreat[]>([]);
 
-  /** Add a new mock event every 5 seconds */
   useEffect(() => {
-    const interval = setInterval(() => {
-      setEvents((prev) => {
-        const next = [generateMockEvent(), ...prev]; // newest on top
-        // Keep at most 20 entries to avoid DOM bloat
-        return next.slice(0, 20);
-      });
-    }, 5000);
+    let active = true;
 
-    // Cleanup on unmount
-    return () => clearInterval(interval);
-  }, []);
+    const load = async () => {
+      try {
+        const token = await getJWT();
+        const res = await fetch('/api/threats', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok || !active) return;
+        const docs = await res.json();
+        if (!active) return;
+        setEvents(
+          (Array.isArray(docs) ? docs : [])
+            .slice(0, 20)
+            .map((d: any) => ({
+              id: d.$id,
+              timestamp: d.timestamp || d.$createdAt,
+              rule: d.rule,
+              priority: d.priority,
+              containerId: d.containerId,
+            }))
+        );
+      } catch {
+        // keep showing the last known events on a transient fetch failure
+      }
+    };
 
-  /** Optional auto‑expire after 5 minutes – uncomment if desired */
-  // useEffect(() => {
-  //   const timer = setInterval(() => {
-  //     const cutoff = Date.now() - 5 * 60 * 1000; // 5 min ago
-  //     setEvents((prev) => prev.filter((e) => new Date(e.timestamp).getTime() > cutoff));
-  //   }, 60000);
-  //   return () => clearInterval(timer);
-  // }, []);
+    load();
+    const interval = setInterval(load, 15000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [getJWT]);
 
   const totalAnomalies = events.length;
 
@@ -87,10 +73,10 @@ export const RuntimeThreatStream: React.FC = () => {
           </div>
         ) : (
           events.map((ev) => {
-            const isCritical = ev.priority === "Critical";
+            const isCritical = ev.priority === "Critical" || ev.priority === "Error";
             return (
               <div
-                key={ev.timestamp}
+                key={ev.id}
                 className={`bg-[var(--bg-primary)]/40 rounded-[12px] p-3 border border-[var(--border-subtle)] border-l-4 ${
                   isCritical ? 'border-l-red-500' : ev.priority === 'Warning' ? 'border-l-amber-500' : 'border-l-teal-400'
                 } flex flex-col transition-all hover:scale-[1.01]`}
@@ -106,7 +92,7 @@ export const RuntimeThreatStream: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-[11px] font-black text-[var(--text-primary)] group-hover:whitespace-normal group-hover:break-words truncate">{ev.rule}</div>
-                <div className="text-[9px] text-[var(--text-secondary)] font-mono group-hover:whitespace-normal group-hover:break-words truncate mt-0.5">{ev.container}</div>
+                <div className="text-[9px] text-[var(--text-secondary)] font-mono group-hover:whitespace-normal group-hover:break-words truncate mt-0.5">{ev.containerId}</div>
               </div>
             );
           })

@@ -19,6 +19,50 @@ interface AuditEntry {
     tamper_hash: string;
 }
 
+// Recomputes a SHA-256 hex digest in-browser via the Web Crypto API, matching
+// backend/src/utils/tamperAuditLogger.ts's crypto.createHash('sha256') output format.
+async function sha256Hex(input: string): Promise<string> {
+    const data = new TextEncoder().encode(input);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+interface ChainStatus {
+    isLegacy: boolean;
+    verified: number;
+    broken: number;
+    total: number;
+    anchorHash: string;
+}
+
+// Verifies the tamper-evident hash chain client-side. The API only returns the
+// most recent window of entries, so the oldest entry in that window is treated
+// as a trusted anchor (we have no visibility into what came before it) -
+// every link after that is independently recomputed and compared.
+async function verifyChain(rawLogs: AuditEntry[]): Promise<ChainStatus> {
+    if (rawLogs.length === 0) {
+        return { isLegacy: false, verified: 0, broken: 0, total: 0, anchorHash: '' };
+    }
+    if (rawLogs.every(l => l.tamper_hash === 'LEGACY_UNHASHED')) {
+        return { isLegacy: true, verified: 0, broken: 0, total: rawLogs.length, anchorHash: '' };
+    }
+
+    const ascending = [...rawLogs].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    let verified = 1; // the oldest visible entry is the trust anchor, not independently verifiable
+    let broken = 0;
+    let previousHash = ascending[0].tamper_hash;
+
+    for (let i = 1; i < ascending.length; i++) {
+        const log = ascending[i];
+        const expected = await sha256Hex(`${previousHash}|${log.actor}|${log.action}|${log.repo_id}|${log.created_at}|${log.details}`);
+        if (expected === log.tamper_hash) verified++;
+        else broken++;
+        previousHash = log.tamper_hash;
+    }
+
+    return { isLegacy: false, verified, broken, total: ascending.length, anchorHash: ascending[0].tamper_hash };
+}
+
 export default function AuditLog() {
     const { t } = useTranslation();
     const { getJWT } = useAuth();
@@ -26,9 +70,9 @@ export default function AuditLog() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filterAction, setFilterAction] = useState('all');
+    const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
 
     useEffect(() => {
-        console.log('[AuditLog] Component mounted');
         fetchLogs();
     }, []);
 
@@ -44,7 +88,7 @@ export default function AuditLog() {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch('http://localhost:3001/api/audit', {
+            const response = await fetch('/api/audit', {
                 headers
             });
 
@@ -65,7 +109,7 @@ export default function AuditLog() {
             }));
 
             setLogs(mappedLogs);
-            console.log(`[AuditLog] Successfully synchronized ${data.length} ledger blocks.`);
+            verifyChain(mappedLogs).then(setChainStatus);
         } catch (err: any) {
             console.error('[AuditLog] Synchronization failed:', err.message);
             setError(err.message);
@@ -182,30 +226,47 @@ export default function AuditLog() {
                                 </h3>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-3 bg-[var(--bg-primary)] p-3 rounded-lg border border-[var(--border-subtle)]">
-                                        <div className="h-2 w-2 rounded-full bg-[var(--accent-primary)] animate-ping shrink-0" />
-                                        <div>
-                                            <p className="text-[8px] font-black uppercase text-[var(--text-secondary)]">Ledger Health</p>
-                                            <p className="text-xs font-black text-[var(--accent-primary)] uppercase tracking-wider">100% SECURE & CHAINED</p>
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const broken = chainStatus?.broken ?? 0;
+                                        const isLegacy = chainStatus?.isLegacy ?? false;
+                                        const intact = broken === 0 && !isLegacy;
+                                        const healthColor = intact ? 'text-[var(--accent-primary)]' : isLegacy ? 'text-[var(--text-secondary)]' : 'text-red-500';
+                                        const healthLabel = chainStatus === null
+                                            ? 'VERIFYING…'
+                                            : isLegacy
+                                                ? 'LEGACY (UNCHAINED)'
+                                                : intact
+                                                    ? 'INTACT & CHAINED'
+                                                    : `${broken} TAMPERED LINK${broken === 1 ? '' : 'S'}`;
+                                        return (
+                                            <>
+                                                <div className="flex items-center gap-3 bg-[var(--bg-primary)] p-3 rounded-lg border border-[var(--border-subtle)]">
+                                                    <div className={`h-2 w-2 rounded-full shrink-0 ${intact ? 'bg-[var(--accent-primary)] animate-ping' : isLegacy ? 'bg-[var(--text-secondary)]' : 'bg-red-500 animate-pulse'}`} />
+                                                    <div>
+                                                        <p className="text-[8px] font-black uppercase text-[var(--text-secondary)]">Ledger Health</p>
+                                                        <p className={`text-xs font-black uppercase tracking-wider ${healthColor}`}>{healthLabel}</p>
+                                                    </div>
+                                                </div>
 
-                                    <div className="grid grid-cols-2 gap-3 text-[10px]">
-                                        <div className="bg-[var(--bg-primary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
-                                            <span className="text-[8px] block text-[var(--text-secondary)] uppercase">Verified Blocks</span>
-                                            <span className="font-black text-[var(--text-primary)] text-xs">{logs.length}</span>
-                                        </div>
-                                        <div className="bg-[var(--bg-primary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
-                                            <span className="text-[8px] block text-[var(--text-secondary)] uppercase">Tamper Audits</span>
-                                            <span className="font-black text-[var(--text-primary)] text-xs">0 BROKEN</span>
-                                        </div>
-                                    </div>
+                                                <div className="grid grid-cols-2 gap-3 text-[10px]">
+                                                    <div className="bg-[var(--bg-primary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
+                                                        <span className="text-[8px] block text-[var(--text-secondary)] uppercase">Verified Blocks</span>
+                                                        <span className="font-black text-[var(--text-primary)] text-xs">{chainStatus?.verified ?? 0}</span>
+                                                    </div>
+                                                    <div className="bg-[var(--bg-primary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
+                                                        <span className="text-[8px] block text-[var(--text-secondary)] uppercase">Tamper Audits</span>
+                                                        <span className={`font-black text-xs ${broken > 0 ? 'text-red-500' : 'text-[var(--text-primary)]'}`}>{broken} BROKEN</span>
+                                                    </div>
+                                                </div>
 
-                                    <div className="text-[9px] bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent-primary)] p-3 rounded-lg space-y-2 font-mono leading-relaxed shadow-sm">
-                                        <p className="text-[var(--accent-primary)] font-bold uppercase text-[8px] tracking-widest">[CRYPTO_ENGINE: SHA-256_VERIFIED]</p>
-                                        <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)] font-bold uppercase">ROOT_HASH:</span> {logs[0]?.tamper_hash || 'SHA-256_ACTIVE'}</p>
-                                        <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)] font-bold uppercase">GENESIS_HASH:</span> 0x8a92f03de10ab8c9e53b49f908e2a14e912c9b4e7239ef182a938c734892cfa7</p>
-                                    </div>
+                                                <div className="text-[9px] bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent-primary)] p-3 rounded-lg space-y-2 font-mono leading-relaxed shadow-sm">
+                                                    <p className="text-[var(--accent-primary)] font-bold uppercase text-[8px] tracking-widest">[CRYPTO_ENGINE: SHA-256_VERIFIED]</p>
+                                                    <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)] font-bold uppercase">LATEST_HASH:</span> {logs[0]?.tamper_hash || 'N/A'}</p>
+                                                    <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)] font-bold uppercase">ANCHOR_HASH:</span> {chainStatus?.anchorHash || 'N/A'}</p>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 

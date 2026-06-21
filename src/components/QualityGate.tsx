@@ -71,7 +71,7 @@ export function QualityGateCard({ scan, loading }: { scan: any; loading?: boolea
       {/* Category grades */}
       <div className="grid grid-cols-3 gap-1.5 mb-3">
         {[
-          { label: 'Security', grade: scan?.gradeSecuity },
+          { label: 'Security', grade: scan?.gradeSecurity },
           { label: 'Reliability', grade: scan?.gradeReliability },
           { label: 'Maintainability', grade: scan?.gradeMaintainability }
         ].map(({ label, grade: g }) => (

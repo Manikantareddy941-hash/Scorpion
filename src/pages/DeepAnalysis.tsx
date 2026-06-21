@@ -24,66 +24,6 @@ export interface VulnerabilityItem {
   lineStart: number;
 }
 
-const MOCK_VULNERABILITIES: VulnerabilityItem[] = [
-  {
-    id: "vuln-1",
-    title: "trivy:package-lock.json:bG9kYVNp... (Axios SSRF)",
-    filePath: "package-lock.json",
-    severity: "HIGH",
-    scanner: "TRIVY",
-    cvssScore: 8.2,
-    cveId: "CVE-2023-45857",
-    impact: "Server-Side Request Forgery (SSRF) flaw in Axios allows unauthorized downstream network access.",
-    packageName: "axios",
-    currentVersion: "4.17.23",
-    fixedVersion: "4.18.0",
-    lineStart: 142
-  },
-  {
-    id: "vuln-2",
-    title: "trivy:package-lock.json:bmv4dDog... (Lodash Prototype Pollution)",
-    filePath: "package-lock.json",
-    severity: "HIGH",
-    scanner: "TRIVY",
-    cvssScore: 8.0,
-    cveId: "CVE-2020-8203",
-    impact: "Prototype pollution vulnerability in lodash allows remote attackers to inject arbitrary properties via template imports.",
-    packageName: "lodash",
-    currentVersion: "4.17.15",
-    fixedVersion: "4.17.21",
-    lineStart: 86
-  },
-  {
-    id: "vuln-3",
-    title: "trivy:package-lock.json:bG9kYVNp... (Axios Authentication Bypass)",
-    filePath: "package-lock.json",
-    severity: "HIGH",
-    scanner: "TRIVY",
-    cvssScore: 8.5,
-    cveId: "CVE-2024-28849",
-    impact: "Insecure credential handling in Axios during cross-origin redirects allows information disclosure.",
-    packageName: "axios",
-    currentVersion: "0.21.1",
-    fixedVersion: "0.21.4",
-    lineStart: 198
-  },
-  {
-    id: "vuln-4",
-    title: "trivy:package-lock.json:bmv4dDog... (Lodash ReDoS)",
-    filePath: "package-lock.json",
-    severity: "HIGH",
-    scanner: "TRIVY",
-    cvssScore: 7.2,
-    cveId: "CVE-2021-23337",
-    impact: "Regular Expression Denial of Service (ReDoS) in lodash CLI commands via command injection strings.",
-    packageName: "lodash",
-    currentVersion: "4.17.11",
-    fixedVersion: "4.17.15",
-    lineStart: 44
-  }
-];
-
-
 export default function DeepAnalysis() {
   const { t } = useTranslation();
   const [vulns, setVulns] = useState<any[]>([]);
@@ -111,12 +51,12 @@ export default function DeepAnalysis() {
           Query.limit(100)
         ])
       ]);
-      const fetchedVulns = vulnsRes.documents || [];
-      setVulns(fetchedVulns.length > 0 ? fetchedVulns : MOCK_VULNERABILITIES);
+      setVulns(vulnsRes.documents || []);
       setRepos(reposRes.documents || []);
     } catch (err) {
       console.error("Failed to fetch data:", err);
-      setVulns(MOCK_VULNERABILITIES);
+      toast.error('Failed to load vulnerability data');
+      setVulns([]);
     } finally {
       setLoading(false);
     }

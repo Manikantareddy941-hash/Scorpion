@@ -35,6 +35,9 @@ async function migrate() {
         await addAttribute('incidents', 'user_id');
         await addAttribute('compliance_controls', 'scopeId');
         await addAttribute('plan_projects', 'user_id');
+        // ai_metrics events were previously aggregated across all users; this lets
+        // getAIAggregates/getAITrends scope results to the calling user.
+        await addAttribute('ai_metrics', 'userId');
         process.exit(0);
     } catch (err: any) {
         console.error('Migration failed:', err.message);

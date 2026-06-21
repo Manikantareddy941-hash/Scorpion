@@ -93,6 +93,12 @@ function App() {
     }
   }, [user]);
 
+  useEffect(() => {
+    const openChat = () => setIsChatOpen(true);
+    window.addEventListener('scorpion:open-chat', openChat);
+    return () => window.removeEventListener('scorpion:open-chat', openChat);
+  }, []);
+
   const checkAppwrite = async () => {
     try {
       await account.get();

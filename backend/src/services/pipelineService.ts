@@ -358,11 +358,17 @@ export async function runPipeline(runId: string) {
         username: envDoc.username,
         privateKey: envDoc.privateKey,
       };
+      // repoName can be caller-supplied free text (pipelineRoutes.ts POST /trigger).
+      // sshService joins these into one remote shell command without escaping each
+      // element individually, so the identifier itself must be stripped of shell
+      // metacharacters before it's interpolated - mirrors deployService.ts's
+      // executeTargetDeployment sanitization for the same class of identifier.
+      const containerName = (runDoc.repoName || runDoc.repoId).replace(/[^a-zA-Z0-9_.-]/g, '-').toLowerCase();
       const remoteCommands = [
-        `docker pull scorpion-registry.local/${runDoc.repoName || runDoc.repoId}:latest`,
-        `docker stop ${runDoc.repoName || runDoc.repoId} || true`,
-        `docker rm ${runDoc.repoName || runDoc.repoId} || true`,
-        `docker run -d --name ${runDoc.repoName || runDoc.repoId} --restart unless-stopped -p 8080:8080 scorpion-registry.local/${runDoc.repoName || runDoc.repoId}:latest`,
+        `docker pull scorpion-registry.local/${containerName}:latest`,
+        `docker stop ${containerName} || true`,
+        `docker rm ${containerName} || true`,
+        `docker run -d --name ${containerName} --restart unless-stopped -p 8080:8080 scorpion-registry.local/${containerName}:latest`,
       ];
       const deployResult = await sshService.executeDeployment({
         server: serverConfig,

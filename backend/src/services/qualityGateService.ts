@@ -94,7 +94,7 @@ export async function evaluateQualityGate(scanId: string): Promise<GateResult> {
   await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
     qualityGrade: worst,
     qualityScore: score,
-    gradeSecuity: security,
+    gradeSecurity: security,
     gradeReliability: reliability,
     gradeMaintainability: maintainability
   });

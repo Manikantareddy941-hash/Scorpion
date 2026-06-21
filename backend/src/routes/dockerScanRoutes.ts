@@ -8,9 +8,17 @@ import { logger } from '../services/logger';
 
 const router = Router();
 
+// A conservative Docker image reference allowlist: must start with an alphanumeric
+// character (so it can never be parsed as a CLI flag by trivy) and only contain
+// characters legal in image names/tags/digests/registry hosts.
+const IMAGE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.\-/:@]*$/;
+
 router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
     const { image_name } = req.body;
     if (!image_name) return res.status(400).json({ error: 'image_name is required' });
+    if (typeof image_name !== 'string' || image_name.length > 255 || !IMAGE_NAME_PATTERN.test(image_name)) {
+        return res.status(400).json({ error: 'Invalid image_name format' });
+    }
 
     // Check if trivy is available
     const trivyCheck = spawnSync('trivy', ['--version']);

@@ -105,6 +105,12 @@ router.post('/evaluate', verifyUser, async (req: Request, res: Response) => {
     if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
 
     try {
+        const userId = (req as any).user?.$id;
+        const repo = await databases.getDocument(DB_ID, 'repositories', repo_id).catch(() => null);
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this repository' });
+        }
+
         await ensurePipelineStateCollection();
         const result = await checkReleaseGate(repo_id);
         const status = result.allowed ? 'passing' : 'BLOCKED';
@@ -160,8 +166,14 @@ router.post('/deploy', verifyUser, checkPermission('repo:deploy'), async (req: R
     if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
 
     try {
+        const userId = (req as any).user?.$id;
+        const repo = await databases.getDocument(DB_ID, 'repositories', repo_id).catch(() => null);
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this repository' });
+        }
+
         await ensurePipelineStateCollection();
-        
+
         // Fetch from pipeline_state to see if blocked
         const existingState = await databases.listDocuments(DB_ID, 'pipeline_state', [
             Query.equal('nodeId', 'release'),
@@ -201,6 +213,12 @@ router.post('/override', verifyUser, checkPermission('gate:bypass'), async (req:
     if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
 
     try {
+        const userId = (req as any).user?.$id;
+        const repo = await databases.getDocument(DB_ID, 'repositories', repo_id).catch(() => null);
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this repository' });
+        }
+
         await ensurePipelineStateCollection();
 
         // Update pipeline_state to passing (Break Glass)
@@ -220,7 +238,7 @@ router.post('/override', verifyUser, checkPermission('gate:bypass'), async (req:
             });
         }
 
-        await logSecureAuditEvent('system', 'BREAK_GLASS_BYPASS', repo_id, `Manual Break Glass override activated for repository: ${repo_id}`);
+        await logSecureAuditEvent(userId, 'BREAK_GLASS_BYPASS', repo_id, `Manual Break Glass override activated for repository: ${repo_id}`);
 
         res.json({
             success: true,
@@ -255,8 +273,13 @@ router.post('/release', verifyUser, async (req: Request, res: Response) => {
     if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
 
     try {
-        const result = await checkReleaseGate(repo_id);
         const userId = (req as any).user?.$id;
+        const repo = await databases.getDocument(DB_ID, 'repositories', repo_id).catch(() => null);
+        if (!repo || !(await canAccessResource(repo, userId))) {
+            return res.status(403).json({ error: 'You do not have access to this repository' });
+        }
+
+        const result = await checkReleaseGate(repo_id);
         await logAuditEvent('GATE_CHECK', `Release gate checked for ${repo_id}. Result: ${result.allowed ? 'PASSED' : 'BLOCKED'} (${result.blocker_count} blockers)`, userId, repo_id);
         res.json(result);
     } catch (err: any) {

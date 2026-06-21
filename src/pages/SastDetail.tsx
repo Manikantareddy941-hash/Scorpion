@@ -23,6 +23,7 @@ interface Finding {
   version?: string;
   tool: string;
   detected_at: string;
+  code?: string;
 }
 
 export default function SastDetail() {
@@ -97,11 +98,12 @@ export default function SastDetail() {
   const actual = critical + high + medium; // security relevant
   const falsePositivePct = total > 0 ? Math.round(((total - actual) / total) * 100) : 0;
 
+  // Real severity-prioritization funnel (no EPSS - that's external data we don't ingest).
   const funnelData = [
     { stage: 'All Issues', total, security: actual },
     { stage: 'Security Issues', total: actual, security: actual },
-    { stage: 'EPSS ≥ 10%', total: Math.round(actual * 0.15), security: Math.round(actual * 0.15) },
-    { stage: 'EPSS ≥ 50%', total: Math.round(actual * 0.02), security: Math.round(actual * 0.02) },
+    { stage: 'High + Critical', total: critical + high, security: critical + high },
+    { stage: 'Critical', total: critical, security: critical },
   ];
 
   const filteredFindings = findings.filter(f => {
@@ -206,8 +208,8 @@ export default function SastDetail() {
           { label: 'All Issues', value: total, sub: '' },
           { label: 'False Positives Cut', value: total - actual, sub: `${falsePositivePct}% noise removed`, color: 'orange' },
           { label: 'Actual Security Issues', value: actual, sub: 'True positives', color: 'green' },
-          { label: 'EPSS ≥ 10%', value: '00', sub: '(0%)' },
-          { label: 'EPSS ≥ 50%', value: '00', sub: '(0%)' },
+          { label: 'Critical', value: critical, sub: total > 0 ? `${Math.round((critical / total) * 100)}%` : '0%', color: 'orange' },
+          { label: 'High', value: high, sub: total > 0 ? `${Math.round((high / total) * 100)}%` : '0%', color: 'orange' },
         ].map((s, i) => (
           <div key={i} className="bg-[var(--bg-card)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
             <div className="text-2xl font-black text-[var(--text-primary)]">{s.value}</div>
@@ -318,34 +320,23 @@ export default function SastDetail() {
                         <label className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em]">Contextual Evidence</label>
                         <div className="mt-1 bg-[#0d0d0d] rounded-xl p-4 border border-[#1a1a1a] font-mono text-[11px] relative group overflow-hidden">
                           <div className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--accent-primary)]/20"></div>
-                          <div className="flex gap-4">
-                            <div className="text-[var(--text-secondary)] opacity-30 select-none text-right w-6">
-                              {(finding.line_number || 1) - 1}<br/>
-                              {finding.line_number || 1}<br/>
-                              {(finding.line_number || 1) + 1}
+                          {finding.code && finding.code.trim() ? (
+                            <pre className="text-[#d1d5db] whitespace-pre-wrap break-words leading-relaxed">{finding.code}</pre>
+                          ) : (
+                            <div className="flex items-center gap-2 text-[var(--text-secondary)] opacity-60">
+                              <Code size={12} />
+                              <span>No source snippet captured for this finding{finding.line_number ? ` (line ${finding.line_number})` : ''}.</span>
                             </div>
-                            <div className="text-[#d1d5db]">
-                              <span className="opacity-40">// context leading to issue...</span><br/>
-                              <span className="text-[var(--status-error)] bg-[var(--status-error)]/10 px-1 rounded font-bold">
-                                {finding.message.split(':').pop()?.trim().substring(0, 50) || '// vulnerable code line'}
-                              </span><br/>
-                              <span className="opacity-40">// context following issue...</span>
-                            </div>
-                          </div>
-                          <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button className="p-2 bg-[#1a1a1a] rounded-lg text-[var(--text-secondary)] hover:text-white">
-                               <Code size={12} />
-                             </button>
-                          </div>
+                          )}
                         </div>
                         <div className="mt-3 flex items-center gap-4">
                           <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--status-error)] animate-pulse"></div>
-                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase">Vulnerability confirmed</span>
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--status-error)]"></div>
+                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase">{finding.severity.toUpperCase()} severity</span>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)]"></div>
-                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase">Trivy engine result</span>
+                            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase">{finding.tool?.toUpperCase()} engine result</span>
                           </div>
                         </div>
                       </div>

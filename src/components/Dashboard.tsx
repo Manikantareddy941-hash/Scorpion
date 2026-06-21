@@ -257,7 +257,11 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
         let bugs = Number(scan.bugs ?? 0);
         let lines = 0;
         let total = scan.total ?? scan.totalIssues ?? scan.vulnerabilities ?? ((scan.critical ?? scan.criticalCount ?? 0) + (scan.high ?? scan.highCount ?? 0) + (scan.medium ?? scan.mediumCount ?? 0) + (scan.low ?? scan.lowCount ?? 0));
-        let score = scan.score ?? scan.securityScore ?? scan.security_score ?? scan.security_rating ?? Math.max(15, Math.round(100 - (crit * 8) - (high * 1.5) - (med * 0.3) - (low * 0.05)));
+        // Fallback formula matches backend/src/services/scanService.ts's computeSecurityScore exactly,
+        // so a scan with no persisted score still scores the same on the frontend as the backend would.
+        const fallbackScore = (c: number, h: number, m: number, l: number) =>
+          Math.max(0, Math.round(100 - (c * 10) - (h * 4) - (m * 1) - (l * 0.25)));
+        let score = scan.score ?? scan.securityScore ?? scan.security_score ?? scan.security_rating ?? fallbackScore(crit, high, med, low);
 
         if (latestCompletedScan.details && typeof latestCompletedScan.details === 'string') {
           try {
@@ -267,14 +271,14 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
             if (d.medium_count !== undefined) med = Math.max(med, Number(d.medium_count));
             if (d.low_count !== undefined) low = Math.max(low, Number(d.low_count));
             if (d.total_vulnerabilities !== undefined) total = Math.max(total, Number(d.total_vulnerabilities));
-            if (d.security_score !== undefined) score = Number(d.security_score) === 0 ? Math.max(15, Math.round(100 - (crit * 8) - (high * 1.5) - (med * 0.3) - (low * 0.05))) : Number(d.security_score);
+            if (d.security_score !== undefined) score = Number(d.security_score) === 0 ? fallbackScore(crit, high, med, low) : Number(d.security_score);
             if (d.bugs !== undefined) bugs = Math.max(bugs, Number(d.bugs));
             if (d.total_lines !== undefined) lines = Number(d.total_lines);
           } catch (e) {}
         }
 
         if (total === 0) total = crit + high + med + low;
-        const finalScore = score !== undefined && score !== null ? Math.round(Number(score)) : Math.max(0, Math.round(100 - (crit * 10) - (high * 4) - (med * 1) - (low * 0.25)));
+        const finalScore = score !== undefined && score !== null ? Math.round(Number(score)) : fallbackScore(crit, high, med, low);
         setVulnStats({ critical: crit, high, medium: med, low, bugs, total, score: finalScore, linesScanned: lines, codeSmells: 0 });
         setPolicyPassRate(finalScore > 85 ? 100 : finalScore > 65 ? 80 : finalScore > 40 ? 60 : 30);
         setQualityGateScore(localStorage.getItem('scorpion_demo_seeded') === 'true' ? 68 : Math.max(0, finalScore - 5));

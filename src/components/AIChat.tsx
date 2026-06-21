@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Send, Copy, Check, RotateCcw } from 'lucide-react';
 import echoIcon from '../assets/echo-ai.png';
+import { useAuth } from '../contexts/AuthContext';
+
+const ECHO_SYSTEM_PROMPT = "You are Echo, the AI assistant for the Scorpion DevSecOps platform. Answer the user's questions about their scans, vulnerabilities, and remediations concisely and accurately.";
 
 const SUGGESTIONS = [
   'What are my critical findings?',
@@ -20,6 +23,7 @@ type ChatMessage = {
 };
 
 const AIChat: React.FC<AIChatProps> = ({ open, setOpen }) => {
+  const { getJWT } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,18 +42,43 @@ const AIChat: React.FC<AIChatProps> = ({ open, setOpen }) => {
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [input]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = input.trim();
     if (!text || isLoading) return;
-    setMessages((prev) => [...prev, { id: `${Date.now()}`, role: 'user', text }]);
+    const userMessage: ChatMessage = { id: `${Date.now()}`, role: 'user', text };
+    const history = [...messages, userMessage];
+    setMessages(history);
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsLoading(true);
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { id: `${Date.now()}-reply`, role: 'assistant', text: `Here's what I found for "${text}".` }]);
+
+    try {
+      const token = await getJWT();
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          systemPrompt: ECHO_SYSTEM_PROMPT,
+          messages: history.map((m) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.text }],
+          })),
+        }),
+      });
+      const data = await res.json();
+      const replyText = res.ok
+        ? (data.reply || "I couldn't find anything for that.")
+        : (data.error || 'Echo is unavailable right now.');
+      setMessages((prev) => [...prev, { id: `${Date.now()}-reply`, role: 'assistant', text: replyText }]);
+    } catch {
+      setMessages((prev) => [...prev, { id: `${Date.now()}-reply`, role: 'assistant', text: 'Echo is unavailable right now — check your connection and try again.' }]);
+    } finally {
       setIsLoading(false);
-    }, 900);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

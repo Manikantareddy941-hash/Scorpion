@@ -577,6 +577,67 @@ export default function PlanWorkspace() {
     return true;
   });
 
+  // Real burndown for the active sprint: the "ideal" line is a genuine linear
+  // interpolation from total points to zero across the sprint's real dates;
+  // "actual" is the one real data point we have - today's remaining points.
+  // There's no daily history stored, so no fabricated multi-day curve is drawn.
+  const burndownData = (() => {
+    if (!activeSprint?.startDate || !activeSprint?.endDate) return [];
+    const sprintIssues = issues.filter(i => i.sprintId === activeSprint.$id);
+    const totalPoints = sprintIssues.reduce((acc, i) => acc + (i.storyPoints || 0), 0);
+    const remainingPoints = sprintIssues
+      .filter(i => i.status !== 'done')
+      .reduce((acc, i) => acc + (i.storyPoints || 0), 0);
+
+    const start = new Date(activeSprint.startDate);
+    const end = new Date(activeSprint.endDate);
+    const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+    const elapsedDays = Math.min(totalDays, Math.max(0, Math.round((Date.now() - start.getTime()) / 86400000)));
+
+    const points: { day: string; ideal: number; actual?: number }[] = [];
+    for (let d = 0; d <= totalDays; d++) {
+      const date = new Date(start.getTime() + d * 86400000);
+      const point: { day: string; ideal: number; actual?: number } = {
+        day: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        ideal: Math.max(0, Math.round(totalPoints - (totalPoints / totalDays) * d)),
+      };
+      if (d === elapsedDays) point.actual = remainingPoints;
+      points.push(point);
+    }
+    return points;
+  })();
+
+  // Real velocity per sprint: committed vs. completed story points, aggregated
+  // directly from the actual issues assigned to each sprint.
+  const velocityData = sprints.map(s => {
+    const sprintIssues = issues.filter(i => i.sprintId === s.$id);
+    const committed = sprintIssues.reduce((acc, i) => acc + (i.storyPoints || 0), 0);
+    const completed = sprintIssues
+      .filter(i => i.status === 'done')
+      .reduce((acc, i) => acc + (i.storyPoints || 0), 0);
+    return { sprint: s.name, committed, completed };
+  });
+
+  // Real bug closure cohorts: bugs grouped by the week they were created,
+  // split into closed vs. still-open based on their current status.
+  const closureVelocityData = (() => {
+    const bugs = issues.filter(i => i.type === 'bug');
+    const weeks: Record<string, { closed: number; open: number; sortKey: number }> = {};
+    bugs.forEach(i => {
+      const created = new Date(i.createdAt);
+      if (Number.isNaN(created.getTime())) return;
+      const weekStart = new Date(created);
+      weekStart.setDate(created.getDate() - created.getDay());
+      const label = weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (!weeks[label]) weeks[label] = { closed: 0, open: 0, sortKey: weekStart.getTime() };
+      if (i.status === 'done') weeks[label].closed++;
+      else weeks[label].open++;
+    });
+    return Object.entries(weeks)
+      .sort((a, b) => a[1].sortKey - b[1].sortKey)
+      .map(([date, v]) => ({ date, closed: v.closed, open: v.open }));
+  })();
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -1458,31 +1519,30 @@ export default function PlanWorkspace() {
                   </span>
                 </div>
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={[
-                        { day: 'Day 1', remaining: 40, ideal: 40 },
-                        { day: 'Day 3', remaining: 35, ideal: 32 },
-                        { day: 'Day 5', remaining: 28, ideal: 24 },
-                        { day: 'Day 7', remaining: 28, ideal: 16 },
-                        { day: 'Day 9', remaining: 15, ideal: 8 },
-                        { day: 'Day 10', remaining: 2, ideal: 0 }
-                      ]}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
-                      <Legend wrapperStyle={{ fontSize: 9 }} />
-                      <Line type="monotone" dataKey="remaining" stroke="#ef4444" name="Actual Remaining" strokeWidth={2} />
-                      <Line type="monotone" dataKey="ideal" stroke="#10b981" name="Ideal Burn" strokeDasharray="5 5" />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  {burndownData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
+                      No active sprint with dates set
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={burndownData}
+                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="day" stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
+                        <Legend wrapperStyle={{ fontSize: 9 }} />
+                        <Line type="monotone" dataKey="actual" stroke="#ef4444" name="Actual Remaining" strokeWidth={2} connectNulls={false} dot={{ r: 4 }} />
+                        <Line type="monotone" dataKey="ideal" stroke="#10b981" name="Ideal Burn" strokeDasharray="5 5" dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
-              {/* Velocity Chart Simulation */}
+              {/* Velocity Chart */}
               <div className="premium-card p-6 space-y-4">
                 <div>
                   <h4 className="text-xs font-black uppercase italic tracking-wider text-[var(--text-primary)]">
@@ -1493,25 +1553,26 @@ export default function PlanWorkspace() {
                   </span>
                 </div>
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[
-                        { sprint: 'Sprint 1', committed: 32, completed: 30 },
-                        { sprint: 'Sprint 2', committed: 35, completed: 35 },
-                        { sprint: 'Sprint 3', committed: 40, completed: 32 },
-                        { sprint: 'Sprint 4', committed: 45, completed: 42 }
-                      ]}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="sprint" stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
-                      <Legend wrapperStyle={{ fontSize: 9 }} />
-                      <Bar dataKey="committed" fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" name="Committed" />
-                      <Bar dataKey="completed" fill="rgba(16, 185, 129, 0.4)" stroke="#10b981" name="Completed" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {velocityData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
+                      No sprints created yet
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={velocityData}
+                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="sprint" stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
+                        <Legend wrapperStyle={{ fontSize: 9 }} />
+                        <Bar dataKey="committed" fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" name="Committed" />
+                        <Bar dataKey="completed" fill="rgba(16, 185, 129, 0.4)" stroke="#10b981" name="Completed" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
@@ -1528,32 +1589,33 @@ export default function PlanWorkspace() {
               <div className="premium-card p-6 space-y-4">
                 <div>
                   <h4 className="text-xs font-black uppercase italic tracking-wider text-[var(--text-primary)]">
-                    Security Posture Cumulative Velocity
+                    Bug Closure Velocity
                   </h4>
                   <span className="text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono">
-                    Fix density and task closure velocity over time
+                    Bugs by week created, closed vs still open
                   </span>
                 </div>
 
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={[
-                        { date: 'Week 1', closed: 5, open: 15 },
-                        { date: 'Week 2', closed: 12, open: 18 },
-                        { date: 'Week 3', closed: 22, open: 14 },
-                        { date: 'Week 4', closed: 35, open: 8 }
-                      ]}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
-                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
-                      <Area type="monotone" dataKey="closed" stroke="#10b981" fillOpacity={0.15} fill="#10b981" name="Closed Vulnerabilities" />
-                      <Area type="monotone" dataKey="open" stroke="#ef4444" fillOpacity={0.05} fill="#ef4444" name="Open Backlog" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  {closureVelocityData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
+                      No bug issues tracked yet
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={closureVelocityData}
+                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={9} />
+                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }} />
+                        <Area type="monotone" dataKey="closed" stroke="#10b981" fillOpacity={0.15} fill="#10b981" name="Closed" />
+                        <Area type="monotone" dataKey="open" stroke="#ef4444" fillOpacity={0.05} fill="#ef4444" name="Still Open" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
               </div>
 
@@ -1761,12 +1823,19 @@ export default function PlanWorkspace() {
                       <span className="text-[8px] text-[var(--text-secondary)] font-bold uppercase tracking-widest italic">
                         {col.default ? 'System Default' : 'Custom'}
                       </span>
-                      <MoreVertical size={14} className="text-[var(--text-secondary)] cursor-pointer" />
+                      <MoreVertical
+                        size={14}
+                        className="text-[var(--text-secondary)] cursor-pointer"
+                        onClick={() => toast('Editing default status columns is coming soon!', { icon: '🚧' })}
+                      />
                     </div>
                   </div>
                 ))}
 
-                <button className="w-full py-3 border border-dashed border-[var(--border-subtle)] hover:border-[var(--accent-primary)] text-[10px] font-black uppercase italic tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent-primary)] rounded-xl flex items-center justify-center gap-1.5 transition-all">
+                <button
+                  onClick={() => toast('Custom status columns are coming soon!', { icon: '🚧' })}
+                  className="w-full py-3 border border-dashed border-[var(--border-subtle)] hover:border-[var(--accent-primary)] text-[10px] font-black uppercase italic tracking-wider text-[var(--text-secondary)] hover:text-[var(--accent-primary)] rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                >
                   <Plus size={14} /> Add Custom Status Column
                 </button>
               </div>

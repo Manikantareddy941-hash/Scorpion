@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  Activity, Shield, AlertTriangle, CheckCircle, 
+import {
+  Activity, Shield, CheckCircle,
   Clock, RefreshCw, BarChart3, List, ChevronRight, ChevronDown, Server,
   TrendingUp, Layout, Zap, Settings, Bell
 } from 'lucide-react';
@@ -16,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 export default function Monitor() {
-  const navigate = useNavigate();
   const { t } = useTranslation();
   const { getJWT } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -25,9 +23,6 @@ export default function Monitor() {
   const [health, setHealth] = useState<any[]>([]);
   const [findings, setFindings] = useState<any[]>([]);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [cpuThreshold, setCpuThreshold] = useState(85);
-  const [incidentAlerts, setIncidentAlerts] = useState(true);
-  const [slackWebhook, setSlackWebhook] = useState('');
   const [filter, setFilter] = useState('All');
   
   // Simulated infrastructure data
@@ -146,50 +141,6 @@ export default function Monitor() {
         </div>
       </div>
 
-      {/* Settings Panel - Permanent Fixture */}
-      <div className="premium-card p-6 border-[var(--accent-primary)]/30">
-        <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-          <AlertTriangle size={14} className="text-yellow-500" /> Alerting Thresholds
-        </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">CPU Warning Threshold (%)</label>
-              <input 
-                type="range" min="50" max="95" value={cpuThreshold} 
-                onChange={(e) => setCpuThreshold(parseInt(e.target.value))}
-                className="w-full accent-[var(--accent-primary)]" 
-              />
-              <div className="flex justify-between text-[10px] font-black">
-                <span>50%</span>
-                <span className="text-[var(--accent-primary)]">{cpuThreshold}%</span>
-                <span>95%</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-subtle)]">
-              <div>
-                <p className="text-[10px] font-black uppercase">Critical Incidents</p>
-                <p className="text-[8px] text-[var(--text-secondary)] font-bold">Immediate push notifications</p>
-              </div>
-              <button 
-                onClick={() => setIncidentAlerts(!incidentAlerts)}
-                className={`w-10 h-5 rounded-full relative transition-all ${incidentAlerts ? 'bg-green-500' : 'bg-gray-400'}`}
-              >
-                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${incidentAlerts ? 'right-1' : 'left-1'}`} />
-              </button>
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Slack Webhook URL</label>
-              <input 
-                type="text" 
-                placeholder="https://hooks.slack.com/..." 
-                value={slackWebhook}
-                onChange={(e) => setSlackWebhook(e.target.value)}
-                className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-[10px] focus:border-[var(--accent-primary)] outline-none"
-              />
-            </div>
-        </div>
-      </div>
-
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
@@ -276,9 +227,13 @@ export default function Monitor() {
                 <Server size={14} className="text-emerald-500" /> Latency & Uptime
               </h3>
               <div className="flex-1 min-h-0">
-                {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
+                {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : healthChecksData.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">
+                    No health-check data yet
+                  </div>
+                ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={healthChecksData.length > 0 ? healthChecksData.map(h => ({ name: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), latency: h.latency })) : [{ name: '00:00', latency: 45 }, { name: '04:00', latency: 50 }, { name: '08:00', latency: 42 }, { name: '12:00', latency: 48 }, { name: '16:00', latency: 52 }, { name: '20:00', latency: 44 }]}>
+                    <AreaChart data={healthChecksData.map(h => ({ name: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), latency: h.latency }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                       <XAxis dataKey="name" hide />
                       <YAxis hide domain={[0, 'auto']} />
@@ -404,8 +359,8 @@ export default function Monitor() {
                           </div>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => navigate('/chat', { state: { initialMessage: `Help me remediate this ${f.severity} finding: "${f.title}" on repository ${f.repo}. Error context: ${f.message}` } })}
+                      <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('scorpion:open-chat'))}
                         className="px-3 py-1.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] text-[8px] font-black uppercase tracking-widest rounded-lg border border-[var(--accent-primary)]/20 hover:bg-[var(--accent-primary)] hover:text-white transition-all flex items-center gap-1 shrink-0"
                       >
                         <Zap size={10} /> Ask

@@ -60,59 +60,13 @@ interface RunMetrics {
 type LogFilter = 'ALL' | 'PASSED' | 'FAILED' | 'WARN';
 type SuiteFilter = 'ALL' | 'unit' | 'integration' | 'e2e' | 'sast' | 'dast';
 
-// ─── Mock fallback data (used when Appwrite returns nothing) ──────────────────
+// ─── Empty defaults (shown until a real test_runs document is fetched) ───────
 
-const MOCK_SUITES: TestSuite[] = [
-  {
-    id: 's-1', name: 'Auth Service Unit Tests', type: 'unit',
-    status: 'PASSED', total: 42, passed: 42, failed: 0, skipped: 0,
-    duration: 1240, coverage: 91.2, flaky: 0, failedTests: []
-  },
-  {
-    id: 's-2', name: 'API Integration Tests', type: 'integration',
-    status: 'FAILED', total: 28, passed: 24, failed: 4, skipped: 0,
-    duration: 4320, coverage: 67.4, flaky: 1,
-    failedTests: [
-      { name: 'POST /api/repos/:id/scan returns 422 on invalid payload', file: 'src/routes/repos.test.ts:88', error: 'Expected 422, received 500 — unhandled schema error in validator middleware', duration: 340 },
-      { name: 'DELETE /api/teams/:id/members rejects non-owners', file: 'src/routes/teams.test.ts:204', error: 'AssertionError: expected 403, got 200 — RBAC middleware not applied on DELETE handler', duration: 210 },
-    ]
-  },
-  {
-    id: 's-3', name: 'SAST Policy Gate', type: 'sast',
-    status: 'PASSED', total: 15, passed: 15, failed: 0, skipped: 0,
-    duration: 8900, coverage: undefined, flaky: 0, failedTests: []
-  },
-  {
-    id: 's-4', name: 'E2E Pipeline Smoke', type: 'e2e',
-    status: 'FLAKY', total: 10, passed: 8, failed: 1, skipped: 1,
-    duration: 22400, coverage: undefined, flaky: 2,
-    failedTests: [
-      { name: 'Scan trigger → result polling → dashboard update', file: 'e2e/pipeline.spec.ts:56', error: 'TimeoutError: waitForSelector(".scan-complete") exceeded 15000ms — likely race condition in WebSocket event', duration: 15020 }
-    ]
-  },
-  {
-    id: 's-5', name: 'Dependency Audit (Trivy)', type: 'dast',
-    status: 'PASSED', total: 6, passed: 6, failed: 0, skipped: 0,
-    duration: 3100, coverage: undefined, flaky: 0, failedTests: []
-  },
-];
-
-const MOCK_LOGS: LogEntry[] = [
-  { id: 'l-1', timestamp: '04:55:01', stage: 'SETUP', status: 'INFO', message: 'Node 20.x environment initialised. Installing dependencies via pnpm ci.', duration: 12400 },
-  { id: 'l-2', timestamp: '04:55:14', stage: 'UNIT', status: 'PASSED', message: 'Auth Service — 42/42 tests passed. Coverage 91.2%.', duration: 1240 },
-  { id: 'l-3', timestamp: '04:55:15', stage: 'INTEGRATION', status: 'FAILED', message: 'API Integration — 4 failures detected. RBAC regression on DELETE /teams/:id/members.', duration: 4320 },
-  { id: 'l-4', timestamp: '04:55:20', stage: 'SAST', status: 'PASSED', message: 'Semgrep SAST gate passed. 0 critical findings. 3 informational notices suppressed.', duration: 8900 },
-  { id: 'l-5', timestamp: '04:55:29', stage: 'E2E', status: 'WARN', message: 'Smoke suite: 1 flaky timeout on scan→dashboard WebSocket race. Retried: passed.', duration: 22400 },
-  { id: 'l-6', timestamp: '04:55:52', stage: 'AUDIT', status: 'PASSED', message: 'Trivy found 0 HIGH/CRITICAL CVEs in production dependencies. 2 LOW suppressed.', duration: 3100 },
-  { id: 'l-7', timestamp: '04:55:55', stage: 'GATE', status: 'FAILED', message: 'Release gate BLOCKED. 4 integration failures must be resolved before merge.', duration: 80 },
-];
-
-const MOCK_METRICS: RunMetrics = {
-  testExecutions: 101, codeCoverage: 62.0, failedTests: 5,
-  passRate: 95.0, totalDuration: 52440, flaky: 3,
-  prevCoverage: 58.4, prevPassRate: 91.2,
-  commitSha: 'a3f9c12', branch: 'feat/rbac-delete-fix',
-  triggeredBy: 'manikantareddy.syamala42', runAt: new Date().toLocaleString(),
+const EMPTY_METRICS: RunMetrics = {
+  testExecutions: 0, codeCoverage: 0, failedTests: 0,
+  passRate: 0, totalDuration: 0, flaky: 0,
+  prevCoverage: 0, prevPassRate: 0,
+  commitSha: '—', branch: '—', triggeredBy: '—', runAt: '—',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -157,11 +111,12 @@ const Trend = ({ current, prev, suffix = '' }: { current: number; prev: number; 
 
 export default function TestResults() {
   const { t } = useTranslation();
-  const [metrics, setMetrics] = useState<RunMetrics>(MOCK_METRICS);
-  const [suites, setSuites] = useState<TestSuite[]>(MOCK_SUITES);
-  const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
+  const [metrics, setMetrics] = useState<RunMetrics>(EMPTY_METRICS);
+  const [suites, setSuites] = useState<TestSuite[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expandedSuite, setExpandedSuite] = useState<string | null>('s-2');
+  const [hasData, setHasData] = useState(false);
+  const [expandedSuite, setExpandedSuite] = useState<string | null>(null);
   const [logFilter, setLogFilter] = useState<LogFilter>('ALL');
   const [suiteFilter, setSuiteFilter] = useState<SuiteFilter>('ALL');
   const [copied, setCopied] = useState<string | null>(null);
@@ -189,12 +144,23 @@ export default function TestResults() {
           triggeredBy: r.triggered_by || '—',
           runAt: r.$createdAt ? new Date(r.$createdAt).toLocaleString() : '—',
         });
-        if (r.suitesJson) { try { setSuites(JSON.parse(r.suitesJson)); } catch { } }
-        if (r.logsJson) { try { setLogs(JSON.parse(r.logsJson)); } catch { } }
+        let parsedSuites: TestSuite[] = [];
+        let parsedLogs: LogEntry[] = [];
+        if (r.suitesJson) { try { parsedSuites = JSON.parse(r.suitesJson); } catch { } }
+        if (r.logsJson) { try { parsedLogs = JSON.parse(r.logsJson); } catch { } }
+        setSuites(parsedSuites);
+        setLogs(parsedLogs);
+        setHasData(true);
+      } else {
+        setMetrics(EMPTY_METRICS);
+        setSuites([]);
+        setLogs([]);
+        setHasData(false);
       }
     } catch (err) {
       console.error('Failed to fetch test run:', err);
-      toast.error('Could not fetch live data — showing last cached run');
+      toast.error('Failed to load test results');
+      setHasData(false);
     } finally {
       setLoading(false);
     }
@@ -299,7 +265,15 @@ export default function TestResults() {
         </div>
 
         <div className="divide-y divide-[#e8e0d0]">
-          {filteredSuites.map(suite => {
+          {!hasData && filteredSuites.length === 0 ? (
+            <div className="text-center py-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+              No test runs recorded yet
+            </div>
+          ) : filteredSuites.length === 0 ? (
+            <div className="text-center py-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+              No suites matching filter
+            </div>
+          ) : filteredSuites.map(suite => {
             const isOpen = expandedSuite === suite.id;
             const passWidth = suite.total > 0 ? (suite.passed / suite.total) * 100 : 0;
             return (
@@ -411,7 +385,7 @@ export default function TestResults() {
           {loading ? (
             <div className="text-slate-500 animate-pulse text-center py-8">Polling pipeline telemetry…</div>
           ) : filteredLogs.length === 0 ? (
-            <div className="text-slate-500 text-center py-8">No entries matching filter.</div>
+            <div className="text-slate-500 text-center py-8">{hasData ? 'No entries matching filter.' : 'No pipeline log recorded yet.'}</div>
           ) : (
             <div className="space-y-1.5">
               {filteredLogs.map(log => (

@@ -108,11 +108,22 @@ router.post('/batch-notify', async (req, res) => {
             return res.status(200).json({ message: 'Integrations disabled' });
         }
 
-        const discordUrl = integration.webhookUrl;
-        const slackUrl = integration.slackWebhookUrl;
+        const discordUrl = integration.discord_webhook;
+        const slackUrl = integration.slack_webhook;
 
         if (!discordUrl && !slackUrl) {
             return res.status(200).json({ message: 'No active webhooks' });
+        }
+
+        // Verify the caller actually owns the scan before relaying its findings
+        // into their own integration - otherwise a guessed/foreign scanId would
+        // leak another tenant's finding details to the caller's webhook.
+        const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId).catch(() => null);
+        const scanRepo = scanDoc?.repo_id
+            ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scanDoc.repo_id).catch(() => null)
+            : null;
+        if (!scanRepo || !(await canAccessResource(scanRepo, user.$id))) {
+            return res.status(403).json({ error: 'You do not have access to this scan' });
         }
 
         // Fetch findings

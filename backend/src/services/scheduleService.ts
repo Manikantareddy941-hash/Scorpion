@@ -71,12 +71,12 @@ export const initReportScheduler = () => {
                                 const boundary = getRangeBoundary(range);
                                 
                                 // Gather data
-                                const findings = await databases.listDocuments(DB_ID, 'findings', [
+                                const findings = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
                                     Query.greaterThanEqual('$createdAt', boundary),
                                     Query.limit(100)
                                 ]);
-                                
-                                const alerts = await databases.listDocuments(DB_ID, 'alerts', [
+
+                                const alerts = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [
                                     Query.greaterThanEqual('$createdAt', boundary),
                                     Query.limit(50)
                                 ]);

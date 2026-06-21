@@ -25,14 +25,37 @@ const triggerLimiter = rateLimit({
  */
 router.get('/runs', verifyUser, async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.$id;
     const { repoId, status, limit = 50 } = req.query;
+
+    if (repoId) {
+      // Single repo requested: verify the caller can access it before scoping to it.
+      const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, String(repoId)).catch(() => null);
+      if (!repo || !(await canAccessResource(repo, userId))) {
+        return res.status(403).json({ error: 'You do not have access to this repository' });
+      }
+    }
 
     const queries: string[] = [
       Query.orderDesc('$createdAt'),
       Query.limit(Number(limit))
     ];
 
-    if (repoId) queries.push(Query.equal('repoId', String(repoId)));
+    if (repoId) {
+      queries.push(Query.equal('repoId', String(repoId)));
+    } else {
+      // No repoId filter: scope to every repo the caller can access instead of
+      // returning runs across the entire system.
+      const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.equal('user_id', userId),
+        Query.limit(500),
+      ]);
+      const accessibleRepoIds = ownedRepos.documents.map((r: any) => r.$id);
+      if (accessibleRepoIds.length === 0) {
+        return res.json({ total: 0, documents: [] });
+      }
+      queries.push(Query.equal('repoId', accessibleRepoIds));
+    }
     if (status) queries.push(Query.equal('status', String(status)));
 
     const runs = await databases.listDocuments(DB_ID, 'pipeline_runs', queries);
@@ -129,14 +152,20 @@ router.post('/trigger', verifyUser, triggerLimiter, async (req: Request, res: Re
       return res.status(400).json({ error: 'repoId is required' });
     }
 
-    // Ensure repository document exists; create minimal entry if missing
+    const userId = (req as any).user?.$id;
+
+    // Ensure repository document exists; create minimal entry if missing. If it
+    // already exists, the caller must actually have access to it.
     try {
-      await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+      const existingRepo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+      if (!(await canAccessResource(existingRepo, userId))) {
+        return res.status(403).json({ error: 'You do not have access to this repository' });
+      }
     } catch {
       await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {
         name: req.body.repoName || repoId,
         url: req.body.cloneUrl || '',
-        user_id: 'system',
+        user_id: userId || 'system',
         created_at: new Date().toISOString(),
       });
     }

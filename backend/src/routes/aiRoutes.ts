@@ -78,7 +78,7 @@ router.post('/vulns/:id/feedback', async (req: AuthenticatedRequest, res: Respon
 // Metrics
 router.post('/metrics/event', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        await recordAIEvent(req.body);
+        await recordAIEvent({ ...req.body, userId: req.user?.$id });
         res.json({ success: true });
     } catch (err) {
         next(err);
@@ -96,7 +96,7 @@ router.get('/metrics/summary', async (req: AuthenticatedRequest, res: Response, 
 
 router.get('/metrics/trends', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const trends = await getAITrends();
+        const trends = await getAITrends(req.user!.$id);
         res.json(trends);
     } catch (err) {
         next(err);

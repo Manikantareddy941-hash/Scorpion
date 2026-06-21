@@ -19,7 +19,7 @@ export default function AuthSystemStatus() {
     setError('');
 
     try {
-      const res = await fetch('http://localhost:3001/health');
+      const res = await fetch('/api/health');
 
       if (!res.ok) throw new Error('Request failed');
 

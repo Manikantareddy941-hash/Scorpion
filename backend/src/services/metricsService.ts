@@ -7,6 +7,7 @@ export interface AIEvent {
     action: 'viewed' | 'accepted' | 'ignored';
     confidence_score?: number;
     metadata?: any;
+    userId?: string;
 }
 
 export const recordAIEvent = async (event: AIEvent) => {
@@ -42,9 +43,8 @@ export const recordAIEvent = async (event: AIEvent) => {
 
 export const getAIAggregates = async (userId: string) => {
     try {
-        // Fetch all metrics for current user (this might need filtering by repository owned by user in the future)
-        // For now, listing all as per previous implementation logic
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.AI_METRICS, [
+            Query.equal('userId', userId),
             Query.limit(5000) // Large limit for manual aggregation
         ]);
 
@@ -82,10 +82,11 @@ export const getAIAggregates = async (userId: string) => {
     }
 };
 
-export const getAITrends = async () => {
+export const getAITrends = async (userId: string) => {
     try {
         // Since we don't have RPC, we'll fetch recent metrics and aggregate by day in JS
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.AI_METRICS, [
+            Query.equal('userId', userId),
             Query.orderDesc('$createdAt'),
             Query.limit(1000)
         ]);

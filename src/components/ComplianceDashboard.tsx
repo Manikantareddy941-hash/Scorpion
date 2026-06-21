@@ -1,5 +1,6 @@
 // src/components/ComplianceDashboard.tsx
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
 
 type MetricResponse = {
   noiseReductionPercentage: number; // e.g. 33.3
@@ -8,15 +9,37 @@ type MetricResponse = {
 };
 
 const ComplianceDashboard: React.FC = () => {
+  const { getJWT } = useAuth();
   const [metrics, setMetrics] = useState<MetricResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch metrics from backend endpoint
-    fetch("/api/dashboard/metrics")
-      .then((res) => res.json())
-      .then((data) => setMetrics(data))
-      .catch((err) => console.error("Failed to load dashboard metrics", err));
-  }, []);
+    let active = true;
+    const load = async () => {
+      try {
+        const token = await getJWT();
+        const res = await fetch("/api/dashboard/metrics", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (active) setMetrics(data);
+      } catch (err: any) {
+        console.error("Failed to load dashboard metrics", err);
+        if (active) setError("Failed to load dashboard metrics");
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, [getJWT]);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64 text-red-400">
+        {error}
+      </div>
+    );
+  }
 
   if (!metrics) {
     return (
