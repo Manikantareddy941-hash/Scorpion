@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { sendOtpEmail } from '../services/emailService';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
@@ -10,7 +11,14 @@ const router = express.Router();
 if (!process.env.RESET_TOKEN_SECRET && process.env.NODE_ENV === 'production') {
     throw new Error('RESET_TOKEN_SECRET must be set in production');
 }
-const RESET_TOKEN_SECRET = process.env.RESET_TOKEN_SECRET || 'your-fallback-secret';
+
+// When RESET_TOKEN_SECRET is unset (non-production only), fall back to a random
+// per-process secret rather than a hardcoded constant. A guessable constant would
+// let anyone forge a reset token and take over any account; a random secret means
+// the worst case is that already-issued reset tokens stop working after a restart,
+// which is fine for a 5-minute token. Read lazily so tests can inject a known value.
+const EPHEMERAL_RESET_SECRET = crypto.randomBytes(32).toString('hex');
+const getResetTokenSecret = (): string => process.env.RESET_TOKEN_SECRET || EPHEMERAL_RESET_SECRET;
 
 // 1. Request Password Reset
 router.post('/request-reset', async (req: Request, res: Response) => {
@@ -129,7 +137,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         }
 
         // Generate temporary reset token
-        const resetToken = jwt.sign({ email }, RESET_TOKEN_SECRET, { expiresIn: '5m' });
+        const resetToken = jwt.sign({ email }, getResetTokenSecret(), { expiresIn: '5m' });
 
         res.json({ resetToken, message: 'OTP verified successfully' });
     } catch (error: any) {
@@ -145,7 +153,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     try {
         // Verify reset token
-        const decoded = jwt.verify(resetToken, RESET_TOKEN_SECRET) as { email: string };
+        const decoded = jwt.verify(resetToken, getResetTokenSecret()) as { email: string };
         const email = decoded.email;
 
         // Fetch user from Appwrite

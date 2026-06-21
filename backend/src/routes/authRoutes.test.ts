@@ -3,6 +3,11 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
+// Pin a known reset-token secret so sign/verify agree (the route otherwise uses
+// a random per-process secret when RESET_TOKEN_SECRET is unset). Read lazily by
+// the route at request time, so setting it here is sufficient.
+process.env.RESET_TOKEN_SECRET = 'test-reset-secret';
+
 jest.mock('../lib/appwrite', () => ({
     databases: {
         listDocuments: jest.fn(),
@@ -180,7 +185,7 @@ describe('POST /auth/reset-password', () => {
     });
 
     it('updates the password and deletes the reset record for a valid token', async () => {
-        const secret = process.env.RESET_TOKEN_SECRET || 'your-fallback-secret';
+        const secret = process.env.RESET_TOKEN_SECRET as string;
         const resetToken = jwt.sign({ email: 'a@b.com' }, secret, { expiresIn: '5m' });
 
         (users.list as jest.Mock).mockResolvedValue({ total: 1, users: [{ $id: 'user-1' }] });
@@ -199,7 +204,7 @@ describe('POST /auth/reset-password', () => {
     });
 
     it('returns 404 when the token is valid but the user no longer exists', async () => {
-        const secret = process.env.RESET_TOKEN_SECRET || 'your-fallback-secret';
+        const secret = process.env.RESET_TOKEN_SECRET as string;
         const resetToken = jwt.sign({ email: 'gone@b.com' }, secret, { expiresIn: '5m' });
         (users.list as jest.Mock).mockResolvedValue({ total: 0, users: [] });
 

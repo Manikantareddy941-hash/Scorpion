@@ -43,6 +43,7 @@ import Monitor from './pages/Monitor';
 import PolicyBuilder from './pages/PolicyBuilder';
 import { Shield } from 'lucide-react';
 import AuthCallback from './pages/AuthCallback';
+import VerifyEmail from './pages/VerifyEmail';
 import AuditLog from './pages/AuditLog';
 import PlanWorkspace from './pages/PlanWorkspace';
 import TicketDashboard from './pages/TicketDashboard';
@@ -76,7 +77,7 @@ function App() {
   };
 
   const { theme, echoFreeRoam } = useTheme();
-  const isAuthPage = ['/login', '/signup', '/forgot-password', '/verify-otp', '/reset-password', '/auth/callback', '/auth'].includes(location.pathname);
+  const isAuthPage = ['/login', '/signup', '/forgot-password', '/verify-otp', '/reset-password', '/auth/callback', '/auth', '/verify-email'].includes(location.pathname);
   const showSidebar = !isAuthPage && user;
 
   useEffect(() => {
@@ -166,6 +167,7 @@ function App() {
               <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
               <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
               <Route path="/verify-otp" element={<PublicRoute><VerifyOtp /></PublicRoute>} />
               <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
