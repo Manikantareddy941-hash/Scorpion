@@ -46,10 +46,40 @@ const upload = multer({
     }
 });
 
+// Verifies the file actually begins with the ZIP local-file-header magic bytes
+// (PK\x03\x04, or the empty/spanned variants PK\x05\x06 / PK\x07\x08), since the
+// multer extension filter alone is trivially spoofable by renaming any file .zip.
+const hasZipSignature = (p: string): boolean => {
+    let fd: number | null = null;
+    try {
+        fd = fs.openSync(p, 'r');
+        const buf = Buffer.alloc(4);
+        fs.readSync(fd, buf, 0, 4, 0);
+        if (buf[0] !== 0x50 || buf[1] !== 0x4b) return false; // 'PK'
+        const third = buf[2], fourth = buf[3];
+        return (
+            (third === 0x03 && fourth === 0x04) ||
+            (third === 0x05 && fourth === 0x06) ||
+            (third === 0x07 && fourth === 0x08)
+        );
+    } catch {
+        return false;
+    } finally {
+        if (fd !== null) fs.closeSync(fd);
+    }
+};
+
 // ZIP Upload Endpoint
 router.post('/zip', uploadLimiter, upload.single('project_zip'), async (req: AuthenticatedRequest, res: Response) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Content-based validation: reject anything that isn't really a ZIP regardless
+    // of its filename/extension or declared MIME type.
+    if (!hasZipSignature(req.file.path)) {
+        cleanupWorkspace(req.file.path);
+        return res.status(400).json({ error: 'Uploaded file is not a valid ZIP archive' });
     }
 
     // multer parses multipart text fields into req.body alongside the file, so

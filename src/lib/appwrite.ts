@@ -41,4 +41,6 @@ export const FUNCTION_ID = import.meta.env.VITE_APPWRITE_FUNCTION_ID;
 export const OAUTH_SUCCESS_URL = `${window.location.origin}/auth/callback`;
 export const OAUTH_FAILURE_URL = `${window.location.origin}/login`;
 
-console.log('Appwrite init:', import.meta.env.VITE_APPWRITE_ENDPOINT, import.meta.env.VITE_APPWRITE_PROJECT_ID);
+if (import.meta.env.DEV) {
+  console.log('Appwrite init:', import.meta.env.VITE_APPWRITE_ENDPOINT, import.meta.env.VITE_APPWRITE_PROJECT_ID);
+}
