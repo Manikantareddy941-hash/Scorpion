@@ -6,8 +6,10 @@ const router = Router();
 
 // Secret verification middleware for ArgoCD webhooks
 function verifyScorpionSecret(req: Request, res: Response, next: NextFunction) {
+  const expected = process.env.SCORPION_WEBHOOK_SECRET;
   const secret = req.headers['x-scorpion-secret'];
-  if (secret !== process.env.SCORPION_WEBHOOK_SECRET) {
+  // Fails closed: an unconfigured secret must never leave this endpoint open.
+  if (!expected || secret !== expected) {
     logger.warn('[GitOps] Unauthorized webhook attempt');
     return res.status(401).json({ error: 'Unauthorized' });
   }

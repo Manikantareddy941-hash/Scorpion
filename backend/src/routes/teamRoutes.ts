@@ -78,6 +78,17 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
 router.get('/:id/members', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const teamId = req.params.id;
+        const userId = req.user!.$id;
+
+        const callerMembership = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
+            Query.equal('team_id', teamId),
+            Query.equal('user_id', userId),
+            Query.limit(1)
+        ]);
+        if (callerMembership.total === 0) {
+            return res.status(403).json({ error: 'You are not a member of this team' });
+        }
+
         const memberships = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
             Query.equal('team_id', teamId)
         ]);

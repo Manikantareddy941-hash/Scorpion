@@ -6,8 +6,10 @@ const router = Router();
 
 // Middleware to verify Falco secret if configured
 const verifyFalcoSecret = (req: Request, res: Response, next: any) => {
+  const expected = process.env.FALCO_SECRET;
   const secret = req.headers['x-falco-secret'];
-  if (process.env.FALCO_SECRET && secret !== process.env.FALCO_SECRET) {
+  // Fails closed: an unconfigured secret must never leave this endpoint open.
+  if (!expected || secret !== expected) {
     return res.status(401).json({ error: 'Unauthorized Falco source' });
   }
   next();
