@@ -1,64 +1,103 @@
-# 🛡️ SCORPION: Enterprise-Grade AI-Powered DevSecOps Orchestration Platform
+<div align="center">
 
-SCORPION is an automated, production-grade security control plane that unifies multi-engine security scanning, real-time threat telemetry, policy-driven CI/CD gates, and Google Gemini-powered AI remediation into a closed-loop security posture platform. It protects applications across their entire lifecycle—from the developer's local VS Code sandbox to GitHub pull requests and production deployment runtimes.
+# 🛡️ SCORPION
+
+**Enterprise-Grade AI-Powered DevSecOps Orchestration Platform**
+
+Unified multi-engine scanning · real-time threat telemetry · policy-driven CI/CD gates · AI-powered remediation
+
+[![CI](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml/badge.svg)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml)
+[![Scorpion Scan](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml/badge.svg)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
+
+</div>
 
 ---
 
-## 🏛️ Platform Architecture
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Core Workflows](#core-workflows)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Security Hardening](#security-hardening)
+- [Project Structure](#project-structure)
+- [Contributing](#contributing)
+
+---
+
+## Overview
+
+SCORPION is a production-grade security control plane that protects applications across their entire lifecycle — from a developer's local VS Code sandbox, through GitHub pull requests, to production deployment runtimes. It unifies SAST, SCA, secrets, IaC, and DAST scanning behind one dashboard, gates releases with policy-as-code, and uses Gemini/OpenAI to generate drop-in remediation patches.
+
+## Features
+
+| Category | Capability |
+|---|---|
+| 🔍 **Scanning** | Parallel SAST (Semgrep), SCA (Trivy), secrets (Gitleaks), IaC (Checkov), Python (Bandit), DAST (OWASP ZAP) |
+| 🤖 **AI Remediation** | "TONY" engine — context-aware patch generation via Gemini, applied as reviewable diffs |
+| 🚪 **Policy Gates** | OPA/Rego policy-as-code blocking PR merges on GitHub commit status checks |
+| 🏢 **Multi-Tenancy** | Team-scoped repos/scans/incidents, fine-grained IAM, Okta/Microsoft SSO via Appwrite OAuth2 |
+| 🧵 **Async Pipeline** | Redis-backed BullMQ scan queue, decoupled from the request thread |
+| 🧩 **Threat Modeling** | STRIDE-based React Flow canvas with Gemini-assisted analysis |
+| 🔐 **Supply Chain** | cosign container image signing/verification, automated leaked-secret revocation |
+| 🚨 **Incident Response** | Slack alerting, automated containment, Falco runtime event ingestion |
+| 📋 **Compliance** | SOC 2 / ISO 27001 evidence export, hash-stamped audit ledger |
+| 🧰 **Dev Integrations** | VS Code extension with inline diagnostics, GitHub App webhooks |
+
+## Architecture
+
+SCORPION is a decentralized, multi-tiered system: a React dashboard, an Express API gateway, a background worker fleet, and external integrations (GitHub App, VS Code extension), all synchronized through an Appwrite Cloud telemetry database.
 
 ![SCORPION Platform Architecture](./public/scorpion_platform_architecture.png)
 
-SCORPION is architected as a decentralized, multi-tiered security system composed of a React front-end dashboard, an Express API gateway, a background worker, and external integrations (GitHub App & VS Code Extension), all synchronized in real-time through an Appwrite Cloud telemetry database.
-
 ```mermaid
 flowchart TD
-    %% Client & Integration Tier
     subgraph ClientTier [Client & Integration Layer]
         FE[React Vite Console]
         VSCode[VS Code Extension]
         GHApp[GitHub App Webhooks]
     end
 
-    %% Gateway & Logic Tier
     subgraph CoreBackend [SCORPION Core Backend]
         API[Express API Router]
+        Queue[BullMQ / Redis Queue]
         Worker[Background Scan Worker]
-        Policy[Policy Governance Engine]
+        Policy[OPA Policy Engine]
         AI[Gemini Remediation Service]
     end
 
-    %% Database Tier
     subgraph Storage [Appwrite Cloud DB]
         ScansColl[(scans collection)]
         VulnsColl[(vulnerabilities collection)]
         AuditColl[(audit_logs collection)]
     end
 
-    %% Telemetry flows
     FE <-->|HTTP & Appwrite Realtime| API
     VSCode <-->|Secure HTTP Tunnel| API
     GHApp -->|PR Webhooks| API
-    
-    API --> Worker
+
+    API --> Queue --> Worker
     API --> Policy
     API --> AI
-    
+
     Worker -->|Differential Delta Ingest| Storage
     Policy -->|Evaluate Scan Metrics| Storage
     AI <-->|Fetch Source Context| Storage
 ```
 
----
+## Core Workflows
 
-## 🏎️ Core Modules & System Workflows
+<details>
+<summary><b>1. Parallel Multi-Engine Scan Pipeline</b></summary>
 
----
+Scan service clones the target repo and runs five scanners in parallel under a sandboxed environment, queued via BullMQ.
 
-### 1. Parallel Multi-Engine Scan Pipeline
-
-When a scan is initiated (manually, via cron, or PR webhooks), the scan service clones the target repository and coordinates five specialized security scanners in parallel under a secure environment.
-
-* **File Path**: [`backend/src/workers/scanWorker.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/workers/scanWorker.ts) & [`backend/src/services/scanService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/scanService.ts)
+**Files:** [`backend/src/workers/scanWorker.ts`](backend/src/workers/scanWorker.ts) · [`backend/src/services/scanService.ts`](backend/src/services/scanService.ts)
 
 ```mermaid
 sequenceDiagram
@@ -72,7 +111,6 @@ sequenceDiagram
     Router->>Service: triggerScan(repoId, options, existingScanId)
     Service->>DB: updateDocument(status: 'running')
     Service->>Git: Clone repository branch locally to /tmp
-    Note over Service, Tools: Executes parallel spawn() child processes
     par SAST Scan
         Service->>Tools: semgrep scan --json --config auto
     and Secret Scan
@@ -89,41 +127,36 @@ sequenceDiagram
     Service->>DB: Ingest Findings Delta
     Service->>Git: Clean up local directory recursively
 ```
+</details>
 
----
+<details>
+<summary><b>2. Differential Delta Ingestion</b></summary>
 
-### 2. Differential Delta Ingestion Logic
+SHA-256 fingerprints compare incoming findings against stored issues to avoid duplicate alerts and enable fast writes.
 
-To ensure lightning-fast database writes and avoid duplicate alerts, SCORPION implements a differential delta scanning system. It computes unique SHA-256 fingerprints to compare current scan findings against stored issues.
+**File:** [`backend/src/services/scanService.ts#L22`](backend/src/services/scanService.ts) (`ingestVulnerabilitiesDelta`)
 
 ![SCORPION Scan & Delta Ingestion](./public/scorpion_scan_and_delta_ingestion.png)
-
-* **File Path**: [`backend/src/services/scanService.ts#L22`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/scanService.ts#L22) (Function: `ingestVulnerabilitiesDelta`)
 
 ```mermaid
 flowchart TD
     Start([Receive Incoming Vulnerabilities]) --> FetchDB[Fetch Open Vulnerabilities from DB]
-    
-    FetchDB --> HashDB[Compute SHA-256 Hashing Signatures for DB docs]
-    HashDB --> HashIncoming[Compute SHA-256 Hashing Signatures for incoming items]
-    
-    Note over HashDB, HashIncoming: Hash Format: repoId | filePath | cveId/Title | severity
-    
+    FetchDB --> HashDB[Compute SHA-256 signatures for DB docs]
+    HashDB --> HashIncoming[Compute SHA-256 signatures for incoming items]
     HashIncoming --> DiffCheck{In Incoming but NOT in DB?}
-    DiffCheck -- Yes --> CreateDoc[createDocument: Insert new vulnerability status: 'open']
+    DiffCheck -- Yes --> CreateDoc[createDocument: status open]
     DiffCheck -- No --> ActiveCheck{In DB but MISSING from Incoming?}
-    
-    ActiveCheck -- Yes --> ResolveDoc[updateDocument: Mark vulnerability status: 'resolved']
-    ActiveCheck -- No --> Ignore[Keep current status unchanged]
+    ActiveCheck -- Yes --> ResolveDoc[updateDocument: status resolved]
+    ActiveCheck -- No --> Ignore[Keep status unchanged]
 ```
+</details>
 
----
+<details>
+<summary><b>3. TONY: AI Remediation Engine</b></summary>
 
-### 3. TONY: Context-Aware AI Remediation Engine
+Generates context-aware drop-in patches and git-compliant diffs via Gemini Pro.
 
-Integrating directly with Google Gemini Pro, TONY generates instant context-aware drop-in source code patches and git-compliant patch diffs.
-
-* **File Path**: [`backend/src/services/aiService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/aiService.ts) & [`backend/src/routes/remediate.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/routes/remediate.ts)
+**Files:** [`backend/src/services/aiService.ts`](backend/src/services/aiService.ts) · [`backend/src/routes/remediate.ts`](backend/src/routes/remediate.ts)
 
 ```mermaid
 flowchart LR
@@ -134,153 +167,105 @@ flowchart LR
     ShowExpl --> DevApprove["Developer approves"]
     DevApprove --> ApplyFix["Apply fix to file"]
 ```
+</details>
 
----
+<details>
+<summary><b>4. GitHub PR Policy Enforcement Gate (OPA)</b></summary>
 
-### 4. GitHub PR Policy Enforcement Gate
+Checks repo vulnerabilities against OPA/Rego policy and posts results to GitHub commit status checks.
 
-The policy governance engine acts as a pipeline block, checking repository vulnerabilities against critical thresholds and posting results directly to GitHub's commit status checks API.
-
-* **File Path**: [`backend/src/services/policyService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/policyService.ts) & [`backend/src/github/policyEngine.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/github/policyEngine.ts)
+**Files:** [`backend/src/services/opaService.ts`](backend/src/services/opaService.ts) · [`backend/src/services/policyService.ts`](backend/src/services/policyService.ts) · [`backend/src/github/policyEngine.ts`](backend/src/github/policyEngine.ts)
 
 ```mermaid
 flowchart TD
     ScanEnd([Scan Process Completed]) --> PullScan[Retrieve Scan severity counts]
-    PullScan --> CheckRule{criticalCount === 0 AND highCount === 0?}
-    
-    CheckRule -- Passed Policy --> PassState[Gate Status: PASSED]
-    CheckRule -- Violated Policy --> FailState[Gate Status: BLOCKED]
-    
+    PullScan --> CheckRule{OPA policy evaluation}
+    CheckRule -- Passed --> PassState[Gate Status: PASSED]
+    CheckRule -- Violated --> FailState[Gate Status: BLOCKED]
     PassState --> PostPass[Post GitHub PR Commit Status: success]
     FailState --> PostFail[Post GitHub PR Commit Status: failure]
-    
     PostPass --> MergeOK([Allow Pull Request Merge])
-    PostFail --> MergeBlocked([Physically Block Pull Request Merge])
+    PostFail --> MergeBlocked([Block Pull Request Merge])
 ```
+</details>
 
----
+<details>
+<summary><b>5. VS Code Extension Workspace Loop</b></summary>
 
-### 5. VS Code Security Extension Workspace Loop
+Embeds SCORPION intelligence directly into the local dev environment.
 
-The VS Code Extension embeds centralized SCORPION intelligence directly into local developer environments.
-
-* **File Path**: [`scorpion-vscode/src/diagnosticProvider.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/scorpion-vscode/src/diagnosticProvider.ts) & [`scorpion-vscode/src/sidebarProvider.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/scorpion-vscode/src/sidebarProvider.ts)
+**Files:** [`scorpion-vscode/src/diagnosticProvider.ts`](scorpion-vscode/src/diagnosticProvider.ts) · [`scorpion-vscode/src/sidebarProvider.ts`](scorpion-vscode/src/sidebarProvider.ts)
 
 ```mermaid
 flowchart TD
     VSActivate([Activate Extension]) --> Connect[Initialize scorpionClient]
     Connect --> Watch[Watch open workspace text files]
-    
     Watch --> FetchVulns[HTTP Fetch vulnerabilities for current file]
     FetchVulns --> SetSquiggles[Draw Diagnostic Squiggles on error lines]
-    
     Watch --> SidebarPanel[Render Webview Sidebar showing metrics]
     SetSquiggles --> RemediateCmd[Trigger scorpion.remediate on code action]
-    
     RemediateCmd --> DiffView[Show side-by-side split code review and apply]
 ```
+</details>
 
----
+<details>
+<summary><b>6. Multi-Tenancy, Threat Modeling & Incident Response</b></summary>
 
-### 6. Audit Ledger & Incident Command Workspace
+Repos/scans/incidents/compliance are team-scoped (closing cross-tenant IDOR); STRIDE threat modeling runs on a React Flow canvas; critical incidents trigger Slack alerts and automated containment, feeding the hash-stamped Audit Ledger.
 
-SCORPION ensures absolute traceability and real-time response for security posture violations across developer logs, compliance checks, and cloud runtime workloads.
-
-* **File Path**: [`src/pages/AuditLedger.tsx`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/src/pages/AuditLedger.tsx) & [`src/pages/Teams.tsx`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/src/pages/Teams.tsx)
+**Files:** [`backend/src/services/tenancyService.ts`](backend/src/services/tenancyService.ts) · [`backend/src/services/threatModelService.ts`](backend/src/services/threatModelService.ts) · [`backend/src/services/slackService.ts`](backend/src/services/slackService.ts) · [`src/pages/AuditLedger.tsx`](src/pages/AuditLedger.tsx)
 
 ```mermaid
 flowchart TD
-    %% Audit Ledger Flow
     ScanCompleted["Scan completed"] --> AuditLedger["Audit Ledger"]
     PRGate["PR gate evaluated"] --> AuditLedger
     AIFix["AI fix applied"] --> AuditLedger
     AuditLedger --> HashStamped["Hash-stamped log entry"]
     HashStamped --> SOCTrail["SOC 2 and ISO 27001 trail"]
 
-    %% Incident Command Flow
     FalcoEvent["Falco Kubernetes event"] --> IncidentCommand["Incident Command"]
-    IncidentCommand --> OnCallTeam["On-call team notified"]
-    OnCallTeam --> ThreatTriage["Threat triage begins"]
+    IncidentCommand --> SlackAlert["Slack alert + containment"]
+    SlackAlert --> OnCallTeam["On-call team notified"]
 ```
+</details>
 
----
+## Tech Stack
 
-### 7. Multi-Tenancy, RBAC & Enterprise SSO
+<table>
+<tr><td valign="top">
 
-Every repo, scan, vulnerability, incident, and policy is scoped to a tenant team via the Appwrite-backed Team model, closing cross-tenant IDOR gaps. Enterprise customers authenticate via Okta/Microsoft SSO through Appwrite OAuth2, with fine-grained IAM roles enforced on every route.
+**Frontend**
+- React `18` · Vite `8` · TypeScript `5.5`
+- Tailwind CSS · Lucide React
+- Appwrite SDK (realtime)
+- Recharts · React Markdown · React Flow
+- `@google/generative-ai`
 
-* **File Path**: [`backend/src/services/tenancyService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/tenancyService.ts) & [`backend/src/middleware/iamMiddleware.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/middleware/iamMiddleware.ts)
+</td><td valign="top">
 
----
+**Backend**
+- Express · TypeScript · Node.js
+- BullMQ + ioredis · socket.io
+- Octokit / `@octokit/auth-app` · simple-git · dockerode
+- zod · helmet · express-rate-limit · bcrypt · jsonwebtoken
+- openai · pdfkit · json2csv · archiver
+- winston + winston-loki · prom-client · OpenTelemetry
 
-### 8. Async Scan Queue (BullMQ + Redis)
+</td></tr>
+</table>
 
-Scan execution moved off the request thread onto a Redis-backed BullMQ queue, replacing the old synchronous pipeline so scans survive API restarts and scale horizontally across workers.
+## Getting Started
 
-* **File Path**: [`backend/src/workers/scanWorker.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/workers/scanWorker.ts)
-
----
-
-### 9. DAST & Threat Modeling
-
-A DAST engine drives OWASP ZAP against running targets, and a STRIDE-based Threat Modeling module (React Flow canvas + Gemini AI) lets teams diagram and analyze architecture risk.
-
-* **File Path**: [`backend/src/services/zapService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/zapService.ts) & [`backend/src/services/threatModelService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/threatModelService.ts)
-
----
-
-### 10. Policy-as-Code Gate, Container Signing & Compliance Export
-
-Real release-gate decisions are evaluated against OPA/Rego policies, container images are signed and verified with cosign, and SOC 2 / ISO 27001 compliance evidence can be exported on demand.
-
-* **File Path**: [`backend/src/services/opaService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/opaService.ts), [`backend/src/services/cosignService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/cosignService.ts) & [`backend/src/services/complianceEngine.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/complianceEngine.ts)
-
----
-
-### 11. Incident Response: Slack Alerts & Secret Auto-Revoke
-
-Critical incidents trigger real Slack notifications and automated containment; secrets leaked into scanned repos are automatically revoked via the provider API instead of just flagged.
-
-* **File Path**: [`backend/src/services/slackService.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/slackService.ts)
-
----
-
-## 💻 Tech Stack & Dependencies
-
-### Frontend Command Center
-
-* **Core framework**: React `^18.3.1` (Vite `^8.0.12`, TypeScript `^5.5.3`)
-* **Styling & Assets**: Tailwind CSS `^3.4.1`, Lucide React `^0.344.0`
-* **Realtime Telemetry Database**: Appwrite SDK `^23.0.0`
-* **Analytics & Graphs**: Recharts `^3.7.0`, React Markdown `^10.1.0`
-* **AI Generative Integration**: `@google/generative-ai` `^0.24.1`
-
-### Orchestration Backend
-
-* **Core gateway**: Express `^4.18.2` (Node.js, TypeScript `^5.3.3`)
-* **Integrations & Git**: Octokit `^5.0.5`, `@octokit/rest` `^22.0.1`, `@octokit/auth-app`, `@octokit/webhooks`, simple-git `^3.36.0`, dockerode, ssh2
-* **Async Queue & Realtime**: bullmq `^5.70.1` + ioredis (Redis-backed scan queue), socket.io, node-cron `^3.0.3`, node-appwrite `^22.1.3`
-* **Validation & Security**: zod, helmet, express-rate-limit, bcrypt, jsonwebtoken
-* **AI & Documents**: openai, json2csv, pdfkit, archiver, adm-zip, unzipper, marked
-* **Notifications**: nodemailer, resend, slackService (Slack webhooks)
-* **Observability & Analytics**: prom-client `^15.1.3`, winston `^3.19.0` + winston-loki, `@opentelemetry/api` `^1.9.1`
-
----
-
-## 🚀 Quickstart Guide
-
-### 📦 Prerequisites
-
-Install the SCORPION security scanners locally before launching the background workers:
+### Prerequisites
 
 ```bash
-# Automate local CLI installations (Semgrep, Trivy, Gitleaks, Checkov, Bandit)
+# Installs Semgrep, Trivy, Gitleaks, Checkov, Bandit
 npm run install
 ```
 
-### 1. Configuration Setup
+### 1. Configure environment
 
-Create a `.env` file in the `backend/` directory:
+Create `backend/.env`:
 
 ```env
 APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
@@ -292,7 +277,7 @@ GITHUB_APP_ID=your_github_app_id
 GITHUB_PRIVATE_KEY=your_github_pem_key
 ```
 
-### 2. Launch Backend Services
+### 2. Run the backend
 
 ```bash
 cd backend
@@ -300,31 +285,44 @@ npm install
 npm run dev
 ```
 
-### 3. Launch UI Console
+### 3. Run the UI
 
 ```bash
-# Return to workspace root
 npm install
 npm run dev
 ```
 
-### 4. Run VS Code Workspace
+### 4. Run the VS Code extension
 
 ```bash
 cd scorpion-vscode
 npm install
-# Press F5 in VS Code to run in debug extension mode
+# Press F5 in VS Code to launch in debug extension mode
 ```
 
----
+## Security Hardening
 
-## 🛡️ Security Principles & Hardening
+- **Argument sanitization** — all scanner subprocess spawns use arg arrays with `shell: false`, eliminating injection.
+- **Tenant isolation** — repos, scans, vulnerabilities, builds, deployments, incidents, compliance, and policy entities are team-scoped; IDOR closed across multiple hardening passes.
+- **Auth & secrets** — dev-auth bypass removed, `RESET_TOKEN_SECRET` fails fast if unset in prod, email verification enforced, webhook secrets never logged, leaked API keys auto-revoked at source.
+- **Request hardening** — baseline + endpoint-specific rate limiting, correct `trust proxy`, HSTS, structured auth logging, Zod validation on high-risk writes.
+- **Upload & SSRF defense** — uploads validated by content (not extension) with zip-bomb guards; outbound webhook URLs checked against SSRF.
+- **Supply chain** — container images signed/verified with cosign; release gates evaluated via OPA/Rego instead of hardcoded thresholds.
+- **Tamper-proof audit trail** — deterministic cryptographic hashing on all scanner inputs feeding the Audit Ledger.
 
-* **DEP0190 Argument Sanitization**: All subprocess spawns in [`scanWorker.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/workers/scanWorker.ts) and [`orchestrator.ts`](file:///c:/Users/manik/OneDrive/Desktop/Scorpion/backend/src/services/scan/orchestrator.ts) run with arrays of arguments without shell interpretation (`shell: false`), completely eliminating argument injection.
-* **Cryptographic Tamper-Proofing**: The Audit Ledger creates deterministic cryptographic hash checks for all scanner inputs, securing compliance trails from manual database alterations.
-* **Least-Privilege RBAC**: Platform access is separated into Developer, Security Operator, and Admin roles managed by node-appwrite, enforcing zero-trust data retrieval.
-* **Tenant Isolation (IDOR Hardening)**: Repos, scans, vulnerabilities, builds, deployments, incidents, compliance posture, policies, and Plan/Jira-style entities are all scoped to the caller's team/tenant — closed across multiple hardening passes.
-* **Auth & Secret Hygiene**: Dev-auth bypass removed, `RESET_TOKEN_SECRET` fails fast in production if unset, email verification enforced, GitOps webhook secrets no longer logged, and leaked API keys are auto-revoked at the source provider.
-* **Request Hardening**: Baseline rate-limiting (extended to scan/upload/AI endpoints), `trust proxy` configured correctly, HSTS enabled, structured auth logging, and Zod schema validation on high-risk write routes.
-* **Upload & SSRF Defense**: File uploads are validated by actual content (not just extension) with zip-bomb guards; outbound webhook/alert URLs are checked to block SSRF via client-supplied `webhookUrl`.
-* **Supply Chain**: Container images are signed and verified with cosign before deploy; release-gate decisions are evaluated through an OPA/Rego policy engine instead of hardcoded thresholds.
+## Project Structure
+
+```
+Scorpion/
+├── backend/            Express API, workers, scanners, services
+├── src/                React dashboard (Vite + TypeScript)
+├── scorpion-vscode/    VS Code extension
+├── functions/          Appwrite serverless functions (e.g. trivy-scanner)
+├── public/             Architecture diagrams, static assets
+├── docs/               Additional documentation
+└── scripts/            Tooling install scripts
+```
+
+## Contributing
+
+Issues and PRs welcome. Run `npm run lint && npm run typecheck && npm test` before submitting.
