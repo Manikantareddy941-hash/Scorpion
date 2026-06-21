@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import SBOMExportButton from '../components/SBOMExportButton';
+import toast from 'react-hot-toast';
 
 interface ScanRecord {
   $id: string;
@@ -16,23 +17,61 @@ interface ScanRecord {
   $createdAt: string;
 }
 
+// Maps a raw Appwrite scan document (which stores counts at the top level and
+// the security score inside a JSON `details` string) into the flat shape this
+// view renders.
+const mapScan = (doc: any, repoName?: string): ScanRecord => {
+  let details: any = {};
+  try {
+    details = typeof doc.details === 'string' ? JSON.parse(doc.details) : (doc.details || {});
+  } catch {
+    details = {};
+  }
+  return {
+    $id: doc.$id,
+    repoId: doc.repo_id,
+    repoName,
+    security_score: Number(details.security_score ?? doc.security_score ?? 0),
+    critical_count: Number(doc.criticalCount ?? details.critical_count ?? 0),
+    high_count: Number(doc.highCount ?? details.high_count ?? 0),
+    medium_count: Number(doc.mediumCount ?? details.medium_count ?? 0),
+    low_count: Number(doc.lowCount ?? details.low_count ?? 0),
+    $createdAt: doc.$createdAt,
+  };
+};
+
 export default function MultiRepoDashboard() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
-  const { user } = useAuth();
+  const [rescanning, setRescanning] = useState<string | null>(null);
+  const { user, getJWT } = useAuth();
 
-  // Fetch all scan documents
+  // Fetch completed scans for the current user's repositories only.
   const fetchScans = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await databases.listDocuments(
-        DB_ID,
-        COLLECTIONS.SCANS,
-        []
-      );
-      const docs = res.documents as unknown as ScanRecord[];
+      const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.equal('user_id', user.$id),
+        Query.limit(200),
+      ]);
+      const repoNameById: Record<string, string> = {};
+      reposRes.documents.forEach((r: any) => { repoNameById[r.$id] = r.name; });
+      const repoIds = reposRes.documents.map((r: any) => r.$id);
+
+      if (repoIds.length === 0) {
+        setScans([]);
+        return;
+      }
+
+      const res = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        Query.equal('repo_id', repoIds),
+        Query.equal('status', 'completed'),
+        Query.orderDesc('$createdAt'),
+        Query.limit(200),
+      ]);
+      const docs = res.documents.map((d: any) => mapScan(d, repoNameById[d.repo_id]));
       setScans(docs);
       if (docs.length && !selectedRepoId) {
         // default to the repo with the worst score
@@ -41,6 +80,7 @@ export default function MultiRepoDashboard() {
       }
     } catch (e) {
       console.error('Failed to fetch scans', e);
+      toast.error('Failed to load repository scans');
     } finally {
       setLoading(false);
     }
@@ -48,8 +88,7 @@ export default function MultiRepoDashboard() {
 
   useEffect(() => {
     fetchScans();
-    // Optional realtime subscription could be added here later
-  }, []);
+  }, [user]);
 
   // Compute summary metrics
   const summary = scans.reduce(
@@ -85,10 +124,26 @@ export default function MultiRepoDashboard() {
   const selectedRepo = selectedRepoId ? latestByRepo[selectedRepoId] : null;
 
   const handleReScan = async (repoId: string) => {
-    // Placeholder – would trigger backend scan creation
-    console.log('Re-scan requested for', repoId);
-    // For now just refresh the list
-    await fetchScans();
+    setRescanning(repoId);
+    try {
+      const token = await getJWT();
+      const res = await fetch('/api/scan/manual/trigger', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ repo_id: repoId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to trigger scan');
+      toast.success('Re-scan triggered');
+      await fetchScans();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to trigger re-scan');
+    } finally {
+      setRescanning(null);
+    }
   };
 
   return (
@@ -136,9 +191,10 @@ export default function MultiRepoDashboard() {
                     <span className="text-sm font-black uppercase">Score: {selectedRepo.security_score}</span>
                     <button
                       onClick={() => handleReScan(selectedRepo.repoId)}
-                      className="flex items-center gap-1 px-3 py-1 bg-[var(--accent-primary)] text-white rounded-md text-xs"
+                      disabled={rescanning === selectedRepo.repoId}
+                      className="flex items-center gap-1 px-3 py-1 bg-[var(--accent-primary)] text-white rounded-md text-xs disabled:opacity-50"
                     >
-                      <RefreshCw className="w-3 h-3" /> Re‑scan
+                      <RefreshCw className={`w-3 h-3 ${rescanning === selectedRepo.repoId ? 'animate-spin' : ''}`} /> {rescanning === selectedRepo.repoId ? 'Scanning…' : 'Re‑scan'}
                     </button>
                     <SBOMExportButton repoId={selectedRepo.repoId} repoName={selectedRepo.repoName || selectedRepo.repoId} />
                   </div>

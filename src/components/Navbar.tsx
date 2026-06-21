@@ -28,17 +28,42 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
     const [notifications, setNotifications] = useState<any[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
 
+    // The notifications collection has no "read" attribute (its status field tracks
+    // delivery, not read-receipts), so read state is persisted per-user in
+    // localStorage, which survives reloads.
+    const readStorageKey = user ? `scorpion_read_notifications_${user.$id}` : '';
+    const getReadIds = (): Set<string> => {
+        if (!readStorageKey) return new Set();
+        try {
+            return new Set(JSON.parse(localStorage.getItem(readStorageKey) || '[]'));
+        } catch {
+            return new Set();
+        }
+    };
+
     useEffect(() => {
-        // Fetch initial notifications
-        databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [Query.orderDesc('$createdAt'), Query.limit(10)]).then(res => {
-            setNotifications(res.documents);
-            setUnreadCount(res.documents.filter(d => !d.read).length);
+        if (!user) return;
+        // Scope to the current user so one tenant never sees another's notifications.
+        databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [
+            Query.equal('user_id', user.$id),
+            Query.orderDesc('$createdAt'),
+            Query.limit(10)
+        ]).then(res => {
+            const readIds = getReadIds();
+            const withRead = res.documents.map(d => ({ ...d, read: readIds.has(d.$id) }));
+            setNotifications(withRead);
+            setUnreadCount(withRead.filter(d => !d.read).length);
         }).catch(err => console.error(err));
-    }, []);
+    }, [user]);
 
     const markAllAsRead = async () => {
         setUnreadCount(0);
-        setNotifications(prev => prev.map(n => ({...n, read: true})));
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        if (readStorageKey) {
+            const allIds = notifications.map(n => n.$id);
+            const merged = Array.from(new Set([...getReadIds(), ...allIds]));
+            localStorage.setItem(readStorageKey, JSON.stringify(merged));
+        }
     };
 
 

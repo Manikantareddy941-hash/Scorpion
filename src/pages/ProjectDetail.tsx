@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
 import {
     Github, Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2, X
 } from 'lucide-react';
@@ -30,6 +31,7 @@ interface Scan {
 
 export default function ProjectDetail() {
     const { id } = useParams();
+    const { getJWT } = useAuth();
     const [repo, setRepo] = useState<any>(null);
     const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
     const [scans, setScans] = useState<Scan[]>([]);
@@ -72,16 +74,15 @@ export default function ProjectDetail() {
             ]);
             setVulnerabilities(vulnerabilitiesData.documents as any[]);
 
-            const apiBase = '';
-            const token = localStorage.getItem('appwrite_jwt');
+            const token = await getJWT();
             // Fetch Policy
-            const policyRes = await fetch(`${apiBase}/api/repos/${id}/policy`, {
+            const policyRes = await fetch(`/api/repos/${id}/policy`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (policyRes.ok) setPolicy(await policyRes.json());
 
             // Fetch Access
-            const accessRes = await fetch(`${apiBase}/api/repos/${id}/access`, {
+            const accessRes = await fetch(`/api/repos/${id}/access`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (accessRes.ok) setProjectAccess(await accessRes.json());
@@ -98,9 +99,8 @@ export default function ProjectDetail() {
         setTriggering(true);
         const toastId = toast.loading('Initiating scan perimeter...');
         try {
-            const apiBase = '';
-            const token = localStorage.getItem('appwrite_jwt');
-            const response = await fetch(`${apiBase}/api/repos/${id}/scan`, {
+            const token = await getJWT();
+            const response = await fetch(`/api/repos/${id}/scan`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -135,9 +135,8 @@ export default function ProjectDetail() {
         setConverting(vulnId);
         const toastId = toast.loading('Configuring tracker remediation...');
         try {
-            const apiBase = '';
-            const token = localStorage.getItem('appwrite_jwt');
-            const response = await fetch(`${apiBase}/api/vulnerabilities/${vulnId}/convert`, {
+            const token = await getJWT();
+            const response = await fetch(`/api/vulnerabilities/${vulnId}/convert`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -180,7 +179,7 @@ export default function ProjectDetail() {
             <div className="max-w-6xl mx-auto">
                 {/* Back Link & Actions */}
                 <div className="flex items-center justify-between mb-8">
-                    <Link to="/security" className="flex items-center gap-2 text-xs font-black text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-all uppercase tracking-widest italic leading-none">
+                    <Link to="/repos" className="flex items-center gap-2 text-xs font-black text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-all uppercase tracking-widest italic leading-none">
                         <ArrowLeft className="w-4 h-4" />
                         Back to Fleet
                     </Link>
@@ -274,13 +273,13 @@ export default function ProjectDetail() {
 }
 
 function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: string, onUpdate: () => void }) {
+    const { getJWT } = useAuth();
     const [updating, setUpdating] = useState(false);
     const updatePolicy = async (profile: string) => {
         setUpdating(true);
         try {
-            const apiBase = '';
-            const token = localStorage.getItem('appwrite_jwt');
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/policy`, {
+            const token = await getJWT();
+            const response = await fetch(`/api/repos/${repoId}/policy`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -325,11 +324,11 @@ function GovernanceView({ policy, repoId, onUpdate }: { policy: any, repoId: str
 }
 
 function AccessView({ access, repoId, onUpdate }: { access: any[], repoId: string, onUpdate: () => void }) {
+    const { getJWT } = useAuth();
     const revokeAccess = async (teamId: string) => {
         try {
-            const apiBase = '';
-            const token = localStorage.getItem('appwrite_jwt');
-            const response = await fetch(`${apiBase}/api/repos/${repoId}/access`, {
+            const token = await getJWT();
+            const response = await fetch(`/api/repos/${repoId}/access`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

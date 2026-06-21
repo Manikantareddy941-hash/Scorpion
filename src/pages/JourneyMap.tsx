@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { client, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import toast from 'react-hot-toast';
 
 interface NodeConfig {
     id: string;
@@ -120,12 +121,14 @@ export default function JourneyMap() {
             if (res.ok) {
                 setGateStatus('passing');
                 setShowBlockedSidebar(false);
-                alert('🔓 Break Glass Override Successful. Release Gate has been bypassed.');
+                toast.success('Break Glass Override successful. Release gate bypassed.');
             } else {
-                alert('Failed to activate Break Glass Override');
+                const data = await res.json().catch(() => ({}));
+                toast.error(data.error || 'Failed to activate Break Glass Override');
             }
         } catch (err) {
             console.error('Break glass failed:', err);
+            toast.error('Break Glass Override request failed');
         } finally {
             setBypassing(false);
         }
@@ -139,7 +142,13 @@ export default function JourneyMap() {
             return 'compromised';
         }
         if (node.id === 'release') return gateStatus === 'BLOCKED' ? 'BLOCKED' : 'passing';
-        return 'passing'; // Force all active telemetry nodes to glow green
+        // Scanner nodes reflect their underlying tool's real availability from /api/health.
+        if (node.scannerKey && health.services && health.services[node.scannerKey] === false) {
+            return 'warning';
+        }
+        // Backend itself unreachable / unhealthy degrades every remaining node.
+        if (health.status && health.status !== 'ok') return 'warning';
+        return 'passing';
     };
 
     const getStat = (node: NodeConfig) => {
@@ -154,20 +163,20 @@ export default function JourneyMap() {
     };
 
     const nodeConfigs: NodeConfig[] = [
-        { id: 'repo', label: 'CONNECT REPO', icon: SiGithub, color: '#00d4ff', x: 120, y: 150, path: '/repositories' },
-        { id: 'code', label: 'CODE SCAN / SAST', icon: SiSonarqube, color: '#7c3aed', x: 300, y: 150, scannerKey: 'semgrep', path: '/scans' },
-        { id: 'secret', label: 'SECRET DETECT', icon: Key, color: '#ef4444', x: 480, y: 150, scannerKey: 'gitleaks', path: '/scans' },
-        { id: 'iac', label: 'IAC SCAN', icon: SiTerraform, color: '#6366f1', x: 660, y: 150, scannerKey: 'checkov', path: '/scans' },
-        { id: 'dep', label: 'DEPENDENCY', icon: SiTrivy, color: '#f59e0b', x: 840, y: 150, scannerKey: 'trivy', path: '/scans' },
-        { id: 'build', label: 'BUILD CI', icon: SiGithubactions, color: '#8b5cf6', x: 1020, y: 150, path: '/repositories' },
-        { id: 'test', label: 'TEST GATE', icon: SiJest, color: '#14b8a6', x: 1020, y: 350, path: '/repositories' },
-        { id: 'docker', label: 'DOCKER SCAN', icon: SiDocker, color: '#0ea5e9', x: 840, y: 350, statKey: 'container', path: '/findings' },
-        { id: 'release', label: 'RELEASE GATE', icon: ShieldCheck, color: '#22c55e', x: 660, y: 350, path: '/release-gate' },
-        { id: 'k8s', label: 'K8S / GITOPS', icon: SiKubernetes, color: '#10b981', x: 480, y: 350, path: '/repositories' },
-        { id: 'dast', label: 'DAST', icon: SiOwasp, color: '#ec4899', x: 300, y: 350, statKey: 'dast', path: '/scans' },
+        { id: 'repo', label: 'CONNECT REPO', icon: SiGithub, color: '#00d4ff', x: 120, y: 150, path: '/repos' },
+        { id: 'code', label: 'CODE SCAN / SAST', icon: SiSonarqube, color: '#7c3aed', x: 300, y: 150, scannerKey: 'semgrep', path: '/scan-results' },
+        { id: 'secret', label: 'SECRET DETECT', icon: Key, color: '#ef4444', x: 480, y: 150, scannerKey: 'gitleaks', path: '/scan-results' },
+        { id: 'iac', label: 'IAC SCAN', icon: SiTerraform, color: '#6366f1', x: 660, y: 150, scannerKey: 'checkov', path: '/scan-results' },
+        { id: 'dep', label: 'DEPENDENCY', icon: SiTrivy, color: '#f59e0b', x: 840, y: 150, scannerKey: 'trivy', path: '/scan-results' },
+        { id: 'build', label: 'BUILD CI', icon: SiGithubactions, color: '#8b5cf6', x: 1020, y: 150, path: '/build' },
+        { id: 'test', label: 'TEST GATE', icon: SiJest, color: '#14b8a6', x: 1020, y: 350, path: '/tests' },
+        { id: 'docker', label: 'DOCKER SCAN', icon: SiDocker, color: '#0ea5e9', x: 840, y: 350, statKey: 'container', path: '/issues' },
+        { id: 'release', label: 'RELEASE GATE', icon: ShieldCheck, color: '#22c55e', x: 660, y: 350, path: '/release' },
+        { id: 'k8s', label: 'K8S / GITOPS', icon: SiKubernetes, color: '#10b981', x: 480, y: 350, path: '/deploy' },
+        { id: 'dast', label: 'DAST', icon: SiOwasp, color: '#ec4899', x: 300, y: 350, statKey: 'dast', path: '/scan-results' },
         { id: 'monitor', label: 'MONITOR', icon: SiFalco, color: '#f97316', x: 120, y: 350, path: '/monitor' },
         { id: 'comply', label: 'COMPLY', icon: ShieldCheck, color: '#eab308', x: 120, y: 520, path: '/governance' },
-        { id: 'audit', label: 'AUDIT', icon: SiElasticsearch, color: '#94a3b8', x: 300, y: 520, path: '/audit-log' }
+        { id: 'audit', label: 'AUDIT', icon: SiElasticsearch, color: '#94a3b8', x: 300, y: 520, path: '/audit' }
     ];
 
     const passingNodes = nodeConfigs.filter(n => getStatus(n) === 'passing').length;
@@ -228,7 +237,11 @@ export default function JourneyMap() {
 
                         {/* Premium Hover Tooltip */}
                         <div className="absolute top-full mt-2 right-0 w-48 p-2 bg-black/90 border border-white/10 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50">
-                            <p className="text-[9px] text-white/80 font-bold leading-relaxed">Score reduced due to 1 blocked release gate in FIT_TRACK.</p>
+                            <p className="text-[9px] text-white/80 font-bold leading-relaxed">
+                                {score === 100
+                                    ? 'All pipeline nodes are healthy and passing.'
+                                    : `${nodeConfigs.length - passingNodes} of ${nodeConfigs.length} nodes degraded${gateStatus === 'BLOCKED' ? ' — release gate is BLOCKED' : ''}.`}
+                            </p>
                         </div>
                     </div>
                 </div>                {/* SVG Lines Connector */}
