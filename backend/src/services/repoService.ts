@@ -59,7 +59,7 @@ export const repoService = {
 
     // Uploaded ZIP repos persist their extraction directory as local_path
     // (see ingestZip in ingestionService.ts) - nothing else ever cleans it up.
-    if (repo.local_path) {
+    if (typeof repo.local_path === 'string') {
       cleanupWorkspace(repo.local_path);
     }
 

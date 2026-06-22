@@ -8,7 +8,7 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'mock-key',
 });
 
-export const generateSecuritySummary = async (findings: any[], alerts: any[]) => {
+export const generateSecuritySummary = async (findings: unknown[], alerts: unknown[]) => {
     try {
         const prompt = `
         You are a Senior DevSecOps Engineer. Analyze the following security data and provide an executive summary.
@@ -158,7 +158,7 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
             .replace(/\s*```$/, '')
             .trim();
 
-        let parsed: any;
+        let parsed: { technical_analysis?: string; diff?: string; impact_assessment?: string; confidence?: number };
         try {
             parsed = JSON.parse(cleaned);
         } catch {
@@ -182,7 +182,7 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
     }
 };
 
-export const recordFeedback = async (fixId: string, feedback: any) => {
+export const recordFeedback = async (fixId: string, feedback: unknown) => {
     try {
         await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITY_FIXES, fixId, {
             feedback: typeof feedback === 'object' ? JSON.stringify(feedback) : feedback

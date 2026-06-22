@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
 /**
@@ -72,7 +73,7 @@ export const resolveCreationOwnership = async (
  * of the owning team.
  */
 export const canAccessResource = async (
-    resource: { user_id?: string; team_id?: string } & Record<string, any>,
+    resource: { user_id?: string; team_id?: string } & Record<string, unknown>,
     userId?: string
 ): Promise<boolean> => {
     if (!userId) return false;
@@ -88,8 +89,8 @@ export const canAccessResource = async (
  * repo_id but doesn't itself carry an owner field (vulnerabilities,
  * findings, pipeline runs, scans, etc).
  */
-export const assertRepoAccess = async (repoId: string, userId: string): Promise<any> => {
-    let repo: any;
+export const assertRepoAccess = async (repoId: string, userId: string): Promise<Models.Document & Record<string, unknown>> => {
+    let repo: Models.Document & Record<string, unknown>;
     try {
         repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
     } catch {

@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
-import { ID } from 'node-appwrite';
+import { ID, Models } from 'node-appwrite';
 import { logger } from './logger';
 
 export type AuditAction =
@@ -21,7 +21,7 @@ export async function auditLog({
   actorEmail: string;
   resource: string;
   resourceId?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   ipAddress?: string;
 }) {
   try {
@@ -48,8 +48,16 @@ export async function auditLog({
   }
 }
 
-export async function exportEvidence(scanIds: string[]) {
-  const evidence: any = {
+export interface EvidenceExport {
+  exportedAt: string;
+  scans: Models.Document[];
+  vulnerabilities: Models.Document[];
+  incidents: Models.Document[];
+  complianceControls: Models.Document[];
+}
+
+export async function exportEvidence(scanIds: string[]): Promise<EvidenceExport> {
+  const evidence: EvidenceExport = {
     exportedAt: new Date().toISOString(),
     scans: [],
     vulnerabilities: [],
