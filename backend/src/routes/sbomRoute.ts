@@ -1,8 +1,25 @@
 import { Router, Request, Response } from 'express';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
 import crypto from 'crypto';
 import { logger } from '../services/logger';
+
+interface AuthenticatedRequest extends Request {
+    user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
+
+interface SbomComponent {
+    name: string;
+    version: string;
+    fixVersion: string;
+    severities: string[];
+    cveIds: string[];
+}
 
 function getHighestSeverity(severities: string[]): string {
     const order = ['critical', 'high', 'medium', 'low', 'unknown'];
@@ -14,13 +31,13 @@ function getHighestSeverity(severities: string[]): string {
 
 const router = Router();
 
-router.get('/:repoId', async (req: Request, res: Response) => {
+router.get('/:repoId', async (req: AuthenticatedRequest, res: Response) => {
     const { repoId } = req.params;
     const format = (req.query.format as 'json' | 'csv') || 'json';
 
     try {
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId).catch(() => null);
-        if (!repo || !(await canAccessResource(repo, (req as any).user?.$id))) {
+        if (!repo || !(await canAccessResource(repo, req.user?.$id))) {
             return res.status(403).json({ error: 'You do not have access to this repository' });
         }
 
@@ -48,9 +65,9 @@ router.get('/:repoId', async (req: Request, res: Response) => {
         ]);
 
         // 3. Deduplicate by package name to create a component list
-        const componentsMap = new Map();
-        
-        vulnsRes.documents.forEach((v: any) => {
+        const componentsMap = new Map<string, SbomComponent>();
+
+        vulnsRes.documents.forEach((v) => {
             const pkgName = v.package || 'unknown-package';
             if (!componentsMap.has(pkgName)) {
                 componentsMap.set(pkgName, {
@@ -62,8 +79,8 @@ router.get('/:repoId', async (req: Request, res: Response) => {
                 });
             }
             
-            const comp = componentsMap.get(pkgName);
-            
+            const comp = componentsMap.get(pkgName)!;
+
             // Capture fixVersion whenever we find one (don't stop at first)
             const fv = v.fixVersion || v.fixedVersion || v.fix_version || '';
             if (fv && fv.trim()) {
@@ -154,9 +171,9 @@ router.get('/:repoId', async (req: Request, res: Response) => {
             return res.send(csv);
         }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         logger.error('[SBOM Route] Error:', err);
-        res.status(500).json({ error: err.message || 'Failed to generate SBOM' });
+        res.status(500).json({ error: errorMessage(err) || 'Failed to generate SBOM' });
     }
 });
 

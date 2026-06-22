@@ -1,15 +1,24 @@
 import { Router, Response, Request } from 'express';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logger } from '../services/logger';
 
+interface AuthenticatedRequest extends Request {
+    user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
+
 const router = Router();
 
 // Get audit logs
-router.get('/', verifyUser, async (req: Request, res: Response) => {
+router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const userId = (req as any).user?.$id;
-        let docs: any[] = [];
+        const userId = req.user?.$id || '';
+        let docs: Models.DefaultDocument[] = [];
         try {
             const response = await databases.listDocuments(
                 DB_ID,
@@ -21,8 +30,8 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
                 ]
             );
             docs = response.documents;
-        } catch (err: any) {
-            logger.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy:', err.message);
+        } catch (err: unknown) {
+            logger.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy:', errorMessage(err));
             // Fallback to legacy audit_logs
             const legacyResponse = await databases.listDocuments(
                 DB_ID,
@@ -33,7 +42,7 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
                     Query.limit(100)
                 ]
             );
-            docs = legacyResponse.documents.map((d: any) => ({
+            docs = legacyResponse.documents.map((d) => ({
                 ...d,
                 repo_id: d.resourceId || 'system',
                 tamper_hash: 'LEGACY_UNHASHED'
@@ -43,16 +52,17 @@ router.get('/', verifyUser, async (req: Request, res: Response) => {
         // Scoped to the caller's own actions, so one tenant can never read
         // another tenant's audit trail through this route.
         res.json(docs);
-    } catch (err: any) {
-        logger.error('[Audit API Error]', err.message, err.stack);
-        res.status(500).json({ error: 'Internal server error', message: err.message });
+    } catch (err: unknown) {
+        const message = errorMessage(err);
+        logger.error('[Audit API Error]', message, err instanceof Error ? err.stack : undefined);
+        res.status(500).json({ error: 'Internal server error', message });
     }
 });
 
 // Create audit log (Server-side write)
-router.post('/', verifyUser, async (req: Request, res: Response) => {
+router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const user = (req as any).user;
+        const user = req.user;
         const { action, resource, details, resourceId, ipAddress } = req.body;
 
         // Map to exact Appwrite attributes (audit_logs collection)
@@ -75,12 +85,14 @@ router.post('/', verifyUser, async (req: Request, res: Response) => {
         );
 
         res.status(201).json(response);
-    } catch (err: any) {
-        logger.error('[Audit Create Error]', err.message, err.response || err);
-        res.status(500).json({ 
-            error: 'Failed to create audit log', 
-            message: err.message,
-            details: err.response?.message || 'Check Appwrite collection attributes'
+    } catch (err: unknown) {
+        const message = errorMessage(err);
+        const response_ = typeof err === 'object' && err !== null && 'response' in err ? (err as { response?: { message?: string } }).response : undefined;
+        logger.error('[Audit Create Error]', message, response_ || err);
+        res.status(500).json({
+            error: 'Failed to create audit log',
+            message,
+            details: response_?.message || 'Check Appwrite collection attributes'
         });
     }
 });

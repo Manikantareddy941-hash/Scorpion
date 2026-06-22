@@ -1,8 +1,11 @@
 import request from 'supertest';
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
+
+type MockAuthRequest = Request & { user?: { $id: string; email?: string } };
 
 jest.mock('../middleware/auth', () => ({
-    verifyUser: (req: any, _res: any, next: any) => {
+    verifyUser: (req: MockAuthRequest, _res: Response, next: NextFunction) => {
         req.user = { $id: 'user-1', email: 'user1@example.com' };
         next();
     },

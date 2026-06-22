@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { Models } from 'node-appwrite';
 import { Octokit } from '@octokit/rest';
 import simpleGit from 'simple-git';
 import * as fs from 'fs/promises';
@@ -8,6 +9,14 @@ import { logger } from '../services/logger';
 import { aiLimiter } from '../middleware/rateLimiters';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
+
+interface AuthenticatedRequest extends Request {
+  user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Unknown error';
+}
 
 const router = Router();
 
@@ -48,7 +57,7 @@ interface CreatePRBody {
   severity: string;
 }
 
-router.post('/create-pr', aiLimiter, async (req: Request, res: Response) => {
+router.post('/create-pr', aiLimiter, async (req: AuthenticatedRequest, res: Response) => {
   const {
     findingId,
     repoUrl,
@@ -66,7 +75,7 @@ router.post('/create-pr', aiLimiter, async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  const userId = (req as any).user?.$id;
+  const userId = req.user?.$id;
   const ownedRepo = await findOwnedRepoByUrl(repoUrl, userId);
   if (!ownedRepo) {
     return res.status(403).json({ error: 'You do not have access to this repository' });
@@ -129,9 +138,10 @@ router.post('/create-pr', aiLimiter, async (req: Request, res: Response) => {
       branch: branchName,
     });
 
-  } catch (err: any) {
-    logger.error('[SCORPION] PR creation failed:', err.message);
-    return res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const message = errorMessage(err);
+    logger.error('[SCORPION] PR creation failed:', message);
+    return res.status(500).json({ error: message });
   } finally {
     // Always clean up the temp clone
     await fs.rm(tmpDir, { recursive: true, force: true });

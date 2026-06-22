@@ -1,9 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { runScanPipeline } from '../scanners/pipeline';
-import { parseSemgrep, parseGitleaks, parseTrivy, Finding as BaseFinding } from '../services/scan/parsers';
+import { parseSemgrep, parseGitleaks, parseTrivy } from '../services/scan/parsers';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
-import { deduplicateFindings } from '../deduplication';
+import { deduplicateFindings, NormalizedVulnerability } from '../deduplication';
 import { logger } from '../services/logger';
+
+const IDE_SEVERITIES: IDEFinding['severity'][] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+function toIDESeverity(severity: string): IDEFinding['severity'] {
+  const upper = severity.toUpperCase();
+  return (IDE_SEVERITIES as string[]).includes(upper) ? (upper as IDEFinding['severity']) : 'LOW';
+}
 
 const router = Router();
 
@@ -20,9 +26,9 @@ export interface IDEFinding {
 /**
  * Map NormalizedVulnerability to the shape expected by the VS Code extension.
  */
-const mapToIDEFinding = (vuln: any): IDEFinding => {
+const mapToIDEFinding = (vuln: NormalizedVulnerability): IDEFinding => {
   // Determine type based on source scanner(s)
-  const source = (vuln.scanner?.toLowerCase() || (Array.isArray(vuln.sources) && vuln.sources[0]?.toLowerCase())) ?? '';
+  const source = vuln.scanner?.toLowerCase() ?? '';
   let type: 'sast' | 'sca' | 'secret' = 'sast';
   if (source.includes('gitleaks') || source.includes('secret')) type = 'secret';
   else if (source.includes('trivy') || source.includes('sca')) type = 'sca';
@@ -30,13 +36,13 @@ const mapToIDEFinding = (vuln: any): IDEFinding => {
   return {
     id: vuln.hash,
     type,
-    severity: vuln.severity as any,
+    severity: toIDESeverity(vuln.severity),
     title: vuln.title,
     file: vuln.filePath,
     line: vuln.line,
     message: vuln.description || vuln.title,
   };
-};;
+};
 
 router.post('/scan', async (req: Request, res: Response) => {
   const { path: localPath, repoId, repoUrl } = req.body;
@@ -56,7 +62,16 @@ router.post('/scan', async (req: Request, res: Response) => {
     const results = await runScanPipeline({ localPath });
 
     // Collect raw findings in a normalized shape
-    const rawFindings: any[] = [];
+    interface RawFinding {
+      filePath: string;
+      line: number;
+      severity: string;
+      scanner: string;
+      ruleId: string;
+      title: string;
+      description: string;
+    }
+    const rawFindings: RawFinding[] = [];
 
     // Normalize Semgrep findings
     if (results.semgrep && results.semgrep.results) {
@@ -138,9 +153,9 @@ router.post('/scan', async (req: Request, res: Response) => {
     
 // Duplicate processing block removed – deduplication already performed above
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[IDE Route] Scan failed:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 

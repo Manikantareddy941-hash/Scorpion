@@ -1,9 +1,17 @@
-import express from 'express';
+import express, { Request } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { AlertService } from '../services/alertService';
 import { canAccessResource } from '../services/tenancyService';
 import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
 import { Models } from 'node-appwrite';
+
+interface AuthenticatedRequest extends Request {
+    user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
 
 const router = express.Router();
 
@@ -22,8 +30,8 @@ router.post('/test', async (req, res) => {
         }
         try {
             await assertSafeWebhookUrl(webhookUrl);
-        } catch (err: any) {
-            return res.status(400).json({ error: err.message });
+        } catch (err: unknown) {
+            return res.status(400).json({ error: errorMessage(err) });
         }
 
         const mockFinding = {
@@ -41,25 +49,25 @@ router.post('/test', async (req, res) => {
         }
 
         res.status(200).json({ success: true, message: 'Test alert sent' });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error: unknown) {
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 
-router.post('/notify', async (req, res) => {
+router.post('/notify', async (req: AuthenticatedRequest, res) => {
     try {
         const { findingId, webhookUrl, type, repoName } = req.body;
 
         try {
             await assertSafeWebhookUrl(webhookUrl);
-        } catch (err: any) {
-            return res.status(400).json({ error: err.message });
+        } catch (err: unknown) {
+            return res.status(400).json({ error: errorMessage(err) });
         }
 
         const findingDoc = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, findingId);
 
         const repo = findingDoc.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, findingDoc.repo_id).catch(() => null) : null;
-        if (!repo || !(await canAccessResource(repo, (req as any).user?.$id))) {
+        if (!repo || !(await canAccessResource(repo, req.user?.$id))) {
             return res.status(403).json({ error: 'You do not have access to this finding' });
         }
 
@@ -79,17 +87,17 @@ router.post('/notify', async (req, res) => {
         }
 
         res.status(200).json({ success: true });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error: unknown) {
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 
-router.post('/batch-notify', async (req, res) => {
+router.post('/batch-notify', async (req: AuthenticatedRequest, res) => {
     try {
         const { scanId, repoName, severities } = req.body;
-        
+
         // Use user object attached by auth middleware if present, else fallback
-        const user = (req as any).user;
+        const user = req.user;
         if (!user) {
             return res.status(401).json({ error: 'Unauthorized' });
         }
@@ -160,8 +168,8 @@ router.post('/batch-notify', async (req, res) => {
         await Promise.allSettled(promises);
 
         res.status(200).json({ success: true, count: mappedFindings.length });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
+    } catch (error: unknown) {
+        res.status(500).json({ error: errorMessage(error) });
     }
 });
 

@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { Models } from 'node-appwrite';
 import PDFDocument from 'pdfkit';
 import { Parser } from 'json2csv';
 import { evaluateCompliance } from '../services/complianceEngine';
@@ -6,11 +7,15 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { logAuditEvent } from '../utils/auditLogger';
 import { logger } from '../services/logger';
 
+interface AuthenticatedRequest extends Request {
+  user?: Models.User<Models.Preferences>;
+}
+
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id || '';
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.COMPLIANCE_CONTROLS, [Query.equal('scopeId', userId)]);
     res.json(result);
   } catch (error) {
@@ -18,9 +23,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/evaluate', async (req, res) => {
+router.post('/evaluate', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id || '';
     const results = await evaluateCompliance(userId);
     res.json({ results });
   } catch (error) {
@@ -39,18 +44,18 @@ const FRAMEWORK_ORDER = ['SOC2', 'ISO27001'];
  * evidence document should reflect what was actually evaluated, not a
  * number that could change mid-export.
  */
-router.get('/export', async (req: Request, res: Response) => {
+router.get('/export', async (req: AuthenticatedRequest, res: Response) => {
   const format = (req.query.format as string) || 'pdf';
   if (format !== 'pdf' && format !== 'csv') {
     return res.status(400).json({ error: "format must be 'pdf' or 'csv'" });
   }
 
   try {
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id || '';
     const controlsRes = await databases.listDocuments(DB_ID, COLLECTIONS.COMPLIANCE_CONTROLS, [
       Query.equal('scopeId', userId),
     ]);
-    const controls = controlsRes.documents as any[];
+    const controls = controlsRes.documents;
 
     await logAuditEvent('COMPLIANCE_EVIDENCE_EXPORTED', `Compliance evidence exported as ${format.toUpperCase()} (${controls.length} controls)`, userId);
 

@@ -1,4 +1,5 @@
 import { Router, Response, Request } from 'express';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, Query, COLLECTIONS, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueScan } from '../queues/scanQueue';
@@ -6,10 +7,18 @@ import { canAccessResource } from '../services/tenancyService';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
 
+interface AuthenticatedRequest extends Request {
+    user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
+
 const router = Router();
 
 // Trigger immediate scan for a repo
-router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
+router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { repo_id } = req.body;
         if (!repo_id) return res.status(400).json({ error: 'repo_id is required' });
@@ -17,7 +26,7 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Request, res
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repo_id);
 
         // Check ownership
-        if (!(await canAccessResource(repo, (req as any).user?.$id))) {
+        if (!(await canAccessResource(repo, req.user?.$id))) {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
@@ -56,8 +65,8 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Request, res
         });
 
         res.json({ scanId, message: 'Scan triggered successfully', status: 'pending' });
-    } catch (err: any) {
-        logger.error('[Scan Trigger Error]', err.message);
+    } catch (err: unknown) {
+        logger.error('[Scan Trigger Error]', errorMessage(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

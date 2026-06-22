@@ -1,5 +1,7 @@
 import request from 'supertest';
-import express from 'express';
+import express, { Request } from 'express';
+
+type MockAuthRequest = Request & { user?: { $id: string; email?: string } };
 
 jest.mock('../lib/appwrite', () => ({
     databases: {
@@ -26,7 +28,7 @@ import { updateIncidentStatus } from '../services/incidentService';
 const buildApp = () => {
     const app = express();
     app.use(express.json());
-    app.use((req: any, _res, next) => {
+    app.use((req: MockAuthRequest, _res, next) => {
         req.user = { $id: 'user-1' };
         next();
     });

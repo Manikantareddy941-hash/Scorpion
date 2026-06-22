@@ -1,4 +1,5 @@
-import { Router, Response, Request } from 'express';
+import { Router, Response, Request, NextFunction } from 'express';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logAuditEvent } from '../utils/auditLogger';
@@ -10,11 +11,19 @@ import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from '
 import { PassThrough } from 'stream';
 import { logger } from '../services/logger';
 
+interface AuthenticatedRequest extends Request {
+    user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
+
 const router = Router();
 
-const validateRange = (range: any) => {
+const validateRange = (range: unknown) => {
     const valid = ['15m', '1h', '24h', '7d'];
-    return valid.includes(range) ? range : '24h';
+    return typeof range === 'string' && valid.includes(range) ? range : '24h';
 };
 
 const getRangeBoundary = (range: string) => {
@@ -29,21 +38,21 @@ const getRangeBoundary = (range: string) => {
 };
 
 // 1. AI Security Briefing Endpoint with Timeout
-router.get('/ai-summary', verifyUser, async (req: Request, res: Response) => {
+router.get('/ai-summary', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     const range = validateRange(req.query.range);
     const boundary = getRangeBoundary(range);
 
     try {
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id || '';
         const scope = await resolveOwnershipScope(req, userId);
         const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(scope.field, scope.value)]);
-        const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+        const repoIds = ownedRepos.documents.map((r) => r.$id);
 
         const findings = repoIds.length > 0 ? await databases.listDocuments(DB_ID, 'findings', [
             Query.equal('repo_id', repoIds),
             Query.greaterThanEqual('$createdAt', boundary),
             Query.limit(100)
-        ]) : { documents: [] as any[] };
+        ]) : { documents: [] as Models.DefaultDocument[] };
 
         const alerts = await databases.listDocuments(DB_ID, 'alerts', [
             Query.greaterThanEqual('$createdAt', boundary),
@@ -58,17 +67,17 @@ router.get('/ai-summary', verifyUser, async (req: Request, res: Response) => {
 
         const summary = await Promise.race([summaryPromise, timeoutPromise]) as string;
         res.status(200).json({ summary });
-    } catch (err: any) {
-        logger.error('[AI Summary Error]', err.message);
+    } catch (err: unknown) {
+        logger.error('[AI Summary Error]', errorMessage(err));
         const fallback = "### ⚠️ AI Analysis Engine temporarily unreachable\n\n*The security mesh analysis timed out or encountered a network bridge interruption.*\n\n**Action Required**:\n1. Please check your network connectivity.\n2. Verify the Gemini API key status in your environment configuration.\n3. Try refreshing the briefing in a few moments.\n\n*Manual telemetry indicates system health remains within normal operational parameters.*";
         res.status(200).json({ summary: fallback });
     }
 });
 
 // Support both POST and GET for exports (GET is easier for browser download triggers)
-const handleExport = async (req: Request, res: Response) => {
+const handleExport = async (req: AuthenticatedRequest, res: Response) => {
     const { repo_id, format, from, to, type } = { ...req.body, ...req.query };
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id || '';
 
     try {
         let repo;
@@ -79,7 +88,7 @@ const handleExport = async (req: Request, res: Response) => {
             repo = { name: 'My-Fleet', $id: 'global' };
             const scope = await resolveOwnershipScope(req, userId);
             const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(scope.field, scope.value)]);
-            const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+            const repoIds = ownedRepos.documents.map((r) => r.$id);
             queries = repoIds.length > 0 ? [Query.equal('repo_id', repoIds)] : [Query.equal('repo_id', '__none__')];
         } else {
             repo = await databases.getDocument(DB_ID, 'repositories', repo_id);
@@ -137,13 +146,13 @@ const handleExport = async (req: Request, res: Response) => {
         }
 
         res.status(400).json({ error: 'Invalid format' });
-    } catch (err: any) {
+    } catch (err: unknown) {
         logger.error('[Export Error]', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
 
-router.get('/export', async (req: Request, res: Response, next) => {
+router.get('/export', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     // Handle query token auth
     const token = req.query.token as string;
     if (token) {
@@ -156,8 +165,8 @@ router.post('/export', verifyUser, handleExport);
 
 // GET /api/reports/posture - PDF security posture report (severity/OWASP
 // breakdown + trend), scoped to the caller's own repos/team/project.
-router.get('/posture', verifyUser, async (req: Request, res: Response) => {
-    const userId = (req as any).user?.$id;
+router.get('/posture', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.$id || '';
     const scope = (['global', 'team', 'project'].includes(req.query.scope as string) ? req.query.scope : 'global') as 'global' | 'team' | 'project';
     const id = req.query.id as string | undefined;
 
@@ -173,7 +182,7 @@ router.get('/posture', verifyUser, async (req: Request, res: Response) => {
         } else {
             const ownScope = await resolveOwnershipScope(req, userId);
             const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(ownScope.field, ownScope.value)]);
-            repoIds = ownedRepos.documents.map((r: any) => r.$id);
+            repoIds = ownedRepos.documents.map((r) => r.$id);
         }
         const trend = await getTrendData(userId, repoIds);
 
@@ -185,7 +194,7 @@ router.get('/posture', verifyUser, async (req: Request, res: Response) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename="scorpion-posture-report.pdf"');
         res.send(buffer);
-    } catch (err: any) {
+    } catch (err: unknown) {
         logger.error('[Posture Report Error]', err);
         res.status(500).json({ error: 'Failed to generate posture report' });
     }
