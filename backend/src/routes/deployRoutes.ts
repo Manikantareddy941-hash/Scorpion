@@ -1,8 +1,12 @@
-import express from 'express';
+import express, { Request } from 'express';
 import { triggerDeploy, rollbackDeploy } from '../deploy/deployService';
 import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import { assertRepoAccess, resolveOwnershipScope, TenantAccessError } from '../services/tenancyService';
 import { hasPermission } from '../middleware/iamMiddleware';
+
+interface AuthenticatedRequest extends Request {
+  user?: { $id: string; email?: string };
+}
 
 const router = express.Router();
 
@@ -10,11 +14,11 @@ const router = express.Router();
  * POST /api/deployments/trigger or POST /api/deploy
  * Trigger a new deployment
  */
-router.post(['/', '/trigger'], async (req, res) => {
+router.post(['/', '/trigger'], async (req: AuthenticatedRequest, res) => {
   try {
     const { buildId, environment } = req.body;
-    const userId = (req as any).user?.$id;
-    const triggeredBy = (req as any).user?.email || 'unknown';
+    const userId = req.user?.$id;
+    const triggeredBy = req.user?.email || 'unknown';
 
     if (!buildId || !environment) {
       return res.status(400).json({ error: 'buildId and environment are required' });
@@ -24,9 +28,9 @@ router.post(['/', '/trigger'], async (req, res) => {
     }
 
     const build = await databases.getDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, buildId);
-    await assertRepoAccess(build.repoId, userId);
+    await assertRepoAccess(build.repoId, userId || '');
 
-    if (!(await hasPermission(req, userId, 'repo:deploy', build.repoId))) {
+    if (!(await hasPermission(req, userId || '', 'repo:deploy', build.repoId))) {
       return res.status(403).json({ error: 'You do not have permission to deploy this repository' });
     }
 
@@ -37,11 +41,11 @@ router.post(['/', '/trigger'], async (req, res) => {
       message: 'Deployment triggered',
       deploymentId: result.deploymentId,
       status: result.status,
-      reason: (result as any).reason
+      reason: 'reason' in result ? result.reason : undefined
     });
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to trigger deployment', details: err.message });
+    res.status(500).json({ error: 'Failed to trigger deployment', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -49,13 +53,13 @@ router.post(['/', '/trigger'], async (req, res) => {
  * GET /api/deployments
  * List all deployments with optional filters
  */
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { repoId, buildId, environment, status, limit = 50 } = req.query;
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
 
     if (repoId) {
-      await assertRepoAccess(String(repoId), userId);
+      await assertRepoAccess(String(repoId), userId || '');
     }
 
     const queries: string[] = [
@@ -66,9 +70,9 @@ router.get('/', async (req, res) => {
     if (repoId) {
       queries.push(Query.equal('repoId', String(repoId)));
     } else {
-      const scope = await resolveOwnershipScope(req, userId);
+      const scope = await resolveOwnershipScope(req, userId || '');
       const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value)]);
-      const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+      const repoIds = ownedRepos.documents.map(r => r.$id);
       queries.push(Query.equal('repoId', repoIds.length > 0 ? repoIds : ['__none__']));
     }
     if (buildId) queries.push(Query.equal('buildId', String(buildId)));
@@ -77,9 +81,9 @@ router.get('/', async (req, res) => {
 
     const results = await databases.listDocuments(DB_ID, COLLECTIONS.DEPLOYMENTS, queries);
     res.json(results);
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to fetch deployments', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch deployments', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -87,13 +91,13 @@ router.get('/', async (req, res) => {
  * GET /api/deployments/environments
  * List all known environments
  */
-router.get('/environments', async (req, res) => {
+router.get('/environments', async (req: AuthenticatedRequest, res) => {
   try {
     // Static list of supported environments
     const environments = ['dev', 'staging', 'production'];
     res.json({ environments });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch environments', details: err.message });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch environments', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -101,15 +105,15 @@ router.get('/environments', async (req, res) => {
  * GET /api/deployments/:id or GET /api/deploy/:id/status
  * Get a single deployment by ID
  */
-router.get(['/:id', '/:id/status'], async (req, res) => {
+router.get(['/:id', '/:id/status'], async (req: AuthenticatedRequest, res) => {
   try {
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.DEPLOYMENTS, req.params.id);
-    await assertRepoAccess(doc.repoId, userId);
+    await assertRepoAccess(doc.repoId, userId || '');
     res.json(doc);
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(404).json({ error: 'Deployment not found', details: err.message });
+    res.status(404).json({ error: 'Deployment not found', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -117,14 +121,14 @@ router.get(['/:id', '/:id/status'], async (req, res) => {
  * POST /api/deployments/:id/rollback
  * Manually trigger a rollback for a deployment
  */
-router.post('/:id/rollback', async (req, res) => {
+router.post('/:id/rollback', async (req: AuthenticatedRequest, res) => {
   try {
     const deploymentId = req.params.id;
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
 
     const doc = await databases.getDocument(DB_ID, COLLECTIONS.DEPLOYMENTS, deploymentId);
-    await assertRepoAccess(doc.repoId, userId);
-    if (!(await hasPermission(req, userId, 'repo:deploy', doc.repoId))) {
+    await assertRepoAccess(doc.repoId, userId || '');
+    if (!(await hasPermission(req, userId || '', 'repo:deploy', doc.repoId))) {
       return res.status(403).json({ error: 'You do not have permission to roll back deployments for this repository' });
     }
     if (doc.status !== 'success') {
@@ -138,9 +142,9 @@ router.post('/:id/rollback', async (req, res) => {
       deploymentId: result.deploymentId,
       status: result.status
     });
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to rollback deployment', details: err.message });
+    res.status(500).json({ error: 'Failed to rollback deployment', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 

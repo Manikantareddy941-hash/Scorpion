@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
-import fs from 'fs/promises';
-import path from 'path';
-import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
+import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import rateLimit from 'express-rate-limit';
 import { verifyUser } from '../middleware/auth';
-import { runPipeline, registerSseClient, unregisterSseClient, PipelineLogger, triggerPipelineRun } from '../services/pipelineService';
+import { registerSseClient, unregisterSseClient, PipelineLogger, triggerPipelineRun } from '../services/pipelineService';
 import { canAccessResource } from '../services/tenancyService';
+import { PipelineRunDocument } from '../types/pipeline.types';
+
+interface AuthenticatedRequest extends Request {
+  user?: { $id: string; email?: string };
+}
 
 const router = Router();
 
@@ -23,9 +26,9 @@ const triggerLimiter = rateLimit({
  * GET /api/pipelines/runs
  * List all pipeline runs
  */
-router.get('/runs', verifyUser, async (req: Request, res: Response) => {
+router.get('/runs', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
     const { repoId, status, limit = 50 } = req.query;
 
     if (repoId) {
@@ -47,10 +50,10 @@ router.get('/runs', verifyUser, async (req: Request, res: Response) => {
       // No repoId filter: scope to every repo the caller can access instead of
       // returning runs across the entire system.
       const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-        Query.equal('user_id', userId),
+        Query.equal('user_id', userId || ''),
         Query.limit(500),
       ]);
-      const accessibleRepoIds = ownedRepos.documents.map((r: any) => r.$id);
+      const accessibleRepoIds = ownedRepos.documents.map(r => r.$id);
       if (accessibleRepoIds.length === 0) {
         return res.json({ total: 0, documents: [] });
       }
@@ -60,8 +63,8 @@ router.get('/runs', verifyUser, async (req: Request, res: Response) => {
 
     const runs = await databases.listDocuments(DB_ID, 'pipeline_runs', queries);
     res.json(runs);
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch pipeline runs', details: err.message });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch pipeline runs', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -70,21 +73,21 @@ router.get('/runs', verifyUser, async (req: Request, res: Response) => {
  * Fetch single pipeline run
  */
 // Verifies the caller can access the repo a pipeline run belongs to.
-const canAccessRun = async (run: any, userId?: string): Promise<boolean> => {
+const canAccessRun = async (run: PipelineRunDocument, userId?: string): Promise<boolean> => {
   if (!run.repoId) return false;
   const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, run.repoId).catch(() => null);
   return !!repo && canAccessResource(repo, userId);
 };
 
-router.get('/run/:runId', verifyUser, async (req: Request, res: Response) => {
+router.get('/run/:runId', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const run = await databases.getDocument(DB_ID, 'pipeline_runs', req.params.runId);
-    if (!(await canAccessRun(run, (req as any).user?.$id))) {
+    const run = await databases.getDocument<PipelineRunDocument>(DB_ID, 'pipeline_runs', req.params.runId);
+    if (!(await canAccessRun(run, req.user?.$id))) {
       return res.status(403).json({ error: 'You do not have access to this pipeline run' });
     }
     res.json(run);
-  } catch (err: any) {
-    res.status(404).json({ error: 'Pipeline run not found', details: err.message });
+  } catch (err) {
+    res.status(404).json({ error: 'Pipeline run not found', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -92,18 +95,18 @@ router.get('/run/:runId', verifyUser, async (req: Request, res: Response) => {
  * GET /api/pipelines/run/:runId/logs
  * Read logs file from disk
  */
-router.get('/run/:runId/logs', verifyUser, async (req: Request, res: Response) => {
+router.get('/run/:runId/logs', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const run = await databases.getDocument(DB_ID, 'pipeline_runs', req.params.runId);
-    if (!(await canAccessRun(run, (req as any).user?.$id))) {
+    const run = await databases.getDocument<PipelineRunDocument>(DB_ID, 'pipeline_runs', req.params.runId);
+    if (!(await canAccessRun(run, req.user?.$id))) {
       return res.status(403).json({ error: 'You do not have access to this pipeline run' });
     }
 
     const pipeLogger = new PipelineLogger(req.params.runId);
     const logs = await pipeLogger.getLogs();
     res.type('text/plain').send(logs);
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to retrieve logs', details: err.message });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve logs', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
@@ -111,12 +114,12 @@ router.get('/run/:runId/logs', verifyUser, async (req: Request, res: Response) =
  * GET /api/pipelines/run/:runId/stream
  * SSE endpoint for live updates
  */
-router.get('/run/:runId/stream', verifyUser, async (req: Request, res: Response) => {
+router.get('/run/:runId/stream', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
   const { runId } = req.params;
 
   try {
-    const run = await databases.getDocument(DB_ID, 'pipeline_runs', runId);
-    if (!(await canAccessRun(run, (req as any).user?.$id))) {
+    const run = await databases.getDocument<PipelineRunDocument>(DB_ID, 'pipeline_runs', runId);
+    if (!(await canAccessRun(run, req.user?.$id))) {
       return res.status(403).json({ error: 'You do not have access to this pipeline run' });
     }
   } catch {
@@ -143,16 +146,16 @@ router.get('/run/:runId/stream', verifyUser, async (req: Request, res: Response)
  * POST /api/pipelines/trigger
  * Manually trigger a pipeline run
  */
-router.post('/trigger', verifyUser, triggerLimiter, async (req: Request, res: Response) => {
+router.post('/trigger', verifyUser, triggerLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { repoId, branch = 'main' } = req.body;
-    const userEmail = (req as any).user?.email || 'unknown';
+    const userEmail = req.user?.email || 'unknown';
 
     if (!repoId) {
       return res.status(400).json({ error: 'repoId is required' });
     }
 
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
 
     // Ensure repository document exists; create minimal entry if missing. If it
     // already exists, the caller must actually have access to it.
@@ -182,8 +185,8 @@ router.post('/trigger', verifyUser, triggerLimiter, async (req: Request, res: Re
       message: 'Pipeline run successfully triggered',
       runId
     });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Failed to trigger pipeline run', details: err.message });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to trigger pipeline run', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
 
