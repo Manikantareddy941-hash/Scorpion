@@ -9,6 +9,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../services/logger';
 
+interface AuthenticatedRequest extends Request {
+    user?: { $id: string; email?: string };
+}
+
 const router = Router();
 // Fallback local path when a vulnerability's repo has no local_path set (e.g.
 // it wasn't ingested via ZIP upload or clone). Was previously hardcoded to a
@@ -16,7 +20,7 @@ const router = Router();
 const workspaceDir = process.env.LOCAL_SCAN_WORKSPACE_DIR || process.cwd();
 
 // POST /api/remediate/generate
-router.post('/generate', verifyUser, aiLimiter, async (req: Request, res: Response) => {
+router.post('/generate', verifyUser, aiLimiter, async (req: AuthenticatedRequest, res: Response) => {
     const { vulnerability_id } = req.body;
     if (!vulnerability_id) return res.status(400).json({ error: 'vulnerability_id is required' });
 
@@ -25,7 +29,7 @@ router.post('/generate', verifyUser, aiLimiter, async (req: Request, res: Respon
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerability_id);
         if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
 
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const repo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
         if (!repo || !(await canAccessResource(repo, userId))) {
             return res.status(403).json({ error: 'You do not have access to this vulnerability' });
@@ -35,7 +39,7 @@ router.post('/generate', verifyUser, aiLimiter, async (req: Request, res: Respon
         const fix = await getRemediationFix(vulnerability_id);
 
         // 3. Log the secure audit event
-        const actor = (req as any).user?.$id || (req as any).user?.email || 'system';
+        const actor = req.user?.$id || req.user?.email || 'system';
         await logSecureAuditEvent(
             actor,
             'REMEDIATE_GENERATE',
@@ -52,14 +56,15 @@ router.post('/generate', verifyUser, aiLimiter, async (req: Request, res: Respon
             confidence: fix.confidence
         });
 
-    } catch (err: any) {
-        logger.error('[Remediate Generate Error]', err.message);
-        res.status(500).json({ error: 'Failed to generate patch', details: err.message });
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        logger.error('[Remediate Generate Error]', message);
+        res.status(500).json({ error: 'Failed to generate patch', details: message });
     }
 });
 
 // POST /api/remediate/apply
-router.post('/apply', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
+router.post('/apply', verifyUser, scanTriggerLimiter, async (req: AuthenticatedRequest, res: Response) => {
     const { vulnerability_id, diff } = req.body;
     if (!vulnerability_id) return res.status(400).json({ error: 'vulnerability_id is required' });
 
@@ -68,7 +73,7 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: Request, res: 
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerability_id);
         if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
 
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const ownerRepo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
         if (!ownerRepo || !(await canAccessResource(ownerRepo, userId))) {
             return res.status(403).json({ error: 'You do not have access to this vulnerability' });
@@ -132,7 +137,7 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: Request, res: 
         });
 
         // 5. Ingest event into the secure cryptographic audit ledger
-        const actor = (req as any).user?.$id || (req as any).user?.email || 'system';
+        const actor = req.user?.$id || req.user?.email || 'system';
         await logSecureAuditEvent(
             actor, 
             'REMEDIATE_APPLY', 
@@ -145,14 +150,15 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: Request, res: 
             message: `Remediation applied successfully to ${relativeFilePath}. Finding status updated to 'remediated'.`
         });
 
-    } catch (err: any) {
-        logger.error('[Remediate Apply Error]', err.message);
-        res.status(500).json({ error: 'Failed to apply patch', details: err.message });
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        logger.error('[Remediate Apply Error]', message);
+        res.status(500).json({ error: 'Failed to apply patch', details: message });
     }
 });
 
 // POST /api/remediate/revert
-router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
+router.post('/revert', verifyUser, scanTriggerLimiter, async (req: AuthenticatedRequest, res: Response) => {
     const { vulnerability_id } = req.body;
     if (!vulnerability_id) return res.status(400).json({ error: 'vulnerability_id is required' });
 
@@ -161,7 +167,7 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Request, res:
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerability_id);
         if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
 
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const ownerRepo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
         if (!ownerRepo || !(await canAccessResource(ownerRepo, userId))) {
             return res.status(403).json({ error: 'You do not have access to this vulnerability' });
@@ -202,7 +208,7 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Request, res:
         });
 
         // 4. Ingest event into the secure cryptographic audit ledger
-        const actor = (req as any).user?.$id || (req as any).user?.email || 'system';
+        const actor = req.user?.$id || req.user?.email || 'system';
         await logSecureAuditEvent(
             actor,
             'REMEDIATE_REVERT',
@@ -215,9 +221,10 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Request, res:
             message: `Remediation successfully reverted for ${relativeFilePath}. Finding status updated to 'open'.`
         });
 
-    } catch (err: any) {
-        logger.error('[Remediate Revert Error]', err.message);
-        res.status(500).json({ error: 'Failed to revert patch', details: err.message });
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown error';
+        logger.error('[Remediate Revert Error]', message);
+        res.status(500).json({ error: 'Failed to revert patch', details: message });
     }
 });
 

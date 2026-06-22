@@ -6,6 +6,20 @@ import { validateBody } from '../middleware/validate';
 import { evaluatePolicy, isOpaAvailable } from '../services/opaService';
 import { logger } from '../services/logger';
 
+interface AuthenticatedRequest extends Request {
+    user?: { $id: string };
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'unknown error';
+}
+
+// Appwrite SDK errors carry a numeric `.code` (e.g. 404) that isn't part of the
+// standard Error shape.
+function errorCode(err: unknown): number | undefined {
+    return typeof err === 'object' && err !== null && 'code' in err ? (err as { code?: number }).code : undefined;
+}
+
 const router = Router();
 
 const evaluateSchema = z.object({
@@ -14,25 +28,25 @@ const evaluateSchema = z.object({
 });
 
 // Get policies
-router.get('/', verifyUser, async (req: Request, res: Response) => {
+router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const response = await databases.listDocuments(
             DB_ID,
             'policies',
-            [Query.equal('userId', userId)]
+            [Query.equal('userId', userId || '')]
         );
         res.json(response.documents);
-    } catch (err: any) {
-        logger.error('[Policy API Error]', err.message);
+    } catch (err) {
+        logger.error('[Policy API Error]', errorMessage(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // Create policy
-router.post('/', verifyUser, async (req: Request, res: Response) => {
+router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const policyData = {
             ...req.body,
             userId,
@@ -47,17 +61,17 @@ router.post('/', verifyUser, async (req: Request, res: Response) => {
             policyData
         );
         res.json(policy);
-    } catch (err: any) {
-        logger.error('[Policy Create Error]', err.message);
+    } catch (err) {
+        logger.error('[Policy Create Error]', errorMessage(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // Update policy
-router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
+router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
 
         const existing = await databases.getDocument(DB_ID, 'policies', id);
         if (existing.userId !== userId) {
@@ -65,7 +79,9 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
         }
 
         // Don't let the request body reassign ownership or the document id
-        const { userId: _ignoredUserId, $id: _ignoredId, ...updates } = req.body;
+        const updates = { ...req.body };
+        delete updates.userId;
+        delete updates.$id;
 
         const policy = await databases.updateDocument(
             DB_ID,
@@ -74,18 +90,18 @@ router.patch('/:id', verifyUser, async (req: Request, res: Response) => {
             updates
         );
         res.json(policy);
-    } catch (err: any) {
-        logger.error('[Policy Update Error]', err.message);
-        if (err.code === 404) return res.status(404).json({ error: 'Policy not found' });
+    } catch (err) {
+        logger.error('[Policy Update Error]', errorMessage(err));
+        if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // Delete policy
-router.delete('/:id', verifyUser, async (req: Request, res: Response) => {
+router.delete('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
 
         const existing = await databases.getDocument(DB_ID, 'policies', id);
         if (existing.userId !== userId) {
@@ -94,25 +110,25 @@ router.delete('/:id', verifyUser, async (req: Request, res: Response) => {
 
         await databases.deleteDocument(DB_ID, 'policies', id);
         res.json({ message: 'Policy deleted' });
-    } catch (err: any) {
-        logger.error('[Policy Delete Error]', err.message);
-        if (err.code === 404) return res.status(404).json({ error: 'Policy not found' });
+    } catch (err) {
+        logger.error('[Policy Delete Error]', errorMessage(err));
+        if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 // GET /api/policies/opa/status - Is the OPA CLI available on this host?
-router.get('/opa/status', verifyUser, async (req: Request, res: Response) => {
+router.get('/opa/status', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     res.json({ available: await isOpaAvailable() });
 });
 
 // POST /api/policies/:id/evaluate - Run this policy's Rego code (regoCode field)
 // against the given input, falling back to the bundled default release-gate
 // policy if the stored policy has no regoCode of its own.
-router.post('/:id/evaluate', verifyUser, validateBody(evaluateSchema), async (req: Request, res: Response) => {
+router.post('/:id/evaluate', verifyUser, validateBody(evaluateSchema), async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { id } = req.params;
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const { input, query } = req.body;
 
         const policy = await databases.getDocument(DB_ID, 'policies', id);
@@ -126,10 +142,10 @@ router.post('/:id/evaluate', verifyUser, validateBody(evaluateSchema), async (re
         });
 
         res.json(evaluation);
-    } catch (err: any) {
-        logger.error('[Policy Evaluate Error]', err.message);
-        if (err.code === 404) return res.status(404).json({ error: 'Policy not found' });
-        res.status(502).json({ error: 'Policy evaluation failed', details: err.message });
+    } catch (err) {
+        logger.error('[Policy Evaluate Error]', errorMessage(err));
+        if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
+        res.status(502).json({ error: 'Policy evaluation failed', details: errorMessage(err) });
     }
 });
 
