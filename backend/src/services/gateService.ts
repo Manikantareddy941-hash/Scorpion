@@ -1,0 +1,159 @@
+import { gateRepository } from '../repositories/gateRepository';
+import { getDynamicPolicy } from './policyService';
+import { evaluatePolicy } from './opaService';
+import { sendSecurityAlert } from './notificationService';
+import { logAuditEvent } from '../utils/auditLogger';
+import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
+import { canAccessResource } from './tenancyService';
+import { logger } from './logger';
+import { GateBlocker, GateResult, PipelineGateStatus } from '../types/gate.types';
+
+function formatBlockers(blockers: GateBlocker[]) {
+  return blockers.map(b => ({
+    id: b.$id,
+    title: b.title,
+    severity: b.severity,
+    package: b.packageName || b.package || 'unknown'
+  }));
+}
+
+/** Computes whether a repository is allowed to be released. */
+export async function checkReleaseGate(repoId: string): Promise<GateResult> {
+  const blockers = await gateRepository.listOpenFindings(repoId);
+  const blockerCount = blockers.length;
+
+  // Calculate score
+  let score = 100;
+  blockers.forEach(b => {
+    const sev = (b.severity || 'low').toLowerCase();
+    if (sev === 'critical') score -= 15;
+    else if (sev === 'high') score -= 10;
+    else if (sev === 'medium') score -= 5;
+    else score -= 2;
+  });
+  score = Math.max(0, score);
+
+  const hasCritical = blockers.some(b => (b.severity || '').toLowerCase() === 'critical');
+  const criticalCount = blockers.filter(b => (b.severity || '').toLowerCase() === 'critical').length;
+  const highCount = blockers.filter(b => (b.severity || '').toLowerCase() === 'high').length;
+
+  // Fetch Dynamic Policy from centralized service
+  const policy = await getDynamicPolicy(repoId);
+
+  // Evaluate compliance thresholds dynamically
+  let allowed = score >= policy.minSecurityScore && !(policy.blockOnCritical && hasCritical);
+  let regoDenyReasons: string[] = [];
+
+  // Additive policy-as-code check: a repo can opt into a custom Rego
+  // policy (PROJECT_POLICIES.regoCode) evaluated alongside the threshold
+  // check above - either one failing blocks the release. Skips silently
+  // if no custom policy is set, or if opa isn't installed/configured -
+  // this must never be the reason a gate check itself fails.
+  if (policy.regoCode) {
+    try {
+      const opaResult = await evaluatePolicy(
+        { critical_count: criticalCount, high_count: highCount, security_score: score, environment: 'production' },
+        { regoCode: policy.regoCode }
+      );
+      if (!opaResult.allow) {
+        allowed = false;
+        regoDenyReasons = opaResult.denyReasons;
+      }
+    } catch (err) {
+      logger.warn(`[Gate] Custom Rego policy evaluation skipped for ${repoId}:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  return {
+    allowed,
+    score,
+    blocker_count: blockerCount,
+    blockers,
+    minSecurityScore: policy.minSecurityScore,
+    ...(regoDenyReasons.length > 0 ? { regoDenyReasons } : {})
+  };
+}
+
+export const gateService = {
+  async assertRepoAccess(repoId: string, userId: string | undefined): Promise<boolean> {
+    const repo = await gateRepository.getRepository(repoId);
+    if (!repo) return false;
+    return canAccessResource(repo, userId);
+  },
+
+  async evaluate(repoId: string) {
+    await gateRepository.ensurePipelineStateCollection();
+    const result = await checkReleaseGate(repoId);
+    const status = result.allowed ? 'passing' : 'BLOCKED';
+
+    if (status === 'BLOCKED') {
+      sendSecurityAlert({
+        type: 'gate_blocked',
+        title: 'CI/CD Release Gate BLOCKED',
+        severity: 'CRITICAL',
+        details: `Security Gate dropped below 80% compliance threshold.\nPosture Score: ${result.score}%\nActive Blockers: ${result.blocker_count}`,
+        repo_id: repoId
+      });
+    }
+
+    await gateRepository.setReleaseNodeStatus(status);
+
+    return {
+      repo_id: repoId,
+      score: result.score,
+      status,
+      blocker_count: result.blocker_count,
+      blockers: formatBlockers(result.blockers)
+    };
+  },
+
+  async checkDeployable(repoId: string): Promise<{ deployable: true } | { deployable: false; minSecurityScore: number; score: number; blockers: ReturnType<typeof formatBlockers> }> {
+    await gateRepository.ensurePipelineStateCollection();
+
+    const state = await gateRepository.getReleaseNodeState();
+    const isBlocked = state.exists && state.status === 'BLOCKED';
+
+    if (!isBlocked) return { deployable: true };
+
+    const result = await checkReleaseGate(repoId);
+    return {
+      deployable: false,
+      minSecurityScore: result.minSecurityScore,
+      score: result.score,
+      blockers: formatBlockers(result.blockers)
+    };
+  },
+
+  async override(repoId: string, userId: string) {
+    await gateRepository.ensurePipelineStateCollection();
+    await gateRepository.setReleaseNodeStatus('passing');
+    await logSecureAuditEvent(userId, 'BREAK_GLASS_BYPASS', repoId, `Manual Break Glass override activated for repository: ${repoId}`);
+  },
+
+  async getState(): Promise<{ status: PipelineGateStatus }> {
+    await gateRepository.ensurePipelineStateCollection();
+    const state = await gateRepository.getReleaseNodeState();
+    return { status: state.exists && state.status ? state.status : 'passing' };
+  },
+
+  async legacyRelease(repoId: string, userId: string) {
+    const result = await checkReleaseGate(repoId);
+    await logAuditEvent('GATE_CHECK', `Release gate checked for ${repoId}. Result: ${result.allowed ? 'PASSED' : 'BLOCKED'} (${result.blocker_count} blockers)`, userId, repoId);
+    return result;
+  },
+
+  async getSummary(userId: string) {
+    const reposResponse = await gateRepository.listUserRepos(userId);
+
+    return Promise.all(reposResponse.documents.map(async repo => {
+      const gateResult = await checkReleaseGate(repo.$id);
+      return {
+        repo_id: repo.$id,
+        repo_name: repo.name,
+        allowed: gateResult.allowed,
+        blocker_count: gateResult.blocker_count,
+        reasons: gateResult.blockers.map(b => `${(b.severity || '').toUpperCase()} ${b.packageName || 'VULN'}: ${b.title}`)
+      };
+    }));
+  }
+};
