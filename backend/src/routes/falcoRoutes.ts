@@ -1,11 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { handleFalcoEvent } from '../runtime/falcoHandler';
 import { logger } from '../services/logger';
 
 const router = Router();
 
 // Middleware to verify Falco secret if configured
-const verifyFalcoSecret = (req: Request, res: Response, next: any) => {
+const verifyFalcoSecret = (req: Request, res: Response, next: NextFunction) => {
   const expected = process.env.FALCO_SECRET;
   const secret = req.headers['x-falco-secret'];
   // Fails closed: an unconfigured secret must never leave this endpoint open.

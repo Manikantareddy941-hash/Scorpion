@@ -33,11 +33,11 @@ router.get('/health', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
     
-  } catch (err: any) {
-    res.status(500).json({ 
-        status: 'error', 
+  } catch (err: unknown) {
+    res.status(500).json({
+        status: 'error',
         message: 'Health check failed',
-        error: err.message
+        error: err instanceof Error ? err.message : 'Unknown error'
     });
   }
 });

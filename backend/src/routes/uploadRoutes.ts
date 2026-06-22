@@ -99,9 +99,9 @@ router.post('/zip', uploadLimiter, upload.single('project_zip'), async (req: Aut
         cleanupWorkspace(req.file.path);
 
         res.json(result);
-    } catch (err: any) {
+    } catch (err: unknown) {
         if (req.file) cleanupWorkspace(req.file.path);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
     }
 });
 
