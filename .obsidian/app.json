@@ -1,0 +1,8 @@
+{
+  "userIgnoreFilters": [
+    "node_modules/",
+    ".git/",
+    "build/",
+    "dist/"
+  ]
+}

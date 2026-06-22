@@ -1,17 +1,19 @@
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
-import { orchestrateScan } from './scan/orchestrator';
+import { orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, parseCheckov, parseBandit, Finding } from './scan/parsers';
 import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
-import { respondToLeakedKeys } from './leakedKeyResponseService';
+import { respondToLeakedKeys, GitleaksRawMatch } from './leakedKeyResponseService';
 import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
 import { logger } from './logger';
+import { IngestableIssue, RepoWithScanStats, ScanRawResults, ScanTriggerOptions } from '../types/scan.types';
 
 /**
  * Consistent security score formula — used here and must match Dashboard fallback.
@@ -26,13 +28,13 @@ const computeSecurityScore = (critical: number, high: number, medium: number, lo
 export const ingestVulnerabilitiesDelta = async (
     repoId: string,
     scanId: string,
-    issues: any[]
+    issues: IngestableIssue[]
 ) => {
     try {
         logger.info(`[Delta Ingestion] Starting delta ingestion for repo: ${repoId}, scan: ${scanId}`);
 
         // Helper to compute a consistent SHA-256 fingerprint for a vulnerability
-        const computeHash = (rId: string, fPath: string, cveOrTitle: string, sev: string): string => {
+        const computeHash = (rId: string, fPath: string | undefined, cveOrTitle: string | undefined, sev: string | undefined): string => {
             const data = `${rId}|${fPath || ''}|${cveOrTitle || ''}|${(sev || '').toUpperCase()}`;
             return crypto.createHash('sha256').update(data).digest('hex');
         };
@@ -46,7 +48,7 @@ export const ingestVulnerabilitiesDelta = async (
         const activeDocs = activeDocsResponse.documents || [];
 
         // 2. Map existing documents to their computed hashes
-        const activeHashMap = new Map<string, any>();
+        const activeHashMap = new Map<string, Models.Document>();
         activeDocs.forEach(doc => {
             const hash = computeHash(
                 doc.repo_id, 
@@ -58,7 +60,7 @@ export const ingestVulnerabilitiesDelta = async (
         });
 
         // 3. Compute hashes for incoming issues
-        const incomingHashMap = new Map<string, any>();
+        const incomingHashMap = new Map<string, IngestableIssue>();
         issues.forEach(issue => {
             const hash = computeHash(
                 repoId, 
@@ -70,8 +72,8 @@ export const ingestVulnerabilitiesDelta = async (
         });
 
         // 4. Calculate deltas
-        const newOrModifiedIssues: any[] = [];
-        const resolvedDocs: any[] = [];
+        const newOrModifiedIssues: IngestableIssue[] = [];
+        const resolvedDocs: Models.Document[] = [];
 
         // Find new/modified (in incoming, but not in existing Appwrite)
         for (const [hash, issue] of incomingHashMap.entries()) {
@@ -110,8 +112,8 @@ export const ingestVulnerabilitiesDelta = async (
                         detected_at: new Date().toISOString(),
                         status: 'open'
                     });
-                } catch (saveErr: any) {
-                    logger.error(`[Delta Ingestion] Failed to create vulnerability document:`, saveErr.message);
+                } catch (saveErr) {
+                    logger.error(`[Delta Ingestion] Failed to create vulnerability document:`, saveErr instanceof Error ? saveErr.message : saveErr);
                 }
             }));
         }
@@ -126,14 +128,14 @@ export const ingestVulnerabilitiesDelta = async (
                         resolvedAt: new Date().toISOString()
                     });
                     logger.info(`[Delta Ingestion] Marked vulnerability ${doc.$id} as RESOLVED.`);
-                } catch (updateErr: any) {
-                    logger.error(`[Delta Ingestion] Failed to update resolved document status:`, updateErr.message);
+                } catch (updateErr) {
+                    logger.error(`[Delta Ingestion] Failed to update resolved document status:`, updateErr instanceof Error ? updateErr.message : updateErr);
                 }
             }));
         }
 
-    } catch (err: any) {
-        logger.error(`[Delta Ingestion Error] Failed to compute or ingest scan deltas:`, err.message);
+    } catch (err) {
+        logger.error(`[Delta Ingestion Error] Failed to compute or ingest scan deltas:`, err instanceof Error ? err.message : err);
         
         // Fallback: if delta logic fails, fallback to standard insertion so telemetry is never lost
         logger.info(`[Delta Ingestion] Falling back to standard bulk creation...`);
@@ -147,8 +149,8 @@ export const ingestVulnerabilitiesDelta = async (
                     detected_at: new Date().toISOString(),
                     status: 'open'
                 });
-            } catch (fallbackErr: any) {
-                logger.error(`[Delta Ingestion Fallback] Save failed:`, fallbackErr.message);
+            } catch (fallbackErr) {
+                logger.error(`[Delta Ingestion Fallback] Save failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
             }
         }
     }
@@ -168,7 +170,7 @@ const addScanLog = async (scanId: string, log: string) => {
 
 export const triggerScan = async (
     repoId: string,
-    options: { scanType?: any; scanDepth?: any; branch?: string } = {},
+    options: ScanTriggerOptions = {},
     existingScanId?: string   // ← ADD THIS PARAMETER
 ): Promise<{ scanId: string | null; error: string | null }> => {
     let scanId: string | null = existingScanId || null;
@@ -257,19 +259,22 @@ export const triggerScan = async (
                 });
                 scanPath = tempDir;
                 isTemporary = true;
-            } catch (cloneErr: any) {
+            } catch (cloneErr) {
                 logger.error('[ScanService] Clone failed:', cloneErr);
-                throw new Error(`Failed to clone repository: ${cloneErr.message}`);
+                throw new Error(`Failed to clone repository: ${cloneErr instanceof Error ? cloneErr.message : cloneErr}`);
             }
         }
 
         // 6️⃣ Run scans
         await addScanLog(scanId!, "Initiating multi-engine security audit...");
-        const timeoutPromise = new Promise<any[]>((_, reject) =>
+        const timeoutPromise = new Promise<ScanResult[]>((_, reject) =>
             setTimeout(() => reject(new Error('Scan Orchestrator Timeout (5m)')), 5 * 60 * 1000)
         );
         const rawResults = await Promise.race([
-            orchestrateScan(scanPath, options, (log) => addScanLog(scanId!, log)), 
+            // options is intentionally wider than orchestrator's own ScanOptions (see
+            // scan.types.ts) since callers use different scanType vocabularies; this is
+            // the one place it crosses into the orchestrator's stricter contract.
+            orchestrateScan(scanPath, options as ScanOptions, (log) => addScanLog(scanId!, log)),
             timeoutPromise
         ]);
         await addScanLog(scanId!, "All security engines finalized.");
@@ -314,7 +319,7 @@ export const triggerScan = async (
         logger.info(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}, Checkov: ${rawResults.find(r => r.tool === 'checkov')?.stdout.length || 0}, Bandit: ${rawResults.find(r => r.tool === 'bandit')?.stdout.length || 0}`);
 
         // 8️⃣ Parse findings (Normalized)
-        const scanResults: any = {};
+        const scanResults: ScanRawResults = {};
         rawResults.forEach(r => {
             try {
                 scanResults[r.tool] = JSON.parse(r.stdout);
@@ -326,14 +331,17 @@ export const triggerScan = async (
         // Check raw (pre-redaction) Gitleaks matches against the repo owner's
         // API keys and auto-revoke any that were leaked, before the Match
         // field gets redacted by normalizeGitleaks below for storage.
-        await respondToLeakedKeys(scanResults.gitleaks || [], repo.user_id, repoId);
+        // Raw scanner JSON shapes are genuinely dynamic third-party output - cast
+        // at this boundary rather than typing scanResults' fields beyond "unknown".
+        const rawGitleaks = (scanResults.gitleaks ?? []) as GitleaksRawMatch[];
+        await respondToLeakedKeys(rawGitleaks, repo.user_id, repoId);
 
         const issues = [
-            ...normalizeTrivy(scanResults.trivy || {}, scanPath),
-            ...normalizeSemgrep(scanResults.semgrep || {}, scanPath),
-            ...normalizeGitleaks(scanResults.gitleaks || [], scanPath),
-            ...normalizeCheckov(scanResults.checkov || {}, scanPath),
-            ...normalizeBandit(scanResults.bandit || {}, scanPath)
+            ...normalizeTrivy(scanResults.trivy ?? {}, scanPath),
+            ...normalizeSemgrep(scanResults.semgrep ?? {}, scanPath),
+            ...normalizeGitleaks(rawGitleaks, scanPath),
+            ...normalizeCheckov(scanResults.checkov ?? {}, scanPath),
+            ...normalizeBandit(scanResults.bandit ?? {}, scanPath)
         ];
 
 // Deduplicate overlapping findings across scanners
@@ -429,15 +437,16 @@ const dedupedIssues = deduplicateFindings(issues);
         await notifyScanCompletion(scanId!);
         return { scanId, error: null };
 
-    } catch (err: any) {
-        logger.error(JSON.stringify({ scanId, repoId, stage: 'fail', error: err.message }));
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error(JSON.stringify({ scanId, repoId, stage: 'fail', error: message }));
         if (scanId) {
             try {
                 await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
                     status: 'failed',
                     completedAt: new Date().toISOString(),
                     details: JSON.stringify({
-                        error: err.message,
+                        error: message,
                         security_score: 0,
                         gate_status: 'failed',
                         critical_count: 0,
@@ -448,9 +457,9 @@ const dedupedIssues = deduplicateFindings(issues);
                         total_lines: 0
                     })
                 });
-            } catch (uErr) {}
+            } catch { /* best-effort status update */ }
         }
-        return { scanId, error: err.message || 'Failed to complete scan' };
+        return { scanId, error: message || 'Failed to complete scan' };
     }
 };
 
@@ -476,7 +485,7 @@ export const getInsightsSummary = async (userId: string) => {
             ...s,
             details: typeof s.details === 'string' ? JSON.parse(s.details) : s.details
         }));
-        const totalVulns = repos.reduce((acc: number, r: any) => acc + (r.vulnerability_count || 0), 0);
+        const totalVulns = (repos as RepoWithScanStats[]).reduce((acc, r) => acc + (r.vulnerability_count || 0), 0);
         const overallScore = scans.length > 0 ? (scans[0].details?.security_score || 0) : 0;
         return { repos, scans, overallScore, totalVulns };
     } catch (err) {
