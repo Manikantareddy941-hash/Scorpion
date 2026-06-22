@@ -17,10 +17,10 @@ router.get('/trends', async (req: AuthenticatedRequest, res: Response, next: Nex
         const dateLimit = new Date();
         dateLimit.setDate(dateLimit.getDate() - days);
 
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id || '';
         const scope = await resolveOwnershipScope(req, userId);
         const ownedRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value)]);
-        const repoIds = ownedRepos.documents.map((r: any) => r.$id);
+        const repoIds = ownedRepos.documents.map((r) => r.$id);
 
         // Fetch vulnerabilities within the date range, scoped to the caller's repos
         // Note: For scalability, we limit to 5000. In a real system, you might aggregate this in a background job
@@ -28,7 +28,7 @@ router.get('/trends', async (req: AuthenticatedRequest, res: Response, next: Nex
             Query.equal('repo_id', repoIds),
             Query.greaterThanEqual('detected_at', dateLimit.toISOString()),
             Query.limit(5000)
-        ]) : { documents: [] as any[] };
+        ]) : { documents: [] as Models.DefaultDocument[] };
 
         // Group by Date (YYYY-MM-DD) and Severity
         const trendsData: Record<string, { Critical: number, High: number, Medium: number, Low: number }> = {};

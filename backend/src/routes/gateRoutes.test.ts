@@ -56,7 +56,7 @@ describe('checkReleaseGate', () => {
         const result = await checkReleaseGate('repo-1');
 
         expect(result.allowed).toBe(false);
-        expect((result as any).regoDenyReasons).toEqual(['custom rule violated']);
+        expect(result.regoDenyReasons).toEqual(['custom rule violated']);
     });
 
     it('stays allowed when the custom Rego policy also allows', async () => {
@@ -71,7 +71,7 @@ describe('checkReleaseGate', () => {
         const result = await checkReleaseGate('repo-1');
 
         expect(result.allowed).toBe(true);
-        expect((result as any).regoDenyReasons).toBeUndefined();
+        expect(result.regoDenyReasons).toBeUndefined();
     });
 
     it('does not let an OPA evaluation failure (e.g. opa not installed) block an otherwise-passing gate', async () => {
