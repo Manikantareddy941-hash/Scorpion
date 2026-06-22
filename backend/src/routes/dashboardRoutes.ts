@@ -1,428 +1,75 @@
-import { Router, Response, Request } from 'express';
-import { databases, DB_ID, Query, COLLECTIONS } from '../lib/appwrite';
+import { Router, Response } from 'express';
 import { verifyUser } from '../middleware/auth';
-import { canAccessResource } from '../services/tenancyService';
-import { Octokit } from 'octokit';
+import { dashboardService } from '../services/dashboardService';
 import { logger } from '../services/logger';
+import { AuthenticatedRequest } from '../types/dashboard.types';
 
 const router = Router();
 
-// In-memory cache
-const dashboardCache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL = 60 * 1000; // 60 seconds
+router.get('/security', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.$id;
+  if (!userId) return res.status(401).json({ error: 'User not found' });
 
-router.get('/security', verifyUser, async (req: Request, res: Response) => {
-    const userId = (req as any).user?.$id;
+  try {
+    res.json(await dashboardService.getSecurityDashboard(userId));
+  } catch (err) {
+    logger.error('[Dashboard API Error]', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/posture-breakdown', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.$id;
+    if (!userId) return res.status(401).json({ error: 'User not found' });
+    res.json(await dashboardService.getPostureBreakdown(userId));
+  } catch (err) {
+    logger.error('[Posture API Error]', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/tasks/:id/ai-blueprint', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.$id;
     if (!userId) return res.status(401).json({ error: 'User not found' });
 
-    // Check cache
-    const cached = dashboardCache.get(userId);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        logger.info(`[Dashboard] Serving cached data for ${userId}`);
-        return res.json(cached.data);
-    }
-
-    try {
-        // 1. Get user's teams
-        const teamMemberships = await databases.listDocuments(
-            DB_ID,
-            COLLECTIONS.TEAM_MEMBERS,
-            [Query.equal('user_id', userId)]
-        );
-        const teamIds = teamMemberships.documents.map(m => m.team_id);
-
-        // 2. Get user repos (owned or team-shared)
-        const reposResponse = await databases.listDocuments(
-            DB_ID,
-            'repositories',
-            teamIds.length > 0 ? [
-                Query.or([
-                    Query.equal('user_id', userId),
-                    Query.equal('team_id', teamIds)
-                ])
-            ] : [
-                Query.equal('user_id', userId)
-            ]
-        );
-
-        const repoIds = reposResponse.documents.map(r => r.$id);
-        const repoNames: Record<string, string> = {};
-        reposResponse.documents.forEach(r => repoNames[r.$id] = r.name);
-
-        if (repoIds.length === 0) {
-            const emptyData = {
-                total: 0,
-                by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
-                by_type: { secret: 0, dependency: 0, sast: 0, docker: 0, iac: 0 },
-                by_repo: [],
-                trend: [],
-                open_count: 0,
-                resolved_count: 0,
-                mttr_days: null
-            };
-            return res.json(emptyData);
-        }
-
-        // 3. Get recent scans to map findings that might miss repo_id
-        const scansResponse = await databases.listDocuments(
-            DB_ID,
-            'scans',
-            [
-                Query.or([
-                    Query.equal('repo_id', repoIds),
-                    Query.equal('repoUrl', reposResponse.documents.map(r => r.url).filter(Boolean))
-                ]),
-                Query.orderDesc('$createdAt'),
-                Query.limit(50)
-            ]
-        );
-        const scanIds = scansResponse.documents.map(s => s.$id);
-
-        // 4. Get findings for these repos/scans
-        // We use OR to find findings either by repo_id OR scanId
-        const findingsResponse = await databases.listDocuments(
-            DB_ID,
-            'findings',
-            [
-                Query.or([
-                    Query.equal('repo_id', repoIds),
-                    Query.equal('scanId', scanIds)
-                ]),
-                Query.limit(5000)
-            ]
-        );
-
-        const findings = findingsResponse.documents;
-
-        // 5. Aggregate Data
-        const stats = {
-            total: findingsResponse.total,
-            by_severity: { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>,
-            by_type: { secret: 0, dependency: 0, sast: 0, docker: 0, iac: 0 } as Record<string, number>,
-            by_type_severity: {
-                secret: { critical: 0, high: 0, medium: 0, low: 0 },
-                dependency: { critical: 0, high: 0, medium: 0, low: 0 },
-                sast: { critical: 0, high: 0, medium: 0, low: 0 },
-                docker: { critical: 0, high: 0, medium: 0, low: 0 },
-                iac: { critical: 0, high: 0, medium: 0, low: 0 }
-            } as Record<string, Record<string, number>>,
-            by_repo: [] as { repo_name: string, count: number, repo_id: string, critical: number, high: number }[],
-            trend: [] as { date: string, count: number }[],
-            open_count: 0,
-            resolved_count: 0,
-            mttr_days: null as number | null,
-            findings: findings
-        };
-
-        const repoCounts: Record<string, { total: number, critical: number, high: number }> = {};
-        const trendCounts: Record<string, number> = {};
-        const resolutionDurationsMs: number[] = [];
-
-        // Map scanId to repoId for fallback
-        const scanToRepo: Record<string, string> = {};
-        scansResponse.documents.forEach(s => {
-            scanToRepo[s.$id] = s.repo_id || s.repoUrl;
-        });
-
-        // Initialize trend for last 30 days
-        const now = new Date();
-        for (let i = 29; i >= 0; i--) {
-            const date = new Date(now);
-            date.setDate(now.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-            trendCounts[dateStr] = 0;
-        }
-
-        for (const finding of findings) {
-            // Severity normalization
-            const severity = (finding.severity || 'low').toLowerCase();
-            const normalizedSeverity = severity === 'crit' ? 'critical' : severity;
-            
-            if (stats.by_severity.hasOwnProperty(normalizedSeverity)) {
-                stats.by_severity[normalizedSeverity]++;
-            }
-
-            // Type normalization (mapping tools to types)
-            let type = (finding.type || 'dependency').toLowerCase();
-            const tool = (finding.tool || '').toLowerCase();
-            const titleAndMessage = `${finding.title || ''} ${finding.message || ''}`;
-            if (tool.includes('gitleaks') || tool.includes('secret')) type = 'secret';
-            if (tool.includes('semgrep') || tool.includes('sast')) type = 'sast';
-            if (tool.includes('trivy') && finding.title?.includes('image')) type = 'docker';
-            if (tool.includes('trivy') && (titleAndMessage.includes('[IaC]') || titleAndMessage.includes('[CONFIG]'))) type = 'iac';
-            if (tool.includes('trivy') && !type) type = 'dependency';
-
-            if (stats.by_type.hasOwnProperty(type)) {
-                stats.by_type[type]++;
-
-                if (stats.by_type_severity[type]) {
-                    stats.by_type_severity[type][normalizedSeverity] = (stats.by_type_severity[type][normalizedSeverity] || 0) + 1;
-                }
-            }
-
-            // Repo identification (with fallback)
-            const repoId = finding.repo_id || scanToRepo[finding.scanId];
-            if (repoId) {
-                if (!repoCounts[repoId]) repoCounts[repoId] = { total: 0, critical: 0, high: 0 };
-                repoCounts[repoId].total++;
-                if (normalizedSeverity === 'critical') repoCounts[repoId].critical++;
-                if (normalizedSeverity === 'high') repoCounts[repoId].high++;
-            }
-
-            // Trend
-            const dateStr = finding.$createdAt.split('T')[0];
-            if (trendCounts.hasOwnProperty(dateStr)) {
-                trendCounts[dateStr]++;
-            }
-
-            // Status
-            if (finding.status === 'resolved' || finding.status === 'remediated') {
-                stats.resolved_count++;
-                // $updatedAt reflects the last write to the document, which for a resolved
-                // finding is when its status flipped — used as a proxy resolution timestamp
-                // since there is no dedicated resolvedAt field on this collection.
-                const created = new Date(finding.$createdAt).getTime();
-                const resolved = new Date(finding.$updatedAt).getTime();
-                if (resolved > created) resolutionDurationsMs.push(resolved - created);
-            } else {
-                stats.open_count++;
-            }
-        }
-
-        if (resolutionDurationsMs.length > 0) {
-            const avgMs = resolutionDurationsMs.reduce((sum, ms) => sum + ms, 0) / resolutionDurationsMs.length;
-            stats.mttr_days = Math.round((avgMs / (1000 * 60 * 60 * 24)) * 10) / 10;
-        }
-
-        // Format by_repo
-        stats.by_repo = Object.entries(repoCounts).map(([id, counts]) => ({
-            repo_id: id,
-            repo_name: repoNames[id] || (id.includes('/') ? id.split('/').pop()?.replace('.git', '') : 'Unknown') || 'Unknown',
-            count: counts.total,
-            critical: counts.critical,
-            high: counts.high
-        }));
-
-        // Format trend
-        stats.trend = Object.entries(trendCounts).map(([date, count]) => ({
-            date,
-            count
-        })).sort((a, b) => a.date.localeCompare(b.date));
-
-        // Save to cache
-        dashboardCache.set(userId, { data: stats, timestamp: Date.now() });
-
-        res.json(stats);
-
-    } catch (err: any) {
-        logger.error('[Dashboard API Error]', err.message);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    const result = await dashboardService.generateAiBlueprint(req.params.id, userId);
+    if (result.forbidden) return res.status(403).json({ error: 'You do not have access to this finding' });
+    res.json({ blueprint: result.blueprint });
+  } catch (err) {
+    logger.error('[Dashboard] AI Blueprint error:', err);
+    res.status(500).json({ error: 'Failed to generate AI blueprint' });
+  }
 });
 
-router.get('/posture-breakdown', verifyUser, async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user?.$id;
-        
-        const reposResponse = await databases.listDocuments(DB_ID, 'repositories', [Query.equal('user_id', userId)]);
-        const repos = reposResponse.documents;
-        
-        if (repos.length === 0) {
-            return res.json({ score: 0, breakdown: [], recommendations: ["Add a repository to begin monitoring."] });
-        }
+router.post('/tasks/:id/github-sync', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.$id;
+    if (!userId) return res.status(401).json({ error: 'User not found' });
 
-        const repoIds = repos.map(r => r.$id);
-        
-        const findings = await databases.listDocuments(DB_ID, 'findings', [
-            Query.equal('repo_id', repoIds),
-            Query.equal('status', 'open'),
-            Query.limit(5000)
-        ]);
-
-        const critical = findings.documents.filter(f => f.severity === 'critical').length;
-        const high = findings.documents.filter(f => f.severity === 'high').length;
-        const medium = findings.documents.filter(f => f.severity === 'medium').length;
-
-        const criticalPenalty = critical * 5;
-        const highPenalty = high * 2;
-        const mediumPenalty = medium * 0.5;
-        
-        const passCount = repos.filter(r => r.gate_status === 'passed' || r.security_score >= 70).length;
-        const passRate = (passCount / repos.length) * 100;
-        const gatePenalty = (100 - passRate) * 0.3;
-
-        const totalPenalty = criticalPenalty + highPenalty + mediumPenalty + gatePenalty;
-        const score = Math.max(0, Math.min(100, Math.round(100 - totalPenalty)));
-
-        const breakdown = [
-            { category: 'Critical Vulnerabilities', impact: Math.round(criticalPenalty), count: critical },
-            { category: 'High Vulnerabilities', impact: Math.round(highPenalty), count: high },
-            { category: 'Medium Vulnerabilities', impact: Math.round(mediumPenalty), count: medium },
-            { category: 'CI Gate Compliance', impact: Math.round(gatePenalty), rate: `${Math.round(passRate)}%` }
-        ];
-
-        const recommendations = [];
-        if (critical > 0) recommendations.push(`Remediate ${critical} critical findings immediately to boost score by ~${Math.round(criticalPenalty)}%.`);
-        if (high > 0) recommendations.push(`Address ${high} high severity issues to improve posture by ~${Math.round(highPenalty)}%.`);
-        if (passRate < 90) recommendations.push(`Improve CI gate pass rate (currently ${Math.round(passRate)}%) by fixing policy blockers.`);
-
-        res.json({
-            score,
-            breakdown,
-            recommendations: recommendations.slice(0, 3)
-        });
-    } catch (err: any) {
-        logger.error('[Posture API Error]', err.message);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-router.post('/tasks/:id/ai-blueprint', verifyUser, async (req: Request, res: Response) => {
-    try {
-        const taskId = req.params.id;
-        const userId = (req as any).user?.$id;
-        const task = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, taskId);
-
-        const repo = task.repo_id ? await databases.getDocument(DB_ID, 'repositories', task.repo_id).catch(() => null) : null;
-        if (!repo || !(await canAccessResource(repo, userId))) {
-            return res.status(403).json({ error: 'You do not have access to this finding' });
-        }
-
-        const prompt = `You are a DevOps Engineer. Create a step-by-step markdown blueprint to remediate this finding:
-        Title: ${task.title || task.name}
-        Severity: ${task.severity}
-        Type: ${task.type}
-        File: ${task.file_path || task.filePath || 'Unknown'}
-        Repository: ${task.repo_name || task.repositoryName || 'Unknown'}
-        
-        Provide copy-pasteable shell commands if applicable.`;
-
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey || apiKey === 'mock-key') {
-            return res.json({ blueprint: "### AI Blueprint (Mock)\n1. Update dependency to latest version.\n2. Run `npm install`.\n3. Commit and push." });
-        }
-
-        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-        const geminiResponse = await fetch(geminiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-
-        const data = await geminiResponse.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        res.json({ blueprint: text || 'Failed to generate blueprint' });
-    } catch (err: any) {
-        logger.error('[Dashboard] AI Blueprint error:', err);
-        res.status(500).json({ error: 'Failed to generate AI blueprint' });
-    }
-});
-
-router.post('/tasks/:id/github-sync', verifyUser, async (req: Request, res: Response) => {
-    try {
-        const taskId = req.params.id;
-        const userId = (req as any).user?.$id;
-        const task = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, taskId);
-
-        const ownerRepo = task.repo_id ? await databases.getDocument(DB_ID, 'repositories', task.repo_id).catch(() => null) : null;
-        if (!ownerRepo || !(await canAccessResource(ownerRepo, userId))) {
-            return res.status(403).json({ error: 'You do not have access to this finding' });
-        }
-
-        if (!process.env.GITHUB_TOKEN) {
-             return res.status(500).json({ error: 'GITHUB_TOKEN not configured' });
-        }
-
-        const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-        
-        const repoName = task.repo_name || task.repositoryName || '';
-        let owner = 'owner';
-        let repo = 'repo';
-        
-        if (repoName.includes('/')) {
-            [owner, repo] = repoName.split('/');
-        } else {
-             repo = repoName;
-        }
-
-        const issue = await octokit.rest.issues.create({
-            owner,
-            repo,
-            title: `[Security Action] ${task.title || task.name || 'Vulnerability'}`,
-            body: `**Severity**: ${task.severity}\n**Type**: ${task.type}\n**File**: ${task.file_path || task.filePath || 'Unknown'}\n\nPlease remediate this issue. Automatically generated by Scorpion.`
-        });
-
-        await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, taskId, {
-            github_issue_url: issue.data.html_url
-        });
-
-        res.json({ success: true, url: issue.data.html_url });
-    } catch (err: any) {
-        // Surface the real failure instead of silently writing a fake issue URL.
-        logger.error('[Dashboard] GitHub Sync error:', err);
-        res.status(502).json({ error: `Failed to sync with GitHub: ${err.message || 'unknown error'}` });
-    }
+    const result = await dashboardService.syncTaskToGithub(req.params.id, userId);
+    if ('forbidden' in result) return res.status(403).json({ error: 'You do not have access to this finding' });
+    if ('configError' in result) return res.status(500).json({ error: 'GITHUB_TOKEN not configured' });
+    res.json({ success: true, url: result.url });
+  } catch (err) {
+    // Surface the real failure instead of silently writing a fake issue URL.
+    logger.error('[Dashboard] GitHub Sync error:', err);
+    res.status(502).json({ error: `Failed to sync with GitHub: ${err instanceof Error ? err.message : 'unknown error'}` });
+  }
 });
 
 // GET /api/dashboard/metrics - compliance/MTTR summary derived from the caller's
 // own open findings (scoped to repos they own).
-router.get('/metrics', verifyUser, async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user?.$id;
-
-        const reposResponse = await databases.listDocuments(DB_ID, 'repositories', [
-            Query.equal('user_id', userId),
-            Query.limit(500),
-        ]);
-        const repoIds = reposResponse.documents.map(r => r.$id);
-
-        if (repoIds.length === 0) {
-            return res.json({ noiseReductionPercentage: 0, complianceMapping: {}, averageMTTRMinutes: 0 });
-        }
-
-        const findingsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
-            Query.equal('repo_id', repoIds),
-            Query.limit(5000),
-        ]);
-        const findings = findingsResponse.documents;
-
-        // Compliance mapping: group OPEN findings into compliance-relevant buckets.
-        const complianceMapping: Record<string, number> = {};
-        const resolutionDurationsMs: number[] = [];
-        let resolved = 0;
-
-        for (const f of findings) {
-            const isResolved = f.status === 'resolved' || f.status === 'remediated';
-            if (isResolved) {
-                resolved++;
-                const created = new Date(f.$createdAt).getTime();
-                const closed = new Date(f.$updatedAt).getTime();
-                if (closed > created) resolutionDurationsMs.push(closed - created);
-                continue;
-            }
-            const tool = (f.tool || '').toLowerCase();
-            let key = 'general';
-            if (tool.includes('gitleaks') || tool.includes('secret')) key = 'secret';
-            else if (tool.includes('semgrep') || tool.includes('sast')) key = 'sast';
-            else if (tool.includes('trivy')) key = 'dependency';
-            else if (tool.includes('checkov')) key = 'iac';
-            complianceMapping[key] = (complianceMapping[key] || 0) + 1;
-        }
-
-        // Noise reduction = share of all findings already resolved/auto-closed.
-        const noiseReductionPercentage = findings.length > 0
-            ? Math.round((resolved / findings.length) * 1000) / 10
-            : 0;
-
-        const averageMTTRMinutes = resolutionDurationsMs.length > 0
-            ? Math.round(resolutionDurationsMs.reduce((s, ms) => s + ms, 0) / resolutionDurationsMs.length / 60000)
-            : 0;
-
-        res.json({ noiseReductionPercentage, complianceMapping, averageMTTRMinutes });
-    } catch (err: any) {
-        logger.error('[Dashboard Metrics Error]', err.message);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+router.get('/metrics', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.$id;
+    if (!userId) return res.status(401).json({ error: 'User not found' });
+    res.json(await dashboardService.getMetrics(userId));
+  } catch (err) {
+    logger.error('[Dashboard Metrics Error]', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;
