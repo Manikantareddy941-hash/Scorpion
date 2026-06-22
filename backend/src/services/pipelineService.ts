@@ -14,6 +14,8 @@ import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
 import { containerizedTrivyService } from './containerizedTrivyService';
 import { getImageDigest, signImageDigest } from './cosignService';
+import { EnvironmentDocument, PipelineRunDocument, StageUpdate } from '../types/pipeline.types';
+import { GateBlocker } from '../types/gate.types';
 
 
 
@@ -34,7 +36,7 @@ export function unregisterSseClient(runId: string, res: Response) {
   }
 }
 
-export function notifyStageChange(runId: string, data: any) {
+export function notifyStageChange(runId: string, data: Record<string, unknown>) {
   const clients = sseClients.get(runId);
   if (clients) {
     clients.forEach(client => {
@@ -67,8 +69,9 @@ export class PipelineLogger {
     logger.info(`[PipelineLogger] ${message}`);
   }
 
-  async error(message: string, error?: any) {
-    const formatted = `[${new Date().toISOString()}] [ERROR] ${message} ${error ? error.stack || JSON.stringify(error) : ''}\n`;
+  async error(message: string, error?: unknown) {
+    const errorDetail = error instanceof Error ? (error.stack || error.message) : (error ? JSON.stringify(error) : '');
+    const formatted = `[${new Date().toISOString()}] [ERROR] ${message} ${errorDetail}\n`;
     await fs.appendFile(this.logPath, formatted);
     logger.error(`[PipelineLogger] ${message}`, error);
   }
@@ -133,7 +136,7 @@ async function execFileCommand(file: string, args: string[], cwd: string, pipeLo
     const { stdout, stderr } = await execFileAsync(file, args, { cwd });
     if (stdout) await pipeLogger.log(sanitizeUrl(stdout));
     if (stderr) await pipeLogger.log(`[stderr]: ${sanitizeUrl(stderr)}`);
-  } catch (error: any) {
+  } catch (error) {
     await pipeLogger.error(`Command failed: ${safeCommand}`, error);
     throw error;
   }
@@ -148,11 +151,11 @@ export async function runPipeline(runId: string) {
 
   const startTime = Date.now();
   let workspaceDir = '';
-  let runDoc: any = null;
+  let runDoc: PipelineRunDocument | null = null;
 
   try {
     // 1. Fetch the pipeline run document
-    runDoc = await databases.getDocument(DB_ID, 'pipeline_runs', runId);
+    runDoc = await databases.getDocument<PipelineRunDocument>(DB_ID, 'pipeline_runs', runId);
     
     // Update main status to running
     await databases.updateDocument(DB_ID, 'pipeline_runs', runId, {
@@ -178,7 +181,7 @@ export async function runPipeline(runId: string) {
     workspaceDir = path.join(os.tmpdir(), 'scorpion-builds', runId);
     await fs.mkdir(workspaceDir, { recursive: true });
 
-    const notifyUpdate = async (stage: string, updates: any) => {
+    const notifyUpdate = async (stage: string, updates: StageUpdate) => {
       notifyStageChange(runId, { stage, status: updates[`${stage}Status`] || updates.status });
       await databases.updateDocument(DB_ID, 'pipeline_runs', runId, updates);
     };
@@ -243,9 +246,10 @@ export async function runPipeline(runId: string) {
         } else {
           await pipeLogger.log('Image signing skipped (cosign/COSIGN_KEY_PATH not configured).');
         }
-      } catch (signErr: any) {
-        logger.warn(`[PipelineService] Image signing step failed for ${imageTag}:`, signErr.message);
-        await pipeLogger.log(`Image signing step failed: ${signErr.message}`);
+      } catch (signErr) {
+        const message = signErr instanceof Error ? signErr.message : String(signErr);
+        logger.warn(`[PipelineService] Image signing step failed for ${imageTag}:`, message);
+        await pipeLogger.log(`Image signing step failed: ${message}`);
       }
     } else if (buildTool === 'gradle') {
       const executionImage = getRuntimeImageForTool(buildTool);
@@ -308,8 +312,8 @@ export async function runPipeline(runId: string) {
         databases
       );
       // optional: halt pipeline on critical threats
-    } catch (secError: any) {
-      await pipeLogger.log(`[Security Stage Fault] ${secError.message}`);
+    } catch (secError) {
+      await pipeLogger.log(`[Security Stage Fault] ${secError instanceof Error ? secError.message : secError}`);
     }
     
     await notifyUpdate('security_scan', { securityScanStatus: 'success' });
@@ -323,7 +327,7 @@ export async function runPipeline(runId: string) {
     await pipeLogger.log(`Gate score: ${gateRes.score}%, Blocker count: ${gateRes.blocker_count}`);
     
     if (!gateRes.allowed) {
-      const blockers = gateRes.blockers.map((b: any) => `[${b.severity}] ${b.title}`).join(', ');
+      const blockers = gateRes.blockers.map((b: GateBlocker) => `[${b.severity}] ${b.title}`).join(', ');
       throw new Error(`Policy gates failed (Allowed: false). Blockers: ${blockers}`);
     }
     
@@ -335,10 +339,10 @@ export async function runPipeline(runId: string) {
     await notifyUpdate('deploy', { deployStatus: 'running', currentStage: 'deploy' });
 
     await pipeLogger.log('Resolving deployment target environment...');
-    let envDoc: any = null;
+    let envDoc: EnvironmentDocument | null = null;
     try {
       const envName = (runDoc.targetEnvironment || 'production').toString();
-      const envRes = await databases.listDocuments(
+      const envRes = await databases.listDocuments<EnvironmentDocument>(
         DB_ID,
         COLLECTIONS.ENVIRONMENTS,
         [Query.equal('name', envName)]
@@ -346,8 +350,8 @@ export async function runPipeline(runId: string) {
       if (envRes.documents.length > 0) {
         envDoc = envRes.documents[0];
       }
-    } catch (e: any) {
-      await pipeLogger.log(`[Deploy] Environment lookup error: ${e.message}`);
+    } catch (e) {
+      await pipeLogger.log(`[Deploy] Environment lookup error: ${e instanceof Error ? e.message : e}`);
     }
 
     if (envDoc) {
@@ -400,13 +404,13 @@ export async function runPipeline(runId: string) {
       duration
     });
 
-  } catch (err: any) {
-    const errorMsg = err.message || JSON.stringify(err);
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
     await pipeLogger.error(`Pipeline run failed: ${errorMsg}`);
-    
+
     // Find active stage
     const current = runDoc ? runDoc.currentStage : 'trigger';
-    const updates: any = {
+    const updates: StageUpdate = {
       status: 'failed',
       finishedAt: new Date().toISOString(),
       duration: Math.round((Date.now() - startTime) / 1000)
@@ -423,8 +427,8 @@ export async function runPipeline(runId: string) {
       try {
         await fs.rm(workspaceDir, { recursive: true, force: true });
         await pipeLogger.log(`Temporary workspace directory ${workspaceDir} cleaned up.`);
-      } catch (cleanupErr: any) {
-        logger.error(`[PipelineService] Cleanup failed for ${workspaceDir}: ${cleanupErr.message}`);
+      } catch (cleanupErr) {
+        logger.error(`[PipelineService] Cleanup failed for ${workspaceDir}: ${cleanupErr instanceof Error ? cleanupErr.message : cleanupErr}`);
       }
     }
   }
