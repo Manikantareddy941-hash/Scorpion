@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { Models } from 'node-appwrite';
 import { verifyUser } from '../middleware/auth';
 import {
   createThreatModel,
@@ -6,10 +7,19 @@ import {
   listThreatModels,
   updateThreatModel,
   deleteThreatModel,
-  updateThreats
+  updateThreats,
+  ThreatModel
 } from '../services/threatModelService';
 import { generateStrideThreats } from '../services/threatAiService';
 import { logger } from '../services/logger';
+
+interface AuthenticatedRequest extends Request {
+  user?: Models.User<Models.Preferences>;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Unknown error';
+}
 
 const router = Router();
 
@@ -17,11 +27,11 @@ const router = Router();
 router.use(verifyUser);
 
 // POST /api/threat-models - Create new threat model
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { name, description, diagramData, threats, createdBy, status } = req.body;
-    const userId = (req as any).user?.$id || 'unknown';
-    const userEmail = (req as any).user?.email || 'unknown';
+    const userId = req.user?.$id || 'unknown';
+    const userEmail = req.user?.email || 'unknown';
 
     if (!name || !createdBy) {
       return res.status(400).json({ error: 'Name and createdBy are required' });
@@ -41,29 +51,29 @@ router.post('/', async (req: Request, res: Response) => {
     );
 
     res.status(201).json(model);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to create threat model:', err);
-    res.status(500).json({ error: 'Failed to create threat model', details: err.message });
+    res.status(500).json({ error: 'Failed to create threat model', details: errorMessage(err) });
   }
 });
 
 // GET /api/threat-models - List all threat models
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
     const models = await listThreatModels(userId);
     res.json(models);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to list threat models:', err);
-    res.status(500).json({ error: 'Failed to list threat models', details: err.message });
+    res.status(500).json({ error: 'Failed to list threat models', details: errorMessage(err) });
   }
 });
 
 // GET /api/threat-models/:id - Fetch single threat model
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = (req as any).user?.$id;
+    const userId = req.user?.$id;
     const model = await getThreatModel(id);
 
     if (!model) {
@@ -74,19 +84,19 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 
     res.json(model);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to get threat model:', err);
-    res.status(500).json({ error: 'Failed to get threat model', details: err.message });
+    res.status(500).json({ error: 'Failed to get threat model', details: errorMessage(err) });
   }
 });
 
 // PUT /api/threat-models/:id - Update threat model
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { name, description, diagramData, threats, status } = req.body;
-    const userId = (req as any).user?.$id || 'unknown';
-    const userEmail = (req as any).user?.email || 'unknown';
+    const userId = req.user?.$id || 'unknown';
+    const userEmail = req.user?.email || 'unknown';
 
     const existing = await getThreatModel(id);
     if (!existing) return res.status(404).json({ error: 'Threat model not found' });
@@ -94,7 +104,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'You do not have access to this threat model' });
     }
 
-    const updates: any = {};
+    const updates: Partial<Omit<ThreatModel, '$id' | 'createdAt'>> = {};
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (diagramData !== undefined) updates.diagramData = diagramData;
@@ -103,18 +113,18 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const model = await updateThreatModel(id, updates, userId, userEmail);
     res.json(model);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to update threat model:', err);
-    res.status(500).json({ error: 'Failed to update threat model', details: err.message });
+    res.status(500).json({ error: 'Failed to update threat model', details: errorMessage(err) });
   }
 });
 
 // DELETE /api/threat-models/:id - Delete threat model
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = (req as any).user?.$id || 'unknown';
-    const userEmail = (req as any).user?.email || 'unknown';
+    const userId = req.user?.$id || 'unknown';
+    const userEmail = req.user?.email || 'unknown';
 
     const existing = await getThreatModel(id);
     if (!existing) return res.status(404).json({ error: 'Threat model not found' });
@@ -124,18 +134,18 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     await deleteThreatModel(id, userId, userEmail);
     res.json({ success: true, message: 'Threat model deleted successfully' });
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to delete threat model:', err);
-    res.status(500).json({ error: 'Failed to delete threat model', details: err.message });
+    res.status(500).json({ error: 'Failed to delete threat model', details: errorMessage(err) });
   }
 });
 
 // POST /api/threat-models/:id/analyze - Trigger AI STRIDE analysis
-router.post('/:id/analyze', async (req: Request, res: Response) => {
+router.post('/:id/analyze', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = (req as any).user?.$id || 'unknown';
-    const userEmail = (req as any).user?.email || 'unknown';
+    const userId = req.user?.$id || 'unknown';
+    const userEmail = req.user?.email || 'unknown';
 
     // Get the current model
     const model = await getThreatModel(id);
@@ -153,9 +163,9 @@ router.post('/:id/analyze', async (req: Request, res: Response) => {
     const updatedModel = await updateThreats(id, threats, userId, userEmail);
 
     res.json(updatedModel);
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to analyze threat model:', err);
-    res.status(500).json({ error: 'Failed to analyze threat model', details: err.message });
+    res.status(500).json({ error: 'Failed to analyze threat model', details: errorMessage(err) });
   }
 });
 

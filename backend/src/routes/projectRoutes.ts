@@ -13,6 +13,11 @@ interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
 }
 
+function errorMessage(err: unknown): string {
+    if (typeof err === 'string') return err;
+    return err instanceof Error ? err.message : 'Unknown error';
+}
+
 const router = Router();
 
 /* -------------------------------------------------------------------------- */
@@ -25,11 +30,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
         const { data, error } = await createProject(req.user!.$id, name, description);
 
-        if (error) return res.status(500).json({ error: (error as any).message });
+        if (error) return res.status(500).json({ error: errorMessage(error) });
 
         res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
@@ -39,11 +44,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { data, error } = await getProjects(req.user!.$id);
-        if (error) return res.status(500).json({ error: (error as any).message });
+        if (error) return res.status(500).json({ error: errorMessage(error) });
 
         res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
@@ -57,12 +62,12 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
         if (error) {
             return res
                 .status(typeof error === 'string' ? 404 : 500)
-                .json({ error: typeof error === 'string' ? error : (error as any).message });
+                .json({ error: errorMessage(error) });
         }
 
         res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
@@ -78,12 +83,12 @@ router.post('/:id/repos', async (req: AuthenticatedRequest, res: Response) => {
 
         if (error)
             return res.status(500).json({
-                error: typeof error === 'string' ? error : (error as any).message
+                error: errorMessage(error)
             });
 
         res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 
@@ -94,11 +99,11 @@ router.get('/:id/scans', async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { data, error } = await getProjectScanHistory(req.params.id, req.user!.$id);
 
-        if (error) return res.status(500).json({ error: (error as any).message });
+        if (error) return res.status(500).json({ error: errorMessage(error) });
 
         res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+        res.status(500).json({ error: errorMessage(err) });
     }
 });
 

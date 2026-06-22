@@ -8,6 +8,10 @@ interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
 }
 
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
+
 const router = Router();
 
 // List teams for user
@@ -68,9 +72,9 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
         });
 
         res.json(team);
-    } catch (err: any) {
+    } catch (err: unknown) {
         logger.error("[Backend Team Crash Log]:", err);
-        return res.status(400).json({ error: err.message });
+        return res.status(400).json({ error: errorMessage(err) });
     }
 });
 

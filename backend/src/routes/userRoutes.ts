@@ -20,7 +20,7 @@ router.get('/role', verifyUser, async (req: AuthenticatedRequest, res: Response,
         ]);
 
         if (roleRes.documents.length > 0) {
-            return res.json({ role: (roleRes.documents[0] as any).role });
+            return res.json({ role: roleRes.documents[0].role });
         }
 
         res.json({ role: 'user' }); // Default role
