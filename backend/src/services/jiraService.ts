@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { JiraConfig, JiraSyncResult, Ticket } from '../../../shared/types';
-import { getTicket, updateTicket, listTickets } from '../models/ticketModel';
+import { ticketsRepository } from '../repositories/ticketsRepository';
 import { logger } from './logger';
+
+const { getTicket, updateTicket, listTickets } = ticketsRepository;
 
 // In-memory JiraConfig store
 let currentJiraConfig: JiraConfig | null = null;
@@ -144,8 +146,8 @@ export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult
       labels: [
         'scorpion-security',
         ticket.type,
-        ...ticket.tags.map(t => t.replace(/[^a-zA-Z0-9-_]/g, '')), // Clean labels
-        ...ticket.linkedFindings.map(f => `finding-${f}`)
+        ...ticket.tags.map((t: string) => t.replace(/[^a-zA-Z0-9-_]/g, '')), // Clean labels
+        ...ticket.linkedFindings.map((f: string) => `finding-${f}`)
       ]
     };
 
@@ -260,7 +262,7 @@ export async function pullFromJira(jiraKey: string): Promise<{ ok: boolean; tick
 
     // Find the local ticket with this jiraKey
     const paginatedTickets = await listTickets({ search: jiraKey, page: 1, limit: 100 });
-    const localTicket = paginatedTickets.data.find(t => t.jiraKey === jiraKey);
+    const localTicket = paginatedTickets.data.find((t: Ticket) => t.jiraKey === jiraKey);
 
     if (!localTicket) {
       return { ok: false, error: `No internal ticket found with Jira Key: ${jiraKey}` };

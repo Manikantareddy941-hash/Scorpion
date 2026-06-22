@@ -1,30 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
 import { verifyUser } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
+import { ticketsService } from '../services/ticketsService';
+import { TicketFilters } from '../../../shared/types';
 import {
-  createTicket,
-  getTicket,
-  findByLinkedFinding,
-  getUnsyncedTickets,
-  updateTicket,
-  deleteTicket,
-  listTickets,
-  addComment,
-  getComments,
-  getActivity,
-  getStats,
-  addLink,
-  removeLink
-} from '../models/ticketModel';
-import {
-  setJiraConfig,
-  getJiraConfig,
-  pushTicketToJira,
-  pullFromJira,
-  testConnection
-} from '../services/jiraService';
-import { TicketFilters, TicketLinkType } from '../../../shared/types';
+  AuthenticatedRequest,
+  jiraConfigSchema,
+  fromFindingSchema,
+  createTicketSchema,
+  updateTicketSchema,
+  addLinkSchema,
+  addCommentSchema
+} from '../types/tickets.types';
 import { logger } from '../services/logger';
 
 const router = Router();
@@ -32,59 +19,15 @@ const router = Router();
 // Apply authentication middleware to all ticket endpoints
 router.use(verifyUser);
 
-const ticketStatus = z.enum(['todo', 'in_progress', 'in_review', 'done', 'closed']);
-const ticketPriority = z.enum(['critical', 'high', 'medium', 'low']);
-const ticketType = z.enum(['bug', 'vulnerability', 'task', 'feature', 'story', 'epic']);
-
-const jiraConfigSchema = z.object({
-  baseUrl: z.string().trim().url('baseUrl must be a valid URL'),
-  email: z.string().trim().email(),
-  apiToken: z.string().trim().min(1),
-  projectKey: z.string().trim().min(1),
-  defaultIssueType: z.string().trim().min(1),
-});
-
-const fromFindingSchema = z.object({
-  findingId: z.string().trim().min(1),
-  title: z.string().trim().min(1),
-  description: z.string().trim().min(1),
-  severity: z.union([z.string(), z.number()]).optional(),
-  type: ticketType.optional(),
-});
-
-const createTicketSchema = z.object({
-  title: z.string().trim().min(1),
-  description: z.string().trim().min(1),
-  status: ticketStatus.optional(),
-  priority: ticketPriority.optional(),
-  type: ticketType.optional(),
-  severity: z.union([z.string(), z.number()]).optional(),
-  assignee: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  linkedFindings: z.array(z.string()).optional(),
-  storyPoints: z.union([z.string(), z.number()]).optional(),
-  dueDate: z.string().optional(),
-  epicLink: z.string().optional(),
-  sprintId: z.string().optional(),
-});
-
-const addLinkSchema = z.object({
-  targetId: z.string().trim().min(1),
-  type: z.enum(['blocks', 'blocked_by', 'relates_to'] as [TicketLinkType, ...TicketLinkType[]]),
-});
-
-const addCommentSchema = z.object({
-  body: z.string().trim().min(1),
-});
-
-const updateTicketSchema = createTicketSchema.partial();
-
-// Try-catch helper for async handlers
-const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => {
+const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) => {
   return (req: Request, res: Response, next: NextFunction) => {
     fn(req, res, next).catch(next);
   };
 };
+
+function actorEmail(req: AuthenticatedRequest): string {
+  return req.user?.email || 'dev@scorpion.local';
+}
 
 /**
  * GET /api/tickets - List & filter tickets
@@ -105,51 +48,28 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     overdue: req.query.overdue === 'true'
   };
 
-  const response = await listTickets(filters);
-  res.json(response);
+  res.json(await ticketsService.listTickets(filters));
 }));
 
 /**
  * GET /api/tickets/stats - Aggregated stats
  */
 router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
-  const stats = await getStats();
-  res.json(stats);
+  res.json(await ticketsService.getStats());
 }));
 
 /**
  * GET /api/tickets/jira/config - Retrieve current JIRA configuration (redacted)
  */
 router.get('/jira/config', asyncHandler(async (req: Request, res: Response) => {
-  const config = getJiraConfig();
-  if (!config) {
-    return res.json({ configured: false });
-  }
-
-  res.json({
-    configured: true,
-    baseUrl: config.baseUrl,
-    email: config.email,
-    projectKey: config.projectKey,
-    defaultIssueType: config.defaultIssueType,
-    apiToken: '********' // Redacted
-  });
+  res.json(ticketsService.getRedactedJiraConfig());
 }));
 
 /**
  * POST /api/tickets/jira/config - Save JIRA configuration
  */
 router.post('/jira/config', validateBody(jiraConfigSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { baseUrl, email, apiToken, projectKey, defaultIssueType } = req.body;
-
-  setJiraConfig({
-    baseUrl,
-    email,
-    apiToken,
-    projectKey,
-    defaultIssueType
-  });
-
+  ticketsService.saveJiraConfig(req.body);
   res.json({ message: 'Jira configuration updated successfully.' });
 }));
 
@@ -157,10 +77,8 @@ router.post('/jira/config', validateBody(jiraConfigSchema), asyncHandler(async (
  * GET /api/tickets/jira/test - Test connection to Jira
  */
 router.get('/jira/test', asyncHandler(async (req: Request, res: Response) => {
-  const result = await testConnection();
-  if (!result.ok) {
-    return res.status(400).json(result);
-  }
+  const result = await ticketsService.testJiraConnection();
+  if (!result.ok) return res.status(400).json(result);
   res.json(result);
 }));
 
@@ -168,10 +86,8 @@ router.get('/jira/test', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/tickets/by-finding/:findingId - Get ticket by linked finding ID
  */
 router.get('/by-finding/:findingId', asyncHandler(async (req: Request, res: Response) => {
-  const ticket = await findByLinkedFinding(req.params.findingId);
-  if (!ticket) {
-    return res.status(404).json({ error: 'Ticket not found for this finding' });
-  }
+  const ticket = await ticketsService.getTicketByFinding(req.params.findingId);
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found for this finding' });
   res.json(ticket);
 }));
 
@@ -179,111 +95,44 @@ router.get('/by-finding/:findingId', asyncHandler(async (req: Request, res: Resp
  * GET /api/tickets/:id - Get a single ticket
  */
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
-  const ticket = await getTicket(req.params.id);
-  if (!ticket) {
-    return res.status(404).json({ error: 'Ticket not found' });
-  }
+  const ticket = await ticketsService.getTicket(req.params.id);
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
   res.json(ticket);
 }));
 
 /**
  * POST /api/tickets/from-finding - Auto-create ticket from a security finding
  */
-router.post('/from-finding', validateBody(fromFindingSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { findingId, title, description, severity, type } = req.body;
-
-  // Duplicate prevention check
-  const existingTicket = await findByLinkedFinding(findingId);
-  if (existingTicket) {
-    return res.status(409).json({ 
-      error: 'A ticket is already linked to this finding.', 
-      ticket: existingTicket 
-    });
+router.post('/from-finding', validateBody(fromFindingSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await ticketsService.createFromFinding(req.body, actorEmail(req));
+  if (result.conflict) {
+    return res.status(409).json({ error: 'A ticket is already linked to this finding.', ticket: result.ticket });
   }
-
-  const sevVal = severity !== undefined ? Number(severity) : 0;
-  let priority: 'critical' | 'high' | 'medium' | 'low' = 'low';
-  if (sevVal >= 9) {
-    priority = 'critical';
-  } else if (sevVal >= 7) {
-    priority = 'high';
-  } else if (sevVal >= 4) {
-    priority = 'medium';
-  }
-
-  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-
-  const ticket = await createTicket({
-    title,
-    description,
-    status: 'todo',
-    priority,
-    type: type || 'vulnerability',
-    severity: sevVal,
-    assignee: '',
-    reporter: userEmail,
-    tags: [],
-    linkedFindings: [findingId]
-  } as any);
-
-  res.status(201).json(ticket);
+  res.status(201).json(result.ticket);
 }));
 
 /**
  * POST /api/tickets - Create a new ticket
  */
-router.post('/', validateBody(createTicketSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { title, description, status, priority, type, severity, assignee, tags, linkedFindings, storyPoints, dueDate, epicLink, sprintId } = req.body;
-
-  // Duplicate prevention check
-  if (Array.isArray(linkedFindings) && linkedFindings.length > 0) {
-    for (const findingId of linkedFindings) {
-      const existingTicket = await findByLinkedFinding(findingId);
-      if (existingTicket) {
-        return res.status(409).json({ 
-          error: 'A ticket is already linked to this finding.', 
-          ticket: existingTicket 
-        });
-      }
-    }
+router.post('/', validateBody(createTicketSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await ticketsService.createTicket(req.body, actorEmail(req));
+  if (result.conflict) {
+    return res.status(409).json({ error: 'A ticket is already linked to this finding.', ticket: result.ticket });
   }
-
-  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-  
-  const ticket = await createTicket({
-    title,
-    description,
-    status: status || 'todo',
-    priority: priority || 'medium',
-    type: type || 'task',
-    severity: severity !== undefined ? Number(severity) : 0,
-    assignee: assignee || '',
-    reporter: userEmail,
-    tags: Array.isArray(tags) ? tags : [],
-    linkedFindings: Array.isArray(linkedFindings) ? linkedFindings : [],
-    storyPoints: storyPoints !== undefined ? Number(storyPoints) : undefined,
-    dueDate,
-    epicLink,
-    sprintId
-  } as any);
-
-  res.status(201).json(ticket);
+  res.status(201).json(result.ticket);
 }));
 
 /**
  * PATCH /api/tickets/:id - Partially update a ticket
  */
-router.patch('/:id', validateBody(updateTicketSchema), asyncHandler(async (req: Request, res: Response) => {
-  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
+router.patch('/:id', validateBody(updateTicketSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const updated = await updateTicket(req.params.id, req.body, userEmail);
-    if (!updated) {
-      return res.status(404).json({ error: 'Ticket not found' });
-    }
+    const updated = await ticketsService.updateTicket(req.params.id, req.body, actorEmail(req));
+    if (!updated) return res.status(404).json({ error: 'Ticket not found' });
     res.json(updated);
-  } catch (err: any) {
+  } catch (err) {
     logger.error('Error in PATCH ticket:', err);
-    res.status(500).json({ error: err.message || 'Failed to update ticket' });
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update ticket' });
   }
 }));
 
@@ -291,38 +140,27 @@ router.patch('/:id', validateBody(updateTicketSchema), asyncHandler(async (req: 
  * DELETE /api/tickets/:id - Delete a ticket
  */
 router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
-  const success = await deleteTicket(req.params.id);
-  if (!success) {
-    return res.status(404).json({ error: 'Ticket not found' });
-  }
+  const success = await ticketsService.deleteTicket(req.params.id);
+  if (!success) return res.status(404).json({ error: 'Ticket not found' });
   res.status(204).end();
 }));
 
 /**
  * POST /api/tickets/:id/links - Link a ticket to another ticket
  */
-router.post('/:id/links', validateBody(addLinkSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/links', validateBody(addLinkSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { targetId, type } = req.body;
-
-  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-  const updatedTicket = await addLink(req.params.id, targetId, type as TicketLinkType, userEmail);
-  if (!updatedTicket) {
-    return res.status(404).json({ error: 'Ticket or target ticket not found' });
-  }
-  
+  const updatedTicket = await ticketsService.addLink(req.params.id, targetId, type, actorEmail(req));
+  if (!updatedTicket) return res.status(404).json({ error: 'Ticket or target ticket not found' });
   res.json(updatedTicket);
 }));
 
 /**
  * DELETE /api/tickets/:id/links/:targetId - Remove a link between tickets
  */
-router.delete('/:id/links/:targetId', asyncHandler(async (req: Request, res: Response) => {
-  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-  const updatedTicket = await removeLink(req.params.id, req.params.targetId, userEmail);
-  if (!updatedTicket) {
-    return res.status(404).json({ error: 'Ticket not found' });
-  }
-  
+router.delete('/:id/links/:targetId', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const updatedTicket = await ticketsService.removeLink(req.params.id, req.params.targetId, actorEmail(req));
+  if (!updatedTicket) return res.status(404).json({ error: 'Ticket not found' });
   res.json(updatedTicket);
 }));
 
@@ -330,18 +168,14 @@ router.delete('/:id/links/:targetId', asyncHandler(async (req: Request, res: Res
  * GET /api/tickets/:id/comments - Retrieve comment thread
  */
 router.get('/:id/comments', asyncHandler(async (req: Request, res: Response) => {
-  const comments = await getComments(req.params.id);
-  res.json(comments);
+  res.json(await ticketsService.getComments(req.params.id));
 }));
 
 /**
  * POST /api/tickets/:id/comments - Add a comment to the ticket
  */
-router.post('/:id/comments', validateBody(addCommentSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { body } = req.body;
-
-  const userEmail = (req as any).user?.email || 'dev@scorpion.local';
-  const comment = await addComment(req.params.id, body, userEmail);
+router.post('/:id/comments', validateBody(addCommentSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const comment = await ticketsService.addComment(req.params.id, req.body.body, actorEmail(req));
   res.status(201).json(comment);
 }));
 
@@ -349,54 +183,22 @@ router.post('/:id/comments', validateBody(addCommentSchema), asyncHandler(async 
  * GET /api/tickets/:id/activity - Retrieve ticket activity audit logs
  */
 router.get('/:id/activity', asyncHandler(async (req: Request, res: Response) => {
-  const activity = await getActivity(req.params.id);
-  res.json(activity);
+  res.json(await ticketsService.getActivity(req.params.id));
 }));
 
 /**
  * POST /api/tickets/sync/bulk - Bulk sync all unsynced tickets to Jira
  */
 router.post('/sync/bulk', asyncHandler(async (req: Request, res: Response) => {
-  const unsynced = await getUnsyncedTickets();
-  const results: any[] = [];
-  let synced = 0;
-  let failed = 0;
-
-  for (const ticket of unsynced) {
-    try {
-      const syncResult = await pushTicketToJira(ticket.id);
-      results.push({ ticketId: ticket.id, ...syncResult });
-      if (syncResult.ok) {
-        synced++;
-      } else {
-        failed++;
-      }
-    } catch (err: any) {
-      failed++;
-      results.push({
-        ticketId: ticket.id,
-        ok: false,
-        error: err.message || 'Error during sync'
-      });
-    }
-  }
-
-  res.json({
-    total: unsynced.length,
-    synced,
-    failed,
-    results
-  });
+  res.json(await ticketsService.bulkSyncToJira());
 }));
 
 /**
  * POST /api/tickets/:id/sync - Push local ticket changes to JIRA
  */
 router.post('/:id/sync', asyncHandler(async (req: Request, res: Response) => {
-  const result = await pushTicketToJira(req.params.id);
-  if (!result.ok) {
-    return res.status(400).json(result);
-  }
+  const result = await ticketsService.syncTicketToJira(req.params.id);
+  if (!result.ok) return res.status(400).json(result);
   res.json(result);
 }));
 
@@ -404,10 +206,8 @@ router.post('/:id/sync', asyncHandler(async (req: Request, res: Response) => {
  * POST /api/tickets/sync/pull/:jiraKey - Pull ticket changes from JIRA
  */
 router.post('/sync/pull/:jiraKey', asyncHandler(async (req: Request, res: Response) => {
-  const result = await pullFromJira(req.params.jiraKey);
-  if (!result.ok) {
-    return res.status(400).json(result);
-  }
+  const result = await ticketsService.pullTicketFromJira(req.params.jiraKey);
+  if (!result.ok) return res.status(400).json(result);
   res.json(result);
 }));
 

@@ -1,3 +1,4 @@
+import { Models } from 'node-appwrite';
 import { Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse, TicketLink, TicketLinkType } from '../../../shared/types';
 import crypto from 'crypto';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
@@ -8,10 +9,30 @@ const commentsMap = new Map<string, TicketComment[]>();
 const activityMap = new Map<string, TicketActivity[]>();
 const linksMap = new Map<string, TicketLink[]>();
 
-/**
- * Maps an Appwrite document to the Ticket interface format.
- */
-function mapDocumentToTicket(doc: any): Ticket {
+type TicketDocument = Models.Document & {
+  title: string;
+  description: string;
+  status: Ticket['status'];
+  priority: Ticket['priority'];
+  type: Ticket['type'];
+  severity: number;
+  assignee: string;
+  reporter: string;
+  tags?: string[];
+  linkedFindings?: string[];
+  storyPoints?: number;
+  dueDate?: string;
+  epicLink?: string;
+  sprintId?: string;
+  resolvedAt?: string;
+  jiraKey?: string;
+  jiraId?: string;
+  jiraSyncedAt?: string;
+  jiraSyncStatus?: 'synced' | 'error';
+  slaDeadline?: string;
+};
+
+function mapDocumentToTicket(doc: TicketDocument): Ticket {
   return {
     id: doc.$id,
     title: doc.title,
@@ -40,10 +61,10 @@ function mapDocumentToTicket(doc: any): Ticket {
   };
 }
 
-export async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt' | 'resolvedAt'>): Promise<Ticket> {
+async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt' | 'resolvedAt'>): Promise<Ticket> {
   const now = new Date().toISOString();
-  
-  const data: any = {
+
+  const data: Record<string, unknown> = {
     title: ticketData.title,
     description: ticketData.description,
     status: ticketData.status,
@@ -54,14 +75,14 @@ export async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' |
     reporter: ticketData.reporter,
     tags: ticketData.tags || [],
     linkedFindings: ticketData.linkedFindings || [],
-    storyPoints: (ticketData as any).storyPoints || null,
-    dueDate: (ticketData as any).dueDate || null,
-    epicLink: (ticketData as any).epicLink || null,
-    sprintId: (ticketData as any).sprintId || null,
+    storyPoints: ticketData.storyPoints || null,
+    dueDate: ticketData.dueDate || null,
+    epicLink: ticketData.epicLink || null,
+    sprintId: ticketData.sprintId || null,
   };
 
   // Compute slaDeadline if not provided
-  if (!(ticketData as any).slaDeadline) {
+  if (!ticketData.slaDeadline) {
     if (data.dueDate) {
       data.slaDeadline = data.dueDate;
     } else {
@@ -73,26 +94,17 @@ export async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' |
         case 'medium': addedMs = 7 * 24 * msInHour; break;
         case 'low': addedMs = 30 * 24 * msInHour; break;
       }
-      if (addedMs > 0) {
-        data.slaDeadline = new Date(Date.now() + addedMs).toISOString();
-      } else {
-        data.slaDeadline = null;
-      }
+      data.slaDeadline = addedMs > 0 ? new Date(Date.now() + addedMs).toISOString() : null;
     }
   } else {
-    data.slaDeadline = (ticketData as any).slaDeadline;
+    data.slaDeadline = ticketData.slaDeadline;
   }
 
   if (data.status === 'done' || data.status === 'closed') {
     data.resolvedAt = now;
   }
 
-  const doc = await databases.createDocument(
-    DB_ID,
-    'tickets',
-    ID.unique(),
-    data
-  );
+  const doc = await databases.createDocument(DB_ID, 'tickets', ID.unique(), data) as unknown as TicketDocument;
 
   const newTicket = mapDocumentToTicket(doc);
   linksMap.set(newTicket.id, ticketData.links || []);
@@ -104,31 +116,31 @@ export async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' |
   return newTicket;
 }
 
-export async function getTicket(id: string): Promise<Ticket | undefined> {
+async function getTicket(id: string): Promise<Ticket | undefined> {
   try {
-    const doc = await databases.getDocument(DB_ID, 'tickets', id);
+    const doc = await databases.getDocument<TicketDocument>(DB_ID, 'tickets', id);
     return mapDocumentToTicket(doc);
-  } catch (err) {
+  } catch {
     return undefined;
   }
 }
 
-export async function findByLinkedFinding(findingId: string): Promise<Ticket | undefined> {
+async function findByLinkedFinding(findingId: string): Promise<Ticket | undefined> {
   try {
-    const response = await databases.listDocuments(DB_ID, 'tickets', [
+    const response = await databases.listDocuments<TicketDocument>(DB_ID, 'tickets', [
       Query.equal('linkedFindings', findingId),
       Query.limit(1)
     ]);
     if (response.documents.length === 0) return undefined;
     return mapDocumentToTicket(response.documents[0]);
-  } catch (err) {
+  } catch {
     return undefined;
   }
 }
 
-export async function getUnsyncedTickets(): Promise<Ticket[]> {
+async function getUnsyncedTickets(): Promise<Ticket[]> {
   try {
-    const response = await databases.listDocuments(DB_ID, 'tickets', [
+    const response = await databases.listDocuments<TicketDocument>(DB_ID, 'tickets', [
       Query.limit(1000)
     ]);
     const tickets = response.documents.map(mapDocumentToTicket);
@@ -139,7 +151,7 @@ export async function getUnsyncedTickets(): Promise<Ticket[]> {
   }
 }
 
-export async function updateTicket(id: string, updates: Partial<Ticket>, actor: string): Promise<Ticket | undefined> {
+async function updateTicket(id: string, updates: Partial<Ticket>, actor: string): Promise<Ticket | undefined> {
   try {
     const ticket = await getTicket(id);
     if (!ticket) return undefined;
@@ -150,7 +162,7 @@ export async function updateTicket(id: string, updates: Partial<Ticket>, actor: 
     const oldAssignee = ticket.assignee;
 
     // Apply updates
-    const data: any = { ...updates };
+    const data: Record<string, unknown> = { ...updates };
     delete data.id;
     delete data.createdAt;
     delete data.updatedAt;
@@ -165,7 +177,7 @@ export async function updateTicket(id: string, updates: Partial<Ticket>, actor: 
       }
     }
 
-    const doc = await databases.updateDocument(DB_ID, 'tickets', id, data);
+    const doc = await databases.updateDocument<TicketDocument>(DB_ID, 'tickets', id, data);
     if (updates.links) {
       linksMap.set(id, updates.links);
     }
@@ -206,7 +218,7 @@ export async function updateTicket(id: string, updates: Partial<Ticket>, actor: 
   }
 }
 
-export async function deleteTicket(id: string): Promise<boolean> {
+async function deleteTicket(id: string): Promise<boolean> {
   try {
     await databases.deleteDocument(DB_ID, 'tickets', id);
     commentsMap.delete(id);
@@ -218,9 +230,9 @@ export async function deleteTicket(id: string): Promise<boolean> {
   }
 }
 
-export async function listTickets(filters: TicketFilters): Promise<PaginatedResponse<Ticket>> {
+async function listTickets(filters: TicketFilters): Promise<PaginatedResponse<Ticket>> {
   try {
-    const queries: any[] = [];
+    const queries: string[] = [];
     if (filters.status) {
       queries.push(Query.equal('status', filters.status));
     }
@@ -237,18 +249,14 @@ export async function listTickets(filters: TicketFilters): Promise<PaginatedResp
     // Retrieve up to 1000 matching documents to sort, search, and paginate locally safely
     queries.push(Query.limit(1000));
 
-    const response = await databases.listDocuments(DB_ID, 'tickets', queries);
+    const response = await databases.listDocuments<TicketDocument>(DB_ID, 'tickets', queries);
     const nowMs = Date.now();
     let list = response.documents.map(doc => {
       const t = mapDocumentToTicket(doc);
       // Compute isOverdue dynamically
       if (t.status !== 'done' && t.status !== 'closed') {
         const deadline = t.dueDate || t.slaDeadline;
-        if (deadline) {
-          t.isOverdue = new Date(deadline).getTime() < nowMs;
-        } else {
-          t.isOverdue = false;
-        }
+        t.isOverdue = deadline ? new Date(deadline).getTime() < nowMs : false;
       } else {
         t.isOverdue = false;
       }
@@ -261,33 +269,28 @@ export async function listTickets(filters: TicketFilters): Promise<PaginatedResp
     }
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      list = list.filter(t => 
-        t.title.toLowerCase().includes(searchLower) || 
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(searchLower) ||
         t.description.toLowerCase().includes(searchLower) ||
         (t.jiraKey && t.jiraKey.toLowerCase().includes(searchLower))
       );
     }
 
     // Sorting
-    const sortBy = filters.sortBy || 'createdAt';
+    const sortBy = (filters.sortBy || 'createdAt') as keyof Ticket;
     const sortOrder = filters.sortOrder || 'desc';
 
-    list.sort((a: any, b: any) => {
-      let valA = a[sortBy];
-      let valB = b[sortBy];
+    list.sort((a, b) => {
+      const valA = a[sortBy];
+      const valB = b[sortBy];
 
       if (valA === undefined) return 1;
       if (valB === undefined) return -1;
 
-      if (typeof valA === 'string') {
-        return sortOrder === 'asc' 
-          ? valA.localeCompare(valB) 
-          : valB.localeCompare(valA);
-      } else {
-        return sortOrder === 'asc' 
-          ? valA - valB 
-          : valB - valA;
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       }
+      return sortOrder === 'asc' ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
     });
 
     // Pagination
@@ -315,17 +318,11 @@ export async function listTickets(filters: TicketFilters): Promise<PaginatedResp
   }
 }
 
-export async function addComment(ticketId: string, body: string, author: string): Promise<TicketComment> {
+async function addComment(ticketId: string, body: string, author: string): Promise<TicketComment> {
   const id = `c-${crypto.randomBytes(4).toString('hex')}`;
   const now = new Date().toISOString();
-  
-  const newComment: TicketComment = {
-    id,
-    ticketId,
-    body,
-    author,
-    createdAt: now
-  };
+
+  const newComment: TicketComment = { id, ticketId, body, author, createdAt: now };
 
   if (!commentsMap.has(ticketId)) {
     commentsMap.set(ticketId, []);
@@ -339,27 +336,20 @@ export async function addComment(ticketId: string, body: string, author: string)
   return newComment;
 }
 
-export async function getComments(ticketId: string): Promise<TicketComment[]> {
+async function getComments(ticketId: string): Promise<TicketComment[]> {
   return commentsMap.get(ticketId) || [];
 }
 
-export async function recordActivity(
-  ticketId: string, 
-  actor: string, 
-  type: TicketActivity['type'], 
+async function recordActivity(
+  ticketId: string,
+  actor: string,
+  type: TicketActivity['type'],
   details: TicketActivity['details']
 ): Promise<TicketActivity> {
   const id = `a-${crypto.randomBytes(4).toString('hex')}`;
   const now = new Date().toISOString();
 
-  const newActivity: TicketActivity = {
-    id,
-    ticketId,
-    actor,
-    type,
-    details,
-    createdAt: now
-  };
+  const newActivity: TicketActivity = { id, ticketId, actor, type, details, createdAt: now };
 
   if (!activityMap.has(ticketId)) {
     activityMap.set(ticketId, []);
@@ -369,27 +359,39 @@ export async function recordActivity(
   return newActivity;
 }
 
-export async function getActivity(ticketId: string): Promise<TicketActivity[]> {
+async function getActivity(ticketId: string): Promise<TicketActivity[]> {
   return activityMap.get(ticketId) || [];
 }
 
-export async function getStats() {
+async function getStats() {
+  const emptyStats = {
+    total: 0,
+    open: 0,
+    critical: 0,
+    resolved: 0,
+    overdue: 0,
+    countsByStatus: { todo: 0, in_progress: 0, in_review: 0, done: 0, closed: 0 },
+    countsByPriority: { critical: 0, high: 0, medium: 0, low: 0 },
+    countsByType: { bug: 0, vulnerability: 0, task: 0, feature: 0, story: 0, epic: 0 },
+    agingTickets: [] as Ticket[]
+  };
+
   try {
-    const response = await databases.listDocuments(DB_ID, 'tickets', [Query.limit(1000)]);
+    const response = await databases.listDocuments<TicketDocument>(DB_ID, 'tickets', [Query.limit(1000)]);
     const tickets = response.documents.map(mapDocumentToTicket);
     const total = tickets.length;
     const open = tickets.filter(t => t.status !== 'done' && t.status !== 'closed').length;
     const critical = tickets.filter(t => t.priority === 'critical' && t.status !== 'done' && t.status !== 'closed').length;
     const resolved = tickets.filter(t => t.status === 'done' || t.status === 'closed').length;
 
-    const countsByStatus = { todo: 0, in_progress: 0, in_review: 0, done: 0, closed: 0 };
-    const countsByPriority = { critical: 0, high: 0, medium: 0, low: 0 };
-    const countsByType = { bug: 0, vulnerability: 0, task: 0, feature: 0, story: 0, epic: 0 };
+    const countsByStatus = { ...emptyStats.countsByStatus };
+    const countsByPriority = { ...emptyStats.countsByPriority };
+    const countsByType = { ...emptyStats.countsByType };
 
     tickets.forEach(t => {
-      if ((countsByStatus as any)[t.status] !== undefined) (countsByStatus as any)[t.status]++;
-      if ((countsByPriority as any)[t.priority] !== undefined) (countsByPriority as any)[t.priority]++;
-      if ((countsByType as any)[t.type] !== undefined) (countsByType as any)[t.type]++;
+      if (t.status in countsByStatus) countsByStatus[t.status]++;
+      if (t.priority in countsByPriority) countsByPriority[t.priority]++;
+      if (t.type in countsByType) countsByType[t.type]++;
     });
 
     // top-5 aging open tickets (oldest createdAt, status !== done & !== closed)
@@ -406,34 +408,14 @@ export async function getStats() {
     openTickets.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     const agingTickets = openTickets.slice(0, 5);
 
-    return {
-      total,
-      open,
-      critical,
-      resolved,
-      overdue: overdueCount,
-      countsByStatus,
-      countsByPriority,
-      countsByType,
-      agingTickets
-    };
+    return { total, open, critical, resolved, overdue: overdueCount, countsByStatus, countsByPriority, countsByType, agingTickets };
   } catch (err) {
     logger.error('Error getting ticket stats:', err);
-    return {
-      total: 0,
-      open: 0,
-      critical: 0,
-      resolved: 0,
-      overdue: 0,
-      countsByStatus: { todo: 0, in_progress: 0, in_review: 0, done: 0, closed: 0 },
-      countsByPriority: { critical: 0, high: 0, medium: 0, low: 0 },
-      countsByType: { bug: 0, vulnerability: 0, task: 0, feature: 0, story: 0, epic: 0 },
-      agingTickets: []
-    };
+    return emptyStats;
   }
 }
 
-export async function addLink(fromId: string, toId: string, type: TicketLinkType, userEmail = 'System'): Promise<Ticket | null> {
+async function addLink(fromId: string, toId: string, type: TicketLinkType, userEmail = 'System'): Promise<Ticket | null> {
   const fromTicket = await getTicket(fromId);
   const toTicket = await getTicket(toId);
   if (!fromTicket || !toTicket) {
@@ -460,17 +442,13 @@ export async function addLink(fromId: string, toId: string, type: TicketLinkType
   linksMap.set(fromId, fromLinks);
   linksMap.set(toId, toLinks);
 
-  await recordActivity(fromId, userEmail, 'status_change', {
-    message: `Linked ticket ${toId} as ${type}`
-  });
-  await recordActivity(toId, userEmail, 'status_change', {
-    message: `Linked ticket ${fromId} as ${inverseType}`
-  });
+  await recordActivity(fromId, userEmail, 'status_change', { message: `Linked ticket ${toId} as ${type}` });
+  await recordActivity(toId, userEmail, 'status_change', { message: `Linked ticket ${fromId} as ${inverseType}` });
 
   return (await getTicket(fromId)) || null;
 }
 
-export async function removeLink(fromId: string, toId: string, userEmail = 'System'): Promise<Ticket | null> {
+async function removeLink(fromId: string, toId: string, userEmail = 'System'): Promise<Ticket | null> {
   const fromTicket = await getTicket(fromId);
   if (!fromTicket) {
     return null;
@@ -479,18 +457,28 @@ export async function removeLink(fromId: string, toId: string, userEmail = 'Syst
   const fromLinks = linksMap.get(fromId) || [];
   const toLinks = linksMap.get(toId) || [];
 
-  const newFromLinks = fromLinks.filter(l => l.ticketId !== toId);
-  const newToLinks = toLinks.filter(l => l.ticketId !== fromId);
+  linksMap.set(fromId, fromLinks.filter(l => l.ticketId !== toId));
+  linksMap.set(toId, toLinks.filter(l => l.ticketId !== fromId));
 
-  linksMap.set(fromId, newFromLinks);
-  linksMap.set(toId, newToLinks);
-
-  await recordActivity(fromId, userEmail, 'status_change', {
-    message: `Removed link to ticket ${toId}`
-  });
-  await recordActivity(toId, userEmail, 'status_change', {
-    message: `Removed link to ticket ${fromId}`
-  });
+  await recordActivity(fromId, userEmail, 'status_change', { message: `Removed link to ticket ${toId}` });
+  await recordActivity(toId, userEmail, 'status_change', { message: `Removed link to ticket ${fromId}` });
 
   return (await getTicket(fromId)) || null;
 }
+
+export const ticketsRepository = {
+  createTicket,
+  getTicket,
+  findByLinkedFinding,
+  getUnsyncedTickets,
+  updateTicket,
+  deleteTicket,
+  listTickets,
+  addComment,
+  getComments,
+  recordActivity,
+  getActivity,
+  getStats,
+  addLink,
+  removeLink
+};
