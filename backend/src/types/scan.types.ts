@@ -45,3 +45,63 @@ export interface ScanRawResults {
 export type RepoWithScanStats = Models.Document & {
   vulnerability_count?: number;
 };
+
+// --- Raw per-tool scanner output shapes (scanners/normalizer.ts) ---
+// Each scanner's CLI emits its own JSON schema; these only pin down the
+// fields normalizer.ts actually reads, not the full third-party schema.
+
+export interface SemgrepRawResult {
+  path?: string;
+  start?: { line?: number };
+  end?: { line?: number };
+  check_id?: string;
+  extra?: { severity?: string; message?: string };
+}
+
+export interface SemgrepRawOutput {
+  results?: SemgrepRawResult[];
+}
+
+export interface TrivyRawVulnerability {
+  Severity?: string;
+  VulnerabilityID?: string;
+  Description?: string;
+  Title?: string;
+  PkgName?: string;
+  InstalledVersion?: string;
+  FixedVersion?: string;
+}
+
+export interface TrivyRawResult {
+  Target?: string;
+  Vulnerabilities?: TrivyRawVulnerability[];
+}
+
+export interface TrivyRawOutput {
+  Results?: TrivyRawResult[];
+}
+
+export interface CheckovFailedCheck {
+  file_path?: string;
+  file_line_range?: [number, number];
+  severity?: string;
+  check_severity?: string;
+  check_id?: string;
+  check_name?: string;
+}
+
+export interface CheckovRawOutput {
+  results?: { failed_checks?: CheckovFailedCheck[] };
+}
+
+export interface BanditRawResult {
+  filename?: string;
+  line_number?: number;
+  issue_severity?: string;
+  test_id?: string;
+  issue_text?: string;
+}
+
+export interface BanditRawOutput {
+  results?: BanditRawResult[];
+}

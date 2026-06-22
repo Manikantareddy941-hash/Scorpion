@@ -1,4 +1,12 @@
 import fs from 'fs';
+import { GitleaksRawMatch } from '../services/leakedKeyResponseService';
+import {
+  BanditRawOutput,
+  CheckovFailedCheck,
+  CheckovRawOutput,
+  SemgrepRawOutput,
+  TrivyRawOutput
+} from '../types/scan.types';
 
 export interface NormalizedIssue {
   tool: string;
@@ -15,8 +23,8 @@ export interface NormalizedIssue {
   ruleId: string;
 }
 
-export function normalizeSemgrep(raw: any, workDir: string): NormalizedIssue[] {
-  return (raw.results ?? []).map((r: any) => {
+export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): NormalizedIssue[] {
+  return (raw.results ?? []).map(r => {
     const relativeFile = r.path ?? '';
     const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
     const line = r.start?.line ?? 0;
@@ -39,31 +47,31 @@ export function normalizeSemgrep(raw: any, workDir: string): NormalizedIssue[] {
   });
 }
 
-export function normalizeTrivy(raw: any, workDir: string): NormalizedIssue[] {
+export function normalizeTrivy(raw: TrivyRawOutput, _workDir: string): NormalizedIssue[] {
   const issues: NormalizedIssue[] = [];
   for (const result of raw.Results ?? []) {
     for (const vuln of result.Vulnerabilities ?? []) {
       issues.push({
         tool: 'trivy',
         type: 'security',
-        severity: vuln.Severity as any,
-        title: vuln.VulnerabilityID,
+        severity: vuln.Severity as NormalizedIssue['severity'],
+        title: vuln.VulnerabilityID ?? '',
         message: vuln.Description ?? vuln.Title ?? '',
         file: result.Target ?? '',
         line: 0,
         endLine: 0,
         code: `${vuln.PkgName}@${vuln.InstalledVersion} → fix: ${vuln.FixedVersion ?? 'no fix available'}`,
-        effort: estimateEffort(vuln.Severity),
+        effort: estimateEffort(vuln.Severity ?? ''),
         category: 'dependency-vulnerability',
-        ruleId: vuln.VulnerabilityID
+        ruleId: vuln.VulnerabilityID ?? ''
       });
     }
   }
   return issues;
 }
 
-export function normalizeGitleaks(raw: any[], workDir: string): NormalizedIssue[] {
-  return (raw ?? []).map((r: any) => {
+export function normalizeGitleaks(raw: GitleaksRawMatch[], workDir: string): NormalizedIssue[] {
+  return (raw ?? []).map(r => {
     const relativeFile = r.File ?? '';
     const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
     
@@ -96,23 +104,23 @@ function extractCodeSnippet(filePath: string, line: number, endLine: number): st
   } catch { return ''; }
 }
 
-function estimateEffort(severity: string): string {
+function estimateEffort(severity?: string): string {
   const map: Record<string, string> = {
     CRITICAL: '30min', HIGH: '15min',
     MEDIUM: '10min', LOW: '5min',
     INFO: '2min', WARNING: '5min', ERROR: '15min'
   };
-  return map[severity?.toUpperCase()] ?? '5min';
+  return map[severity?.toUpperCase() ?? ''] ?? '5min';
 }
 
-function mapSemgrepSeverity(s: string): NormalizedIssue['severity'] {
+function mapSemgrepSeverity(s?: string): NormalizedIssue['severity'] {
   const map: Record<string, NormalizedIssue['severity']> = {
     ERROR: 'HIGH', WARNING: 'MEDIUM', INFO: 'LOW'
   };
-  return map[s?.toUpperCase()] ?? 'LOW';
+  return map[s?.toUpperCase() ?? ''] ?? 'LOW';
 }
 
-function classifyType(ruleId: string): NormalizedIssue['type'] {
+function classifyType(ruleId?: string): NormalizedIssue['type'] {
   const id = ruleId?.toLowerCase() ?? '';
   if (id.includes('sql') || id.includes('xss') || id.includes('inject') ||
       id.includes('secret') || id.includes('auth')) return 'security';
@@ -121,13 +129,13 @@ function classifyType(ruleId: string): NormalizedIssue['type'] {
   return 'maintainability';
 }
 
-export function normalizeCheckov(raw: any, workDir: string): NormalizedIssue[] {
+export function normalizeCheckov(raw: CheckovRawOutput | CheckovRawOutput[], workDir: string): NormalizedIssue[] {
   const results = Array.isArray(raw) ? raw : [raw];
   const issues: NormalizedIssue[] = [];
 
-  results.forEach((result: any) => {
-    const failed = result.results?.failed_checks || [];
-    failed.forEach((c: any) => {
+  results.forEach(result => {
+    const failed: CheckovFailedCheck[] = result.results?.failed_checks || [];
+    failed.forEach(c => {
       const relativeFile = c.file_path ?? '';
       const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
       const line = c.file_line_range?.[0] ?? 0;
@@ -163,8 +171,8 @@ function mapCheckovSeverity(s?: string): NormalizedIssue['severity'] {
   }
 }
 
-export function normalizeBandit(raw: any, workDir: string): NormalizedIssue[] {
-  return (raw.results ?? []).map((r: any) => {
+export function normalizeBandit(raw: BanditRawOutput, workDir: string): NormalizedIssue[] {
+  return (raw.results ?? []).map(r => {
     const relativeFile = r.filename ?? '';
     const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
     const line = r.line_number ?? 0;

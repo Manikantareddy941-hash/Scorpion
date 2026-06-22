@@ -7,6 +7,9 @@ export interface GitleaksRawMatch {
     Match?: string;
     RuleID?: string;
     File?: string;
+    Description?: string;
+    StartLine?: number;
+    EndLine?: number;
 }
 
 // Must match keyRoutes.ts's `sp_${crypto.randomBytes(24).toString('hex')}` format exactly.
@@ -46,7 +49,7 @@ export const respondToLeakedKeys = async (
             if (!candidate) continue;
 
             const candidateHash = crypto.createHash('sha256').update(candidate).digest('hex');
-            const leakedKey = keysRes.documents.find((k: any) => k.key_hash === candidateHash);
+            const leakedKey = keysRes.documents.find(k => k.key_hash === candidateHash);
             if (!leakedKey) continue;
 
             await databases.deleteDocument(DB_ID, COLLECTIONS.API_KEYS, leakedKey.$id);
@@ -63,9 +66,9 @@ export const respondToLeakedKeys = async (
                 userId: ownerUserId,
             });
         }
-    } catch (err: any) {
+    } catch (err) {
         // Best-effort, same as freezeReleaseGateForIncident - a failure here
         // must never break the scan that's reporting this finding.
-        logger.error('[Leaked Key Response] Failed:', err.message);
+        logger.error('[Leaked Key Response] Failed:', err instanceof Error ? err.message : err);
     }
 };
