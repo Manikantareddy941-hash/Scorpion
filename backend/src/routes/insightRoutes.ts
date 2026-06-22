@@ -34,10 +34,10 @@ router.get('/dashboard/stats', async (req: AuthenticatedRequest, res: Response, 
         const stats = {
             total_repos: repos.total,
             avg_risk_score: repos.documents.length > 0
-                ? repos.documents.reduce((acc, r: any) => acc + (r.risk_score || 0), 0) / repos.documents.length
+                ? repos.documents.reduce((acc, r) => acc + (r.risk_score || 0), 0) / repos.documents.length
                 : 0,
-            tasks_pending: tasks.documents.filter((t: any) => t.status !== 'completed').length,
-            critical_vulns: repos.documents.reduce((acc, r: any) => acc + (r.vulnerability_count || 0), 0)
+            tasks_pending: tasks.documents.filter((t) => t.status !== 'completed').length,
+            critical_vulns: repos.documents.reduce((acc, r) => acc + (r.vulnerability_count || 0), 0)
         };
 
         res.json(stats);
@@ -58,23 +58,23 @@ router.get('/dashboard/activities', async (req: AuthenticatedRequest, res: Respo
         ]);
 
         const allRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
-        const repoIds = allRepos.documents.map((r: any) => r.$id);
+        const repoIds = allRepos.documents.map((r) => r.$id);
 
         const scans = repoIds.length > 0 ? await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repo_id', repoIds),
             Query.orderDesc('$createdAt'),
             Query.limit(10)
-        ]) : { documents: [] as any[] };
+        ]) : { documents: [] as Models.DefaultDocument[] };
 
         const activities = [
-            ...repos.documents.map((r: any) => ({
+            ...repos.documents.map((r) => ({
                 id: r.$id,
                 type: 'repo_sync',
                 title: 'Repository Synced',
                 description: `Repository ${r.name} was updated.`,
                 timestamp: r.updated_at
             })),
-            ...scans.documents.map((s: any) => ({
+            ...scans.documents.map((s) => ({
                 id: s.$id,
                 type: 'scan_complete',
                 title: 'Scan Completed',
@@ -94,15 +94,16 @@ router.get('/dashboard/trends', async (req: AuthenticatedRequest, res: Response,
     try {
         const userId = req.user!.$id;
         const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
-        const repoIds = repos.documents.map((r: any) => r.$id);
+        const repoIds = repos.documents.map((r) => r.$id);
 
         const scans = repoIds.length > 0 ? await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repo_id', repoIds),
             Query.orderAsc('$createdAt'),
             Query.limit(20)
-        ]) : { documents: [] as any[] };
+        ]) : { documents: [] as Models.DefaultDocument[] };
 
-        const trends = scans.documents.reduce((acc: any[], scan: any) => {
+        interface TrendPoint { date: string; score: number; vulnerabilities: number }
+        const trends = scans.documents.reduce((acc: TrendPoint[], scan) => {
             const date = new Date(scan.$createdAt).toLocaleDateString();
             const score = scan.details?.security_score || 0;
             const vulns = scan.details?.total_vulnerabilities || 0;
