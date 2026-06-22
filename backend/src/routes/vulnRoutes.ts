@@ -18,7 +18,7 @@ router.post('/:id/remediate', async (req: AuthenticatedRequest, res: Response, n
         logger.info(`[Remediation] Triggering AI remediation for: ${vulnerabilityId}`);
 
         const vuln = await databases.getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vulnerabilityId);
-        const userId = (req as any).user?.$id;
+        const userId = req.user?.$id;
         const repo = vuln.repo_id ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, vuln.repo_id).catch(() => null) : null;
         if (!repo || !(await canAccessResource(repo, userId))) {
             return res.status(403).json({ error: 'You do not have access to this vulnerability' });

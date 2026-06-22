@@ -1,10 +1,27 @@
 import { Router, Response, Request } from 'express';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { spawnSync } from 'child_process';
-import { sendFindingAlert } from '../utils/alertDispatcher';
+import { sendFindingAlert, FindingDocument } from '../utils/alertDispatcher';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
+
+interface AuthenticatedRequest extends Request {
+    user?: Models.User<Models.Preferences>;
+}
+
+interface TrivyVulnerability {
+    PkgName: string;
+    InstalledVersion: string;
+    FixedVersion?: string;
+    VulnerabilityID: string;
+    Severity?: string;
+}
+
+function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : 'Unknown error';
+}
 
 const router = Router();
 
@@ -13,7 +30,7 @@ const router = Router();
 // characters legal in image names/tags/digests/registry hosts.
 const IMAGE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.\-/:@]*$/;
 
-router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Request, res: Response) => {
+router.post('/docker', verifyUser, scanTriggerLimiter, async (req: AuthenticatedRequest, res: Response) => {
     const { image_name } = req.body;
     if (!image_name) return res.status(400).json({ error: 'image_name is required' });
     if (typeof image_name !== 'string' || image_name.length > 255 || !IMAGE_NAME_PATTERN.test(image_name)) {
@@ -38,8 +55,8 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Request, res:
             return res.status(500).json({ error: "Trivy scan failed", details: result.stderr });
         }
 
-        const output = JSON.parse(result.stdout || '{"Results": []}');
-        const vulnerabilities = (output.Results || []).flatMap((r: any) => r.Vulnerabilities || []);
+        const output = JSON.parse(result.stdout || '{"Results": []}') as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
+        const vulnerabilities = (output.Results || []).flatMap((r) => r.Vulnerabilities || []);
 
         const stats = {
             total: vulnerabilities.length,
@@ -68,7 +85,7 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Request, res:
             };
 
             // Write to Appwrite
-            const createdFinding = await databases.createDocument(
+            const createdFinding = await databases.createDocument<FindingDocument>(
                 DB_ID,
                 'findings',
                 ID.unique(),
@@ -76,16 +93,16 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Request, res:
             );
 
             // Alert Dispatcher
-            const userId = (req as any).user?.$id;
+            const userId = req.user?.$id;
             if (userId) {
-                await sendFindingAlert(createdFinding as any, userId);
+                await sendFindingAlert(createdFinding, userId);
             }
         }
 
         res.json(stats);
 
-    } catch (err: any) {
-        logger.error('[Docker API Error]', err.message);
+    } catch (err: unknown) {
+        logger.error('[Docker API Error]', errorMessage(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
