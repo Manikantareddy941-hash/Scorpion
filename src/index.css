@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Literata:wght@400;600;700;900&family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @layer base {
   html {
     font-size: 13.5px;
@@ -27,606 +27,197 @@
   display: none;
 }
 
-/* Night Ops — primary console theme. Carapace/Plate base, Venom amber accent,
-   Strike red reserved for true criticals. See design-system notes in CLAUDE context. */
-html.dark {
-  --background: #14171c;
-  --card-background: #1c2128;
-  --primary: #e8a33d;
-  --text-primary: #c9cdd3;
-  --text-secondary: #7a828e;
-  --border: #2a3038;
-  --accent: #5fd4c4;
-  --danger: #e0473a;
-  --warning: #e8a33d;
-
-  --bg-primary: var(--background);
-  --bg-page: #14171c;
-  --bg-surface: #1c2128;
-  --bg-card: var(--card-background);
-  --bg-secondary: #181c22;
-  --border-subtle: var(--border);
-  --border-color: var(--border);
-  --text-on-accent: #14171c;
-  --accent-primary: var(--primary);
-  --accent-secondary: var(--accent);
-  --status-success: var(--accent);
-  --status-error: var(--danger);
-  --status-warning: var(--warning);
-  --severity-critical: #e0473a;
-  --severity-high: #d9622e;
-  --severity-medium: #e8a33d;
-  --severity-low: #5fd4c4;
-  --severity-info: #7fa8c9;
-  --glass-blur: none;
-  --glass-border: var(--border);
-  --glass-shadow: none;
-  --card-shadow: none;
-}
-
-html.dark .card,
-html.dark [class*='card'],
-html.dark [class*='widget'],
-html.dark [class*='panel'] {
-  background-color: var(--card-background) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: none !important;
-  --chart-bg: transparent;
-  --chart-grid: var(--border-subtle);
-  --chart-label: var(--text-secondary);
-  --chart-fill: var(--accent-primary);
-  --chart-fill-opacity: 0.4;
-}
-
-/* Catch components that hardcode Tailwind grays instead of theme tokens —
-   without this, those elements stay bright white on the dark background. */
-html.dark .bg-white,
-html.dark .bg-gray-50,
-html.dark .bg-gray-100,
-html.dark .bg-gray-200 {
-  background-color: var(--bg-card) !important;
-}
-html.dark .text-gray-900,
-html.dark .text-gray-800,
-html.dark .text-gray-700 {
-  color: var(--text-primary) !important;
-}
-html.dark .text-gray-600,
-html.dark .text-gray-500,
-html.dark .text-gray-400 {
-  color: var(--text-secondary) !important;
-}
-html.dark .border-gray-100,
-html.dark .border-gray-200,
-html.dark .border-gray-300 {
-  border-color: var(--border-subtle) !important;
-}
-
-/* Day Ops — daylight console. White/blue base — main app theme.
-   Crisp white plates on a soft blue-tinted steel background, with a
-   single confident blue accent carrying CTAs, focus states, and the
-   primary data series. Same structural language as Night Ops. */
-html.light {
-  --background: #eef3fb;
+/* Terra — organic daylight console. Default theme. Forest green on warm cream, Literata
+   headlines over Nunito Sans body. Soft 12px rounding, no harsh shadows. */
+html.terra {
+  --background: #faf6f0;
+  --bg-page: #faf6f0;
   --card-background: #ffffff;
-  --primary: #2563eb;
-  --text-primary: #0f1729;
-  --text-secondary: #5b6b85;
-  --border: #dbe5f3;
-  --accent: #2563eb;
-  --danger: #dc3545;
-  --warning: #d97706;
-
   --bg-primary: var(--background);
-  --bg-page: var(--background);
   --bg-card: var(--card-background);
-  --bg-secondary: #e4edf9;
+  --bg-secondary: #f0ece4;
+  --primary: #4a7c59;
+  --border: #c4c8bc;
   --border-subtle: var(--border);
   --border-color: var(--border);
+  --text-primary: #2e3230;
+  --text-secondary: #4a4e4a;
+  --text-muted: #74796e;
   --text-on-accent: #ffffff;
+  --accent: #705c30;
   --accent-primary: var(--primary);
-  --accent-secondary: #60a5fa;
-  --status-success: #2563eb;
-  --status-error: var(--danger);
-  --status-warning: var(--warning);
-  --severity-critical: #dc3545;
-  --severity-high: #ea580c;
-  --severity-medium: #d97706;
-  --severity-low: #2563eb;
-  --severity-info: #60a5fa;
+  --accent-secondary: #705c30;
+  --status-success: #4a7c59;
+  --status-error: #b83230;
+  --status-warning: #705c30;
+  --danger: #b83230;
+  --warning: #705c30;
+  --severity-critical: #b83230;
+  --severity-high: #b83230;
+  --severity-medium: #705c30;
+  --severity-low: #4a7c59;
+  --severity-info: #6b6358;
+  --card-shadow: 0 4px 20px rgba(46, 50, 48, 0.06);
   --chart-bg: transparent;
   --chart-grid: var(--border-subtle);
   --chart-label: var(--text-secondary);
   --chart-fill: var(--accent-primary);
-  --chart-fill-opacity: 0.4;
+  --chart-fill-opacity: 0.35;
   --glass-blur: none;
   --glass-border: var(--border);
   --glass-shadow: none;
-  --card-shadow: 0 1px 3px rgba(15, 23, 41, 0.06);
+  --font-display: 'Literata', serif;
+  --font-body: 'Nunito Sans', sans-serif;
 }
 
-html.light .card,
-html.light [class*='card'],
-html.light [class*='widget'],
-html.light [class*='panel'] {
+html.terra body {
+  font-family: var(--font-body);
+}
+
+html.terra h1, html.terra h2, html.terra h3, html.terra h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
+html.terra .card,
+html.terra [class*='card'],
+html.terra [class*='widget'],
+html.terra [class*='panel'] {
   background-color: var(--card-background) !important;
   color: var(--text-primary) !important;
-  border: 1px solid var(--glass-border) !important;
+  border: 1px solid var(--border-subtle) !important;
   box-shadow: var(--card-shadow) !important;
+  border-radius: 12px;
 }
 
-/* Phosphor — night-shift scope mode. Monochrome amber on near-black, like an
-   old radar/CRT display. Strike red is the only non-amber color, reserved
-   for true criticals so it still reads instantly in a single-hue room. */
-html.eye-protection {
-  --background: #1a1206;
-  --card-background: #241b0c;
-  --bg-primary: var(--background);
-  --bg-page: var(--background);
-  --bg-surface: var(--card-background);
-  --bg-card: var(--card-background);
-  --bg-secondary: #1f1609;
-  --border-subtle: #3a2c12;
-  --border-color: #3a2c12;
-  --text-primary: #ffb000;
-  --text-secondary: #8c6a22;
-  --text-muted: #6b5119;
-  --text-on-accent: #1a1206;
-  --accent-primary: #ffb000;
-  --accent-secondary: #8c6a22;
-  --status-success: #ffb000;
-  --status-error: #ff6a3d;
-  --status-warning: #ffb000;
-  --severity-critical: #ff6a3d;
-  --severity-high: #ffb000;
-  --severity-medium: #cf8f1f;
-  --severity-low: #8c6a22;
-  --severity-info: #8c6a22;
-  --chart-bg: #1a1206;
-  --chart-grid: #3a2c12;
-  --chart-label: #8c6a22;
-  --chart-fill: #ffb000;
-  --chart-fill-opacity: 0.25;
-  --glass-blur: none;
-  --glass-border: #3a2c12;
-  --glass-shadow: none;
-  --card-shadow: none;
-}
-
-html.eye-protection body {
-  font-size: 15px;
-  line-height: 1.7;
-  letter-spacing: 0.01em;
-}
-
-html.eye-protection h1,
-html.eye-protection h2,
-html.eye-protection h3,
-html.eye-protection h4,
-html.eye-protection h5,
-html.eye-protection h6,
-html.eye-protection .text-lg,
-html.eye-protection .text-xl,
-html.eye-protection .text-2xl,
-html.eye-protection .text-3xl {
-  color: var(--text-primary) !important;
-}
-
-html.eye-protection .text-xs,
-html.eye-protection .text-sm,
-html.eye-protection p,
-html.eye-protection span {
-  color: var(--text-secondary) !important;
-}
-
-html.eye-protection .card,
-html.eye-protection [class*='card'],
-html.eye-protection [class*='widget'],
-html.eye-protection [class*='panel'] {
-  background-color: var(--card-background) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: none !important;
-}
-
-html.eye-protection .bg-white,
-html.eye-protection .bg-gray-50,
-html.eye-protection .bg-gray-100 {
+html.terra .bg-white,
+html.terra .bg-gray-50,
+html.terra .bg-gray-100,
+html.terra .bg-gray-200 {
   background-color: var(--bg-card) !important;
 }
-
-html.eye-protection .text-gray-900,
-html.eye-protection .text-gray-800,
-html.eye-protection .text-gray-700 {
+html.terra .text-gray-900,
+html.terra .text-gray-800,
+html.terra .text-gray-700 {
   color: var(--text-primary) !important;
 }
-html.eye-protection .text-gray-600,
-html.eye-protection .text-gray-500,
-html.eye-protection .text-gray-400 {
+html.terra .text-gray-600,
+html.terra .text-gray-500,
+html.terra .text-gray-400 {
   color: var(--text-secondary) !important;
 }
-html.eye-protection .border-gray-100,
-html.eye-protection .border-gray-200,
-html.eye-protection .border-gray-300 {
+html.terra .border-gray-100,
+html.terra .border-gray-200,
+html.terra .border-gray-300 {
   border-color: var(--border-subtle) !important;
 }
 
-/* Deep Scan (formerly "Ocean") — sonar console. Navy-hull base instead of
-   bright tropical gradient; a single sonar-teal accent instead of bright cyan,
-   consistent with the rest of the console system. Background sonar-ping
-   effect (replacing the bubble animation) lands in the next pass. */
-html.underwater {
-  --background: #0b1a1f;
-  --bg-page: #0b1a1f;
-  --card-background: #122a30;
-  --card-border: #1e3a40;
-  --bg-primary: var(--background);
-  --bg-card: var(--card-background);
-  --bg-secondary: #0f2228;
-  --border-subtle: #1e3a40;
-  --border-color: var(--card-border);
-  --text-primary: #d3eceb;
-  --text-secondary: #6f9b9a;
-  --text-muted: #547776;
-  --accent-primary: #2fd8c4;
-  --accent-secondary: #1e7a6e;
-  --status-success: #2fd8c4;
-  --status-error: #e0473a;
-  --status-warning: #cf8f1f;
-  --severity-critical: #e0473a;
-  --severity-high: #d9622e;
-  --severity-medium: #cf8f1f;
-  --severity-low: #2fd8c4;
-  --severity-info: #4a8c9b;
-  --card-shadow: none;
-  --chart-bg: transparent;
-  --chart-grid: #1e3a40;
-  --chart-label: #6f9b9a;
-  --chart-fill: #2fd8c4;
-  --chart-fill-opacity: 0.3;
-  --glass-blur: none;
-}
-
-html.underwater body, html.underwater html {
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow-x: hidden !important;
-  height: auto !important;
-  min-height: 100% !important;
-}
-
-html.underwater body {
-  background: var(--bg-page) fixed !important;
-  background-attachment: fixed !important;
-}
-
-/* Ensure no artifact below footer */
-html.underwater #root {
-  min-height: 100vh;
-  display: flex !important;
-  flex-direction: column !important;
-  background: transparent !important;
-}
-
-html.underwater body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: radial-gradient(circle, #ffffff 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: bubbles 10s linear infinite;
-  opacity: 0.05;
-  pointer-events: none;
-  z-index: -1;
-}
-
-@keyframes bubbles {
-  0% { background-position: 0 100%; }
-  100% { background-position: 50px 0; }
-}
-
-@keyframes globe-rotate {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-html.underwater .card,
-html.underwater [class*='card'],
-html.underwater [class*='widget'],
-html.underwater [class*='panel'] {
-  background: var(--card-background) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: none !important;
-  color: var(--text-primary) !important;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  isolation: isolate;
-  will-change: transform;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-html.underwater .card b,
-html.underwater .card strong,
-html.underwater [class*='card'] b,
-html.underwater [class*='card'] strong {
-  color: #ffffff !important;
-  font-weight: 800 !important;
-}
-
-html.underwater .bg-white,
-html.underwater .bg-gray-50,
-html.underwater .bg-gray-100,
-html.underwater .bg-gray-200 {
-  background-color: var(--bg-card) !important;
-}
-html.underwater .text-gray-900,
-html.underwater .text-gray-800,
-html.underwater .text-gray-700,
-html.underwater .text-gray-600,
-html.underwater .text-gray-500,
-html.underwater .text-gray-400 {
-  color: var(--text-secondary) !important;
-}
-html.underwater .border-gray-100,
-html.underwater .border-gray-200,
-html.underwater .border-gray-300 {
-  border-color: var(--border-subtle) !important;
-}
-
-/* Console plates are flat by default — no global forced rounding. Liquid
-   Glass is the one theme that keeps soft corners (handled in its own block). */
+/* Console plates are flat by default — no global forced rounding. */
 h1, h2, h3, .display {
   font-family: var(--font-display);
   font-weight: 800;
   letter-spacing: 0.01em;
 }
 
-/* Liquid Glass — kept as the one translucent/blur theme of the six, but the
-   photographic-slideshow backdrop and accent are due a heavier rework once
-   Dashboard is approved (it's the most "generic AI/SaaS glassmorphism" piece
-   of the old language). Accent retoned to Signal teal in the meantime so it
-   doesn't clash with the new severity scale. */
-html.liquid-glass {
-  --background: transparent;
-  --bg-page: transparent;
-  --card-bg: rgba(255, 255, 255, 0.1);
-  --card-border: rgba(255, 255, 255, 0.35);
-  --glass-bg: var(--card-bg);
-  --glass-border: var(--card-border);
-  --glass-shadow: 0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(255,255,255,0.1);
-  --card-shadow: var(--glass-shadow);
-  --glass-blur: blur(12px);
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --accent: #5fd4c4;
-  --accent-primary: var(--accent);
-  --border-subtle: rgba(255, 255, 255, 0.35);
-  --border-color: rgba(255, 255, 255, 0.35);
-  --severity-critical: #e0473a;
-  --severity-high: #d9622e;
-  --severity-medium: #e8a33d;
-  --severity-low: #5fd4c4;
-  --severity-info: #ffffff;
-  --status-success: #5fd4c4;
-  --status-error: #e0473a;
-  --status-warning: #e8a33d;
-  --chart-bg: rgba(255, 255, 255, 0.05);
-  --chart-grid: rgba(255, 255, 255, 0.1);
-  --chart-label: #ffffff;
-  --chart-fill: #5fd4c4;
-  --chart-fill-opacity: 0.15;
-  --sidebar-bg: rgba(255, 255, 255, 0.08);
-  --sidebar-active: rgba(255, 255, 255, 0.25);
-  --backdrop-blur: blur(12px);
-}
-
-html.liquid-glass body {
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
-  min-height: 100vh;
-}
-
-html.liquid-glass #root {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: transparent !important;
-  position: relative;
-  z-index: 1;
-}
-
-/* Apply white-glass to all LiquidGlass UI components */
-html.liquid-glass header,
-html.liquid-glass aside,
-html.liquid-glass nav,
-html.liquid-glass footer,
-html.liquid-glass .panel,
-html.liquid-glass .modal,
-html.liquid-glass [class*="modal"],
-html.liquid-glass [class*="dropdown"],
-html.liquid-glass [class*="rounded-lg"],
-html.liquid-glass [class*="rounded-xl"],
-html.liquid-glass [class*="rounded-2xl"],
-html.liquid-glass [class*="rounded-3xl"],
-html.liquid-glass .bg-white,
-html.liquid-glass .bg-gray-50,
-html.liquid-glass [class*="card"],
-html.liquid-glass [class*="widget"],
-html.liquid-glass [class*="dropdown-panel"] {
-  background: rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.35) !important;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.5) !important;
-  color: var(--text-primary) !important;
-  border-radius: 16px !important;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  isolation: isolate;
-  will-change: transform;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-html.liquid-glass .text-gray-900,
-html.liquid-glass .text-gray-800,
-html.liquid-glass h1,
-html.liquid-glass h2,
-html.liquid-glass h3 {
-  color: #ffffff !important;
-}
-
-html.liquid-glass .text-gray-700,
-html.liquid-glass .text-gray-600,
-html.liquid-glass .text-gray-500,
-html.liquid-glass .text-gray-400 {
-  color: var(--text-secondary) !important;
-}
-
-html.liquid-glass .border-gray-100,
-html.liquid-glass .border-gray-200,
-html.liquid-glass .border-gray-300 {
-  border-color: var(--border-subtle) !important;
-}
-
-/* Lattice (formerly "Matrix") — signal-lattice console. Same green-on-void
-   DNA, restrained: one phosphor green, a dim trace tone, Strike red kept for
-   true criticals so severity still reads at a glance. The falling-code rain
-   effect gets reworked into a circuit-lattice motif in the next pass. */
-html.matrix {
-  --background: #060a07;
-  --card-background: #0e1712;
-  --bg-primary: #060a07;
-  --bg-page: #060a07;
+/* Aegis — the platform default. Slate-white surfaces, deep-navy text,
+   electric-blue/indigo accents: the tech & corporate trust register for
+   SaaS/fintech/dev-tool buyers. Flat plates, no glass, no corner ticks —
+   trust reads as precision here, not theater. */
+html.aegis {
+  --background: #f8fafc;
+  --bg-page: #f8fafc;
+  --card-background: #ffffff;
+  --bg-primary: var(--background);
   --bg-card: var(--card-background);
-  --bg-secondary: #0a0f0c;
-  --border-subtle: #1d6b3b;
-  --border-color: #1d6b3b;
-  --card-border: var(--border-color);
-  --text-primary: #39ff6a;
-  --text-secondary: #2f8a4f;
-  --text-muted: #1d6b3b;
-  --text-on-accent: #060a07;
-  --accent: #39ff6a;
-  --accent-primary: var(--accent);
-  --accent-secondary: #1d6b3b;
-  --status-success: #39ff6a;
-  --status-error: #ff4438;
-  --status-warning: #e8a33d;
-  --severity-critical: #ff4438;
-  --severity-high: #d9622e;
-  --severity-medium: #e8a33d;
-  --severity-low: #39ff6a;
-  --severity-info: #2f8a9b;
-  --glass-shadow: none;
-  --card-shadow: none;
-  --glass-blur: none;
+  --bg-secondary: #f1f5f9;
+  --primary: #2563eb;
+  --border: #e2e8f0;
+  --border-subtle: var(--border);
+  --border-color: var(--border);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-on-accent: #ffffff;
+  --accent: #2563eb;
+  --accent-primary: var(--primary);
+  --accent-secondary: #4f46e5;
+  --status-success: #16a34a;
+  --status-error: #dc2626;
+  --status-warning: #d97706;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --severity-critical: #dc2626;
+  --severity-high: #ea580c;
+  --severity-medium: #d97706;
+  --severity-low: #16a34a;
+  --severity-info: #64748b;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.05);
   --chart-bg: transparent;
-  --chart-grid: #1d6b3b;
-  --chart-label: #2f8a4f;
-  --chart-fill: #39ff6a;
-  --chart-fill-opacity: 0.12;
-  --sidebar-bg: #060a07;
+  --chart-grid: var(--border-subtle);
+  --chart-label: var(--text-secondary);
+  --chart-fill: var(--accent-primary);
+  --chart-fill-opacity: 0.18;
+  --glass-blur: none;
+  --glass-border: var(--border);
+  --glass-shadow: none;
+  --font-display: 'IBM Plex Sans', 'Inter', sans-serif;
+  --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
 }
 
-html.matrix body {
-  background: #000000 !important;
-  min-height: 100vh;
+html.aegis body {
+  font-family: var(--font-body);
 }
 
-html.matrix body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: 
-    radial-gradient(circle at 10% 10%, rgba(0, 255, 65, 0.2) 0%, transparent 60%),
-    radial-gradient(circle at 90% 90%, rgba(0, 255, 65, 0.15) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: 0;
+html.aegis h1, html.aegis h2, html.aegis h3, html.aegis h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-html.matrix body::before {
-  content: '01001010 01101111 01110010 01100111 01100101 \A 01110011 01100101 01100011 01110101 01110010 01101001 01110100 01111001 \A 01101101 01100001 01110100 01110010 01101001 01111000 \A 10101011 11000101 00110011 11110000';
-  position: fixed;
-  top: -100vh;
-  left: 0;
-  width: 100vw;
-  height: 200vh;
-  color: rgba(0, 255, 65, 0.12);
-  font-family: monospace;
-  font-size: 14px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
-  z-index: 0;
-  pointer-events: none;
-  animation: matrixFall 20s linear infinite;
+html.aegis .plate::before,
+html.aegis .plate::after {
+  display: none;
 }
 
-html.matrix #root {
-  position: relative;
-  z-index: 1;
-}
-
-html.matrix .card,
-html.matrix [class*='card'],
-html.matrix [class*='widget'],
-html.matrix [class*='panel'],
-html.matrix aside,
-html.matrix nav,
-html.matrix footer,
-html.matrix header,
-html.matrix .modal,
-html.matrix [class*="modal"],
-html.matrix [class*="dropdown"],
-html.matrix [class*="dropdown-panel"] {
-  background: var(--card-background) !important;
+html.aegis .card,
+html.aegis [class*='card'],
+html.aegis [class*='widget'],
+html.aegis [class*='panel'] {
+  background-color: var(--card-background) !important;
+  color: var(--text-primary) !important;
   border: 1px solid var(--border-subtle) !important;
-  box-shadow: none !important;
-  color: var(--text-primary) !important;
+  box-shadow: var(--card-shadow) !important;
+  border-radius: 6px;
 }
 
-html.matrix * {
-  color: var(--text-primary) !important;
+/* Force-tighten all cards and plates globally under the Aegis theme (terra keeps soft 12px). */
+html.aegis .plate,
+html.aegis .tele-card,
+html.aegis .card-root {
+  border-radius: 6px !important;
+  padding: 12px !important; /* Forces the p-3 density spec */
 }
 
-html.matrix .text-gray-500,
-html.matrix .text-gray-400,
-html.matrix p,
-html.matrix span {
+html.aegis .bg-white,
+html.aegis .bg-gray-50,
+html.aegis .bg-gray-100,
+html.aegis .bg-gray-200 {
+  background-color: var(--bg-card) !important;
+}
+html.aegis .text-gray-900,
+html.aegis .text-gray-800,
+html.aegis .text-gray-700 {
+  color: var(--text-primary) !important;
+}
+html.aegis .text-gray-600,
+html.aegis .text-gray-500,
+html.aegis .text-gray-400 {
   color: var(--text-secondary) !important;
 }
-
-html.matrix .text-gray-900, html.matrix .text-gray-800 {
-  color: var(--text-primary) !important;
-}
-html.matrix .text-gray-500, html.matrix .text-gray-400 {
-  color: #00cc33 !important;
-}
-
-html.matrix .btn-premium {
-  background: var(--accent) !important;
-  color: #000000 !important;
-}
-
-html.matrix .bg-white,
-html.matrix .bg-gray-50,
-html.matrix .bg-gray-100,
-html.matrix .bg-gray-200 {
-  background: var(--card-background) !important;
-}
-html.matrix .border-gray-100,
-html.matrix .border-gray-200,
-html.matrix .border-gray-300 {
+html.aegis .border-gray-100,
+html.aegis .border-gray-200,
+html.aegis .border-gray-300 {
   border-color: var(--border-subtle) !important;
 }
 
@@ -684,11 +275,10 @@ body {
     border-right: 2px solid var(--accent-primary);
   }
 
-  /* The rounded white/blue light theme reads as soft and clean — sharp
-     corner-bracket ticks look like glitch artifacts against it, so drop
-     them entirely for html.light. Other themes keep the flat console look. */
-  html.light .plate::before,
-  html.light .plate::after {
+  /* Terra's soft rounded plates read clean without sharp corner-bracket
+     ticks — those look like glitch artifacts against it. Matrix keeps them. */
+  html.terra .plate::before,
+  html.terra .plate::after {
     display: none;
   }
 
@@ -830,7 +420,7 @@ a[href*="bolt.new"], div[class*="bolt"], [data-bolt], #bolt-watermark, .bolt-wat
 
 /* Telemetry Card Hover Effect */
 .tele-card {
-  transition: transform 0.22s cubic-bezier(.34,1.56,.64,1),
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
               box-shadow 0.22s ease,
               border-color 0.2s ease;
   transform-origin: top center;
