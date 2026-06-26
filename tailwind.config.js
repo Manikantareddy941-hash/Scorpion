@@ -6,11 +6,11 @@ export default {
     extend: {
       colors: {
         surface: {
-          light: '#ffffff',
+          light: '#f8fafc',
           dark: '#0f172a',
         },
         card: {
-          light: '#f8fafc',
+          light: '#ffffff',
           dark: '#111827',
         },
         primary: 'var(--color-primary)',
