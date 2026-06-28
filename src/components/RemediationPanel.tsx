@@ -1,5 +1,20 @@
 import { useState, useEffect } from 'react';
-import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { X, Sparkles, ThumbsUp, ThumbsDown, CheckCircle, Info, Loader2, Code, GitPullRequest, ExternalLink, AlertCircle, RefreshCw, Zap, Clock, User } from 'lucide-react';
+import { SLA_HOURS } from '../lib/sla';
+
+function slaInfo(finding: any): { breached: boolean; urgent: boolean; label: string } | null {
+  if (!finding?.$createdAt) return null;
+  const sev = String(finding.severity || '').toLowerCase();
+  const slaH = SLA_HOURS[sev] ?? 168;
+  const hoursLeft = (new Date(finding.$createdAt).getTime() + slaH * 3600_000 - Date.now()) / 3600_000;
+  const fmt = (h: number) => (Math.abs(h) >= 48 ? `${Math.round(h / 24)}d` : `${Math.round(h)}h`);
+  if (hoursLeft <= 0) return { breached: true, urgent: true, label: `Exceeded by ${fmt(Math.abs(hoursLeft))}` };
+  return { breached: false, urgent: hoursLeft <= 24, label: `Due in ${fmt(hoursLeft)}` };
+}
+
+function codeOwner(repo: any): string | null {
+  return repo?.owner || repo?.code_owner || repo?.codeowner || repo?.team || null;
+}
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
@@ -21,11 +36,27 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
     const [prLoading, setPrLoading] = useState(false);
     const [prResult, setPrResult] = useState<{ url: string } | null>(null);
     const [prState, setPrState] = useState<{status: 'idle' | 'loading' | 'success' | 'error', prUrl?: string, error?: string}>({ status: 'idle' });
+    const [shown, setShown] = useState(false);
 
     useEffect(() => {
         if (!documentId || documentId === '') return;
         fetchFix();
     }, [documentId]);
+
+    // Slide in on mount; slide out before unmount on close.
+    useEffect(() => {
+        const id = requestAnimationFrame(() => setShown(true));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
+    const handleClose = () => {
+        setShown(false);
+        setTimeout(onClose, 280);
+    };
+
+    const sla = slaInfo(finding);
+    const owner = codeOwner(repo);
+    const repoName = repo?.name || repo?.repo_name || (repo?.repo_url ? String(repo.repo_url).replace('https://github.com/', '') : null);
 
     const trackEvent = async (action: 'viewed' | 'accepted' | 'ignored', suggestionId?: string, confidence?: number) => {
         try {
@@ -229,10 +260,10 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
     }
 
     return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            
-            <div className="relative w-full max-w-4xl max-h-[90vh] bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-[10000] flex justify-end">
+            <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${shown ? 'opacity-100' : 'opacity-0'}`} onClick={handleClose} />
+
+            <div className={`relative w-full max-w-2xl h-full bg-[var(--bg-primary)] border-l border-[var(--border-subtle)] shadow-2xl flex flex-col transform transition-transform duration-300 ease-out ${shown ? 'translate-x-0' : 'translate-x-full'}`}>
                 {/* Header */}
                 <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-secondary)]/50">
                     <div className="flex items-center gap-4">
@@ -241,14 +272,14 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                         </div>
                         <div>
                             <h2 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight">
-                                {t('remediation.title', 'Intelligence Remediation Engine')}
+                                {t('remediation.title', 'Remediation Path')}
                             </h2>
                             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic">
                                 {t('remediation.scoping_patch', 'Scoping patch for')} {finding?.title || t('common.unknown_threat', 'Unknown Threat')}
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-[var(--text-secondary)]">
+                    <button type="button" onClick={handleClose} aria-label="Close" title="Close" className="p-2 hover:bg-white/5 rounded-full transition-colors text-[var(--text-secondary)]">
                         <X size={20} />
                     </button>
                 </div>
@@ -269,6 +300,26 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                         </div>
                     ) : (
                         <div className="space-y-8">
+                            {/* Workbench meta: severity · SLA · owner · repository */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-1.5">Severity</p>
+                                    <p className="text-sm font-black uppercase italic" style={{ color: `var(--severity-${String(finding?.severity || 'info').toLowerCase()})` }}>{finding?.severity || '—'}</p>
+                                </div>
+                                <div className={`p-4 rounded-2xl border ${sla?.breached ? 'bg-[var(--status-error)] border-[var(--status-error)]' : 'bg-[var(--bg-secondary)] border-[var(--border-subtle)]'}`}>
+                                    <p className={`text-[9px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1 ${sla?.breached ? 'text-white/80' : 'text-[var(--text-secondary)]'}`}><Clock size={10} /> SLA</p>
+                                    <p className="text-sm font-black uppercase italic" style={{ color: sla?.breached ? '#fff' : sla ? (sla.urgent ? 'var(--status-warning)' : 'var(--status-success)') : 'var(--text-muted)' }}>{sla?.label || '—'}</p>
+                                </div>
+                                <div className={`p-4 rounded-2xl border ${owner ? 'bg-[var(--bg-secondary)] border-[var(--border-subtle)]' : 'border-dashed bg-transparent border-[var(--border-subtle)]'}`}>
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-1.5 flex items-center gap-1"><User size={10} /> Code Owner</p>
+                                    <p className="text-sm font-bold truncate" style={{ color: owner ? 'var(--text-primary)' : 'var(--text-muted)' }}>{owner ? `@${owner}` : 'Unassigned'}</p>
+                                </div>
+                                <div className="p-4 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-1.5">Repository</p>
+                                    <p className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{repoName || '—'}</p>
+                                </div>
+                            </div>
+
                             {/* Analysis Section */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative group">
