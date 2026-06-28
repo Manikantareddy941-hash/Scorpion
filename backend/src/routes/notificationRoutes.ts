@@ -12,7 +12,7 @@ const router = Router();
 router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [
-            Query.equal('user_id', req.user!.$id),
+            Query.equal('userId', req.user!.$id),
             Query.orderDesc('$createdAt'),
             Query.limit(50)
         ]);

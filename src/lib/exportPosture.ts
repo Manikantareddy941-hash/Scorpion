@@ -149,11 +149,11 @@ export function exportPosturePdf(s: PostureSnapshot): void {
 // One-line executive steer derived from the live verdict + score.
 function recommendation(s: PostureSnapshot): string {
   if (s.preflight.status === 'blocked')
-    return `Release is blocked. ${s.preflight.reason}. Remediate blocking findings before deploying.`;
+    return `${s.preflight.reason}. Remediate blocking findings before deploying.`;
   if (s.slaStats.breached > 0)
     return `${s.slaStats.breached} finding(s) past SLA (${s.slaStats.breachedCritical} critical). Prioritize overdue items this cycle.`;
   if (s.preflight.status === 'warning')
-    return `Release allowed with warnings. ${s.preflight.reason}. Schedule remediation to avoid escalation.`;
+    return `${s.preflight.reason}. Schedule remediation to avoid escalation.`;
   return `Posture is healthy (score ${s.riskScore}/100). Maintain current controls and monitoring.`;
 }
 
@@ -171,6 +171,7 @@ export function buildPostureCsv(s: PostureSnapshot, slaRows: SlaBreachRow[] | nu
   const rows: string[][] = [
     ['Scorpion Security Posture — SLA Breach Report'],
     ['Generated', s.generatedAt.toISOString(), 'By', s.actor],
+    ['Pre-flight', s.preflight.reason],
     [],
   ];
 

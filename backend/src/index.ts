@@ -54,6 +54,10 @@ import deployRoutes from './routes/deployRoutes';
 import pipelineRoutes from './routes/pipelineRoutes';
 import planRoutes from './routes/planRoutes';
 import threatModelRoutes from './routes/threatModelRoutes';
+import k8sAdmissionRoutes from './routes/k8sAdmission';
+import ingestRoutes from './routes/ingestRoutes';
+import gateRulesRoutes from './routes/gateRulesRoutes';
+import driftRoutes from './routes/driftRoutes';
 import { registerTicketRoutes } from './registerRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
@@ -61,6 +65,10 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
+import { startDriftMonitor } from './workers/driftMonitor';
+import { startFallbackReplayer, stopFallbackReplayer } from './workers/fallbackReplayer';
+import { scanQueue } from './queues/scanQueue';
+import { redisConnection } from './queues/redisConnection';
 
 // --- Startup Diagnostic ---
 logger.info('🚀 [Startup] System Diagnostic Initiated');
@@ -130,6 +138,16 @@ const port = process.env.PORT || 3001;
 // the proxy) and audit/IP logging behind a reverse proxy.
 app.set('trust proxy', 1);
 
+// Force HTTPS in production. TLS itself is terminated by the reverse proxy/load
+// balancer in front of this service (this app never holds a cert) — this just
+// rejects/redirects any request that proxy reports as plain HTTP.
+if (process.env.NODE_ENV === 'production') {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+        if (req.secure || req.headers['x-forwarded-proto'] === 'https') return next();
+        res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+    });
+}
+
 // --- Middleware ---
 app.use(morgan('dev'));
 // helmet sets secure response headers (X-Frame-Options, X-Content-Type-Options,
@@ -167,11 +185,22 @@ const globalApiLimiter = rateLimit({
     max: 300,
     standardHeaders: true,
     legacyHeaders: false,
-    message: 'Too many requests, please slow down.'
+    message: 'Too many requests, please slow down.',
+    handler: (req: Request, res: Response) => {
+        logger.warn(`[RateLimit] IP ${req.ip} exceeded global limit on ${req.method} ${req.originalUrl}`);
+        res.status(429).json({ error: 'Too many requests, please slow down.' });
+    }
 });
 app.use('/api', globalApiLimiter);
 
-const authLimiter = rateLimit({ windowMs: 60 * 1000, max: 10 });
+const authLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    handler: (req: Request, res: Response) => {
+        logger.warn(`[RateLimit] IP ${req.ip} exceeded auth limit on ${req.method} ${req.originalUrl}`);
+        res.status(429).json({ error: 'Too many requests, please slow down.' });
+    }
+});
 
 // --- Authentication Middleware ---
 interface AuthenticatedRequest extends Request {
@@ -260,6 +289,8 @@ app.use('/api/compliance', authenticate, complianceRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/gates', gateRoutes);
+app.use('/api/v1/rules', authenticate, gateRulesRoutes);
+app.use('/api/v1/drift', authenticate, driftRoutes);
 app.use('/api/scan', dockerScanRoutes);
 app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with /scan/docker
 app.use('/api/scan/dast', dastRoutes);
@@ -271,6 +302,10 @@ app.use('/api/deploy', authenticate, deployRoutes);
 app.use('/api/pipelines', pipelineRoutes);
 app.use('/api/plan', authenticate, planRoutes);
 app.use('/api/threat-models', authenticate, threatModelRoutes);
+// K8s ValidatingWebhook: called by the kube-apiserver, not an authenticated user — no auth middleware.
+app.use('/api/v1/webhook', k8sAdmissionRoutes);
+// CI scan-results ingestion, keyed by image digest (see ingestRoutes for the auth TODO).
+app.use('/api/v1/ingest', ingestRoutes);
 registerTicketRoutes(app);
 app.use('/metrics', metricsRoutes);
 
@@ -321,8 +356,12 @@ import { initUptimeScheduler } from './services/monitorService';
 initScheduler();
 initReportScheduler();
 initScanWorker();
-initScanQueueWorker();
+const scanQueueWorker = initScanQueueWorker();
 initUptimeScheduler();
+// Continuous runtime drift monitor (undefined when no kube config is reachable).
+const driftMonitor = startDriftMonitor();
+// Periodically replays repo JSON fallback buffers back into Appwrite on recovery.
+startFallbackReplayer();
 
 // --- Error Handler ---
 interface HttpError extends Error {
@@ -344,6 +383,63 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
     });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
     logger.info(`[Backend] Service running on http://localhost:${port}`);
 });
+
+// --- Graceful Shutdown -------------------------------------------------------
+// On SIGTERM (k8s pod termination) / SIGINT (Ctrl-C): stop accepting new
+// connections, drain in-flight requests, halt the drift poll loop, and close all
+// backing connections before exit. Idempotent and time-boxed so a hung drain can
+// never wedge the process past its termination grace period.
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 15000;
+let shuttingDown = false;
+
+const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    if (shuttingDown) return; // second signal during drain — ignore
+    shuttingDown = true;
+    logger.info(`[Shutdown] ${signal} received — draining...`);
+
+    // Hard ceiling: if any close hangs, force-exit so the orchestrator isn't
+    // left waiting past its grace period. unref() so the timer itself can't
+    // keep the event loop alive once a clean shutdown completes.
+    const forceExit = setTimeout(() => {
+        logger.error('[Shutdown] Drain timed out — forcing exit');
+        process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    forceExit.unref();
+
+    try {
+        // 1. Halt drift polling and the fallback replayer first so no new work
+        //    starts mid-shutdown.
+        driftMonitor?.stop();
+        stopFallbackReplayer();
+
+        // 2. Stop accepting new connections; resolves once in-flight drains.
+        await new Promise<void>((resolve, reject) => {
+            server.close((err) => (err ? reject(err) : resolve()));
+        });
+        logger.info('[Shutdown] HTTP server closed');
+
+        // 3. Drain the BullMQ worker (waits for the active job), then the queue.
+        await scanQueueWorker.close();
+        await scanQueue.close();
+
+        // 4. Close the Redis connection backing BullMQ.
+        await redisConnection.quit();
+
+        // node-appwrite is a stateless HTTP client (no pooled socket to close);
+        // there is nothing to release on the Appwrite side.
+
+        clearTimeout(forceExit);
+        logger.info('[Shutdown] Clean exit');
+        process.exit(0);
+    } catch (err: unknown) {
+        logger.error(`[Shutdown] Error during shutdown: ${err instanceof Error ? err.message : String(err)}`);
+        clearTimeout(forceExit);
+        process.exit(1);
+    }
+};
+
+process.on('SIGTERM', (signal) => { void gracefulShutdown(signal); });
+process.on('SIGINT', (signal) => { void gracefulShutdown(signal); });

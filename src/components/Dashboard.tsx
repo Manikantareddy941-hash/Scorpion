@@ -12,10 +12,12 @@ import toast from 'react-hot-toast';
 import PostureDonut from './charts/PostureDonut';
 import CoverageRadar from './charts/CoverageRadar';
 import VulnTrend from './charts/VulnTrend';
-import GateRulesDrawer, { loadGateRules, evaluatePreflight } from './GateRulesDrawer';
+import GateRulesDrawer, { evaluatePreflight, type Reachability } from './GateRulesDrawer';
+import { useGateRules } from '../hooks/useGateRules';
 import { StatCard, VibrationTrace, type HeatmapDatum, type Severity } from './ui';
 import { SLA_HOURS } from '../lib/sla';
 import PostureExportButton from './PostureExportButton';
+import DriftAlertsTable from './DriftAlertsTable';
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: '#E11D48',
@@ -90,7 +92,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
   const [recentDeployments, setRecentDeployments] = useState<{ environment: string; status: string }[]>([]);
   const [slaStats, setSlaStats] = useState({ breached: 0, dueSoon: 0, breachedCritical: 0, nextHours: null as number | null });
   const [showGateRules, setShowGateRules] = useState(false);
-  const [gateRules, setGateRules] = useState(loadGateRules);
+  const { rules: gateRules, env: gateEnv, setRules: setGateRules, setEnv: setGateEnv } = useGateRules();
 
   const ENV_STATUS_STYLE: Record<string, { icon: string; color: string }> = {
     success: { icon: '✓', color: 'var(--status-success)' },
@@ -411,11 +413,49 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
     vulnStats.critical * 8 + vulnStats.high * 4 + vulnStats.medium * 2 + vulnStats.low * 0.5
   );
 
-  // Pre-flight: predict the next build outcome from live counts vs gate rules.
-  const preflight = evaluatePreflight(gateRules, {
-    critical: vulnStats.critical, high: vulnStats.high, medium: vulnStats.medium, low: vulnStats.low,
-  });
+  // Reachability gate: reduce the scan route's vulnerable packages to one verdict.
+  // Worst-case wins — any reachable > any unknown > unreachable; no reachability
+  // data at all → undefined, so evaluatePreflight falls back to count-based rules.
+  const scanVulns: { severity?: string; reachability?: Reachability }[] = (() => {
+    if (latestScan?.details && typeof latestScan.details === 'string') {
+      try {
+        const d = JSON.parse(latestScan.details);
+        if (Array.isArray(d.vulnerabilities)) return d.vulnerabilities;
+      } catch { /* ignore malformed details */ }
+    }
+    return latestVulnerabilities;
+  })();
+
+  const SEV_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+  const reachableVulns = scanVulns.filter((v) => v.reachability === 'reachable');
+  const reachabilityVerdict: Reachability | undefined =
+    reachableVulns.length > 0 ? 'reachable'
+    : scanVulns.some((v) => v.reachability === 'unknown') ? 'unknown'
+    : scanVulns.some((v) => v.reachability) ? 'unreachable'
+    : undefined;
+  const worstReachableSev = reachableVulns
+    .map((v) => String(v.severity || '').toLowerCase())
+    .sort((a, b) => (SEV_RANK[b] ?? 0) - (SEV_RANK[a] ?? 0))[0];
+
+  // Pre-flight: reachability-driven, env-aware; counts/rules as fallback.
+  const preflightCounts = { critical: vulnStats.critical, high: vulnStats.high, medium: vulnStats.medium, low: vulnStats.low };
+  const preflight = evaluatePreflight(gateRules, preflightCounts, gateEnv, reachabilityVerdict);
   const preflightColor = preflight.tone === 'error' ? 'var(--status-error)' : preflight.tone === 'warning' ? 'var(--status-warning)' : 'var(--status-success)';
+  const capWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const preflightReason =
+    reachabilityVerdict === 'reachable' ? `${capWord(worstReachableSev || 'vuln')} reachable in ${gateEnv}`
+    : reachabilityVerdict === 'unknown' ? `Reachability unknown in ${gateEnv}`
+    : reachabilityVerdict === 'unreachable' ? `No reachable vulns in ${gateEnv}`
+    : preflight.reason;
+  // Exact badge, e.g. "BLOCKED: Critical reachable in prod".
+  const preflightBadge = `${preflight.label.toUpperCase()}: ${preflightReason}`;
+
+  // Frosted glassmorphism by gate status: red / amber / emerald.
+  const PREFLIGHT_GLASS: Record<typeof preflight.status, React.CSSProperties> = {
+    blocked: { background: 'color-mix(in srgb, var(--status-error) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--status-error) 45%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 8px 32px -12px color-mix(in srgb, var(--status-error) 50%, transparent)' },
+    warning: { background: 'color-mix(in srgb, var(--status-warning) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--status-warning) 45%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 8px 32px -12px color-mix(in srgb, var(--status-warning) 50%, transparent)' },
+    ready: { background: 'color-mix(in srgb, var(--status-success) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--status-success) 45%, transparent)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', boxShadow: '0 8px 32px -12px color-mix(in srgb, var(--status-success) 50%, transparent)' },
+  };
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const scansLast7 = heatmapData
@@ -500,7 +540,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
             <PostureExportButton getSnapshot={() => ({
               generatedAt: new Date(),
               actor: user?.email || 'unknown',
-              preflight: { label: preflight.label, reason: preflight.reason, status: preflight.status },
+              preflight: { label: preflight.label, reason: preflightBadge, status: preflight.status },
               riskScore: vulnStats.score,
               securityDebtHours,
               vulnStats: {
@@ -525,13 +565,13 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
 
         {/* ── Risk Command Bar — preflight / score / SLA / debt ── */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Pre-flight Status — live gate-rule prediction */}
-          <div className="p-5 rounded border" style={{ background: 'var(--bg-card)', borderColor: preflight.status === 'blocked' ? 'var(--status-error)' : preflight.status === 'warning' ? 'var(--status-warning)' : 'var(--border-subtle)', boxShadow: 'var(--card-shadow)' }}>
-            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Pre-flight Status</p>
+          {/* Pre-flight Status — reachability-driven, env-aware, frosted glass */}
+          <div className="p-5 rounded" style={PREFLIGHT_GLASS[preflight.status]}>
+            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Pre-flight Status · {gateEnv.toUpperCase()}</p>
             {loading ? <div className="mt-3 w-24 h-12 rounded animate-pulse" style={{ background: 'var(--bg-secondary)' }} /> : (
               <>
                 <p className="mt-2 text-4xl font-extrabold leading-none" style={{ color: preflightColor, fontFamily: 'var(--font-display)' }}>{preflight.label}</p>
-                <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>{preflight.reason}</p>
+                <p className="mt-2 text-[11px] font-semibold" style={{ color: preflightColor }}>{preflightBadge}</p>
               </>
             )}
           </div>
@@ -704,6 +744,9 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
             </div>
           </div>
         </div>
+
+        {/* ── Runtime drift anomalies — closes the observability loop ── */}
+        <DriftAlertsTable />
 
         {/* ── Details — collapsed by default (anti-bloat; command bar is the focus) ── */}
         <div className="pt-2">
@@ -1002,7 +1045,7 @@ export default function Dashboard({ isSidebarCollapsed: _isSidebarCollapsed }: {
         />
       )}
 
-      {showGateRules && <GateRulesDrawer onClose={() => setShowGateRules(false)} onChange={setGateRules} />}
+      {showGateRules && <GateRulesDrawer onClose={() => setShowGateRules(false)} rules={gateRules} env={gateEnv} onChange={setGateRules} onEnvChange={setGateEnv} counts={preflightCounts} />}
 
     </div>
   );

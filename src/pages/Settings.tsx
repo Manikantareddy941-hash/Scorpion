@@ -4,20 +4,16 @@ import { OAuthProvider } from 'appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
-    Save, Loader2, LogOut, Moon, Sun,
-    Terminal, Github, Eye, Camera, Upload, Waves, Activity, Cpu, Crosshair
+    Save, Loader2, LogOut,
+    Terminal, Github, Camera, Upload, Activity, Crosshair, Leaf, Shield
 } from 'lucide-react';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Bot, Globe, Droplets } from 'lucide-react';
+import { Bot, Globe } from 'lucide-react';
 
 const THEME_SWATCHES: Record<string, { bg: string; card: string; accent: string }> = {
-    light: { bg: '#f5f5f5', card: '#ffffff', accent: '#10b981' },
-    dark: { bg: '#0f1115', card: '#1a1d24', accent: '#10b981' },
-    'eye-protection': { bg: '#f5f0e8', card: '#ffffff', accent: '#6db87a' },
-    underwater: { bg: '#0a2540', card: '#0e3a5f', accent: '#4fc3f7' },
-    matrix: { bg: '#000000', card: '#0a0f0a', accent: '#00ff41' },
-    'liquid-glass': { bg: '#e8edf2', card: 'rgba(255,255,255,0.5)', accent: '#7c9cff' },
+    aegis: { bg: '#f8fafc', card: '#ffffff', accent: '#2563eb' },
+    terra: { bg: '#faf6f0', card: '#ffffff', accent: '#4a7c59' },
 };
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
@@ -249,7 +245,7 @@ export default function Settings() {
 
                 <div className="space-y-12">
                     {/* Language Selection */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <div className="flex items-center gap-5 mb-8">
                             <div className="w-12 h-12 bg-[var(--accent-primary)]/10 rounded-2xl flex items-center justify-center border border-[var(--accent-primary)]/20">
                                 <Globe className="w-5 h-5 text-[var(--accent-primary)]" />
@@ -271,7 +267,7 @@ export default function Settings() {
                     <div className="h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent opacity-50" />
 
                     {/* Terminology Mode Toggle */}
-                    <div className={`premium-card p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <div className={`premium-card p-10`}>
                         <div className="flex items-center gap-5 mb-8">
                             <div className="w-12 h-12 bg-[var(--accent-primary)]/10 rounded-2xl flex items-center justify-center border border-[var(--accent-primary)]/20">
                                 <Terminal className="w-5 h-5 text-[var(--accent-primary)]" />
@@ -313,11 +309,11 @@ export default function Settings() {
 
                     <div className="h-px bg-gradient-to-r from-transparent via-[var(--border-subtle)] to-transparent opacity-50" />
 
-                    {/* Dark Mode Toggle */}
-                    <div className={`premium-card p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    {/* Theme Toggle */}
+                    <div className="premium-card p-10">
                         <div className="flex items-center gap-5 mb-8">
                             <div className="w-12 h-12 bg-[var(--accent-primary)]/10 rounded-2xl flex items-center justify-center border border-[var(--accent-primary)]/20">
-                                {theme === 'dark' ? <Moon className="w-5 h-5 text-[var(--accent-primary)]" /> : <Sun className="w-5 h-5 text-[var(--accent-primary)]" />}
+                                {theme === 'aegis' ? <Shield className="w-5 h-5 text-[var(--accent-primary)]" /> : <Leaf className="w-5 h-5 text-[var(--accent-primary)]" />}
                             </div>
                             <div>
                                 <h3 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest italic">{t('settings.visual_mode', 'Visual Interface Mode')}</h3>
@@ -327,12 +323,8 @@ export default function Settings() {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {[
-                                { id: 'light', label: t('settings.theme_light', 'Light Mode'), icon: Sun, desc: t('settings.theme_light_desc', 'High visibility daylight protocol') },
-                                { id: 'dark', label: t('settings.theme_dark', 'Dark Mode'), icon: Moon, desc: t('settings.theme_dark_desc', 'Stealth ops standard interface') },
-                                { id: 'eye-protection', label: t('settings.theme_eye', 'Eye Protection'), icon: Eye, desc: t('settings.theme_eye_desc', 'Warm amber neural filter') },
-                                { id: 'underwater', label: t('settings.theme_underwater', 'Underwater'), icon: Waves, desc: t('settings.theme_underwater_desc', 'Deep sea stealth mode with caustic light') },
-                                { id: 'matrix', label: t('settings.theme_matrix', 'Matrix'), icon: Cpu, desc: t('settings.theme_matrix_desc', 'Particle globe · green terminal · cyber ops') },
-                                { id: 'liquid-glass', label: t('settings.theme_liquid_glass', 'Liquid Glass'), icon: Droplets, desc: t('settings.theme_liquid_glass_desc', 'Premium frosted aesthetic with dynamic refraction') },
+                                { id: 'aegis', label: t('settings.theme_aegis', 'Aegis'), icon: Shield, desc: t('settings.theme_aegis_desc', 'Slate-white surfaces · deep navy · electric blue trust accent') },
+                                { id: 'terra', label: t('settings.theme_terra', 'Terra'), icon: Leaf, desc: t('settings.theme_terra_desc', 'Organic forest green on warm cream') },
                             ].map((themeOption) => {
                                 const swatch = THEME_SWATCHES[themeOption.id];
                                 return (
@@ -371,7 +363,7 @@ export default function Settings() {
                     </div>
 
                     {/* Profile Section */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
                             <User className="w-4 h-4 text-[var(--accent-primary)]" /> {t('settings.operator_credentials', 'Operator Credentials')}
                         </h3>
@@ -510,7 +502,7 @@ export default function Settings() {
                     </section>
 
                     {/* Notifications */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <h3 className="text-xs font-black text-[var(--text-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
                             <Bell className="w-4 h-4 text-[var(--accent-secondary)]" /> {t('settings.alert_feeds', 'Intelligence Alert Feeds')}
                         </h3>
@@ -637,7 +629,7 @@ export default function Settings() {
                     </section>
 
                     {/* Automated Scan Schedules */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <h3 className="text-xs font-black text-[var(--accent-primary)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
                             <Activity className="w-4 h-4 text-[var(--accent-primary)]" /> {t('settings.scan_schedules', 'Automated Scan Schedules')}
                         </h3>
@@ -673,7 +665,7 @@ export default function Settings() {
                     </section>
 
                     {/* API Keys */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <h3 className="text-xs font-black text-[var(--status-success)] mb-8 uppercase tracking-[0.2em] italic flex items-center gap-3">
                             <Key className="w-4 h-4 text-[var(--status-success)]" /> {t('settings.api_keys_heading', 'Secure API Vectors')}
                         </h3>
@@ -718,7 +710,7 @@ export default function Settings() {
                     </section>
 
                     {/* Echo Neural Interface */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-5">
                                 <div className="w-12 h-12 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/20">
@@ -799,7 +791,7 @@ export default function Settings() {
                     </section>
 
                     {/* Echo Movement: Free roam vs Fixed position */}
-                    <section className={`premium-card rounded-2xl p-10 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card rounded-2xl p-10`}>
                         <div className="flex items-center gap-5 mb-8">
                             <div className="w-12 h-12 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/20">
                                 <Bot className="w-5 h-5 text-cyan-500" />
@@ -834,7 +826,7 @@ export default function Settings() {
                     </section>
 
                     {/* Danger Zone */}
-                    <section className={`premium-card p-10 border-[var(--status-error)]/20 ${theme === 'liquid-glass' ? 'liquid-glass' : ''}`}>
+                    <section className={`premium-card p-10 border-[var(--status-error)]/20`}>
                         <h3 className="text-xs font-black text-[var(--status-error)] mb-8 uppercase tracking-[0.2em] italic">{t('settings.decommissioning_zone', 'Decommissioning Zone')}</h3>
                         <div className="flex flex-col md:flex-row justify-between items-center gap-8">
                             <div>

@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import {
@@ -71,7 +72,7 @@ async function handleQuery<T>(appwriteCall: () => Promise<T>, mockCall: () => Pr
 }
 
 function randomId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${prefix}-${randomUUID()}`;
 }
 
 export const planRepository = {

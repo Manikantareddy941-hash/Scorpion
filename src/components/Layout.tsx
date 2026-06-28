@@ -1,7 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import { useAuth } from '../contexts/AuthContext';
-import { Bell, Sun, Moon, ChevronDown, Eye, Waves, Cpu, Droplets } from 'lucide-react';
+import { Bell, ChevronDown, Leaf, Shield } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 import Footer from './Footer';
@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex flex-1 items-start">
         <Sidebar isCollapsed={false} setIsCollapsed={() => {}} />
         <div className="flex-1 flex flex-col min-w-0" style={{ zoom: 0.85 }}>
-          <header className={`h-16 flex items-center justify-between px-8 sticky top-0 z-40 ${theme === 'liquid-glass' ? '' : 'border-b border-[var(--border-subtle)]'}`} style={{ background: 'transparent' }}>
+          <header className="h-16 flex items-center justify-between px-8 sticky top-0 z-40 border-b border-[var(--border-subtle)]" style={{ background: 'transparent' }}>
             <div />
 
             <div className="flex items-center gap-6">
@@ -34,12 +34,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   onClick={() => setIsThemeOpen(!isThemeOpen)}
                   className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center gap-1"
                 >
-                  {theme === 'light' && <Sun className="w-5 h-5" />}
-                  {theme === 'dark' && <Moon className="w-5 h-5" />}
-                  {theme === 'eye-protection' && <Eye className="w-5 h-5" />}
-                  {theme === 'underwater' && <Waves className="w-5 h-5" />}
-                  {theme === 'matrix' && <Cpu className="w-5 h-5" />}
-                  {theme === 'liquid-glass' && <Droplets className="w-5 h-5" />}
+                  {theme === 'aegis' && <Shield className="w-5 h-5" />}
+                  {theme === 'terra' && <Leaf className="w-5 h-5" />}
                   <ChevronDown className={`w-3 h-3 transition-transform ${isThemeOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -49,12 +45,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <div className="absolute right-0 mt-2 p-2 bg-[var(--bg-card)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] z-50 animate-in fade-in zoom-in duration-200">
                       <div className="grid grid-cols-3 gap-1">
                         {[
-                          { id: 'light', icon: Sun },
-                          { id: 'dark', icon: Moon },
-                          { id: 'eye-protection', icon: Eye },
-                          { id: 'underwater', icon: Waves },
-                          { id: 'matrix', icon: Cpu },
-                          { id: 'liquid-glass', icon: Droplets },
+                          { id: 'aegis', icon: Shield },
+                          { id: 'terra', icon: Leaf },
                         ].map((t) => (
                           <button
                             key={t.id}

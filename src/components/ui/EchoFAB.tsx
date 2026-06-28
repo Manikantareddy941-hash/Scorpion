@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import echoIcon from '../../assets/echo-ai.png';
+import echoIcon from '../../assets/echo-ai.webp';
 
 type EchoStatus = 'online' | 'busy' | 'offline';
 
@@ -112,21 +112,10 @@ const EchoFAB: React.FC<EchoFABProps> = ({ onClick, status = 'online', open = fa
       style={positionStyle}
     >
       <span
-        className="absolute inset-0 rounded-full animate-ping"
-        style={{ backgroundColor: 'var(--accent-primary)', opacity: 0.25 }}
-      />
-      <span
-        className="absolute inset-0 rounded-full animate-ping"
-        style={{ backgroundColor: 'var(--accent-primary)', opacity: 0.15, animationDelay: '0.6s' }}
-      />
-      <span
         className={`relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 group-hover:scale-105 ${open ? 'scale-105' : ''}`}
-        style={{
-          background: 'transparent',
-          boxShadow: '0 0 18px color-mix(in srgb, var(--accent-primary) 55%, transparent)',
-        }}
+        style={{ background: 'transparent' }}
       >
-        <img src={echoIcon} alt="Echo AI" style={{ width: 48, height: 48, background: 'transparent' }} draggable={false} />
+        <img src={echoIcon} alt="Echo AI" width={48} height={48} style={{ width: 48, height: 48, mixBlendMode: 'multiply' }} draggable={false} />
         <span
           className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2"
           style={{ backgroundColor: statusColor[status], borderColor: 'var(--bg-card)' }}

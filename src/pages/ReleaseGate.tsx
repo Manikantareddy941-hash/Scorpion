@@ -44,7 +44,6 @@ export default function ReleaseGate() {
     const [checking, setChecking] = useState(false);
 
     useEffect(() => {
-        console.log('[ReleaseGate] Component mounted');
         fetchRepos();
     }, []);
 
@@ -63,7 +62,6 @@ export default function ReleaseGate() {
             const data = await res.json();
             const repoList = data.by_repo || [];
             setRepos(repoList);
-            console.log(`[ReleaseGate] Loaded ${repoList.length} repositories for gate check`);
         } catch (err: any) {
             console.error('[ReleaseGate] Failed to load repositories:', err);
             setError(err.message);
@@ -212,6 +210,21 @@ export default function ReleaseGate() {
                                           </div>
                                         ) : hasResult ? (
                                           <>
+                                            <div className={`rounded-xl p-6 flex items-center gap-5 border ${hasResult.allowed ? 'bg-emerald-950/20 border-emerald-500/20' : 'bg-red-950/20 border-red-500/20'}`}>
+                                              <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${hasResult.allowed ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white animate-pulse'}`}>
+                                                {hasResult.allowed ? <CheckCircle2 size={28} /> : <XCircle size={28} />}
+                                              </div>
+                                              <div>
+                                                <h3 className={`text-2xl font-black uppercase italic ${hasResult.allowed ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                  {hasResult.allowed ? 'Release Allowed' : 'Blocked'}
+                                                </h3>
+                                                <p className="text-xs text-zinc-400 mt-1">
+                                                  {hasResult.allowed
+                                                    ? 'No open findings block this release.'
+                                                    : `${hasResult.blocker_count} open finding(s) blocking deployment.`}
+                                                </p>
+                                              </div>
+                                            </div>
                                             <div className="flex flex-col gap-3 mt-1">
                                               {hasResult.blockers.length === 0 ? (
                                                 <div className="flex flex-col gap-2 bg-black/40 p-4 rounded-xl border border-white/5 font-mono text-xs">

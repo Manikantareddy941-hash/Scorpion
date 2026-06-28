@@ -1,65 +1,66 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useTheme } from './contexts/ThemeContext';
-// import Auth from './components/Auth';
-import Dashboard from './components/Dashboard';
-import Issues from './pages/Issues';
-import ResetPassword from './pages/ResetPassword';
-import ForgotPassword from './pages/ForgotPassword';
-import VerifyOtp from './pages/VerifyOtp';
-import ChangePassword from './pages/ChangePassword';
-import SettingsPage from './pages/Settings';
-import CodeInsights from './pages/CodeInsights';
-import ProjectDetail from './pages/ProjectDetail';
-import TasksPage from './pages/TasksPage';
-import Teams from './pages/Teams';
-import Alerts from './pages/Alerts';
-import Reports from './pages/Reports';
-import Governance from './pages/Governance';
-import MultiRepoDashboard from './pages/MultiRepoDashboard';
-import Repositories from './pages/Repositories';
-import Profile from './pages/Profile';
-import ScanResults from './pages/ScanResults';
-import SastDetail from './pages/SastDetail';
-import SecretsDetail from './pages/SecretsDetail';
-import InfraDetail from './pages/InfraDetail';
-import ScaDetail from './pages/ScaDetail';
-import SbomDetail from './pages/SbomDetail';
-import AntipatternsDetail from './pages/AntipatternsDetail';
-import DuplicatesDetail from './pages/DuplicatesDetail';
-import DeadCodeDetail from './pages/DeadCodeDetail';
-import QualityDetail from './pages/QualityDetail';
-import AIChat from './components/AIChat';
-import { EchoFAB } from './components/ui';
-import JourneyMap from './pages/JourneyMap';
-import CodeActivity from './pages/CodeActivity';
-import Build from './pages/Build';
-import Deploy from './pages/Deploy';
-import TestResults from './pages/TestResults';
-import DeepAnalysis from './pages/DeepAnalysis';
-import ReleaseGate from './pages/ReleaseGate';
-import Monitor from './pages/Monitor';
-import PolicyBuilder from './pages/PolicyBuilder';
 import { Shield } from 'lucide-react';
-import AuthCallback from './pages/AuthCallback';
-import VerifyEmail from './pages/VerifyEmail';
-import AuditLog from './pages/AuditLog';
-import PlanWorkspace from './pages/PlanWorkspace';
-import TicketDashboard from './pages/TicketDashboard';
-import TicketDetail from './pages/TicketDetail';
-import JiraSettings from './pages/JiraSettings';
-import Footer from './components/Footer';
-import NetworkErrorPanel from './components/NetworkErrorPanel';
-import { useEffect, useState } from 'react';
 import { account } from './lib/appwrite';
+// Structural chrome stays eager — needed on every route, no benefit to splitting.
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import ProductTour from './components/ProductTour';
+import Footer from './components/Footer';
+import NetworkErrorPanel from './components/NetworkErrorPanel';
+
+// Everything else is route content or below-the-fold chrome — code-split so a
+// visit to one page doesn't ship the JS for all 40+ others.
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Issues = lazy(() => import('./pages/Issues'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const VerifyOtp = lazy(() => import('./pages/VerifyOtp'));
+const ChangePassword = lazy(() => import('./pages/ChangePassword'));
+const SettingsPage = lazy(() => import('./pages/Settings'));
+const CodeInsights = lazy(() => import('./pages/CodeInsights'));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const TasksPage = lazy(() => import('./pages/TasksPage'));
+const Teams = lazy(() => import('./pages/Teams'));
+const Alerts = lazy(() => import('./pages/Alerts'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Governance = lazy(() => import('./pages/Governance'));
+const Repositories = lazy(() => import('./pages/Repositories'));
+const Profile = lazy(() => import('./pages/Profile'));
+const ScanResults = lazy(() => import('./pages/ScanResults'));
+const SastDetail = lazy(() => import('./pages/SastDetail'));
+const SecretsDetail = lazy(() => import('./pages/SecretsDetail'));
+const InfraDetail = lazy(() => import('./pages/InfraDetail'));
+const ScaDetail = lazy(() => import('./pages/ScaDetail'));
+const SbomDetail = lazy(() => import('./pages/SbomDetail'));
+const AntipatternsDetail = lazy(() => import('./pages/AntipatternsDetail'));
+const DuplicatesDetail = lazy(() => import('./pages/DuplicatesDetail'));
+const DeadCodeDetail = lazy(() => import('./pages/DeadCodeDetail'));
+const QualityDetail = lazy(() => import('./pages/QualityDetail'));
+const AIChat = lazy(() => import('./components/AIChat'));
+const EchoFAB = lazy(() => import('./components/ui/EchoFAB'));
+const JourneyMap = lazy(() => import('./pages/JourneyMap'));
+const CodeActivity = lazy(() => import('./pages/CodeActivity'));
+const Build = lazy(() => import('./pages/Build'));
+const Deploy = lazy(() => import('./pages/Deploy'));
+const TestResults = lazy(() => import('./pages/TestResults'));
+const DeepAnalysis = lazy(() => import('./pages/DeepAnalysis'));
+const ReleaseGate = lazy(() => import('./pages/ReleaseGate'));
+const Monitor = lazy(() => import('./pages/Monitor'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const AuditLog = lazy(() => import('./pages/AuditLog'));
+const PlanWorkspace = lazy(() => import('./pages/PlanWorkspace'));
+const TicketDashboard = lazy(() => import('./pages/TicketDashboard'));
+const TicketDetail = lazy(() => import('./pages/TicketDetail'));
+const JiraSettings = lazy(() => import('./pages/JiraSettings'));
+const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const ProductTour = lazy(() => import('./components/ProductTour'));
 
 function App() {
   const { user, loading } = useAuth();
@@ -162,6 +163,11 @@ function App() {
           )}
 
           <main className="flex-1 p-3 flex flex-col bg-transparent">
+            <Suspense fallback={
+              <div className="flex items-center justify-center flex-1">
+                <Shield size={32} className="text-[var(--accent-primary)] animate-pulse" />
+              </div>
+            }>
             <Routes>
               <Route path="/auth" element={<Navigate to="/login" replace />} />
               <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -213,19 +219,22 @@ function App() {
               <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
           </main>
         </div>
       </div>
       
       {!isAuthPage && <div className="w-full relative z-10"><Footer /></div>}
-      
-      {!isAuthPage && <AIChat open={isChatOpen} setOpen={setIsChatOpen} />}
 
-      {!isAuthPage && !isChatOpen && (
-        <EchoFAB open={isChatOpen} onClick={() => setIsChatOpen(true)} freeRoam={echoFreeRoam} />
-      )}
+      <Suspense fallback={null}>
+        {!isAuthPage && <AIChat open={isChatOpen} setOpen={setIsChatOpen} />}
 
-      {!isAuthPage && user && <ProductTour />}
+        {!isAuthPage && !isChatOpen && (
+          <EchoFAB open={isChatOpen} onClick={() => setIsChatOpen(true)} freeRoam={echoFreeRoam} />
+        )}
+
+        {!isAuthPage && user && <ProductTour />}
+      </Suspense>
     </div>
   );
 }

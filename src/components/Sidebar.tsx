@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { 
-  LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale, 
-  ChevronLeft, ChevronRight, Layout, Clock, Map, 
-  TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug, 
-  Zap, Package, Tag, Ticket
+import {
+  LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale,
+  ChevronLeft, ChevronRight, Layout, Clock, Map,
+  TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug,
+  Zap, Package, Tag, Ticket, Bot
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -122,166 +122,27 @@ export default function Sidebar({
     }
   ];
 
-  const getThemeStyles = () => {
-    switch (theme) {
-      case 'underwater':
-        return {
-          sidebarBg: 'linear-gradient(180deg, #003366 0%, #004e8c 100%)',
-          sidebarBorder: '1px solid rgba(0,200,255,0.2)',
-          sectionLabel: 'rgba(100,200,255,0.6)',
-          navText: 'rgba(180,230,255,0.85)',
-          activeBg: '#00c8ff',
-          activeText: '#ffffff',
-          hoverBg: 'rgba(0,200,255,0.15)',
-          newScanBg: 'linear-gradient(135deg, #00a8cc, #0077aa)',
-          logoRing: '#00c8ff',
-          logoText: '#ffffff',
-          logoSubtext: '#00c8ff',
-          collapseBtnBg: 'rgba(0,40,80,0.8)',
-          collapseBtnText: '#00c8ff',
-          collapseBtnHover: '#00c8ff',
-          collapsedActiveBg: 'rgba(109,184,122,0.1)',
-          collapsedActiveBorder: '#6db87a',
-          collapsedHoverBg: 'rgba(109,184,122,0.05)',
-          collapsedActiveIconColor: '#6db87a'
-        };
-      case 'liquid-glass':
-        return {
-          sidebarBg: 'rgba(255, 255, 255, 0.08)',
-          sidebarBorder: '1px solid rgba(255, 255, 255, 0.2)',
-          sectionLabel: 'rgba(255, 255, 255, 0.5)',
-          navText: 'rgba(255, 255, 255, 0.9)',
-          activeBg: 'rgba(255, 255, 255, 0.25)',
-          activeBorder: '1px solid rgba(255, 255, 255, 0.5)',
-          activeText: '#ffffff',
-          hoverBg: 'rgba(255, 255, 255, 0.15)',
-          newScanBg: 'rgba(255, 255, 255, 0.2)',
-          logoRing: 'rgba(255, 255, 255, 0.6)',
-          logoText: '#ffffff',
-          logoSubtext: 'rgba(255, 255, 255, 0.7)',
-          accentBar: 'rgba(255, 255, 255, 0.8)',
-          collapseBtnBg: 'rgba(255, 255, 255, 0.1)',
-          collapseBtnText: 'rgba(255, 255, 255, 0.8)',
-          collapseBtnHover: 'rgba(255, 255, 255, 0.3)',
-          collapsedActiveBg: 'rgba(109,184,122,0.1)',
-          collapsedActiveBorder: '#6db87a',
-          collapsedHoverBg: 'rgba(109,184,122,0.05)',
-          collapsedActiveIconColor: '#6db87a'
-        };
-      case 'matrix':
-        return {
-          sidebarBg: '#000000',
-          sidebarBorder: '1px solid #003b00',
-          sectionLabel: '#003b00',
-          navText: '#008f11',
-          activeBg: 'rgba(0, 59, 0, 0.5)',
-          activeBorder: '1px solid #00ff41',
-          activeText: '#00ff41',
-          hoverBg: 'rgba(0, 59, 0, 0.3)',
-          newScanBg: '#008f11',
-          logoRing: '#00ff41',
-          logoText: '#00ff41',
-          logoSubtext: '#008f11',
-          collapseBtnBg: '#001100',
-          collapseBtnText: '#008f11',
-          collapseBtnHover: '#00ff41',
-          collapsedActiveBg: 'rgba(109,184,122,0.1)',
-          collapsedActiveBorder: '#6db87a',
-          collapsedHoverBg: 'rgba(109,184,122,0.05)',
-          collapsedActiveIconColor: '#6db87a'
-        };
-      case 'dark':
-        return {
-          sidebarBg: '#141414',
-          sidebarBorder: '1px solid #222222',
-          sectionLabel: '#555555',
-          navText: '#a0a0a0',
-          activeBg: '#6db87a',
-          activeText: '#ffffff',
-          hoverBg: '#1e1e1e',
-          newScanBg: '#6db87a',
-          logoRing: '#eef8ef',
-          logoIcon: '#6db87a',
-          logoText: '#ffffff',
-          logoSubtext: '#6db87a',
-          collapseBtnBg: '#1e1e1e',
-          collapseBtnText: '#888888',
-          collapseBtnHover: '#6db87a',
-          collapsedActiveBg: 'rgba(109,184,122,0.1)',
-          collapsedActiveBorder: '#6db87a',
-          collapsedHoverBg: 'rgba(109,184,122,0.05)',
-          collapsedActiveIconColor: '#6db87a'
-        };
-      case 'eye-protection':
-        return {
-          sidebarBg: '#ddebd0',
-          sidebarBorder: '1px solid #d4e6c3',
-          sectionLabel: '#8aaa78',
-          navText: '#5a7a4a',
-          activeBg: '#6db87a',
-          activeText: '#ffffff',
-          hoverBg: '#f8faf5',
-          newScanBg: '#6db87a',
-          logoRing: '#eef8ef',
-          logoIcon: '#6db87a',
-          logoText: '#2d4a1e',
-          logoSubtext: '#6db87a',
-          collapseBtnBg: '#f8faf5',
-          collapseBtnText: '#5a7a4a',
-          collapseBtnHover: '#6db87a',
-          collapsedActiveBg: 'rgba(109,184,122,0.1)',
-          collapsedActiveBorder: '#6db87a',
-          collapsedHoverBg: 'rgba(109,184,122,0.05)',
-          collapsedActiveIconColor: '#6db87a'
-        };
-      case 'light':
-        return {
-          sidebarBg: 'var(--bg-card)',
-          sidebarBorder: '1px solid var(--border-subtle)',
-          sectionLabel: 'color-mix(in srgb, var(--text-secondary) 70%, transparent)',
-          navText: 'var(--text-secondary)',
-          activeBg: 'var(--accent-primary)',
-          activeText: 'var(--accent-primary)',
-          hoverBg: 'color-mix(in srgb, var(--accent-primary) 6%, transparent)',
-          newScanBg: 'var(--accent-primary)',
-          logoRing: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)',
-          logoIcon: 'var(--accent-primary)',
-          logoText: 'var(--text-primary)',
-          logoSubtext: 'var(--accent-primary)',
-          collapseBtnBg: 'color-mix(in srgb, var(--accent-primary) 8%, transparent)',
-          collapseBtnText: 'var(--accent-primary)',
-          collapseBtnHover: 'var(--accent-primary)',
-          collapsedActiveBg: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)',
-          collapsedActiveBorder: 'var(--accent-primary)',
-          collapsedHoverBg: 'color-mix(in srgb, var(--accent-primary) 5%, transparent)',
-          collapsedActiveIconColor: 'var(--accent-primary)'
-        };
-      default:
-        return {
-          sidebarBg: '#ffffff',
-          sidebarBorder: 'none',
-          sectionLabel: '#9ca3af',
-          navText: '#6b7280',
-          activeBg: '#6db87a',
-          activeText: '#ffffff',
-          hoverBg: 'rgba(240, 253, 244, 1)',
-          newScanBg: '#6db87a',
-          logoRing: '#eef8ef',
-          logoIcon: '#6db87a',
-          logoText: '#111111',
-          logoSubtext: '#6db87a',
-          collapseBtnBg: '#f0fdf4',
-          collapseBtnText: '#16a34a',
-          collapseBtnHover: '#6db87a',
-          collapsedActiveBg: 'rgba(109,184,122,0.1)',
-          collapsedActiveBorder: '#6db87a',
-          collapsedHoverBg: 'rgba(109,184,122,0.05)',
-          collapsedActiveIconColor: '#6db87a'
-        };
-    }
+  const s = {
+    sidebarBg: 'var(--bg-card)',
+    sidebarBorder: '1px solid var(--border-subtle)',
+    sectionLabel: 'var(--text-muted)',
+    navText: 'var(--text-secondary)',
+    activeBg: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)',
+    activeText: 'var(--text-primary)',
+    hoverBg: 'var(--bg-secondary)',
+    newScanBg: 'var(--accent-primary)',
+    logoRing: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)',
+    logoIcon: 'var(--accent-primary)',
+    logoText: 'var(--text-primary)',
+    logoSubtext: 'var(--text-secondary)',
+    collapseBtnBg: 'var(--bg-secondary)',
+    collapseBtnText: 'var(--text-secondary)',
+    collapseBtnHover: 'var(--accent-primary)',
+    collapsedActiveBg: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)',
+    collapsedActiveBorder: 'var(--accent-primary)',
+    collapsedHoverBg: 'var(--bg-secondary)',
+    collapsedActiveIconColor: 'var(--accent-primary)'
   };
-
-  const s = getThemeStyles();
 
   return (
     <>
@@ -294,16 +155,15 @@ export default function Sidebar({
         flexDirection: 'column', 
         zIndex: 100, 
         borderRadius: '0px',
-        boxShadow: theme === 'liquid-glass' || theme === 'underwater' ? 'none' : (theme === 'dark' ? 'none' : theme === 'eye-protection' ? '0 2px 12px rgba(100,150,80,0.08)' : '4px 0 24px rgba(0, 0, 0, 0.04)'),
+        boxShadow: '4px 0 24px rgba(0, 0, 0, 0.04)',
         transition: 'width 0.3s ease',
         overflow: 'hidden',
         overflowY: 'auto',
         flexShrink: 0,
-        backdropFilter: theme === 'liquid-glass' ? 'blur(20px)' : 'none'
       }}>
 
         {/* Header / Logo Area */}
-        <div className={`flex ${isCollapsed ? 'flex-col items-center gap-4 px-0 pb-4 pt-6' : 'p-4 items-center justify-between'} shrink-0 relative`}>
+        <div className={`flex ${isCollapsed ? 'flex-col gap-4 items-center px-0 pt-6 pb-4' : 'justify-between items-center p-4'} shrink-0 relative`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center w-full' : 'gap-2'}`}>
             <div className={`flex items-center justify-center rounded-lg transition-all ${isCollapsed ? 'w-10 h-10' : 'w-7 h-7'}`}
                style={{ background: s.newScanBg, color: 'white' }}>
@@ -336,18 +196,18 @@ export default function Sidebar({
         {/* Nav Sections */}
         <div className={`flex-1 overflow-y-auto overflow-x-hidden ${isCollapsed ? 'px-0' : 'px-3'} flex flex-col pb-6 mt-2`}>
           {navSections.map((section, idx) => (
-            <div key={idx} className="flex flex-col mb-4">
+            <div key={idx} className="flex flex-col mb-2.5">
               {/* Section Header */}
               {!isCollapsed && (
-                <div className="px-2" style={{ margin: '2px 0 2px 0' }}>
-                  <p className="text-[7px] font-bold uppercase tracking-widest text-center md:text-left transition-all mono" style={{ color: s.sectionLabel }}>
+                <div className="px-3 mb-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: s.sectionLabel }}>
                     {section.title}
                   </p>
                 </div>
               )}
               
               {/* Items */}
-              <div className={`flex flex-col ${isCollapsed ? 'gap-0' : 'gap-[2px]'}`}>
+              <div className={`flex flex-col ${isCollapsed ? 'gap-0' : 'gap-1'}`}>
                 {section.items.map((item) => {
                   const { icon: Icon, label, path } = item as any;
                   const active = path === '/plan' ? location.pathname.startsWith('/plan') : (path === '/tickets' ? (location.pathname.startsWith('/tickets') || location.pathname === '/jira-settings') : location.pathname === path);
@@ -359,50 +219,47 @@ export default function Sidebar({
                     path === '/release' ? 'tour-release' :
                     path === '/settings' ? 'tour-settings' : undefined;
 
+                  // Convert label from translation keys or all-caps if translation is missing
+                  let displayLabel = label;
+                  if (typeof label === 'string') {
+                    // Try to capitalize nicely (sentence casing)
+                    displayLabel = label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+                  }
+
                   return (
                     <div key={path} className="flex flex-col">
                       <Link
                         to={path}
                         id={tourId}
                         className={isCollapsed
-                          ? `flex items-center justify-center transition-all relative w-full h-[44px] ${active ? 'opacity-100 border-l-[3px]' : 'opacity-70 hover:opacity-100 border-l-[3px] border-l-transparent'}`
-                          : `flex items-center gap-2.5 px-3 h-10 rounded-lg transition-all relative group/item ${active ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`
+                          ? `flex items-center justify-center transition-all relative w-full h-[40px] ${active ? 'opacity-100 border-l-[3px]' : 'opacity-75 hover:opacity-100 border-l-[3px] border-l-transparent'}`
+                          : `flex items-center gap-3 px-3 h-8.5 py-1.5 rounded-lg transition-all relative group/item ${active ? 'opacity-100 font-medium' : 'opacity-80 hover:translate-x-1'}`
                         }
                         style={{
-                          transition: 'all 0.2s ease',
+                          transition: 'all 0.15s ease',
                           margin: isCollapsed ? '0' : '0 4px',
                           position: 'relative',
                           overflow: 'hidden',
                           backgroundColor: isCollapsed
                             ? (active ? s.collapsedActiveBg : 'transparent')
-                            : (active ? `color-mix(in srgb, ${s.activeBg} 14%, transparent)` : 'transparent'),
+                            : (active ? s.activeBg : 'transparent'),
                           borderLeftColor: isCollapsed ? (active ? s.collapsedActiveBorder : 'transparent') : undefined,
                         }}
-                        onMouseOver={(e) => {
-                          if (!active) {
-                            e.currentTarget.style.background = isCollapsed ? s.collapsedHoverBg! : s.hoverBg;
-                          }
-                        }}
-                        onMouseOut={(e) => { 
-                          if (!active) {
-                            e.currentTarget.style.background = 'transparent'; 
-                          } 
-                        }}
                       >
-                        {active && !isCollapsed && theme === 'liquid-glass' && (
-                          <div style={{ position: 'absolute', left: 0, top: '20%', bottom: '20%', width: '3px', background: s.accentBar, borderRadius: '0 4px 4px 0' }} />
-                        )}
-                        <Icon 
-                          size={isCollapsed ? 20 : 16} 
-                          style={{ 
-                            color: active ? (isCollapsed ? s.collapsedActiveIconColor : s.activeText) : 'inherit',
+                        <Icon
+                          size={16}
+                          style={{
+                            color: active ? (isCollapsed ? s.collapsedActiveIconColor : s.activeText) : s.navText,
                             margin: isCollapsed ? '0 auto' : '0'
-                          }} 
-                          className="transition-colors" 
+                          }}
+                          className="transition-colors shrink-0"
                         />
                         {!isCollapsed && (
-                          <span className={`flex-1 min-w-0 truncate text-[10px] tracking-widest uppercase ${active ? 'font-bold' : 'font-semibold'}`}>
-                            {label}
+                          <span
+                            className={`flex-1 min-w-0 truncate text-xs ${active ? 'font-semibold' : 'font-normal'}`}
+                            style={{ color: active ? s.activeText : s.navText }}
+                          >
+                            {displayLabel}
                           </span>
                         )}
                       </Link>
@@ -413,6 +270,20 @@ export default function Sidebar({
               </div>
             </div>
           ))}
+        </div>
+
+        {/* AI Assistant CTA — opens the real AIChat overlay */}
+        <div className={`shrink-0 ${isCollapsed ? 'px-2' : 'px-3'} pb-4`}>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event('scorpion:open-chat'))}
+            className={`w-full flex items-center justify-center gap-2 rounded-xl font-bold transition-opacity hover:opacity-90 ${isCollapsed ? 'h-10' : 'py-3'}`}
+            style={{ background: 'var(--accent-secondary)', color: 'var(--text-on-accent)' }}
+            title="Open Echo AI"
+          >
+            <Bot size={18} />
+            {!isCollapsed && <span className="text-xs">AI Assistant</span>}
+          </button>
         </div>
 
       </aside>

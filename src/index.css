@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Literata:wght@400;600;700;900&family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @layer base {
   html {
-    font-size: 13.5px;
+    font-size: 14px;
   }
 }
 
@@ -125,43 +125,44 @@ h1, h2, h3, .display {
    SaaS/fintech/dev-tool buyers. Flat plates, no glass, no corner ticks —
    trust reads as precision here, not theater. */
 html.aegis {
-  --background: #f8fafc;
-  --bg-page: #f8fafc;
+  --background: #eef1f6;
+  --bg-page: #eef1f6;
   --card-background: #ffffff;
   --bg-primary: var(--background);
   --bg-card: var(--card-background);
-  --bg-secondary: #f1f5f9;
+  --bg-secondary: #f4f6fa;
   --primary: #2563eb;
-  --border: #e2e8f0;
+  --border: #dde3ec;
   --border-subtle: var(--border);
+  --border-strong: #c3ccd9;
   --border-color: var(--border);
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-primary: #0b1220;
+  --text-secondary: #44505f;
+  --text-muted: #6a7686;
   --text-on-accent: #ffffff;
   --accent: #2563eb;
   --accent-primary: var(--primary);
-  --accent-secondary: #4f46e5;
-  --status-success: #16a34a;
-  --status-error: #dc2626;
-  --status-warning: #d97706;
-  --danger: #dc2626;
-  --warning: #d97706;
-  --severity-critical: #dc2626;
+  --accent-secondary: #1d4ed8;
+  --status-success: #15a34a;
+  --status-error: #e11d48;
+  --status-warning: #e08600;
+  --danger: #e11d48;
+  --warning: #e08600;
+  --severity-critical: #e11d48;
   --severity-high: #ea580c;
   --severity-medium: #d97706;
-  --severity-low: #16a34a;
+  --severity-low: #15a34a;
   --severity-info: #64748b;
-  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.05);
+  --card-shadow: 0 1px 2px rgba(11, 18, 32, 0.05), 0 1px 1px rgba(11, 18, 32, 0.04);
   --chart-bg: transparent;
   --chart-grid: var(--border-subtle);
   --chart-label: var(--text-secondary);
   --chart-fill: var(--accent-primary);
-  --chart-fill-opacity: 0.18;
+  --chart-fill-opacity: 0.16;
   --glass-blur: none;
   --glass-border: var(--border);
   --glass-shadow: none;
-  --font-display: 'IBM Plex Sans', 'Inter', sans-serif;
+  --font-display: 'Big Shoulders', 'IBM Plex Sans', sans-serif;
   --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
 }
 
@@ -171,8 +172,17 @@ html.aegis body {
 
 html.aegis h1, html.aegis h2, html.aegis h3, html.aegis h4 {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+/* Tabular numerics everywhere under Aegis — gauge readouts must align column-true. */
+html.aegis .tabular-nums,
+html.aegis [class*='text-2xl'],
+html.aegis [class*='text-3xl'],
+html.aegis [class*='text-4xl'] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }
 
 html.aegis .plate::before,
@@ -188,15 +198,15 @@ html.aegis [class*='panel'] {
   color: var(--text-primary) !important;
   border: 1px solid var(--border-subtle) !important;
   box-shadow: var(--card-shadow) !important;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 /* Force-tighten all cards and plates globally under the Aegis theme (terra keeps soft 12px). */
 html.aegis .plate,
 html.aegis .tele-card,
 html.aegis .card-root {
-  border-radius: 6px !important;
-  padding: 12px !important; /* Forces the p-3 density spec */
+  border-radius: 4px !important;
+  padding: 14px !important;
 }
 
 html.aegis .bg-white,

@@ -37,18 +37,17 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = ({
     // Align to the start of the week (Sunday) so columns read like GitHub's grid.
     start.setDate(start.getDate() - start.getDay());
 
-    const cells: { date: string; count: number }[] = [];
-    const cursor = new Date(start);
-    while (cursor <= today) {
-      const key = toKey(cursor);
-      cells.push({ date: key, count: countByDate.get(key) ?? 0 });
-      cursor.setDate(cursor.getDate() + 1);
-    }
+    const totalDays = Math.round((today.getTime() - start.getTime()) / 86400000) + 1;
+    const cells = Array.from({ length: totalDays }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      const key = toKey(d);
+      return { date: key, count: countByDate.get(key) ?? 0 };
+    });
 
-    const weeks: { date: string; count: number }[][] = [];
-    for (let i = 0; i < cells.length; i += 7) {
-      weeks.push(cells.slice(i, i + 7));
-    }
+    const weeks = Array.from({ length: Math.ceil(cells.length / 7) }, (_, i) =>
+      cells.slice(i * 7, i * 7 + 7)
+    );
 
     const maxCount = Math.max(1, ...data.map((d) => d.count));
     return { weeks, maxCount };
@@ -87,8 +86,9 @@ const HeatmapGrid: React.FC<HeatmapGridProps> = ({
                     height: cellSize,
                     backgroundColor:
                       intensity === 0
-                        ? 'var(--bg-secondary)'
+                        ? '#f3f4f6'
                         : `color-mix(in srgb, ${color} ${opacityScale[intensity] * 100}%, transparent)`,
+                    borderColor: intensity === 0 ? '#e5e7eb' : 'transparent',
                   }}
                 />
               );

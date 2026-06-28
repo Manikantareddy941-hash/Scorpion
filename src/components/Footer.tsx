@@ -1,15 +1,10 @@
-import { useTheme } from '../contexts/ThemeContext';
-
 export default function Footer() {
-  const { theme } = useTheme();
   return (
-    <footer 
+    <footer
       className="w-full py-24 px-12 lg:px-24 flex flex-col font-sans transition-all duration-300 relative overflow-hidden"
-      style={{ 
-        background: theme === 'liquid-glass' ? 'var(--glass-bg)' : theme === 'underwater' ? '#002855' : 'var(--bg-primary)',
-        borderTop: theme === 'liquid-glass' ? '1px solid var(--glass-border)' : '1px solid var(--border-subtle)',
-        backdropFilter: theme === 'liquid-glass' ? 'var(--glass-blur)' : 'none',
-        WebkitBackdropFilter: theme === 'liquid-glass' ? 'var(--glass-blur)' : 'none',
+      style={{
+        background: 'var(--bg-primary)',
+        borderTop: '1px solid var(--border-subtle)',
         zIndex: 10
       }}
     >
