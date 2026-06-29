@@ -1,15 +1,15 @@
-import './services/tracer';
+import './utils/telemetry';
 import dotenv from "dotenv";
 dotenv.config();
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import morgan from 'morgan';
 import { initScheduler } from './scheduler';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
 import { logger } from './services/logger';
+import { requestLogger } from './middleware/requestLogger';
 
 // Route Imports
 import authRoutes from './routes/authRoutes';
@@ -151,7 +151,9 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // --- Middleware ---
-app.use(morgan('dev'));
+// Structured JSON request logging (winston) in place of morgan, so HTTP access
+// logs share the app's logger/transports and parse cleanly in the log pipeline.
+app.use(requestLogger);
 // helmet sets secure response headers (X-Frame-Options, X-Content-Type-Options,
 // etc.). HSTS is made explicit so browsers pin HTTPS for a year once served over TLS.
 app.use(helmet({
