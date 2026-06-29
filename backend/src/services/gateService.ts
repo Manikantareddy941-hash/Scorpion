@@ -22,7 +22,12 @@ function resolveRepoSourceDir(repoId: string): string | null {
   const base = process.env.REPO_WORKSPACE_DIR;
   if (!base) return null;
   const dir = path.join(base, repoId);
-  return fs.existsSync(dir) ? dir : null;
+  if (fs.existsSync(dir)) {
+    logger.info(`[gate] resolved repo source dir for ${repoId}: ${dir}`);
+    return dir;
+  }
+  logger.warn(`[gate] repo source dir not found for ${repoId}, attempted path: ${dir}`);
+  return null;
 }
 
 /** Keep only blockers a real import can reach. Fail-secure on every uncertain
