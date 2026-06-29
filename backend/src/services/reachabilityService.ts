@@ -255,6 +255,28 @@ export function analyzeReachability(repoDir: string, vulns: VulnerablePackage[])
   return vulns.map(vuln => classifyReachability(vuln, directImports, closure, hasGraph));
 }
 
+/**
+ * Adapter for the pipeline enforcer: name-in, name-out. Returns the subset of
+ * `vulnerablePackages` that first-party code can reach.
+ *
+ * Fail-secure: a package is included unless the engine can PROVE it unreachable.
+ * 'unknown' (no dependency graph — missing node_modules, unparseable env, I/O
+ * error) is treated as reachable, so a missing scan context can never silently
+ * pass a live CVE through the gate.
+ */
+export async function analyzeReachablePackages(
+  targetDir: string,
+  vulnerablePackages: string[],
+): Promise<string[]> {
+  const results = analyzeReachability(
+    targetDir,
+    vulnerablePackages.map((pkgName) => ({ pkgName })),
+  );
+  return results
+    .filter((r) => r.reachability !== 'unreachable')
+    .map((r) => r.pkgName);
+}
+
 // ponytail: one runnable self-check of the pure core. `ts-node reachabilityService.ts`
 if (require.main === module) {
   assert.strictEqual(extractPackageRoot('lodash/merge'), 'lodash');
