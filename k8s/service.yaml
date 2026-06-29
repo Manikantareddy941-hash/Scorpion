@@ -1,0 +1,22 @@
+# ClusterIP service for the Scorpion backend.
+# 80   -> 3001 (HTTP)
+# 8443 -> 8443 (HTTPS, target of the admission webhook in validating-webhook.yaml)
+apiVersion: v1
+kind: Service
+metadata:
+  name: scorpion-backend
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: scorpion-backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP

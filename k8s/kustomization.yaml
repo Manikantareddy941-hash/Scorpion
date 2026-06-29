@@ -1,0 +1,18 @@
+# Aggregates the Scorpion backend manifests for ArgoCD (./k8s).
+# argocd-app.yaml is intentionally excluded (it deploys this kustomization).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: default
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - sealed-secret.yaml
+  - validating-webhook.yaml
+
+# `kustomize edit set image scorpion-backend=ghcr.io/your-org/scorpion-backend:<tag>`
+# rewrites the container image without hand-editing deployment.yaml.
+images:
+  - name: scorpion-backend
+    newName: ghcr.io/your-org/scorpion-backend
+    newTag: latest

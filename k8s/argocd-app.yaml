@@ -1,0 +1,26 @@
+# ArgoCD Application — syncs ./k8s from this repo into the cluster.
+# Apply once to bootstrap GitOps:  kubectl apply -f k8s/argocd-app.yaml
+#
+# Kept OUT of kustomization.yaml on purpose: this Application manages ./k8s, so
+# including it in the kustomize it deploys would make Argo manage itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: scorpion-backend
+  namespace: argocd
+spec:
+  project: default
+  source:
+    # Set to this repository's clone URL.
+    repoURL: https://github.com/Manikantareddy941-hash/Scorpion.git
+    targetRevision: HEAD
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
