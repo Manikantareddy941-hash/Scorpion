@@ -9,7 +9,6 @@ import {
 } from 'react-icons/si';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { client, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import toast from 'react-hot-toast';
 
@@ -26,8 +25,6 @@ interface NodeConfig {
 }
 
 export default function JourneyMap() {
-    const { theme } = useTheme();
-    const isMatrix = theme === 'matrix';
     const navigate = useNavigate();
     const { getJWT } = useAuth();
     
@@ -246,19 +243,19 @@ export default function JourneyMap() {
                     </div>
                 </div>                {/* SVG Lines Connector */}
                 <svg className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                    <line x1="120" y1="150" x2="300" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="300" y1="150" x2="480" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="480" y1="150" x2="660" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="660" y1="150" x2="840" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="840" y1="150" x2="1020" y2="150" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <path d="M 1020,150 C 1120,150 1120,350 1020,350" fill="none" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="1020" y1="350" x2="840" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="840" y1="350" x2="660" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="660" y1="350" x2="480" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="480" y1="350" x2="300" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="300" y1="350" x2="120" y2="350" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <path d="M 120,350 C 20,350 20,520 120,520" fill="none" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
-                    <line x1="120" y1="520" x2="300" y2="520" stroke={isMatrix ? "#00ff41" : "var(--accent-primary)"} strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="120" y1="150" x2="300" y2="150" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="300" y1="150" x2="480" y2="150" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="480" y1="150" x2="660" y2="150" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="660" y1="150" x2="840" y2="150" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="840" y1="150" x2="1020" y2="150" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <path d="M 1020,150 C 1120,150 1120,350 1020,350" fill="none" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="1020" y1="350" x2="840" y2="350" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="840" y1="350" x2="660" y2="350" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="660" y1="350" x2="480" y2="350" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="480" y1="350" x2="300" y2="350" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="300" y1="350" x2="120" y2="350" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <path d="M 120,350 C 20,350 20,520 120,520" fill="none" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
+                    <line x1="120" y1="520" x2="300" y2="520" stroke="var(--accent-primary)" strokeWidth="2" opacity="0.3" style={{ transition: 'stroke 0.8s ease-in-out, opacity 0.8s ease-in-out' }} />
                 </svg>
 
                 {/* Nodes */}

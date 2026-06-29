@@ -1,0 +1,54 @@
+# Scorpion release-gate admission webhook.
+#
+# Routes CREATE/UPDATE of Pods through the Scorpion backend's HTTPS listener
+# (TLS_PORT, default 8443) so the gate can deny images that fail policy.
+#
+# failurePolicy: Fail — if the webhook is unreachable or errors, the apiserver
+# REJECTS the request. This is the fail-secure posture: no admission decision
+# means no deploy, rather than letting unscanned images through.
+#
+# Before applying:
+#   1. Generate certs:  backend/scripts/generate-certs.sh
+#   2. Mount tls.crt/tls.key into the backend pod; set TLS_CERT / TLS_KEY.
+#   3. Replace <CA_BUNDLE_BASE64> below with the base64 the script prints.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: scorpion-release-gate
+  labels:
+    app.kubernetes.io/name: scorpion
+    app.kubernetes.io/component: admission-webhook
+webhooks:
+  - name: gate.scorpion.svc
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    matchPolicy: Equivalent
+    clientConfig:
+      service:
+        name: scorpion-backend
+        namespace: default
+        # Express mounts the admission handler here (see src/index.ts:
+        # app.use('/api/v1/webhook', k8sAdmissionRoutes) -> POST /k8s-admission).
+        path: /api/v1/webhook/k8s-admission
+        port: 8443
+      # Output of: base64 -w0 certs/tls.crt
+      caBundle: <CA_BUNDLE_BASE64>
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+        scope: Namespaced
+    # Don't gate the control plane / Scorpion's own namespace, or a bad rollout
+    # of the gate can wedge the cluster (webhook can't admit the pod that serves
+    # the webhook). Adjust the opt-out label/namespaces to your environment.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: ["kube-system", "default"]
+        - key: scorpion.io/gate
+          operator: NotIn
+          values: ["disabled"]

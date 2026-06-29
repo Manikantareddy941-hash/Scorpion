@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Shield, CheckCircle, XCircle, Loader2, ExternalLink, Terminal, Clock, FileCode, AlertCircle, Play } from "lucide-react";
-import { useTheme } from "../contexts/ThemeContext";
 import { useNavigate } from "react-router-dom";
 
 interface LogEntry {
@@ -46,7 +45,6 @@ export default function UVScanOverlay({
   onCancel,
   resultsSummary
 }: UVScanOverlayProps) {
-  const { theme } = useTheme();
   const navigate = useNavigate();
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -63,12 +61,12 @@ export default function UVScanOverlay({
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 10000, backgroundColor: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className={theme === 'liquid-glass' ? 'liquid-glass' : ''} style={{ 
-        position: "relative", 
-        width: "560px", 
-        background: theme === 'liquid-glass' ? 'transparent' : 'var(--bg-card)', 
-        borderRadius: "16px", 
-        border: theme === 'liquid-glass' ? 'none' : "1px solid var(--border-subtle)",
+      <div style={{
+        position: "relative",
+        width: "560px",
+        background: 'var(--bg-card)',
+        borderRadius: "16px",
+        border: "1px solid var(--border-subtle)",
         boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
         overflow: "hidden",
         display: "flex",

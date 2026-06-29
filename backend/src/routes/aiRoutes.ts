@@ -142,7 +142,8 @@ router.get('/fixes/:id/pr/status', async (req: AuthenticatedRequest, res: Respon
     }
 });
 
-// AI Chat Proxy
+// AI Chat Proxy — streams Gemini's SSE response straight through to the client
+// token-by-token instead of buffering the full reply first.
 router.post('/chat', aiLimiter, async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { messages, systemPrompt } = req.body;
@@ -152,7 +153,7 @@ router.post('/chat', aiLimiter, async (req: Request, res: Response, next: NextFu
             return res.status(500).json({ error: 'Gemini API key not configured on server' });
         }
 
-        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
 
         const geminiResponse = await fetch(geminiEndpoint, {
             method: 'POST',
@@ -168,14 +169,26 @@ router.post('/chat', aiLimiter, async (req: Request, res: Response, next: NextFu
             }),
         });
 
-        if (!geminiResponse.ok) {
-            const errData = await geminiResponse.json();
-            return res.status(geminiResponse.status).json({ error: errData.error?.message || 'Gemini API error' });
+        if (!geminiResponse.ok || !geminiResponse.body) {
+            const errData = await geminiResponse.json().catch(() => ({}));
+            return res.status(geminiResponse.status || 502).json({ error: errData.error?.message || 'Gemini API error' });
         }
 
-        const data = await geminiResponse.json();
-        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
-        res.json({ reply });
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+
+        const reader = geminiResponse.body.getReader();
+        req.on('close', () => reader.cancel().catch(() => {}));
+
+        const decoder = new TextDecoder();
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(decoder.decode(value, { stream: true }));
+        }
+        res.end();
     } catch (err) {
         next(err);
     }

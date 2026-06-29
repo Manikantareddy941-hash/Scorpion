@@ -6,7 +6,6 @@ import UVScanOverlay from './UVScanOverlay';
 import ConnectRepoModal from './ConnectRepoModal';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../contexts/ThemeContext';
 import { useScan } from '../contexts/ScanContext';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 
@@ -17,7 +16,6 @@ interface Props {
 
 export default function NewScanModal({ onClose, onScan }: Props) {
   const { t } = useTranslation();
-  const { theme } = useTheme();
   const [tab, setTab] = useState<'github' | 'upload' | 'cloud'>('github');
   const [repoUrl, setRepoUrl] = useState('');
   const [scanType, setScanType] = useState<'full' | 'security' | 'deps' | 'quick'>('full');
@@ -233,7 +231,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className={theme === 'liquid-glass' ? 'liquid-glass' : ''} style={{ background: theme === 'liquid-glass' ? 'transparent' : 'var(--bg-card)', border: theme === 'liquid-glass' ? 'none' : '1px solid var(--border-subtle)', borderRadius: '16px', width: '520px', maxWidth: '95vw', padding: '32px', position: 'relative' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '16px', width: '520px', maxWidth: '95vw', padding: '32px', position: 'relative' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>

@@ -9,6 +9,7 @@ import { deduplicateFindings } from '../deduplication';
 import { evaluateScan } from './policyService';
 import { generateFingerprint } from './gitTraceabilityService';
 import { respondToLeakedKeys, GitleaksRawMatch } from './leakedKeyResponseService';
+import { vulnerabilitiesFound } from './metrics';
 import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
@@ -347,17 +348,19 @@ export const triggerScan = async (
 // Deduplicate overlapping findings across scanners
 const dedupedIssues = deduplicateFindings(issues);
 
-        // 9️⃣ Count by severity (Adjusted for uppercase)
-        const criticalCount = issues.filter(i => i.severity === 'CRITICAL').length;
-        const highCount     = issues.filter(i => i.severity === 'HIGH').length;
-        const mediumCount   = issues.filter(i => i.severity === 'MEDIUM').length;
-        const lowCount      = issues.filter(i => i.severity === 'LOW').length;
-        const infoCount     = issues.filter(i => i.severity === 'INFO').length;
-        const totalVulns    = issues.length;
+        dedupedIssues.forEach(i => vulnerabilitiesFound.inc({ severity: i.severity, tool: i.scanner }));
+
+        // 9️⃣ Count by severity, deduplicated (overlapping scanner findings collapsed above)
+        const criticalCount = dedupedIssues.filter(i => i.severity === 'CRITICAL').length;
+        const highCount     = dedupedIssues.filter(i => i.severity === 'HIGH').length;
+        const mediumCount   = dedupedIssues.filter(i => i.severity === 'MEDIUM').length;
+        const lowCount      = dedupedIssues.filter(i => i.severity === 'LOW').length;
+        const infoCount     = dedupedIssues.filter(i => i.severity === 'INFO').length;
+        const totalVulns    = dedupedIssues.length;
 
         // Semantic Mappings for Dashboard
-        const banditCount = issues.filter(i => i.tool === 'bandit').length;
-        const codeSmellCount = issues.filter(i => i.tool === 'semgrep' && (i.severity === 'INFO' || i.severity === 'LOW')).length;
+        const banditCount = dedupedIssues.filter(i => i.scanner === 'bandit').length;
+        const codeSmellCount = dedupedIssues.filter(i => i.scanner === 'semgrep' && (i.severity === 'INFO' || i.severity === 'LOW')).length;
 
         // FIX: single consistent score formula matching Dashboard fallback
         const score    = computeSecurityScore(criticalCount, highCount, mediumCount, lowCount);
@@ -366,7 +369,7 @@ const dedupedIssues = deduplicateFindings(issues);
         // 🔟 Store vulnerabilities (Normalized) via Delta Ingestion (Delta Scans)
         await ingestVulnerabilitiesDelta(repoId, scanId!, dedupedIssues);
 
-        logger.info(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: issues.length }));
+        logger.info(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: dedupedIssues.length }));
 
         // 1️⃣1️⃣ Evaluate policy gate BEFORE writing completed details
         let gateStatus: 'passed' | 'failed' = score >= 50 ? 'passed' : 'failed';
@@ -397,8 +400,8 @@ const dedupedIssues = deduplicateFindings(issues);
                 low_count: lowCount,
                 info_count: infoCount,
                 total_vulnerabilities: totalVulns,
-                bugs: issues.filter(i => i.tool === 'bandit').length,
-                code_smells: issues.filter(i => i.tool === 'semgrep' && (i.severity === 'INFO' || i.severity === 'LOW')).length,
+                bugs: banditCount,
+                code_smells: codeSmellCount,
                 security_score: score,
                 gate_status: gateStatus,
                 language: detectedLanguage,
@@ -406,11 +409,11 @@ const dedupedIssues = deduplicateFindings(issues);
                 total_files: totalFiles,
                 total_lines: totalLines,
                 tool_counts: {
-                    semgrep:  issues.filter(i => i.tool === 'semgrep').length,
-                    gitleaks: issues.filter(i => i.tool === 'gitleaks').length,
-                    trivy:    issues.filter(i => i.tool === 'trivy').length,
-                    checkov:  issues.filter(i => i.tool === 'checkov').length,
-                    bandit:   issues.filter(i => i.tool === 'bandit').length,
+                    semgrep:  dedupedIssues.filter(i => i.scanner === 'semgrep').length,
+                    gitleaks: dedupedIssues.filter(i => i.scanner === 'gitleaks').length,
+                    trivy:    dedupedIssues.filter(i => i.scanner === 'trivy').length,
+                    checkov:  dedupedIssues.filter(i => i.scanner === 'checkov').length,
+                    bandit:   dedupedIssues.filter(i => i.scanner === 'bandit').length,
                 }
             })
         };

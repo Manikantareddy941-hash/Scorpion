@@ -61,3 +61,4 @@ project_tree.txt
 *.p12
 *.pfx
 password_resets.sql
+k8s/overlays/dev/

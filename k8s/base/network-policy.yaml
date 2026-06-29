@@ -1,0 +1,58 @@
+# NetworkPolicies for the Scorpion backend.
+#
+# NAMESPACE NOTE: the prompt said 'scorpion-system', but every other manifest
+# (deployment/service/secret/webhook) runs in 'default'. A NetworkPolicy only
+# affects pods in its OWN namespace, so these live in 'default' to actually guard
+# the workload. If you migrate the whole stack to scorpion-system, change every
+# manifest's namespace together — not just this file.
+#
+# Default-deny is scoped to INGRESS only. A full egress deny without companion
+# allow rules would cut the app off from Appwrite, Redis, and the OTLP collector
+# (outage). ponytail: add an egress policy with DNS + those destinations if you
+# want egress lockdown too.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: default
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+spec:
+  podSelector: {} # all pods in the namespace
+  policyTypes:
+    - Ingress
+  # No ingress rules => deny all inbound by default.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-webhook
+  namespace: default
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: scorpion-backend
+  policyTypes:
+    - Ingress
+  ingress:
+    # 1. kube-apiserver -> admission webhook (HTTPS 8443). The apiserver is not a
+    #    pod, so it can't be selected by pod/namespace labels — match its source
+    #    IP(s) via ipBlock. REPLACE with your control-plane CIDR (e.g. the
+    #    masters' node IPs or the apiserver egress range).
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/8 # REPLACE: control-plane / apiserver source range
+      ports:
+        - protocol: TCP
+          port: 8443
+    # 2. Internal pods in this namespace -> HTTP API (3001). Narrow the
+    #    podSelector to specific callers if you don't want the whole namespace.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - protocol: TCP
+          port: 3001

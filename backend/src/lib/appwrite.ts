@@ -1,4 +1,54 @@
 import { Client, Databases, Users, Account, ID, Query } from 'node-appwrite';
+import { logger } from '../services/logger';
+
+// Connection pooling for all Appwrite (HTTP/REST) calls — gateRulesRepository included.
+// node-appwrite's transport (node-fetch-native-with-agent) builds a FRESH undici
+// dispatcher per request, so every call does a new TCP/TLS handshake with no keep-alive
+// reuse — costly under CI/CD bursts. Patch its createAgent to reuse a single dispatcher
+// (undici Agents pool + keep-alive by default), so connections are reused across requests.
+// ponytail: monkeypatches the SDK's transport helper; re-verify on node-appwrite or
+// node-fetch-native-with-agent upgrade. Reuses the SDK's own bundled undici Agent to
+// avoid a version mismatch from importing undici separately.
+type FetchAgents = { agent: unknown; dispatcher: unknown };
+type CreateAgent = (endpoint?: string, opts?: { rejectUnauthorized?: boolean }) => FetchAgents;
+
+// Best-effort: a transport-helper shape change on upgrade (or a failed require) must
+// never crash the process at import time. On any failure the SDK keeps its default
+// per-request dispatcher — slower, but functional.
+function installAppwritePooling(): void {
+  let nfnAgent: { createAgent?: CreateAgent };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    nfnAgent = require('node-fetch-native-with-agent/agent') as { createAgent?: CreateAgent };
+  } catch (err) {
+    logger.warn('[appwrite] pooling patch skipped: transport helper not resolvable', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
+  const baseCreateAgent = nfnAgent.createAgent;
+  if (typeof baseCreateAgent !== 'function') {
+    logger.warn('[appwrite] pooling patch skipped: createAgent is not a function');
+    return;
+  }
+
+  let sharedDispatcher: unknown;
+  nfnAgent.createAgent = (endpoint?: string, opts?: { rejectUnauthorized?: boolean }): FetchAgents => {
+    // Let a genuine build failure propagate — node-appwrite awaits it, so it surfaces as a
+    // rejected call (handled by each repository's try/catch), not an uncaught exception.
+    const built = baseCreateAgent(endpoint, opts);
+    try {
+      if (!sharedDispatcher) sharedDispatcher = built.dispatcher;
+      return { agent: built.agent, dispatcher: sharedDispatcher };
+    } catch {
+      // Reuse failed — hand back the freshly built agents so transport still works.
+      return built;
+    }
+  };
+}
+
+installAppwritePooling();
 
 const client = new Client();
 

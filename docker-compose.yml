@@ -11,8 +11,9 @@ services:
     image: redis:7-alpine
     container_name: scorpion_redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # No published port: only the backend (same compose network, via REDIS_URL=redis://redis:6379)
+    # talks to Redis. Publishing 6379 to the host previously exposed it to the public internet
+    # on any host with an open firewall.
     volumes:
       - redis_data:/data
 

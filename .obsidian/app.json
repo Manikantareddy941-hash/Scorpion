@@ -1,8 +1,7 @@
 {
   "userIgnoreFilters": [
-    "node_modules/",
-    ".git/",
-    "build/",
-    "dist/"
+    "node_modules/ajv/",
+    "dist/assets/",
+    "dist/assets/"
   ]
 }

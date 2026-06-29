@@ -1,17 +1,21 @@
 import winston from 'winston';
 import LokiTransport from 'winston-loki';
 
-const lokiEnabled = !!process.env.LOKI_URL && process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production';
+const lokiEnabled = !!process.env.LOKI_URL && isProduction;
+
+// Production logs to stdout as JSON so the cluster's log pipeline can parse them;
+// local dev gets human-readable pretty output.
+const consoleFormat = isProduction
+  ? winston.format.json()
+  : winston.format.prettyPrint();
 
 export const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
   transports: [
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
+      format: consoleFormat
     }),
     ...(lokiEnabled ? [
       new LokiTransport({

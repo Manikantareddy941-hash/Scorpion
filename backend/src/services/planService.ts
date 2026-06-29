@@ -1,8 +1,9 @@
+import { randomUUID } from 'crypto';
 import { planRepository } from '../repositories/planRepository';
 import { Issue, Threat } from '../types/plan.types';
 
 function randomId(prefix: string): string {
-  return `${prefix}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${prefix}-${randomUUID()}`;
 }
 
 async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {

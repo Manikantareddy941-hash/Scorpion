@@ -1,5 +1,7 @@
 import fs from 'fs';
+import path from 'path';
 import { GitleaksRawMatch } from '../services/leakedKeyResponseService';
+import { analyzeReachability, Reachability, VulnerablePackage } from '../services/reachabilityService';
 import {
   BanditRawOutput,
   CheckovFailedCheck,
@@ -21,12 +23,17 @@ export interface NormalizedIssue {
   effort: string;      // "5min", "2min" etc
   category: string;    // unused-import, sql-injection etc
   ruleId: string;
+  reachability?: Reachability; // SCA: is the vulnerable dep actually invoked
+}
+
+function resolveFullPath(workDir: string, relativeFile: string): string {
+  return fs.existsSync(relativeFile) ? relativeFile : path.join(workDir, relativeFile);
 }
 
 export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): NormalizedIssue[] {
   return (raw.results ?? []).map(r => {
     const relativeFile = r.path ?? '';
-    const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
+    const fullPath = resolveFullPath(workDir, relativeFile);
     const line = r.start?.line ?? 0;
     const endLine = r.end?.line ?? line;
 
@@ -47,8 +54,9 @@ export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): Normal
   });
 }
 
-export function normalizeTrivy(raw: TrivyRawOutput, _workDir: string): NormalizedIssue[] {
+export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): NormalizedIssue[] {
   const issues: NormalizedIssue[] = [];
+  const vulns: VulnerablePackage[] = [];
   for (const result of raw.Results ?? []) {
     for (const vuln of result.Vulnerabilities ?? []) {
       issues.push({
@@ -65,16 +73,27 @@ export function normalizeTrivy(raw: TrivyRawOutput, _workDir: string): Normalize
         category: 'dependency-vulnerability',
         ruleId: vuln.VulnerabilityID ?? ''
       });
+      vulns.push({
+        pkgName: vuln.PkgName ?? '',
+        installedVersion: vuln.InstalledVersion,
+        vulnerabilityId: vuln.VulnerabilityID,
+        severity: vuln.Severity,
+        fixedVersion: vuln.FixedVersion
+      });
     }
   }
+  // Annotate each finding with whether first-party code actually reaches the dep.
+  // Index-parallel: analyzeReachability preserves input order.
+  const reach = analyzeReachability(workDir, vulns);
+  reach.forEach((r, i) => { issues[i].reachability = r.reachability; });
   return issues;
 }
 
 export function normalizeGitleaks(raw: GitleaksRawMatch[], workDir: string): NormalizedIssue[] {
   return (raw ?? []).map(r => {
     const relativeFile = r.File ?? '';
-    const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
-    
+    const fullPath = resolveFullPath(workDir, relativeFile);
+
     return {
       tool: 'gitleaks',
       type: 'security',
@@ -137,7 +156,7 @@ export function normalizeCheckov(raw: CheckovRawOutput | CheckovRawOutput[], wor
     const failed: CheckovFailedCheck[] = result.results?.failed_checks || [];
     failed.forEach(c => {
       const relativeFile = c.file_path ?? '';
-      const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
+      const fullPath = resolveFullPath(workDir, relativeFile);
       const line = c.file_line_range?.[0] ?? 0;
       const endLine = c.file_line_range?.[1] ?? line;
 
@@ -174,7 +193,7 @@ function mapCheckovSeverity(s?: string): NormalizedIssue['severity'] {
 export function normalizeBandit(raw: BanditRawOutput, workDir: string): NormalizedIssue[] {
   return (raw.results ?? []).map(r => {
     const relativeFile = r.filename ?? '';
-    const fullPath = fs.existsSync(relativeFile) ? relativeFile : (workDir.endsWith('/') || workDir.endsWith('\\') ? workDir + relativeFile : `${workDir}/${relativeFile}`);
+    const fullPath = resolveFullPath(workDir, relativeFile);
     const line = r.line_number ?? 0;
 
     return {
