@@ -1,0 +1,21 @@
+// Prisma schema — durable audit store for scan ingests.
+// Hot path stays on Redis (services/imageStore.ts); this is the history/audit
+// record only. Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// One durable row per scanned image digest. Upserted on ingest so re-scans
+/// of the same digest overwrite rather than duplicate.
+model ScanResult {
+  imageDigest        String   @id
+  reachabilityCounts Json
+  createdAt          DateTime @default(now())
+}
