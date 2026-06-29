@@ -61,6 +61,8 @@ import driftRoutes from './routes/driftRoutes';
 import { registerTicketRoutes } from './registerRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
+import https from 'https';
+import fs from 'fs';
 import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
@@ -383,9 +385,38 @@ app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
     });
 });
 
-const server = app.listen(port, () => {
-    logger.info(`[Backend] Service running on http://localhost:${port}`);
+const httpServer = app.listen(port, () => {
+    logger.info(`[Backend] HTTP service running on http://localhost:${port}`);
 });
+
+// Optionally boot an HTTPS listener alongside HTTP for the K8s admission webhook,
+// which the kube-apiserver calls directly over TLS (no terminating proxy in
+// front). Enabled only when both TLS_CERT and TLS_KEY are set (paths to PEM
+// files). The same Express `app` backs both listeners, so every route and the
+// UI serve identically over HTTP and HTTPS.
+const tlsCertPath = process.env.TLS_CERT;
+const tlsKeyPath = process.env.TLS_KEY;
+let httpsServer: https.Server | undefined;
+
+if (tlsCertPath && tlsKeyPath) {
+    const httpsPort = Number(process.env.TLS_PORT) || 8443;
+    try {
+        const credentials = {
+            cert: fs.readFileSync(tlsCertPath),
+            key: fs.readFileSync(tlsKeyPath),
+        };
+        httpsServer = https.createServer(credentials, app).listen(httpsPort, () => {
+            logger.info(`[Backend] HTTPS service running on https://localhost:${httpsPort}`);
+        });
+    } catch (err: unknown) {
+        // Fail closed: TLS was explicitly requested but the cert/key can't be
+        // read. Don't silently fall back to HTTP-only — the admission webhook
+        // (failurePolicy: Fail) depends on this TLS listener being up, and a
+        // half-configured gate is worse than a loud crash.
+        logger.error(`[Backend] TLS requested but cert/key unreadable: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+    }
+}
 
 // --- Graceful Shutdown -------------------------------------------------------
 // On SIGTERM (k8s pod termination) / SIGINT (Ctrl-C): stop accepting new
@@ -415,11 +446,17 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         driftMonitor?.stop();
         stopFallbackReplayer();
 
-        // 2. Stop accepting new connections; resolves once in-flight drains.
-        await new Promise<void>((resolve, reject) => {
-            server.close((err) => (err ? reject(err) : resolve()));
-        });
-        logger.info('[Shutdown] HTTP server closed');
+        // 2. Stop accepting new connections on both listeners; resolves once
+        //    in-flight requests drain.
+        const listeners = [httpServer, httpsServer].filter(
+            (s): s is NonNullable<typeof s> => s !== undefined,
+        );
+        await Promise.all(
+            listeners.map(
+                (s) => new Promise<void>((resolve, reject) => s.close((err) => (err ? reject(err) : resolve()))),
+            ),
+        );
+        logger.info('[Shutdown] HTTP(S) listener(s) closed');
 
         // 3. Drain the BullMQ worker (waits for the active job), then the queue.
         await scanQueueWorker.close();
