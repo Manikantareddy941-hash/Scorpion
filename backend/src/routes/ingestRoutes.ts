@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { putScan } from '../services/imageStore';
+import { recordScanResult, summarizeSeverity } from '../services/scanAudit';
 import { VulnerablePackage } from '../services/reachabilityService';
 import { requireCiApiKey } from '../middleware/ciApiKey';
 import { logger } from '../services/logger';
@@ -75,6 +76,15 @@ router.post('/scan', ingestRateLimiter, requireCiApiKey, async (req: Request, re
 
     const { imageDigest, results } = parsed.data;
     await putScan(imageDigest, results);
+    // Best-effort durable audit alongside the Redis hot store. Fire-and-forget:
+    // an audit write failure must never fail an ingest the gate depends on.
+    recordScanResult(imageDigest, summarizeSeverity(results)).catch((err) =>
+      logger.warn('ci-ingest audit write failed', {
+        event: 'ci_ingest_audit_failed',
+        imageDigest,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
     logger.info('ci-ingest stored scan', { event: 'ci_ingest_stored', imageDigest, findings: results.length, clientIp: clientIp(req) });
     return res.status(202).json({ stored: results.length, imageDigest });
   } catch (err) {
