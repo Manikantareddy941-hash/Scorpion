@@ -38,7 +38,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const baseUrl = requireEnv('SCORPION_API_URL').replace(/\/+$/, '');
   const token = requireEnv('SCORPION_API_TOKEN');
   const repoId = requireEnv('REPO_ID');
@@ -58,14 +58,24 @@ async function main(): Promise<void> {
       signal: controller.signal,
     });
   } catch (err) {
-    return fail(`Gate request failed: ${err instanceof Error ? err.message : String(err)}`);
+    const reason = err instanceof Error ? err.message : String(err);
+    return fail(
+      `Gate request failed: ${reason}\n` +
+        `  Fix-it: verify SCORPION_API_URL ("${baseUrl}") is reachable from this runner ` +
+        `(DNS, firewall, VPN), and that the backend is up.`,
+    );
   } finally {
     clearTimeout(timer);
   }
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    fail(`Gate endpoint returned HTTP ${res.status}. ${detail}`.trim());
+    const hint =
+      res.status === 401 || res.status === 403
+        ? '\n  Fix-it: SCORPION_API_TOKEN is missing, expired, or lacks access to REPO_ID. ' +
+          'Re-issue the token and confirm your CI injects it as an env var (not the literal value).'
+        : '';
+    fail(`Gate endpoint returned HTTP ${res.status}. ${detail}`.trim() + hint);
   }
 
   let result: GateEvaluateResponse;
@@ -92,4 +102,7 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-main().catch((err) => fail(err instanceof Error ? err.message : String(err)));
+// Only auto-run when invoked directly (ts-node/node), not when imported by a test.
+if (require.main === module) {
+  main().catch((err) => fail(err instanceof Error ? err.message : String(err)));
+}
