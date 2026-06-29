@@ -16,6 +16,12 @@ data:
   REDIS_URL: "redis://redis:6379"
   TLS_CERT: "/etc/scorpion/tls/tls.crt"
   TLS_KEY: "/etc/scorpion/tls/tls.key"
+  # Non-sensitive Appwrite config (the app requires these to boot, see
+  # src/index.ts requiredEnv). APPWRITE_API_KEY is the only secret one.
+  APPWRITE_ENDPOINT: "https://sgp.cloud.appwrite.io/v1"
+  APPWRITE_PROJECT_ID: "REPLACE_PROJECT_ID"
+  APPWRITE_DATABASE_ID: "REPLACE_DATABASE_ID"
+  FRONTEND_URL: "https://scorpion.example.com"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -53,8 +59,11 @@ spec:
                 secretKeyRef:
                   name: scorpion-secrets
                   key: CI_INGEST_API_KEY
-            # The app also requires APPWRITE_* and FRONTEND_URL to boot; add them
-            # to scorpion-secrets / scorpion-config for a real deploy.
+            - name: APPWRITE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: scorpion-secrets
+                  key: APPWRITE_API_KEY
           readinessProbe:
             httpGet:
               path: /api/health
