@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { gateRepository } from '../repositories/gateRepository';
 import { getDynamicPolicy } from './policyService';
 import { evaluatePolicy } from './opaService';
@@ -5,8 +7,50 @@ import { sendSecurityAlert } from './notificationService';
 import { logAuditEvent } from '../utils/auditLogger';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { canAccessResource } from './tenancyService';
+import { analyzeReachablePackages } from './reachabilityService';
 import { logger } from './logger';
 import { GateBlocker, GateResult, PipelineGateStatus } from '../types/gate.types';
+
+// SCA reachability filter: drop blockers for packages first-party code never
+// imports, so a CVE in an unused transitive dep stops failing the release gate.
+// Off by default — opt in per environment once a repo workspace is mounted.
+const REACHABILITY_FILTER_ENABLED = process.env.SCA_REACHABILITY_FILTER === 'true';
+
+/** Local source checkout for a repo, or null when none is mounted. Reachability
+ *  needs source on disk; without it we cannot prove anything unreachable. */
+function resolveRepoSourceDir(repoId: string): string | null {
+  const base = process.env.REPO_WORKSPACE_DIR;
+  if (!base) return null;
+  const dir = path.join(base, repoId);
+  return fs.existsSync(dir) ? dir : null;
+}
+
+/** Keep only blockers a real import can reach. Fail-secure on every uncertain
+ *  edge — flag off, no source dir, analysis error, or a non-package finding
+ *  (SAST/secret) — never drops a blocker, so a broken/absent scan can't quietly
+ *  open the gate. Mirrors analyzeReachablePackages' own unknown==reachable rule. */
+async function filterByReachability(repoId: string, blockers: GateBlocker[]): Promise<GateBlocker[]> {
+  if (!REACHABILITY_FILTER_ENABLED || blockers.length === 0) return blockers;
+
+  const sourceDir = resolveRepoSourceDir(repoId);
+  if (!sourceDir) return blockers; // no checkout → prove nothing, drop nothing
+
+  try {
+    const pkgNames = blockers
+      .map(b => b.packageName || b.package || '')
+      .filter((name): name is string => name.length > 0);
+    const reachable = new Set(await analyzeReachablePackages(sourceDir, pkgNames));
+
+    return blockers.filter(b => {
+      const pkg = b.packageName || b.package;
+      if (!pkg) return true; // non-package finding (SAST/secret) — not in scope, keep
+      return reachable.has(pkg);
+    });
+  } catch (err) {
+    logger.warn(`[Gate] Reachability filter skipped for ${repoId}:`, err instanceof Error ? err.message : err);
+    return blockers; // fail-secure on any analysis error
+  }
+}
 
 function formatBlockers(blockers: GateBlocker[]) {
   return blockers.map(b => ({
@@ -19,7 +63,8 @@ function formatBlockers(blockers: GateBlocker[]) {
 
 /** Computes whether a repository is allowed to be released. */
 export async function checkReleaseGate(repoId: string): Promise<GateResult> {
-  const blockers = await gateRepository.listOpenFindings(repoId);
+  const allBlockers = await gateRepository.listOpenFindings(repoId);
+  const blockers = await filterByReachability(repoId, allBlockers);
   const blockerCount = blockers.length;
 
   // Calculate score
