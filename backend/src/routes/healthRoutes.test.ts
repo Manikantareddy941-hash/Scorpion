@@ -10,6 +10,9 @@ jest.mock('../lib/appwrite', () => ({
 jest.mock('../utils/toolCheck', () => ({
     checkTool: jest.fn(),
 }));
+jest.mock('../services/prismaClient', () => ({
+    prisma: { $queryRaw: jest.fn() },
+}));
 
 const buildApp = (healthRoutes: express.Router) => {
     const app = express();
@@ -58,5 +61,34 @@ describe('GET /api/health', () => {
         expect(res.statusCode).toBe(200);
         expect(res.body.services.appwrite).toBe(false);
         expect(res.body.worker).toBe('stopped');
+    });
+});
+
+describe('GET /api/health/ready', () => {
+    beforeEach(() => {
+        jest.resetModules();
+    });
+
+    it('returns 200 ready when the audit-store SELECT 1 resolves', async () => {
+        const { prisma } = require('../services/prismaClient');
+        (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+
+        const healthRoutes = require('./healthRoutes').default;
+        const res = await request(buildApp(healthRoutes)).get('/api/health/ready');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('ready');
+    });
+
+    it('returns 503 not_ready with the error message when the DB query rejects', async () => {
+        const { prisma } = require('../services/prismaClient');
+        (prisma.$queryRaw as jest.Mock).mockRejectedValue(new Error('connection terminated'));
+
+        const healthRoutes = require('./healthRoutes').default;
+        const res = await request(buildApp(healthRoutes)).get('/api/health/ready');
+
+        expect(res.statusCode).toBe(503);
+        expect(res.body.status).toBe('not_ready');
+        expect(res.body.error).toBe('connection terminated');
     });
 });
