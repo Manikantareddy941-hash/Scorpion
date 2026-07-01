@@ -21,7 +21,7 @@
         "@react-three/drei": "^9.122.0",
         "@react-three/fiber": "^8.18.0",
         "@react-three/postprocessing": "^2.19.1",
-        "appwrite": "^23.0.0",
+        "appwrite": "^26.1.0",
         "axios": "^1.13.5",
         "d3": "^7.9.0",
         "docx": "^9.6.1",
