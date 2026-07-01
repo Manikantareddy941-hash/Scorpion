@@ -1,0 +1,21 @@
+# Gitleaks config for Scorpion's own repo scan.
+# Extends the default ruleset, then allowlists example/placeholder files
+# that legitimately contain fake credentials.
+title = "Scorpion Gitleaks Config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example env files and docs with placeholder secrets"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.local$''',
+  '''k8s/overlays/dev/\.env\.local$''',
+  '''README\.md$''',
+  '''docs/.*''',
+]
+# Common placeholder tokens so demo values don't trip the scan.
+regexes = [
+  '''(?i)(your[_-]?(api[_-]?key|token|secret)|example|placeholder|changeme|xxxx+|<[^>]+>)''',
+]

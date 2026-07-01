@@ -15,7 +15,19 @@ export default tseslint.config(
       "node_modules/**",
       "project/**",
       "scripts/**",
-      "print_tree.cjs"
+      "print_tree.cjs",
+      // Vendored / scaffold / tooling dirs — not app source. Linting these
+      // pulled in a bundled Obsidian plugin (main.js) that produced 27 phantom
+      // errors and kept frontend CI red.
+      ".obsidian/**",
+      ".bolt/**",
+      "graphify-out/**",
+      "starter-for-react/**",
+      "Stackpilot/**",
+      "Stitch_Screens/**",
+      "examples/**",
+      "functions/**",
+      "public/**"
     ]
   },
   ...tseslint.configs.recommended,

@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # Frontend (root) npm
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  # Backend npm
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions used by our workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Container base images
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

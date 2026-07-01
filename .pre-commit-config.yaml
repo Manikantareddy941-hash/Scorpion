@@ -1,0 +1,25 @@
+# Shift-left hooks. Framework-agnostic (no package.json churn).
+# Devs opt in once with:  pip install pre-commit && pre-commit install
+# CI still enforces the same tools server-side, so this is convenience, not the gate.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+  # Semgrep quick pass on staged files (uses the same p/ci ruleset as CI).
+  - repo: https://github.com/semgrep/semgrep
+    rev: v1.90.0
+    hooks:
+      - id: semgrep
+        args: [--config, p/ci, --error, --skip-unknown-extensions]
