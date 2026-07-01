@@ -18,7 +18,7 @@ type CreateAgent = (endpoint?: string, opts?: { rejectUnauthorized?: boolean }) 
 function installAppwritePooling(): void {
   let nfnAgent: { createAgent?: CreateAgent };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     nfnAgent = require('node-fetch-native-with-agent/agent') as { createAgent?: CreateAgent };
   } catch (err) {
     logger.warn('[appwrite] pooling patch skipped: transport helper not resolvable', {
