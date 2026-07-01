@@ -1,13 +1,132 @@
-name: StackPilot Security Audit
+name: Scorpion Security Scan
+
+# Scorpion dogfoods its own engines against its own source.
+# Same tools the product runs (Semgrep / Trivy / Gitleaks / Checkov),
+# now pointed at this repo. Fails the PR on CRITICAL, mirroring the
+# product's gate policy (blockOnCritical in gateService).
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
-jobs:
-  audit:
-    name: StackPilot Scan
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
+  security-events: write # upload SARIF to the code-scanning tab
 
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secrets (Gitleaks)
+    runs-on: ubuntu-latest
     steps:
-      - name: Placeholder step
-        run: echo "Security scan will run when backend is deployed"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so gitleaks scans past commits
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep scan
+        # p/ci is Semgrep's curated CI ruleset (OWASP + security-audit + secrets).
+        run: semgrep scan --config=p/ci --sarif --output=semgrep.sarif || true
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  sca:
+    name: SCA + SBOM (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          format: table
+      - name: Trivy SARIF (all severities, non-blocking)
+        uses: aquasecurity/trivy-action@0.28.0
+        if: always()
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          ignore-unfixed: true
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+      - name: Generate SBOM (CycloneDX)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: sbom.cdx.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+
+  iac:
+    name: IaC (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          quiet: true
+          soft_fail: true # report first; flip to false once k8s/Dockerfile findings are triaged
+          framework: kubernetes,dockerfile,github_actions
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+      - name: Upload Checkov SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results/checkov.sarif
+          category: checkov
+
+  container:
+    name: Container image (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build web image (no push)
+        run: docker build -t scorpion-web:ci -f Dockerfile .
+      - name: Trivy image scan (fail on CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: scorpion-web:ci
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          format: table
