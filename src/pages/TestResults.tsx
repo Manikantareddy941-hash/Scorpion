@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  TestTube2, CheckCircle2, XCircle, AlertCircle, RefreshCw,
-  BarChart, TerminalSquare, TrendingUp, TrendingDown, Minus,
-  Filter, Clock, Zap, GitCommit, ChevronDown, ChevronRight,
+  TestTube2, CheckCircle2, XCircle, RefreshCw,
+  BarChart, TerminalSquare, TrendingUp, TrendingDown, Minus, Clock, ChevronDown, ChevronRight,
   Copy, Check, AlertTriangle, Activity
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
@@ -66,8 +65,7 @@ const EMPTY_METRICS: RunMetrics = {
   testExecutions: 0, codeCoverage: 0, failedTests: 0,
   passRate: 0, totalDuration: 0, flaky: 0,
   prevCoverage: 0, prevPassRate: 0,
-  commitSha: '—', branch: '—', triggeredBy: '—', runAt: '—',
-};
+  commitSha: '—', branch: '—', triggeredBy: '—', runAt: '—' };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -78,22 +76,19 @@ const suiteTypeColor: Record<string, string> = {
   integration: 'bg-purple-50 text-purple-600 border-purple-200',
   e2e: 'bg-orange-50 text-orange-600 border-orange-200',
   sast: 'bg-red-50 text-red-600 border-red-200',
-  dast: 'bg-yellow-50 text-yellow-600 border-yellow-200',
-};
+  dast: 'bg-yellow-50 text-yellow-600 border-yellow-200' };
 
 const statusColor: Record<string, string> = {
   PASSED: 'text-[#6db87a]',
   FAILED: 'text-red-500',
   FLAKY: 'text-orange-500',
-  SKIPPED: 'text-slate-400',
-};
+  SKIPPED: 'text-slate-400' };
 
 const logStatusStyle: Record<string, string> = {
   PASSED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
   FAILED: 'bg-red-500/10 text-red-400 border-red-500/30',
   WARN: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
-  INFO: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-};
+  INFO: 'bg-blue-500/10 text-blue-400 border-blue-500/30' };
 
 const Trend = ({ current, prev, suffix = '' }: { current: number; prev: number; suffix?: string }) => {
   const delta = current - prev;
@@ -110,7 +105,7 @@ const Trend = ({ current, prev, suffix = '' }: { current: number; prev: number; 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function TestResults() {
-  const { t } = useTranslation();
+  const {} = useTranslation();
   const [metrics, setMetrics] = useState<RunMetrics>(EMPTY_METRICS);
   const [suites, setSuites] = useState<TestSuite[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -142,12 +137,11 @@ export default function TestResults() {
           commitSha: r.commit_sha || '—',
           branch: r.branch || '—',
           triggeredBy: r.triggered_by || '—',
-          runAt: r.$createdAt ? new Date(r.$createdAt).toLocaleString() : '—',
-        });
+          runAt: r.$createdAt ? new Date(r.$createdAt).toLocaleString() : '—' });
         let parsedSuites: TestSuite[] = [];
         let parsedLogs: LogEntry[] = [];
-        if (r.suitesJson) { try { parsedSuites = JSON.parse(r.suitesJson); } catch { } }
-        if (r.logsJson) { try { parsedLogs = JSON.parse(r.logsJson); } catch { } }
+        if (r.suitesJson) { try { parsedSuites = JSON.parse(r.suitesJson); } catch {} }
+        if (r.logsJson) { try { parsedLogs = JSON.parse(r.logsJson); } catch {} }
         setSuites(parsedSuites);
         setLogs(parsedLogs);
         setHasData(true);

@@ -24,22 +24,53 @@ const TTL_MS = 60 * 60 * 1000; // 1h — generous vs. CI build→admission gap.
 interface Entry {
   packages: VulnerablePackage[];
   expiresAt: number;
+  signature?: string;
 }
+
+const SIG_PREFIX = 'sig:';
 
 const fallback = new Map<string, Entry>();
 
 const redisReady = (): boolean => redisConnection.status === 'ready';
 const toMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-export async function putScan(digest: string, packages: VulnerablePackage[], now: number = Date.now()): Promise<void> {
+export async function putScan(
+  digest: string,
+  packages: VulnerablePackage[],
+  now: number = Date.now(),
+  signature?: string
+): Promise<void> {
   // Always mirror locally so a mid-flight Redis drop still serves what we just stored.
-  putLocal(digest, packages, now);
+  putLocal(digest, packages, now, signature);
   if (!redisReady()) return;
   try {
     await redisConnection.set(KEY_PREFIX + digest, JSON.stringify(packages), 'PX', TTL_MS);
+    if (signature) {
+      await redisConnection.set(SIG_PREFIX + digest, signature, 'PX', TTL_MS);
+    }
   } catch (err) {
     logger.warn('[imageStore] redis put failed — kept local fallback', { digest, error: toMessage(err) });
   }
+}
+
+/**
+ * Cosign signature recorded for an image digest at CI-ingest time, if any.
+ * Read by the K8s admission webhook when REQUIRE_IMAGE_SIGNATURE is enabled.
+ * Absence (undefined) means "no signature on record" — the caller decides
+ * whether that blocks (it does, fail-secure, in prod when enforcement is on).
+ */
+export async function getSignature(digest: string, now: number = Date.now()): Promise<string | undefined> {
+  if (redisReady()) {
+    try {
+      const raw = await redisConnection.get(SIG_PREFIX + digest);
+      if (raw !== null) return raw;
+    } catch (err) {
+      logger.warn('[imageStore] redis sig get failed — serving local fallback', { digest, error: toMessage(err) });
+    }
+  }
+  const entry = fallback.get(digest);
+  if (entry === undefined || entry.expiresAt <= now) return undefined;
+  return entry.signature;
 }
 
 export async function getScan(digest: string, now: number = Date.now()): Promise<VulnerablePackage[] | undefined> {
@@ -59,14 +90,14 @@ export async function getScan(digest: string, now: number = Date.now()): Promise
 // Map iteration order is insertion order, so the first key is the LRU victim;
 // delete-then-set moves a key to the tail to mark it most-recently-used.
 
-function putLocal(digest: string, packages: VulnerablePackage[], now: number): void {
+function putLocal(digest: string, packages: VulnerablePackage[], now: number, signature?: string): void {
   fallback.delete(digest);
   while (fallback.size >= MAX_ENTRIES) {
     const oldest = fallback.keys().next().value;
     if (oldest === undefined) break;
     fallback.delete(oldest);
   }
-  fallback.set(digest, { packages, expiresAt: now + TTL_MS });
+  fallback.set(digest, { packages, expiresAt: now + TTL_MS, signature });
 }
 
 function getLocal(digest: string, now: number): VulnerablePackage[] | undefined {

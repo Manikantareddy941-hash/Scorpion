@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface Step {
   targetId: string;
@@ -41,7 +41,7 @@ const TOUR_STEPS: Step[] = [
 
 export default function ProductTour() {
   const [currentStep, setCurrentStep] = useState<number>(-1);
-  const [coords, setCoords] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [, setCoords] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number; placement: 'right' | 'bottom' }>({ top: 0, left: 0, placement: 'right' });
   const [isVisible, setIsVisible] = useState(false);
   

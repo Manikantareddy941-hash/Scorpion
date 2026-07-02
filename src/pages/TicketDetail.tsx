@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTicket, updateTicket, addComment, syncToJira, addTicketLink, removeTicketLink } from '../hooks/useTickets';
-import { Ticket, TicketComment, TicketActivity } from '../../shared/types';
+import { Ticket } from '../../shared/types';
 import {
-  ArrowLeft, ExternalLink, Link2, Plus, Send, User, Clock,
-  AlertOctagon, CheckCircle2, ShieldAlert, Bug, Sparkles,
-  Loader2, RefreshCw, Check, Calendar, Activity, Tag, Trash2, Link
+  ArrowLeft, ExternalLink, Link2, Plus, Send, User,
+  AlertOctagon,
+  Loader2, RefreshCw, Check, Activity, Tag, Trash2, Link
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -34,14 +34,6 @@ export default function TicketDetail() {
   const [linkTargetId, setLinkTargetId] = useState('');
   const [linkType, setLinkType] = useState('relates_to');
   const [linking, setLinking] = useState(false);
-
-  // Update temp values on ticket load
-  useEffect(() => {
-    if (ticket) {
-      setTempTitle(ticket.title);
-      setTempDesc(ticket.description);
-    }
-  }, [ticket]);
 
   const handleUpdate = async (field: keyof Ticket, value: any) => {
     if (!ticket) return;
@@ -270,10 +262,7 @@ export default function TicketDetail() {
                       <Check size={16} strokeWidth={3} />
                     </button>
                     <button
-                      onClick={() => {
-                        setEditingTitle(false);
-                        setTempTitle(ticket.title);
-                      }}
+                      onClick={() => setEditingTitle(false)}
                       className="p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white rounded-xl transition-all"
                     >
                       Cancel
@@ -281,7 +270,7 @@ export default function TicketDetail() {
                   </div>
                 ) : (
                   <h2
-                    onClick={() => setEditingTitle(true)}
+                    onClick={() => { setTempTitle(ticket.title); setEditingTitle(true); }}
                     className="text-xl font-black text-[var(--text-primary)] uppercase italic leading-tight hover:text-[var(--accent-primary)] cursor-pointer transition-colors"
                   >
                     {ticket.title}
@@ -304,10 +293,7 @@ export default function TicketDetail() {
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => {
-                          setEditingDesc(false);
-                          setTempDesc(ticket.description);
-                        }}
+                        onClick={() => setEditingDesc(false)}
                         className="px-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white text-[10px] font-black uppercase rounded-lg transition-all"
                       >
                         Cancel
@@ -322,7 +308,7 @@ export default function TicketDetail() {
                   </div>
                 ) : (
                   <p
-                    onClick={() => setEditingDesc(true)}
+                    onClick={() => { setTempDesc(ticket.description); setEditingDesc(true); }}
                     className="text-xs text-[var(--text-secondary)] font-semibold leading-relaxed hover:bg-[var(--bg-primary)]/10 p-2 -m-2 rounded-lg cursor-pointer whitespace-pre-wrap transition-colors"
                   >
                     {ticket.description || 'No description entered. Click here to edit details.'}

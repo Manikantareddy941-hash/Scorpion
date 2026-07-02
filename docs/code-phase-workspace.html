@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Phase Workspace &amp; Senior Engineer Playbook · Scorpion DevSecOps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:wght@400;600;700;900&family=Nunito+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Design tokens - mirrors the product's "Terra" theme (forest green on
+     warm cream, Literata headlines, Nunito Sans body, IBM Plex Mono for code
+     and data). Same scaffold as the Plan phase workspace, so the series
+     reads as one system. */
+  :root {
+    --bg-page: #faf6f0;
+    --bg-card: #ffffff;
+    --bg-secondary: #f0ece4;
+    --bg-code: #23261f;
+    --primary: #4a7c59;
+    --primary-ink: #2f4f38;
+    --border: #c4c8bc;
+    --border-strong: #a9ae9e;
+    --text-primary: #2e3230;
+    --text-secondary: #4a4e4a;
+    --text-muted: #74796e;
+    --accent-secondary: #705c30;
+    --status-success: #4a7c59;
+    --status-error: #b83230;
+    --status-warning: #705c30;
+    --shadow-card: 0 4px 20px rgba(46, 50, 48, 0.06);
+    --shadow-lift: 0 10px 28px rgba(46, 50, 48, 0.12);
+    /* Ordinal ramp reused from the Plan phase workspace (validated via
+       scripts/validate_palette.js --ordinal: lightness monotone, adjacent
+       delta-L >= 0.06, light-end contrast 2.05:1 on #ffffff, single hue). */
+    --ramp-1: #d7af6a;
+    --ramp-2: #cc983e;
+    --ramp-3: #a5792c;
+    --ramp-4: #795820;
+    --ramp-5: #4d3814;
+    --font-display: 'Literata', Georgia, serif;
+    --font-body: 'Nunito Sans', 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--primary-ink); }
+
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding: 56px 0 40px;
+    background:
+      radial-gradient(680px 220px at 12% -10%, rgba(74,124,89,0.10), transparent 65%),
+      var(--bg-page);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--primary-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--primary); }
+  h1.title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(28px, 4.4vw, 46px);
+    line-height: 1.08;
+    margin: 20px 0 12px;
+    letter-spacing: -0.01em;
+  }
+  p.subtitle { font-size: 17px; color: var(--text-secondary); max-width: 760px; margin: 0; }
+  nav.phase-rail {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  nav.phase-rail span { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-card); }
+  nav.phase-rail span.done { color: var(--primary-ink); border-color: var(--primary); }
+  nav.phase-rail span.current { color: #fff; background: var(--primary); border-color: var(--primary); font-weight: 700; }
+
+  section { padding: 56px 0; }
+  section.alt { background: var(--bg-secondary); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+  .section-head { margin-bottom: 28px; max-width: 760px; }
+  .section-kicker { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-secondary); margin-bottom: 8px; }
+  h2.section-title { font-family: var(--font-display); font-weight: 800; font-size: clamp(22px, 2.6vw, 30px); margin: 0 0 10px; }
+  p.section-desc { color: var(--text-secondary); margin: 0; }
+
+  .workflow-map { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: thin; }
+  .stage-card {
+    flex: 1 1 200px; min-width: 200px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 16px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  }
+  .stage-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+  .stage-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .stage-card.active { background: linear-gradient(180deg, rgba(74,124,89,0.10), rgba(74,124,89,0.03)); border-color: var(--primary); }
+  .stage-num { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .stage-num .idx { width: 22px; height: 22px; border-radius: 999px; background: var(--bg-secondary); color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+  .stage-card.active .stage-num .idx { background: var(--primary); color: #fff; }
+  .stage-name { font-weight: 800; font-size: 14.5px; margin-bottom: 6px; }
+  .stage-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
+  .stage-cta { margin-top: 12px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary-ink); }
+  .map-arrow { align-self: center; color: var(--border-strong); font-size: 18px; flex: 0 0 auto; padding: 0 2px; }
+
+  .recipe-panel { margin-top: 28px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-card); overflow: hidden; }
+  .recipe-head { padding: 22px 24px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .recipe-title { font-family: var(--font-display); font-weight: 800; font-size: 20px; margin: 0 0 6px; }
+  .recipe-owner { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .recipe-standards { display: flex; gap: 6px; flex-wrap: wrap; }
+  .std-chip { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-secondary); }
+  .recipe-body { padding: 18px 24px 24px; }
+  .recipe-why { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 16px; }
+  pre.code { margin: 0; background: var(--bg-code); color: #e8e3d3; font-family: var(--font-mono); font-size: 12.3px; line-height: 1.65; padding: 18px 20px; border-radius: 10px; overflow-x: auto; tab-size: 2; }
+  pre.code .cm { color: #8a9384; }
+  pre.code .kw { color: #d7af6a; }
+  pre.code .st { color: #9fc9a6; }
+  pre.code .fn { color: #8fb3d9; }
+
+  /* ── Parallelization simulator ── */
+  .sim-grid { display: grid; grid-template-columns: 340px 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 880px) { .sim-grid { grid-template-columns: 1fr; } }
+  .sim-inputs, .sim-output { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-card); padding: 22px; }
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; }
+  .field label .val { font-family: var(--font-mono); color: var(--primary-ink); font-weight: 700; }
+  .field input[type="range"] { width: 100%; accent-color: var(--primary); }
+  .field input[type="number"] { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-page); font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); }
+  .field-hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+  .scanner-table { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .scanner-table .mt-head { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 10px; }
+  .mrow { display: grid; grid-template-columns: 1fr 64px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .mrow .mname { font-size: 12.5px; font-weight: 700; }
+  .mrow input[type="number"] { padding: 5px 7px; font-size: 12px; }
+
+  .sim-headline { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 24px; }
+  .stat-tile { min-width: 150px; }
+  .stat-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .stat-value { font-family: var(--font-body); font-weight: 800; font-size: 26px; color: var(--text-primary); }
+  .stat-value.hero { font-size: 40px; color: var(--primary-ink); }
+  .stat-delta { font-size: 12px; font-weight: 700; color: var(--status-success); margin-top: 2px; }
+
+  .race { display: flex; flex-direction: column; gap: 18px; }
+  .race-row { display: flex; align-items: center; gap: 14px; }
+  .race-label { width: 92px; flex: 0 0 auto; font-size: 12.5px; font-weight: 700; color: var(--text-secondary); }
+  .race-track { flex: 1; height: 28px; background: var(--bg-secondary); border-radius: 8px; position: relative; overflow: hidden; }
+  .race-fill { height: 100%; border-radius: 8px; transform-origin: left; transition: transform 0.25s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; }
+  .race-fill span { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; }
+
+  .scanner-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); }
+  .scanner-legend .lg-item { display: inline-flex; align-items: center; gap: 6px; }
+  .scanner-legend .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+  .takeaways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .takeaways { grid-template-columns: 1fr; } }
+  .takeaway-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: var(--shadow-card); }
+  .takeaway-card .tk-kicker { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary-ink); margin-bottom: 8px; }
+  .takeaway-card p { margin: 0; font-size: 13.5px; color: var(--text-secondary); }
+  .takeaway-card strong { color: var(--text-primary); }
+
+  footer { padding: 36px 0 60px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  footer a { color: var(--primary-ink); font-weight: 700; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>DevSecOps Lifecycle · Code Phase</span>
+    <h1 class="title">Code Phase Workspace &amp; Senior Engineer Playbook</h1>
+    <p class="subtitle">How senior engineers push security feedback all the way to the keystroke, run every scanner
+      in parallel instead of in a queue, and turn "you have a vulnerability" into a reviewable patch before the
+      pull request even opens.</p>
+    <nav class="phase-rail" aria-label="DevSecOps lifecycle phases">
+      <span class="done">Plan</span>
+      <span class="current">Code</span>
+      <span>Build</span>
+      <span>Test</span>
+      <span>Release</span>
+      <span>Deploy</span>
+      <span>Monitor</span>
+    </nav>
+  </div>
+</header>
+
+<section id="workflow">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-kicker">Automation loop</div>
+      <h2 class="section-title">How the Code phase actually runs</h2>
+      <p class="section-desc">Five stages, one continuous loop. Click a stage to open the senior-engineer recipe that
+        drives it: the actual extension code, hook config, and orchestration logic, not slideware.</p>
+    </div>
+
+    <div class="workflow-map" id="workflowMap" role="tablist" aria-label="Code phase automation stages"></div>
+    <div class="recipe-panel" id="recipePanel"></div>
+  </div>
+</section>
+
+<section class="alt" id="simulator">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-kicker">Parallel orchestration</div>
+      <h2 class="section-title">Scan parallelization time savings</h2>
+      <p class="section-desc">Running SAST, SCA, secrets, and IaC scanners one after another adds their durations.
+        Running them concurrently costs only the slowest one. The gap between those two numbers is developer wait
+        time your team gets back on every single pull request.</p>
+    </div>
+
+    <div class="sim-grid">
+      <div class="sim-inputs">
+        <div class="field">
+          <label for="prsPerDay">PRs opened <span class="val" id="prsPerDayVal">18</span> / day, team-wide</label>
+          <input type="range" id="prsPerDay" min="1" max="80" value="18">
+          <div class="field-hint">Every PR waits on the scan gate once.</div>
+        </div>
+        <div class="field">
+          <label for="orchOverhead">Orchestration overhead <span class="val" id="orchOverheadVal">0.5</span> min</label>
+          <input type="range" id="orchOverhead" min="0" max="3" step="0.1" value="0.5">
+          <div class="field-hint">Queue pickup and result aggregation, paid once either way.</div>
+        </div>
+
+        <div class="scanner-table">
+          <div class="mt-head">Per-scanner duration, minutes</div>
+          <div id="scannerRows"></div>
+        </div>
+      </div>
+
+      <div class="sim-output">
+        <div class="sim-headline">
+          <div class="stat-tile">
+            <div class="stat-label">Sequential wait</div>
+            <div class="stat-value" id="statSeq">0 min</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Parallel wait</div>
+            <div class="stat-value" id="statPar">0 min</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Reclaimed, whole team / week</div>
+            <div class="stat-value hero" id="statWeekly">0 hrs</div>
+            <div class="stat-delta" id="statPct">0% faster per PR</div>
+          </div>
+        </div>
+
+        <div class="race" id="race"></div>
+
+        <div class="scanner-legend" id="scannerLegend"></div>
+        <p class="sr-only" id="liveRegion" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="takeaways">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-kicker">Why this matters</div>
+      <h2 class="section-title">Key takeaways of the Code phase automation loop</h2>
+    </div>
+    <div class="takeaways">
+      <div class="takeaway-card">
+        <div class="tk-kicker">Feedback at the keystroke</div>
+        <p>Diagnostic squiggles render in the editor on save, not in a nightly report three days later.
+          <strong>The developer who introduced the flaw is still looking at that exact line when it's flagged.</strong></p>
+      </div>
+      <div class="takeaway-card">
+        <div class="tk-kicker">Concurrency is the product</div>
+        <p>SAST, SCA, secrets, and IaC scans run as independent workers, not a chain. <strong>The gate costs the
+          slowest scanner, never the sum of all of them.</strong></p>
+      </div>
+      <div class="takeaway-card">
+        <div class="tk-kicker">Detection becomes remediation</div>
+        <p>An AI-generated diff sits next to every finding, reviewable before it's applied. <strong>The fix ships in
+          the same PR the bug was found in, not a follow-up ticket.</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Part of the DevSecOps lifecycle series, Code phase.
+    <div style="margin-top:6px"><a href="plan-phase-workspace.html">Plan phase playbook</a> · <a href="#">Build phase playbook</a></div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var STAGES = [
+    {
+      id: 'ide',
+      name: 'IDE-Embedded Feedback',
+      desc: 'Diagnostic squiggles appear on the exact line, in the editor, the moment a file is saved.',
+      owner: 'Written by: developer experience team · lives in: scorpion-vscode/src/diagnosticProvider.ts',
+      standards: ['VS Code Diagnostics API', 'onDidSaveTextDocument'],
+      why: 'A finding surfaced in a nightly report is a finding the author has already forgotten writing. A squiggle under the line, while the file is still open, closes that gap to zero.',
+      code: '<span class="cm">// diagnosticProvider.ts - runs inside the VS Code extension host</span>\n<span class="kw">const</span> collection = vscode.languages.<span class="fn">createDiagnosticCollection</span>(<span class="st">"scorpion"</span>);\n\nvscode.workspace.onDidSaveTextDocument(<span class="kw">async</span> (doc) => {\n  <span class="kw">const</span> findings = <span class="kw">await</span> scorpionClient.<span class="fn">getFindingsForFile</span>(doc.fileName);\n\n  <span class="kw">const</span> diagnostics = findings.<span class="fn">map</span>((f) => {\n    <span class="kw">const</span> range = <span class="kw">new</span> vscode.Range(f.line - <span class="st">1</span>, <span class="st">0</span>, f.line - <span class="st">1</span>, <span class="st">200</span>);\n    <span class="kw">const</span> diag = <span class="kw">new</span> vscode.Diagnostic(range, f.title, severityOf(f.severity));\n    diag.code = { value: f.cwe, target: vscode.Uri.<span class="fn">parse</span>(f.docsUrl) };\n    <span class="kw">return</span> diag;\n  });\n\n  collection.<span class="fn">set</span>(doc.uri, diagnostics);\n});'
+    },
+    {
+      id: 'precommit',
+      name: 'Pre-Commit Local Gate',
+      desc: 'Fast local scanners run on staged files only, before a secret or an obvious flaw ever leaves the laptop.',
+      owner: 'Written by: platform engineering · config: .pre-commit-config.yaml · IDE install: scorpion.installPreCommitHook',
+      standards: ['pre-commit', 'Gitleaks', 'Semgrep p/ci'],
+      why: 'A secret caught in CI is a secret that already exists in git history. A secret caught pre-commit never gets written to a ref at all, which is the only remediation that does not require a rotation. Devs opt in once with pre-commit install, or let the VS Code extension install the local Gitleaks hook with one command. CI enforces the same tools server-side, so this is convenience, not the gate.',
+      code: '<span class="cm"># .pre-commit-config.yaml - shift-left hooks, framework-agnostic</span>\n<span class="kw">repos</span>:\n  - repo: <span class="st">https://github.com/gitleaks/gitleaks</span>\n    rev: <span class="st">v8.21.2</span>\n    hooks:\n      - id: <span class="fn">gitleaks</span>\n\n  <span class="cm"># Semgrep quick pass on staged files, same p/ci ruleset as CI</span>\n  - repo: <span class="st">https://github.com/semgrep/semgrep</span>\n    rev: <span class="st">v1.90.0</span>\n    hooks:\n      - id: <span class="fn">semgrep</span>\n        args: [--config, <span class="st">p/ci</span>, --error, --skip-unknown-extensions]'
+    },
+    {
+      id: 'orchestrate',
+      name: 'PR-Triggered Parallel Orchestration',
+      desc: 'One webhook, four scanners running concurrently, one merged result set.',
+      owner: 'Written by: scan platform team · lives in: backend/src/services/scan/orchestrator.ts',
+      standards: ['Semgrep', 'Trivy', 'Gitleaks', 'Checkov', 'BullMQ'],
+      why: 'Four scanners run sequentially and the gate takes the sum of all four. Run them as independent workers against the same checkout and the gate takes only as long as the slowest one, which is the simulator below in code form.',
+      code: '<span class="cm">// orchestrator.ts - fired from the GitHub App webhook (pull_request.opened / .synchronize)</span>\n<span class="cm">// and from GitLab Push Hook / Merge Request Hook via the generic webhook ingest</span>\n<span class="kw">export async function</span> <span class="fn">orchestrateScan</span>(localPath: <span class="kw">string</span>, opts: ScanOptions) {\n  <span class="kw">const</span> jobs = [\n    { tool: <span class="st">"semgrep"</span>, run: () => runSemgrep(localPath) },\n    { tool: <span class="st">"trivy"</span>,   run: () => runTrivy(localPath) },\n    { tool: <span class="st">"gitleaks"</span>, run: () => runGitleaks(localPath) },\n    { tool: <span class="st">"checkov"</span>,  run: () => runCheckov(localPath) },\n  ];\n\n  <span class="cm">// Promise.allSettled, not a for-await loop - the four scanners don\'t wait</span>\n  <span class="cm">// on each other, and one crashing doesn\'t kill the rest</span>\n  <span class="kw">const</span> results = <span class="kw">await</span> Promise.<span class="fn">allSettled</span>(jobs.<span class="fn">map</span>((j) => j.run().<span class="fn">then</span>((r) => ({ tool: j.tool, ...r }))));\n\n  <span class="kw">return</span> results;\n}'
+    },
+    {
+      id: 'remediate',
+      name: 'AI-Assisted Remediation Generation',
+      desc: 'Every finding ships with a reviewable diff, not just a description of the problem.',
+      owner: 'Written by: AI platform team · command: scorpion.fixWithAI · backend: POST /api/remediate/generate',
+      standards: ['Gemini / OpenAI', 'Unified diff', 'Side-by-side review'],
+      why: '"You have a SQL injection on line 42" is a research task. A unified diff that parameterizes the query, sitting next to the finding, is a one-click accept. The model only ever proposes; the developer always applies.',
+      code: '<span class="cm">// aiService.ts - behind POST /api/remediate/generate (rate-limited, access-checked)</span>\n<span class="kw">export async function</span> <span class="fn">generatePatch</span>(finding: Finding): Promise&lt;RemediationDiff&gt; {\n  <span class="kw">const</span> prompt = <span class="fn">buildPrompt</span>({\n    cwe: finding.cwe,\n    snippet: <span class="kw">await</span> <span class="fn">readContext</span>(finding.file, finding.line, <span class="st">10</span>),\n    instruction: <span class="st">"Return a minimal unified diff. Do not change unrelated lines."</span>,\n  });\n\n  <span class="kw">const</span> completion = <span class="kw">await</span> llm.<span class="fn">generate</span>(prompt);\n  <span class="kw">const</span> diff = <span class="fn">parseUnifiedDiff</span>(completion.text);\n\n  <span class="kw">return</span> { findingId: finding.$id, diff, status: <span class="st">"pending_review"</span> };\n  <span class="cm">// → rendered in the VS Code side-by-side diff view; scorpion.fixWithAI applies on accept</span>\n}'
+    },
+    {
+      id: 'gate',
+      name: 'PR Status Check Gate',
+      desc: 'The merge button itself becomes the enforcement point for everything the earlier stages found.',
+      owner: 'Written by: platform engineering · lives in: backend/src/github/ciOrchestrator.ts + statusService.ts',
+      standards: ['GitHub Commit Status API', 'Required status check', 'OPA/Rego policy'],
+      why: 'A dashboard nobody opens catches nothing. A required commit status that goes red on the PR itself is a gate a developer cannot merge past. The GitHub App sets scorpion/security-gate to pending when the scan starts, evaluates the results against baseline thresholds, the repo\'s own policy, and OPA/Rego rules, then flips it to success or failure on the PR head commit.',
+      code: '<span class="cm">// ciOrchestrator.ts - on scan completion, publish the verdict to the PR head commit</span>\n<span class="kw">const</span> { passed, summary, denyReasons } =\n  <span class="kw">await</span> <span class="fn">evaluatePolicyForRepo</span>(scanResults, repo, <span class="st">"production"</span>);  <span class="cm">// thresholds + per-repo policy + OPA/Rego</span>\n\n<span class="kw">await</span> <span class="fn">setCommitStatus</span>(octokit, {\n  owner, repo, sha: pr.head.sha,\n  context: <span class="st">"scorpion/security-gate"</span>,   <span class="cm">// mark it required in branch protection</span>\n  state: passed ? <span class="st">"success"</span> : <span class="st">"failure"</span>,\n  description: passed ? summary : <span class="fn">`Blocked: ${denyReasons.join("; ")}`</span>,\n  target_url: <span class="fn">`${FRONTEND_URL}/scans/${pr.head.sha}`</span>,\n});'
+    }
+  ];
+
+  var mapEl = document.getElementById('workflowMap');
+  var panelEl = document.getElementById('recipePanel');
+  var activeStage = STAGES[0].id;
+
+  function renderMap() {
+    mapEl.innerHTML = '';
+    STAGES.forEach(function (stage, i) {
+      if (i > 0) {
+        var arrow = document.createElement('div');
+        arrow.className = 'map-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '→';
+        mapEl.appendChild(arrow);
+      }
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'stage-card' + (stage.id === activeStage ? ' active' : '');
+      card.setAttribute('role', 'tab');
+      card.setAttribute('aria-selected', stage.id === activeStage ? 'true' : 'false');
+      card.innerHTML =
+        '<div class="stage-num"><span class="idx">' + (i + 1) + '</span>Stage ' + (i + 1) + '</div>' +
+        '<div class="stage-name">' + stage.name + '</div>' +
+        '<div class="stage-desc">' + stage.desc + '</div>' +
+        '<div class="stage-cta">View recipe →</div>';
+      card.addEventListener('click', function () { activeStage = stage.id; renderMap(); renderPanel(); });
+      mapEl.appendChild(card);
+    });
+  }
+
+  function renderPanel() {
+    var stage = STAGES.filter(function (s) { return s.id === activeStage; })[0];
+    var chips = stage.standards.map(function (s) { return '<span class="std-chip">' + s + '</span>'; }).join('');
+    panelEl.innerHTML =
+      '<div class="recipe-head">' +
+        '<div><h3 class="recipe-title">' + stage.name + '</h3><div class="recipe-owner">' + stage.owner + '</div></div>' +
+        '<div class="recipe-standards">' + chips + '</div>' +
+      '</div>' +
+      '<div class="recipe-body">' +
+        '<p class="recipe-why">' + stage.why + '</p>' +
+        '<pre class="code"><code>' + stage.code + '</code></pre>' +
+      '</div>';
+  }
+
+  renderMap();
+  renderPanel();
+
+  // ── Parallelization simulator ──────────────────────────────────────────
+  var SCANNERS = [
+    { id: 'sast', name: 'SAST (Semgrep)', minutes: 6 },
+    { id: 'sca', name: 'SCA (Trivy)', minutes: 4 },
+    { id: 'secrets', name: 'Secrets (Gitleaks)', minutes: 2 },
+    { id: 'iac', name: 'IaC (Checkov)', minutes: 3 }
+  ];
+  var RAMP = ['var(--ramp-1)', 'var(--ramp-2)', 'var(--ramp-3)', 'var(--ramp-4)'];
+
+  var prsInput = document.getElementById('prsPerDay');
+  var overheadInput = document.getElementById('orchOverhead');
+  var scannerRowsEl = document.getElementById('scannerRows');
+  var raceEl = document.getElementById('race');
+  var legendEl = document.getElementById('scannerLegend');
+  var liveRegion = document.getElementById('liveRegion');
+
+  function renderScannerRows() {
+    scannerRowsEl.innerHTML = '';
+    SCANNERS.forEach(function (s, i) {
+      var row = document.createElement('div');
+      row.className = 'mrow';
+      row.innerHTML =
+        '<div class="mname"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:' + RAMP[i] + ';margin-right:7px"></span>' + s.name + '</div>' +
+        '<input type="number" min="0.5" max="60" step="0.5" value="' + s.minutes + '" data-id="' + s.id + '">';
+      scannerRowsEl.appendChild(row);
+    });
+    scannerRowsEl.querySelectorAll('input[type="number"]').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var s = SCANNERS.filter(function (x) { return x.id === inp.dataset.id; })[0];
+        s.minutes = parseFloat(inp.value) || 0;
+        update();
+      });
+    });
+
+    legendEl.innerHTML = SCANNERS.map(function (s, i) {
+      return '<span class="lg-item"><span class="sw" style="background:' + RAMP[i] + '"></span>' + s.name + '</span>';
+    }).join('');
+  }
+
+  function fmtMin(n) { return (Math.round(n * 10) / 10) + ' min'; }
+  function fmtHrs(n) { return (Math.round(n * 10) / 10) + ' hrs'; }
+
+  function update() {
+    var prsPerDay = parseFloat(prsInput.value);
+    var overhead = parseFloat(overheadInput.value);
+    document.getElementById('prsPerDayVal').textContent = prsPerDay;
+    document.getElementById('orchOverheadVal').textContent = overhead;
+
+    var sequentialTotal = SCANNERS.reduce(function (sum, s) { return sum + s.minutes; }, 0) + overhead;
+    var slowest = Math.max.apply(null, SCANNERS.map(function (s) { return s.minutes; }));
+    var parallelTotal = slowest + overhead;
+
+    document.getElementById('statSeq').textContent = fmtMin(sequentialTotal);
+    document.getElementById('statPar').textContent = fmtMin(parallelTotal);
+
+    var savedPerPr = sequentialTotal - parallelTotal;
+    var weeklyMinutes = savedPerPr * prsPerDay * 5; // 5 workdays
+    var weeklyHours = weeklyMinutes / 60;
+    var pct = sequentialTotal > 0 ? Math.round((savedPerPr / sequentialTotal) * 100) : 0;
+
+    document.getElementById('statWeekly').textContent = fmtHrs(weeklyHours);
+    document.getElementById('statPct').textContent = pct + '% faster per PR';
+
+    var maxTotal = Math.max(sequentialTotal, parallelTotal) || 1;
+    raceEl.innerHTML = '';
+
+    var seqRow = document.createElement('div');
+    seqRow.className = 'race-row';
+    var seqFillWidth = (sequentialTotal / maxTotal) * 100;
+    seqRow.innerHTML =
+      '<div class="race-label">Sequential</div>' +
+      '<div class="race-track"><div class="race-fill" style="width:' + seqFillWidth + '%;background:var(--ramp-4)"><span>' + fmtMin(sequentialTotal) + '</span></div></div>';
+    raceEl.appendChild(seqRow);
+
+    var parRow = document.createElement('div');
+    parRow.className = 'race-row';
+    var parFillWidth = (parallelTotal / maxTotal) * 100;
+    parRow.innerHTML =
+      '<div class="race-label">Parallel</div>' +
+      '<div class="race-track"><div class="race-fill" style="width:' + parFillWidth + '%;background:var(--primary)"><span>' + fmtMin(parallelTotal) + '</span></div></div>';
+    raceEl.appendChild(parRow);
+
+    liveRegion.textContent = 'Parallel scanning saves ' + fmtMin(savedPerPr) + ' per pull request, reclaiming ' + fmtHrs(weeklyHours) + ' across the team per week.';
+  }
+
+  [prsInput, overheadInput].forEach(function (el) { el.addEventListener('input', update); });
+  renderScannerRows();
+  update();
+})();
+</script>
+</body>
+</html>

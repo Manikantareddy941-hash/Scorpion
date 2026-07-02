@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-    Clock, Shield, User as UserIcon, Activity,
-    Filter, ArrowDown, ChevronRight,
-    Loader2, AlertCircle, CheckCircle, FileText,
-    Lock, Terminal, Play, Save, RefreshCw, AlertTriangle, Key, ShieldAlert
+    Clock, Shield, User as Activity,
+    Filter,
+    Loader2, CheckCircle, FileText,
+    Lock, Terminal, Play, RefreshCw, AlertTriangle, Key, ShieldAlert
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -64,7 +64,7 @@ async function verifyChain(rawLogs: AuditEntry[]): Promise<ChainStatus> {
 }
 
 export default function AuditLog() {
-    const { t } = useTranslation();
+    const {} = useTranslation();
     const { getJWT } = useAuth();
     const [logs, setLogs] = useState<AuditEntry[]>([]);
     const [loading, setLoading] = useState(true);

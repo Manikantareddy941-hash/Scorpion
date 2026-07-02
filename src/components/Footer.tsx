@@ -18,9 +18,9 @@ export default function Footer() {
         <div className="grid grid-cols-2 gap-16 md:gap-24">
           <div className="flex flex-col gap-4">
             {['Download', 'Product', 'Docs', 'Changelog', 'Press', 'Releases'].map((link) => (
-              <span 
-                key={link} 
-                className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-50 cursor-pointer hover:text-[var(--accent-primary)] hover:opacity-100 transition-all whitespace-nowrap"
+              <span
+                key={link}
+                className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-50 whitespace-nowrap"
               >
                 {link}
               </span>
@@ -28,9 +28,9 @@ export default function Footer() {
           </div>
           <div className="flex flex-col gap-4">
             {['Blog', 'Pricing', 'Use Cases'].map((link) => (
-              <span 
-                key={link} 
-                className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-50 cursor-pointer hover:text-[var(--text-primary)] hover:opacity-100 transition-all whitespace-nowrap"
+              <span
+                key={link}
+                className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-primary)] opacity-50 whitespace-nowrap"
               >
                 {link}
               </span>
@@ -57,9 +57,9 @@ export default function Footer() {
         
         <div className="flex gap-12 text-[10px] font-bold uppercase tracking-[0.2em]">
           {['About', 'Privacy', 'Terms'].map((link) => (
-            <span 
-              key={link} 
-              className="text-[var(--text-primary)] opacity-40 cursor-pointer hover:text-[var(--accent-primary)] hover:opacity-100 transition-all font-bold"
+            <span
+              key={link}
+              className="text-[var(--text-primary)] opacity-40 font-bold"
             >
               {link}
             </span>

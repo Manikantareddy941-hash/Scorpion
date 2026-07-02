@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-    Cpu, Loader2, X, Terminal, Check, 
-    ShieldCheck, AlertTriangle, Play 
+    Cpu, Loader2, X, Terminal, 
+    ShieldCheck 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

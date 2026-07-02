@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Shield, AlertTriangle, Bug, Wind, CheckCircle2, 
-  ArrowLeft, Clock, Activity, FileText, Code, 
-  ExternalLink, Search, Filter, Terminal, Package
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Activity, Package
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 interface Finding {
@@ -23,11 +20,8 @@ interface Finding {
 
 export default function ScaDetail() {
   const { scanId } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { t } = useTranslation();
-  
+
   const [loading, setLoading] = useState(true);
   const [findings, setFindings] = useState<Finding[]>([]);
 

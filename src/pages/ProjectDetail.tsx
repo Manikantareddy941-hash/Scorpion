@@ -36,7 +36,6 @@ export default function ProjectDetail() {
     const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
     const [scans, setScans] = useState<Scan[]>([]);
     const [loading, setLoading] = useState(true);
-    const [converting, setConverting] = useState<string | null>(null);
     const [triggering, setTriggering] = useState(false);
     const [activeTab, setActiveTab] = useState<'findings' | 'governance' | 'access'>('findings');
     const [policy, setPolicy] = useState<any>(null);
@@ -128,40 +127,6 @@ export default function ProjectDetail() {
             ), { id: toastId, duration: Infinity });
         } finally {
             setTriggering(false);
-        }
-    };
-
-    const handleConvertToIssue = async (vulnId: string) => {
-        setConverting(vulnId);
-        const toastId = toast.loading('Configuring tracker remediation...');
-        try {
-            const token = await getJWT();
-            const response = await fetch(`/api/vulnerabilities/${vulnId}/convert`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (response.ok) {
-                toast.success('Finding securely attached to Issue board!', { id: toastId });
-                fetchData();
-            } else {
-                const data = await response.json();
-                toast.error((t) => (
-                    <div className="flex items-center justify-between w-full gap-4">
-                        <span>{data.error || 'Failed to convert finding'}</span>
-                        <button onClick={() => toast.dismiss(t.id)} className="p-1 hover:bg-black/10 rounded-full transition-colors"><X size={14} /></button>
-                    </div>
-                ), { id: toastId, duration: Infinity });
-            }
-        } catch (err: any) {
-            toast.error((t) => (
-                <div className="flex items-center justify-between w-full gap-4">
-                    <span>{err.message || 'Error executing remediation sequence'}</span>
-                    <button onClick={() => toast.dismiss(t.id)} className="p-1 hover:bg-black/10 rounded-full transition-colors"><X size={14} /></button>
-                </div>
-            ), { id: toastId, duration: Infinity });
-        } finally {
-            setConverting(null);
         }
     };
 

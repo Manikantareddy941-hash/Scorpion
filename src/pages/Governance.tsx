@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     Shield, Scale,
     Plus, Check, X
@@ -11,8 +11,7 @@ const FRAMEWORK_COLORS: Record<string, string> = {
     'SOC 2': '#4FC3F7',
     'ISO 27001': '#9575CD',
     'OWASP TOP 10': '#E57373',
-    'SOC 2 Trust Criteria': '#4FC3F7',
-};
+    'SOC 2 Trust Criteria': '#4FC3F7' };
 const frameworkColor = (fw: string) => FRAMEWORK_COLORS[fw] ?? 'var(--accent-primary)';
 
 export interface GovernancePolicy {
@@ -59,7 +58,7 @@ const DEFAULT_GUARDRAILS: GovernancePolicy[] = [
 ];
 
 export default function Governance() {
-    const { t } = useTranslation();
+    const {} = useTranslation();
     const [policies, setPolicies] = useState<GovernancePolicy[]>(DEFAULT_GUARDRAILS);
 
     useEffect(() => {
@@ -71,8 +70,7 @@ export default function Governance() {
                     const overrides: Record<string, boolean> = JSON.parse(stored);
                     setPolicies(DEFAULT_GUARDRAILS.map(p => ({
                         ...p,
-                        isEnabled: overrides[p.id] ?? p.isEnabled,
-                    })));
+                        isEnabled: overrides[p.id] ?? p.isEnabled })));
                 }
             } catch {
                 // keep defaults if prefs can't be loaded
@@ -156,8 +154,7 @@ export default function Governance() {
                                                         style={{
                                                             color: frameworkColor(fw),
                                                             backgroundColor: `color-mix(in srgb, ${frameworkColor(fw)} 12%, transparent)`,
-                                                            borderColor: `color-mix(in srgb, ${frameworkColor(fw)} 35%, transparent)`,
-                                                        }}
+                                                            borderColor: `color-mix(in srgb, ${frameworkColor(fw)} 35%, transparent)` }}
                                                     >
                                                         {fw}
                                                     </span>

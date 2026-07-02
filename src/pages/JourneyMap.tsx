@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { 
-    Key, ShieldCheck, Database, Loader2, ShieldAlert, Lock, Unlock
+    Key, ShieldCheck, Loader2, ShieldAlert, Lock
 } from 'lucide-react';
 import { 
     SiGithub, SiSonarqube, SiTerraform, SiTrivy, 

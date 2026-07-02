@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-    CheckCircle2, AlertTriangle, Bug, Activity, Shield, Cpu, Globe,
+    CheckCircle2, Bug, Activity, Shield, Cpu, Globe,
     Filter, Clock, LayoutGrid, List, ChevronRight,
     CheckCircle, XCircle, Loader2, RefreshCw, Sparkles, Github, X
 } from 'lucide-react';
@@ -20,7 +21,7 @@ interface Finding {
 }
 
 export default function TasksPage() {
-    const { t } = useTranslation();
+    const {} = useTranslation();
     const { getJWT } = useAuth();
     const [findings, setFindings] = useState<Finding[]>([]);
     const [loading, setLoading] = useState(true);
@@ -41,7 +42,6 @@ export default function TasksPage() {
         setLoading(true);
         setHasError(false);
         try {
-            const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
             const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
                 Query.limit(100),
                 Query.orderDesc('$createdAt')
@@ -68,7 +68,6 @@ export default function TasksPage() {
 
     const handleResolve = async (id: string) => {
         try {
-            const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
             await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved' });
             setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
             toast.success('Issue marked as resolved');
@@ -84,33 +83,19 @@ export default function TasksPage() {
         setSelectedTasks(newSet);
     };
 
-    const handleBulkAcknowledge = async () => {
-        const toastId = toast.loading(`Acknowledging ${selectedTasks.size} tasks...`);
+    const handleBulkStatusChange = async (status: 'resolved' | 'dismissed') => {
+        const verb = status === 'resolved' ? 'Acknowledging' : 'Dismissing';
+        const verbPast = status === 'resolved' ? 'acknowledged' : 'dismissed';
+        const toastId = toast.loading(`${verb} ${selectedTasks.size} tasks...`);
         try {
-            const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
             await Promise.all(Array.from(selectedTasks).map(id =>
-                databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved' })
+                databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status })
             ));
-            setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status: 'resolved' } : f));
-            toast.success(`Bulk acknowledged ${selectedTasks.size} tasks`, { id: toastId });
+            setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status } : f));
+            toast.success(`Bulk ${verbPast} ${selectedTasks.size} tasks`, { id: toastId });
             setSelectedTasks(new Set());
         } catch (err) {
-            toast.error('Failed to acknowledge tasks', { id: toastId });
-        }
-    };
-
-    const handleBulkDismiss = async () => {
-        const toastId = toast.loading(`Dismissing ${selectedTasks.size} tasks...`);
-        try {
-            const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
-            await Promise.all(Array.from(selectedTasks).map(id =>
-                databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'dismissed' })
-            ));
-            setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status: 'dismissed' } : f));
-            toast.success(`Bulk dismissed ${selectedTasks.size} tasks`, { id: toastId });
-            setSelectedTasks(new Set());
-        } catch (err) {
-            toast.error('Failed to dismiss tasks', { id: toastId });
+            toast.error(`Failed to ${status === 'resolved' ? 'acknowledge' : 'dismiss'} tasks`, { id: toastId });
         }
     };
 
@@ -218,8 +203,7 @@ export default function TasksPage() {
             critical: 'border-l-red-500',
             high: 'border-l-orange-400',
             medium: 'border-l-yellow-400',
-            low: 'border-l-green-500',
-        };
+            low: 'border-l-green-500' };
         const accent = severityAccent[finding.severity.toLowerCase()] || 'border-l-slate-300';
 
         return (
@@ -477,8 +461,8 @@ export default function TasksPage() {
                     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--bg-secondary)]/90 backdrop-blur-md border border-[var(--border-color)] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-50">
                         <span className="text-xs font-black uppercase text-[var(--text-primary)] italic">{selectedTasks.size} Selected</span>
                         <div className="flex gap-3">
-                            <button onClick={handleBulkAcknowledge} className="px-4 py-2 bg-[var(--accent-primary)] hover:bg-opacity-90 text-white text-[10px] font-black uppercase rounded-lg italic transition-all">Bulk Acknowledge</button>
-                            <button onClick={handleBulkDismiss} className="px-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white text-[10px] font-black uppercase rounded-lg italic transition-all">Bulk Dismiss</button>
+                            <button onClick={() => handleBulkStatusChange('resolved')} className="px-4 py-2 bg-[var(--accent-primary)] hover:bg-opacity-90 text-white text-[10px] font-black uppercase rounded-lg italic transition-all">Bulk Acknowledge</button>
+                            <button onClick={() => handleBulkStatusChange('dismissed')} className="px-4 py-2 bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-white text-[10px] font-black uppercase rounded-lg italic transition-all">Bulk Dismiss</button>
                         </div>
                     </div>
                 )}

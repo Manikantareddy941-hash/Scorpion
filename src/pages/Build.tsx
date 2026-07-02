@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  Hammer, CheckCircle2, XCircle, Clock, RefreshCw, Terminal, 
-  Box, Rocket, ChevronDown, ChevronUp, Play, GitBranch, User, Tag, FileText, Cpu, ShieldAlert
+  Hammer, CheckCircle2, XCircle, Clock, RefreshCw, Terminal, ChevronDown, ChevronUp, Play, GitBranch, User, Tag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

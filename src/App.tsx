@@ -78,7 +78,7 @@ function App() {
     localStorage.setItem('sidebarCollapsed', String(collapsed));
   };
 
-  const { theme, echoFreeRoam } = useTheme();
+  const { echoFreeRoam } = useTheme();
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/verify-otp', '/reset-password', '/auth/callback', '/auth', '/verify-email'].includes(location.pathname);
   const showSidebar = !isAuthPage && user;
 

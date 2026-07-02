@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Activity, Bug, CheckCircle2, ChevronRight, 
-  BarChart3, Filter, Search, ShieldAlert, ShieldCheck
+  ArrowLeft, Activity, ChevronRight, 
+  BarChart3
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 

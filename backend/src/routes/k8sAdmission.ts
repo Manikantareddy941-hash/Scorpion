@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import * as assert from 'assert';
 import { logger } from '../services/logger';
-import { getScan } from '../services/imageStore';
+import { getScan, getSignature } from '../services/imageStore';
+import { verifyImageDigest } from '../services/cosignService';
 import { VulnerablePackage, ReachabilityResult } from '../services/reachabilityService';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
 
@@ -233,6 +234,43 @@ export async function resolveSignal(image: string): Promise<Signal> {
   }
 }
 
+/**
+ * Supply-chain gate: require a valid cosign signature for the image.
+ *
+ * Opt-in and fail-secure. Only active when REQUIRE_IMAGE_SIGNATURE === 'true'
+ * AND the target env is prod (lower envs are never blocked on signatures, so
+ * dev/stage keep working). When active:
+ *   - no signature on record for the digest  -> block (unsigned)
+ *   - signature present but verify() is false -> block (tampered/mismatched)
+ *   - verify() throws (cosign missing / no pubkey) -> block (cannot prove — the
+ *     operator enabled enforcement, so an unverifiable image must not deploy)
+ * Default-off means zero behavior change for installs that don't opt in.
+ */
+export async function checkImageSignature(
+  image: string,
+  env: string
+): Promise<{ status: 'ready' | 'blocked'; reason: string }> {
+  if (process.env.REQUIRE_IMAGE_SIGNATURE !== 'true' || env !== 'prod') {
+    return { status: 'ready', reason: 'signature enforcement off' };
+  }
+  const digest = imageDigest(image);
+  if (!digest) {
+    return { status: 'blocked', reason: 'unsigned image — no digest to verify (use an @sha256 pinned ref)' };
+  }
+  const signature = await getSignature(digest);
+  if (!signature) {
+    return { status: 'blocked', reason: 'unsigned image — no signature on record from the build pipeline' };
+  }
+  try {
+    const ok = await verifyImageDigest(digest, signature);
+    return ok
+      ? { status: 'ready', reason: 'signature verified' }
+      : { status: 'blocked', reason: 'image signature verification failed (tampered or substituted)' };
+  } catch (err) {
+    return { status: 'blocked', reason: `cannot verify image signature: ${toMessage(err)}` };
+  }
+}
+
 interface K8sContainer { image?: string }
 interface AdmissionRequest {
   uid?: string;
@@ -284,6 +322,14 @@ router.post('/k8s-admission', async (req: Request, res: Response) => {
 
   const warnings: string[] = [];
   for (const image of images) {
+    // Supply-chain gate first: an unsigned/tampered image is rejected before we
+    // even weigh its vulnerabilities (opt-in via REQUIRE_IMAGE_SIGNATURE).
+    const sig = await checkImageSignature(image, env);
+    if (sig.status === 'blocked') {
+      logDecision({ decision: 'deny', reason: sig.reason, uid, namespace, env, image, durationMs: Date.now() - start });
+      return res.status(200).json(admissionResponse(uid, false, `${image}: ${sig.reason}`));
+    }
+
     const { counts, reachability } = await resolveSignal(image);
     const result = evaluatePreflight(rules, counts, env, reachability);
     if (result.status === 'blocked') {

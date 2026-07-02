@@ -166,6 +166,37 @@ router.post('/:id/invite', verifyUser, async (req: AuthenticatedRequest, res: Re
     }
 });
 
+// Delete (dissolve) a team - owner only
+router.delete('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const teamId = req.params.id;
+        const userId = req.user!.$id;
+
+        const callerMembership = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
+            Query.equal('team_id', teamId),
+            Query.equal('user_id', userId),
+            Query.limit(1)
+        ]);
+
+        if (callerMembership.total === 0 || callerMembership.documents[0].role !== 'owner') {
+            return res.status(403).json({ error: 'Only the team owner can dissolve this team' });
+        }
+
+        const allMembers = await databases.listDocuments(DB_ID, COLLECTIONS.TEAM_MEMBERS, [
+            Query.equal('team_id', teamId)
+        ]);
+        await Promise.all(allMembers.documents.map(m =>
+            databases.deleteDocument(DB_ID, COLLECTIONS.TEAM_MEMBERS, m.$id)
+        ));
+
+        await databases.deleteDocument(DB_ID, COLLECTIONS.TEAMS, teamId);
+
+        res.json({ message: 'Team dissolved' });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Remove member
 router.delete('/:id/members/:userId', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

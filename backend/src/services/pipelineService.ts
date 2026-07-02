@@ -143,6 +143,29 @@ async function execFileCommand(file: string, args: string[], cwd: string, pipeLo
 }
 
 /**
+ * Runs a build/test command for a detected build tool inside its runtime container,
+ * and throws with a stage-appropriate message on non-zero exit.
+ */
+async function executeStageInContainer(
+  buildTool: string,
+  cmd: string[],
+  workspaceDir: string,
+  pipeLogger: PipelineLogger,
+  stageLabel: 'Build' | 'Test'
+): Promise<void> {
+  const executionImage = getRuntimeImageForTool(buildTool);
+  const executionOutcome = await dockerRunnerService.runInContainer({
+    image: executionImage,
+    cmd,
+    workspacePath: workspaceDir,
+    logger: pipeLogger
+  });
+  if (executionOutcome.exitCode !== 0) {
+    throw new Error(`${stageLabel} failed with exit code: ${executionOutcome.exitCode}`);
+  }
+}
+
+/**
  * Orchestrates and executes the pipeline run stages sequentially
  */
 export async function runPipeline(runId: string) {
@@ -219,16 +242,13 @@ export async function runPipeline(runId: string) {
     await pipeLogger.log(`Detected build tool: ${buildTool}`);
 
     if (buildTool === 'npm') {
-      const executionImage = getRuntimeImageForTool(buildTool);
-      const executionOutcome = await dockerRunnerService.runInContainer({
-        image: executionImage,
-        cmd: ['sh', '-c', 'npm install --legacy-peer-deps && npm run build --if-present'],
-        workspacePath: workspaceDir,
-        logger: pipeLogger
-      });
-      if (executionOutcome.exitCode !== 0) {
-        throw new Error(`Build failed with exit code: ${executionOutcome.exitCode}`);
-      }
+      await executeStageInContainer(
+        buildTool,
+        ['sh', '-c', 'npm install --legacy-peer-deps && npm run build --if-present'],
+        workspaceDir,
+        pipeLogger,
+        'Build'
+      );
     } else if (buildTool === 'docker') {
       const imageTag = `repo-${runDoc.repoId}:${runId}`;
       await execFileCommand('docker', ['build', '-t', imageTag, '.'], workspaceDir, pipeLogger);
@@ -252,16 +272,13 @@ export async function runPipeline(runId: string) {
         await pipeLogger.log(`Image signing step failed: ${message}`);
       }
     } else if (buildTool === 'gradle') {
-      const executionImage = getRuntimeImageForTool(buildTool);
-      const executionOutcome = await dockerRunnerService.runInContainer({
-        image: executionImage,
-        cmd: ['gradle', 'build', '-x', 'test', '--no-daemon'],
-        workspacePath: workspaceDir,
-        logger: pipeLogger
-      });
-      if (executionOutcome.exitCode !== 0) {
-        throw new Error(`Build failed with exit code: ${executionOutcome.exitCode}`);
-      }
+      await executeStageInContainer(
+        buildTool,
+        ['gradle', 'build', '-x', 'test', '--no-daemon'],
+        workspaceDir,
+        pipeLogger,
+        'Build'
+      );
     } else {
       await pipeLogger.log(`No specific build setup for ${buildTool}, skipping compile.`);
     }
@@ -273,27 +290,9 @@ export async function runPipeline(runId: string) {
     await notifyUpdate('test', { testStatus: 'running', currentStage: 'test' });
     
     if (buildTool === 'npm') {
-      const executionImage = getRuntimeImageForTool(buildTool);
-      const executionOutcome = await dockerRunnerService.runInContainer({
-        image: executionImage,
-        cmd: ['npm', 'test', '--if-present'],
-        workspacePath: workspaceDir,
-        logger: pipeLogger
-      });
-      if (executionOutcome.exitCode !== 0) {
-        throw new Error(`Test stage failed with exit code: ${executionOutcome.exitCode}`);
-      }
+      await executeStageInContainer(buildTool, ['npm', 'test', '--if-present'], workspaceDir, pipeLogger, 'Test');
     } else if (buildTool === 'gradle') {
-      const executionImage = getRuntimeImageForTool(buildTool);
-      const executionOutcome = await dockerRunnerService.runInContainer({
-        image: executionImage,
-        cmd: ['gradle', 'test', '--no-daemon'],
-        workspacePath: workspaceDir,
-        logger: pipeLogger
-      });
-      if (executionOutcome.exitCode !== 0) {
-        throw new Error(`Test stage failed with exit code: ${executionOutcome.exitCode}`);
-      }
+      await executeStageInContainer(buildTool, ['gradle', 'test', '--no-daemon'], workspaceDir, pipeLogger, 'Test');
     } else {
       await pipeLogger.log(`Skipping tests (no standard command for ${buildTool}).`);
     }
@@ -480,7 +479,30 @@ try {
     pipelineId = newPipeline.$id;
   }
 
-  // 2. Create pipeline run doc
+  // 2. Reuse an in-flight run for the same commit instead of starting a duplicate
+  // one - webhook providers (GitHub/GitLab) retry delivery on timeout/non-2xx, and
+  // without this guard each retry re-ran the full build/test/deploy pipeline.
+  const inFlight = await databases.listDocuments(DB_ID, 'pipeline_runs', [
+    Query.equal('repoId', repoId),
+    Query.equal('branch', branch),
+    Query.equal('commitHash', commitHash),
+    Query.orderDesc('startedAt'),
+    Query.limit(5)
+  ]);
+  // Only reuse runs started recently - an orphaned run stuck in 'running' (e.g. the
+  // process crashed mid-pipeline, skipping the `finally` cleanup) must not block
+  // every future trigger for this branch forever.
+  const dedupeWindowMs = 15 * 60 * 1000;
+  const existingRun = inFlight.documents.find(d =>
+    (d.status === 'pending' || d.status === 'running') &&
+    Date.now() - new Date(d.startedAt).getTime() < dedupeWindowMs
+  );
+  if (existingRun) {
+    logger.info(`[PipelineTrigger] Reusing in-flight run ${existingRun.$id} for ${repoId}@${branch}#${commitHash}`);
+    return existingRun.$id;
+  }
+
+  // 3. Create pipeline run doc
   const runId = ID.unique();
   await databases.createDocument(DB_ID, 'pipeline_runs', runId, {
     pipelineId,
@@ -503,7 +525,7 @@ try {
     duration: 0
   });
 
-  // 3. Run pipeline asynchronously
+  // 4. Run pipeline asynchronously
   runPipeline(runId).catch(err => {
     logger.error(`[PipelineTrigger] Async execution failed for run ${runId}:`, err);
   });

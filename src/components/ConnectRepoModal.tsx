@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Globe, Shield, Lock, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 

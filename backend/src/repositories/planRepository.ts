@@ -404,11 +404,21 @@ export const planRepository = {
       const repoIds = repos.documents.map(r => r.$id);
       if (repoIds.length === 0) return [];
 
-      const list = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS || 'findings', [
-        Query.equal('repo_id', repoIds),
-        Query.limit(100)
-      ]);
-      return list.documents;
+      const pageSize = 100;
+      const findings: unknown[] = [];
+      // Page through results instead of a flat limit(100) - a single page silently
+      // dropped every finding past the first 100 for users with larger repo sets.
+      // Capped at 20 pages (2000 findings) so a runaway data set can't loop forever.
+      for (let page = 0; page < 20; page++) {
+        const list = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS || 'findings', [
+          Query.equal('repo_id', repoIds),
+          Query.limit(pageSize),
+          Query.offset(page * pageSize)
+        ]);
+        findings.push(...list.documents);
+        if (list.documents.length < pageSize) break;
+      }
+      return findings;
     } catch {
       return [];
     }

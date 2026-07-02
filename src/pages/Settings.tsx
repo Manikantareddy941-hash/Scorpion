@@ -16,16 +16,17 @@ const THEME_SWATCHES: Record<string, { bg: string; card: string; accent: string 
     terra: { bg: '#faf6f0', card: '#ffffff', accent: '#4a7c59' },
 };
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { useTerminology } from '../contexts/TerminologyContext';
 
 export default function Settings() {
     const { t } = useTranslation();
-    const { user, signOut, updatePassword, getGithubToken, refreshUser, getJWT, signInWithOAuth } = useAuth();
+    const { user, signOut, getGithubToken, refreshUser, getJWT, signInWithOAuth } = useAuth();
     const { theme, setTheme, echoMovementEnabled, setEchoMovementEnabled, echoFreeRoam, setEchoFreeRoam } = useTheme();
     const { uiMode, setUiMode } = useTerminology();
     const [isGithubConnected, setIsGithubConnected] = useState(false);
-    const [preferences, setPreferences] = useState({});
+    const [, setPreferences] = useState({});
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -58,22 +59,27 @@ export default function Settings() {
     }, [getGithubToken]);
 
     useEffect(() => {
-        if (user?.prefs) {
-            fetchSettings();
-            setPreferences(prev => ({ ...prev, ...user.prefs }));
-            setAvatarUrl((user.prefs as any)?.profilePic || null);
-            setProfile((prev: any) => ({ ...prev, name: user.name, email: user.email }));
-        }
+        if (!user?.prefs) return;
+        // Guard against the fetch resolving after `user` has already changed again
+        // (e.g. rapid account switch) and overwriting the newer user's settings.
+        let cancelled = false;
+        fetchSettings(() => cancelled);
+        setPreferences(prev => ({ ...prev, ...user.prefs }));
+        setAvatarUrl((user.prefs as any)?.profilePic || null);
+        setProfile((prev: any) => ({ ...prev, name: user.name, email: user.email }));
+        return () => { cancelled = true; };
     }, [user]);
 
-    const fetchSettings = async () => {
+    const fetchSettings = async (isCancelled: () => boolean = () => false) => {
         setLoading(true);
         try {
-            const prefResponse = await databases.listDocuments(
-                DB_ID,
-                'notification_preferences',
-                [Query.equal('user_id', user?.$id || '')]
-            );
+            const [prefResponse, keysResponse, repoResponse] = await Promise.all([
+                databases.listDocuments(DB_ID, 'notification_preferences', [Query.equal('user_id', user?.$id || '')]),
+                databases.listDocuments(DB_ID, 'api_keys', [Query.equal('user_id', user?.$id || '')]),
+                databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', user?.$id || '')]),
+            ]);
+
+            if (isCancelled()) return;
 
             if (prefResponse.total > 0) {
                 const prefs = prefResponse.documents;
@@ -83,25 +89,13 @@ export default function Settings() {
                 setPrefSlackWebhook(prefs.find(p => p.channel === 'slack')?.target_value || '');
                 setPrefDiscordWebhook(prefs.find(p => p.channel === 'discord')?.target_value || '');
             }
-
-            const keysResponse = await databases.listDocuments(
-                DB_ID,
-                'api_keys',
-                [Query.equal('user_id', user?.$id || '')]
-            );
             setApiKeys(keysResponse.documents);
-
-            const repoResponse = await databases.listDocuments(
-                DB_ID,
-                COLLECTIONS.REPOSITORIES,
-                [Query.equal('user_id', user?.$id || '')]
-            );
             setRepositories(repoResponse.documents);
 
         } catch (error) {
             console.error('Error fetching settings:', error);
         } finally {
-            setLoading(false);
+            if (!isCancelled()) setLoading(false);
         }
     };
 
@@ -157,22 +151,23 @@ export default function Settings() {
             const token = await getJWT();
             const apiBase = '';
 
+            const channels = [
+                { channel: 'email', enabled: prefEmail, target_value: undefined as string | undefined },
+                { channel: 'slack', enabled: prefSlack && !!prefSlackWebhook, target_value: prefSlackWebhook },
+                { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, target_value: prefDiscordWebhook },
+            ];
+            const eventTypes = ['scan_completed', 'critical_detected'];
+            const preferences = channels.flatMap(({ channel, enabled, target_value }) =>
+                eventTypes.map(event_type => ({ channel, enabled, event_type, target_value }))
+            );
+
             await fetch(`${apiBase}/api/notifications/preferences`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({
-                    preferences: [
-                        { channel: 'email', enabled: prefEmail, event_type: 'scan_completed' },
-                        { channel: 'email', enabled: prefEmail, event_type: 'critical_detected' },
-                        { channel: 'slack', enabled: prefSlack && !!prefSlackWebhook, event_type: 'scan_completed', target_value: prefSlackWebhook },
-                        { channel: 'slack', enabled: prefSlack && !!prefSlackWebhook, event_type: 'critical_detected', target_value: prefSlackWebhook },
-                        { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'scan_completed', target_value: prefDiscordWebhook },
-                        { channel: 'discord', enabled: prefDiscord && !!prefDiscordWebhook, event_type: 'critical_detected', target_value: prefDiscordWebhook },
-                    ]
-                })
+                body: JSON.stringify({ preferences })
             });
 
             alert(t('settings.prefs_saved', 'Preferences saved'));
@@ -190,7 +185,7 @@ export default function Settings() {
             const token = await getJWT();
             const apiBase = '';
 
-            const response = await fetch(`${apiBase}/api/auth/api-key`, {
+            const response = await fetch(`${apiBase}/api/keys`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -199,16 +194,41 @@ export default function Settings() {
                 body: JSON.stringify({ name: newKeyName })
             });
 
+            if (!response.ok) {
+                toast.error('Failed to generate API key');
+                return;
+            }
+
             const data = await response.json();
-            if (data.key) {
-                setGeneratedKey(data.key);
-                setApiKeys([{ $id: ID.unique(), name: newKeyName, masked_key: 'sk_....' + data.key.slice(-4), created_at: new Date().toISOString() }, ...apiKeys]);
+            if (data.api_key) {
+                setGeneratedKey(data.api_key);
+                setApiKeys([{ $id: data.$id, name: newKeyName, masked_key: 'sk_....' + data.api_key.slice(-4), created_at: data.created_at }, ...apiKeys]);
                 setNewKeyName('');
             }
         } catch (error) {
             console.error('Error generating API key:', error);
+            toast.error('Failed to generate API key');
         } finally {
             setUpdating(false);
+        }
+    };
+
+    const handleDeleteApiKey = async (keyId: string) => {
+        try {
+            const token = await getJWT();
+            const response = await fetch(`/api/keys/${keyId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                toast.error('Failed to revoke API key');
+                return;
+            }
+            setApiKeys(apiKeys.filter((k) => k.$id !== keyId));
+            toast.success('API key revoked');
+        } catch (error) {
+            console.error('Error revoking API key:', error);
+            toast.error('Failed to revoke API key');
         }
     };
 
@@ -700,7 +720,10 @@ export default function Settings() {
                                     </div>
                                     <div className="flex items-center gap-6">
                                         <span className="text-[9px] font-black text-[var(--status-success)] uppercase tracking-widest italic">{t('settings.active_vector', 'Active Vector')}</span>
-                                        <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--status-error)] transition-colors">
+                                        <button
+                                            onClick={() => handleDeleteApiKey(key.$id)}
+                                            className="p-2 text-[var(--text-secondary)] hover:text-[var(--status-error)] transition-colors"
+                                        >
                                             <LogOut className="w-4 h-4 rotate-90" />
                                         </button>
                                     </div>

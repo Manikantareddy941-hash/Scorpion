@@ -1,4 +1,3 @@
-import React from 'react';
 import { Shield, ArrowUpRight } from 'lucide-react';
 
 interface SecurityPulseProps {
@@ -21,7 +20,6 @@ export default function SecurityPulseCard({
     // Calculate stroke-dasharray for the circular progress
     const radius = 80;
     const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (healthScore / 100) * circumference;
 
     return (
         <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-sm border border-[var(--border-subtle)] relative overflow-hidden group">

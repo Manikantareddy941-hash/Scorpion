@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Activity, Copy, CheckCircle2 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import toast from 'react-hot-toast';
@@ -7,7 +7,6 @@ import toast from 'react-hot-toast';
 export default function DuplicatesDetail() {
   const { scanId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [findings, setFindings] = useState<any[]>([]);
 

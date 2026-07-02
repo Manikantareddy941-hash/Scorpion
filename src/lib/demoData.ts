@@ -1,4 +1,4 @@
-import { databases, DB_ID, COLLECTIONS, ID } from './appwrite';
+import { databases, DB_ID, COLLECTIONS } from './appwrite';
 
 // Realistic threat feed (12 entries)
 export const MOCK_THREATS = [

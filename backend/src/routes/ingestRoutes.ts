@@ -29,6 +29,10 @@ const vulnerablePackageSchema = z.object({
 const ingestScanSchema = z.object({
   imageDigest: z.string().min(1),
   results: z.array(vulnerablePackageSchema).max(10_000),
+  // Optional cosign blob-signature of the image digest, produced by the CI
+  // signing step. Recorded so the K8s admission webhook can enforce signed
+  // images when REQUIRE_IMAGE_SIGNATURE is enabled.
+  imageSignature: z.string().min(1).optional(),
 }).strict();
 
 const clientIp = (req: Request): string => req.ip ?? req.socket.remoteAddress ?? 'unknown';
@@ -74,8 +78,8 @@ router.post('/scan', ingestRateLimiter, requireCiApiKey, async (req: Request, re
       return res.status(400).json({ error: 'Invalid scan payload', details: parsed.error.flatten() });
     }
 
-    const { imageDigest, results } = parsed.data;
-    await putScan(imageDigest, results);
+    const { imageDigest, results, imageSignature } = parsed.data;
+    await putScan(imageDigest, results, Date.now(), imageSignature);
     // Best-effort durable audit alongside the Redis hot store. Fire-and-forget:
     // an audit write failure must never fail an ingest the gate depends on.
     recordScanResult(imageDigest, summarizeSeverity(results)).catch((err) =>

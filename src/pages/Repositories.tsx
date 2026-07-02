@@ -2,9 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { databases, DB_ID, ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-    Github, Globe, Clock, Play, Trash2, Plus, 
-    Shield, AlertCircle, CheckCircle, 
-    MoreVertical, Settings, ExternalLink, RefreshCw, Loader2 
+    Github, Clock, Play, Trash2, Plus, ExternalLink, Loader2 
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -22,7 +20,7 @@ interface Repository {
 }
 
 export default function Repositories() {
-    const { t } = useTranslation();
+    const {} = useTranslation();
     const { user, getJWT } = useAuth();
     const navigate = useNavigate();
     const [repos, setRepos] = useState<Repository[]>([]);

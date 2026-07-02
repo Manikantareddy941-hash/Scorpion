@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Rocket, RefreshCw, XCircle, RotateCcw, Clock, CheckCircle2 } from 'lucide-react';
+import { Rocket, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Deploy() {
   const { getJWT } = useAuth();
   const [deployments, setDeployments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   const fetchDeployments = async () => {
     try {

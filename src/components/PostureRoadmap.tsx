@@ -1,7 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Shield, TrendingUp, ChevronRight, CheckCircle2, AlertTriangle, Info, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { TopVulnerabilities } from './TopVulnerabilities';
 import { SecurityPostureDonut } from './ui';
 
@@ -23,9 +21,8 @@ interface VulnCounts {
   score?: number;
 }
 
-export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = false, vulnStats }: { compact?: boolean; ciGateRate?: number; hasScans?: boolean; vulnStats?: VulnCounts }) {
+export default function PostureRoadmap({ compact, ciGateRate = 0, vulnStats }: { compact?: boolean; ciGateRate?: number; vulnStats?: VulnCounts }) {
   const { getJWT } = useAuth();
-  const navigate = useNavigate();
   const [data, setData] = useState<PostureData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,19 +43,6 @@ export default function PostureRoadmap({ compact, ciGateRate = 0, hasScans = fal
     };
     fetchPosture();
   }, []);
-
-  const handleRecommendationClick = (rec: string) => {
-    const text = rec.toLowerCase();
-    if (text.includes('ci gate') || text.includes('gate')) {
-      navigate('/release');
-    } else if (text.includes('scan') || text.includes('vulnerability')) {
-      navigate('/tests');
-    } else if (text.includes('task') || text.includes('finding')) {
-      navigate('/tasks');
-    } else {
-      navigate('/tasks');
-    }
-  };
 
   if (loading) return <div className="h-64 plate animate-pulse"></div>;
 

@@ -1,13 +1,9 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Activity, Sparkles, CheckCircle2, 
-  BarChart3, ChevronRight 
+import {
+  ArrowLeft, Activity, Sparkles, CheckCircle2,
+  ChevronRight
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Cell 
-} from 'recharts';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import toast from 'react-hot-toast';
 

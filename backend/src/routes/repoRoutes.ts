@@ -5,8 +5,17 @@ import { validateBody } from '../middleware/validate';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
 import { AuthenticatedRequest, addRepoSchema, externalScanSchema, triggerScanSchema } from '../types/repo.types';
+import { getEffectivePolicy } from '../services/policyService';
+import { hasRequiredRole } from '../services/rbacService';
+import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 
 const router = Router();
+
+const POLICY_PRESETS: Record<string, { max_critical: number; max_high: number; min_risk_score: number }> = {
+    strict: { max_critical: 0, max_high: 0, min_risk_score: 80 },
+    balanced: { max_critical: 0, max_high: 5, min_risk_score: 50 },
+    relaxed: { max_critical: 2, max_high: 15, min_risk_score: 30 }
+};
 
 // Add/Sync repository
 router.post('/', validateBody(addRepoSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -109,6 +118,105 @@ router.get('/scans/:scanId', async (req: AuthenticatedRequest, res: Response, ne
         if (result === 'forbidden') return res.status(403).json({ error: 'Access denied' });
 
         res.json(result.data);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Get the effective governance policy for a repo
+router.get('/:id/policy', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoId = req.params.id;
+        if (!(await hasRequiredRole(req.user!.$id, repoId, 'viewer'))) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        res.json(await getEffectivePolicy(repoId));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Switch a repo's governance policy preset (Strict / Balanced / Relaxed)
+router.put('/:id/policy', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoId = req.params.id;
+        const { policy_name } = req.body;
+        const preset = POLICY_PRESETS[policy_name];
+        if (!preset) return res.status(400).json({ error: 'Unknown policy_name' });
+
+        if (!(await hasRequiredRole(req.user!.$id, repoId, 'admin'))) {
+            return res.status(403).json({ error: 'Only repo admins can change the governance policy' });
+        }
+
+        const existing = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_POLICIES, [
+            Query.equal('repo_id', repoId),
+            Query.limit(1)
+        ]);
+
+        const data = { repo_id: repoId, policy_name, ...preset };
+        if (existing.total > 0) {
+            await databases.updateDocument(DB_ID, COLLECTIONS.PROJECT_POLICIES, existing.documents[0].$id, data);
+        } else {
+            await databases.createDocument(DB_ID, COLLECTIONS.PROJECT_POLICIES, ID.unique(), data);
+        }
+
+        res.json(await getEffectivePolicy(repoId));
+    } catch (err) {
+        next(err);
+    }
+});
+
+// List teams granted access to a repo
+router.get('/:id/access', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoId = req.params.id;
+        if (!(await hasRequiredRole(req.user!.$id, repoId, 'viewer'))) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const accessDocs = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
+            Query.equal('repo_id', repoId)
+        ]);
+
+        const enriched = await Promise.all(accessDocs.documents.map(async (doc) => {
+            const team = await databases.getDocument(DB_ID, COLLECTIONS.TEAMS, doc.team_id).catch(() => null);
+            return { id: doc.$id, team_id: doc.team_id, teams: team ? { name: team.name } : null };
+        }));
+
+        res.json(enriched);
+    } catch (err) {
+        next(err);
+    }
+});
+
+// Grant or revoke a team's access to a repo
+router.put('/:id/access', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoId = req.params.id;
+        const { team_id, action } = req.body;
+        if (!team_id || !['grant', 'revoke'].includes(action)) {
+            return res.status(400).json({ error: 'team_id and action ("grant" | "revoke") are required' });
+        }
+
+        if (!(await hasRequiredRole(req.user!.$id, repoId, 'admin'))) {
+            return res.status(403).json({ error: 'Only repo admins can change access' });
+        }
+
+        const existing = await databases.listDocuments(DB_ID, COLLECTIONS.PROJECT_ACCESS, [
+            Query.equal('repo_id', repoId),
+            Query.equal('team_id', team_id),
+            Query.limit(1)
+        ]);
+
+        if (action === 'revoke') {
+            if (existing.total > 0) {
+                await databases.deleteDocument(DB_ID, COLLECTIONS.PROJECT_ACCESS, existing.documents[0].$id);
+            }
+        } else if (existing.total === 0) {
+            await databases.createDocument(DB_ID, COLLECTIONS.PROJECT_ACCESS, ID.unique(), { repo_id: repoId, team_id });
+        }
+
+        res.json({ message: action === 'revoke' ? 'Access revoked' : 'Access granted' });
     } catch (err) {
         next(err);
     }

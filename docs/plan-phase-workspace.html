@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan Phase Workspace &amp; Senior Engineer Playbook · Scorpion DevSecOps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:wght@400;600;700;900&family=Nunito+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Design tokens — mirrors the product's "Terra" theme (forest green on
+     warm cream, Literata headlines, Nunito Sans body, IBM Plex Mono for code
+     and data). Swap this block to retarget a different brand. ── */
+  :root {
+    --bg-page: #faf6f0;
+    --bg-card: #ffffff;
+    --bg-secondary: #f0ece4;
+    --bg-code: #23261f;
+    --primary: #4a7c59;
+    --primary-ink: #2f4f38;
+    --border: #c4c8bc;
+    --border-strong: #a9ae9e;
+    --text-primary: #2e3230;
+    --text-secondary: #4a4e4a;
+    --text-muted: #74796e;
+    --accent-secondary: #705c30;
+    --status-success: #4a7c59;
+    --status-error: #b83230;
+    --status-warning: #705c30;
+    --shadow-card: 0 4px 20px rgba(46, 50, 48, 0.06);
+    --shadow-lift: 0 10px 28px rgba(46, 50, 48, 0.12);
+    /* Validated ordinal ramp — one hue (amber/umber), monotone lightness,
+       light→dark = cheap→expensive. Passed scripts/validate_palette.js
+       --ordinal (lightness monotone, adjacent ΔL >= 0.06, light-end
+       contrast 2.05:1 on #ffffff, single-hue spread 3°). Do not hand-edit
+       without re-running the validator. */
+    --ramp-1: #d7af6a;
+    --ramp-2: #cc983e;
+    --ramp-3: #a5792c;
+    --ramp-4: #795820;
+    --ramp-5: #4d3814;
+    --font-display: 'Literata', Georgia, serif;
+    --font-body: 'Nunito Sans', 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  a { color: var(--primary-ink); }
+
+  /* ── Header ── */
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding: 56px 0 40px;
+    background:
+      radial-gradient(680px 220px at 12% -10%, rgba(74,124,89,0.10), transparent 65%),
+      var(--bg-page);
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--primary-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--primary); }
+  h1.title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(28px, 4.4vw, 46px);
+    line-height: 1.08;
+    margin: 20px 0 12px;
+    letter-spacing: -0.01em;
+  }
+  p.subtitle {
+    font-size: 17px;
+    color: var(--text-secondary);
+    max-width: 760px;
+    margin: 0;
+  }
+  nav.phase-rail {
+    margin-top: 28px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  nav.phase-rail span {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: var(--bg-card);
+  }
+  nav.phase-rail span.current {
+    color: #fff;
+    background: var(--primary);
+    border-color: var(--primary);
+    font-weight: 700;
+  }
+
+  section { padding: 56px 0; }
+  section.alt { background: var(--bg-secondary); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+  .section-head { margin-bottom: 28px; max-width: 760px; }
+  .section-kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-secondary);
+    margin-bottom: 8px;
+  }
+  h2.section-title {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(22px, 2.6vw, 30px);
+    margin: 0 0 10px;
+  }
+  p.section-desc { color: var(--text-secondary); margin: 0; }
+
+  /* ── Workflow map ── */
+  .workflow-map {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: thin;
+  }
+  .stage-card {
+    flex: 1 1 200px;
+    min-width: 200px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 16px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    position: relative;
+  }
+  .stage-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+  .stage-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .stage-card.active {
+    background: linear-gradient(180deg, rgba(74,124,89,0.10), rgba(74,124,89,0.03));
+    border-color: var(--primary);
+  }
+  .stage-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .stage-num .idx {
+    width: 22px; height: 22px;
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .stage-card.active .stage-num .idx { background: var(--primary); color: #fff; }
+  .stage-name { font-weight: 800; font-size: 14.5px; margin-bottom: 6px; }
+  .stage-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
+  .stage-cta {
+    margin-top: 12px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--primary-ink);
+  }
+  .map-arrow { align-self: center; color: var(--border-strong); font-size: 18px; flex: 0 0 auto; padding: 0 2px; }
+
+  /* ── Recipe panel ── */
+  .recipe-panel {
+    margin-top: 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+  .recipe-head {
+    padding: 22px 24px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .recipe-title { font-family: var(--font-display); font-weight: 800; font-size: 20px; margin: 0 0 6px; }
+  .recipe-owner {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .recipe-standards { display: flex; gap: 6px; flex-wrap: wrap; }
+  .std-chip {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .recipe-body { padding: 18px 24px 24px; }
+  .recipe-why { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 16px; }
+  pre.code {
+    margin: 0;
+    background: var(--bg-code);
+    color: #e8e3d3;
+    font-family: var(--font-mono);
+    font-size: 12.3px;
+    line-height: 1.65;
+    padding: 18px 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+    tab-size: 2;
+  }
+  pre.code .cm { color: #8a9384; }
+  pre.code .kw { color: #d7af6a; }
+  pre.code .st { color: #9fc9a6; }
+  pre.code .fn { color: #8fb3d9; }
+
+  /* ── ROI calculator ── */
+  .roi-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 22px;
+    align-items: start;
+  }
+  @media (max-width: 880px) { .roi-grid { grid-template-columns: 1fr; } }
+
+  .roi-inputs, .roi-output {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-card);
+    padding: 22px;
+  }
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .field label .val { font-family: var(--font-mono); color: var(--primary-ink); font-weight: 700; }
+  .field input[type="range"] { width: 100%; accent-color: var(--primary); }
+  .field input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-page);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .field-hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+
+  .multiplier-table { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .multiplier-table .mt-head {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+  .mrow { display: grid; grid-template-columns: 1fr 70px; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .mrow .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; }
+  .mrow .mname { font-size: 12.5px; font-weight: 700; display: flex; align-items: center; }
+  .mrow input[type="number"] { padding: 5px 7px; font-size: 12px; }
+  .mrow.locked input { opacity: 0.6; }
+
+  .roi-headline { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 22px; }
+  .stat-tile { min-width: 150px; }
+  .stat-label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .stat-value { font-family: var(--font-body); font-weight: 800; font-size: 26px; color: var(--text-primary); }
+  .stat-value.hero { font-size: 40px; color: var(--primary-ink); }
+  .stat-delta { font-size: 12px; font-weight: 700; color: var(--status-success); margin-top: 2px; }
+
+  .chart-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .chart-caption { font-size: 12px; color: var(--text-muted); }
+  button.view-toggle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  button.view-toggle:hover { border-color: var(--border-strong); }
+
+  .chart-area { position: relative; padding-top: 14px; }
+  .bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 28px;
+    height: 240px;
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    position: relative;
+  }
+  .gridline {
+    position: absolute;
+    left: 0; right: 0;
+    border-top: 1px dashed #e1e0d9;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .gridline span { position: absolute; right: 100%; margin-right: 8px; top: -6px; white-space: nowrap; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; position: relative; }
+  .bar-value {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    white-space: nowrap;
+  }
+  /* Fixed-height track reserves the vertical space; the bar inside it is
+     scaled with transform (compositor-only), never animated via height, so
+     resizing the chart never triggers layout. */
+  .bar-track { flex: 1; min-height: 0; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+  .bar {
+    width: 22px;
+    height: 100%;
+    border-radius: 4px 4px 0 0;
+    transform-origin: bottom;
+    transition: transform 0.25s ease, filter 0.15s ease, outline-color 0.15s ease;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    cursor: pointer;
+  }
+  .bar:hover, .bar:focus-visible { filter: brightness(1.08); outline-color: var(--primary); }
+  .bar-label { margin-top: 10px; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-align: center; }
+  .bar-sub { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+
+  .bar-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-code);
+    color: #f2efe6;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    z-index: 5;
+  }
+  .bar-col:hover .bar-tooltip, .bar:focus-visible + .bar-tooltip, .bar-col:focus-within .bar-tooltip { opacity: 1; }
+  .bar-tooltip strong { color: #fff; }
+
+  table.roi-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.roi-table th, table.roi-table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+  table.roi-table th { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  table.roi-table td.num, table.roi-table th.num { text-align: right; font-family: var(--font-mono); }
+  table.roi-table .swatch-cell { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+
+  /* ── Takeaways ── */
+  .takeaways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .takeaways { grid-template-columns: 1fr; } }
+  .takeaway-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: var(--shadow-card);
+  }
+  .takeaway-card .tk-kicker {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--primary-ink);
+    margin-bottom: 8px;
+  }
+  .takeaway-card p { margin: 0; font-size: 13.5px; color: var(--text-secondary); }
+  .takeaway-card strong { color: var(--text-primary); }
+
+  footer {
+    padding: 36px 0 60px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  footer a { color: var(--primary-ink); font-weight: 700; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 640px) {
+    .roi-headline { gap: 16px; }
+    .bars { gap: 14px; }
+    .bar { width: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span>DevSecOps Lifecycle · Plan Phase</span>
+    <h1 class="title">Plan Phase Workspace &amp; Senior Engineer Playbook</h1>
+    <p class="subtitle">How senior engineers wire architecture reviews, threat modeling, and policy baselining into a
+      self-driving pipeline, so security requirements exist before the first line of code, not after the first
+      incident.</p>
+    <nav class="phase-rail" aria-label="DevSecOps lifecycle phases">
+      <span class="current">Plan</span>
+      <span>Code</span>
+      <span>Build</span>
+      <span>Test</span>
+      <span>Release</span>
+      <span>Deploy</span>
+      <span>Monitor</span>
+    </nav>
+  </div>
+</header>
+
+<!-- ── Workflow map + recipes ── -->
+<section id="workflow">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-kicker">Automation loop</div>
+      <h2 class="section-title">How the Plan phase actually runs</h2>
+      <p class="section-desc">Five stages, one continuous loop. Click a stage to open the senior-engineer recipe that
+        drives it: the actual data contracts, AI prompts, and policy files, not slideware.</p>
+    </div>
+
+    <div class="workflow-map" id="workflowMap" role="tablist" aria-label="Plan phase automation stages"></div>
+
+    <div class="recipe-panel" id="recipePanel"></div>
+  </div>
+</section>
+
+<!-- ── ROI calculator ── -->
+<section class="alt" id="roi">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-kicker">Shift-left ROI</div>
+      <h2 class="section-title">Cost-to-fix simulator</h2>
+      <p class="section-desc">The classic "cost of change" curve (Boehm / IBM Systems Sciences Institute) says a flaw
+        gets more expensive the later it's caught. The multipliers below are the widely-cited industry defaults, and
+        every one of them is editable so you can substitute your own team's numbers.</p>
+    </div>
+
+    <div class="roi-grid">
+      <div class="roi-inputs">
+        <div class="field">
+          <label for="flawCount">Architectural flaws found <span class="val" id="flawCountVal">12</span> / quarter</label>
+          <input type="range" id="flawCount" min="1" max="60" value="12">
+          <div class="field-hint">Design-level issues a Plan-phase threat model would have caught.</div>
+        </div>
+        <div class="field">
+          <label for="baseHours">Plan-phase fix effort <span class="val" id="baseHoursVal">4</span> hrs / flaw</label>
+          <input type="range" id="baseHours" min="0.5" max="16" step="0.5" value="4">
+          <div class="field-hint">Engineer-hours to redesign one flaw before code exists.</div>
+        </div>
+        <div class="field">
+          <label for="hourlyRate">Blended engineering cost</label>
+          <input type="number" id="hourlyRate" min="20" max="400" value="120">
+          <div class="field-hint">$ / hour, fully loaded (salary + overhead).</div>
+        </div>
+
+        <div class="multiplier-table">
+          <div class="mt-head">Cost-of-change multiplier, vs. Plan baseline</div>
+          <div id="multiplierRows"></div>
+        </div>
+      </div>
+
+      <div class="roi-output">
+        <div class="roi-headline">
+          <div class="stat-tile">
+            <div class="stat-label">Fixed in Plan</div>
+            <div class="stat-value" id="statPlan">$0</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Fixed in Production</div>
+            <div class="stat-value" id="statProd">$0</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Quarterly savings, shift-left</div>
+            <div class="stat-value hero" id="statSavings">$0</div>
+            <div class="stat-delta" id="statSavingsPct">0% cheaper</div>
+          </div>
+        </div>
+
+        <div class="chart-toolbar">
+          <div class="chart-caption">Total remediation cost per phase, this quarter's flaw count. Lighter = cheaper, darker = more expensive.</div>
+          <button class="view-toggle" id="viewToggle" type="button">View as table</button>
+        </div>
+
+        <div class="chart-area" id="chartArea">
+          <div class="bars" id="bars"></div>
+        </div>
+
+        <table class="roi-table" id="roiTable" style="display:none">
+          <thead>
+            <tr><th>Phase</th><th class="num">Multiplier</th><th class="num">Cost / flaw</th><th class="num">Total this quarter</th></tr>
+          </thead>
+          <tbody id="roiTableBody"></tbody>
+        </table>
+        <p class="sr-only" id="liveRegion" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Key takeaways ── -->
+<section id="takeaways">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="section-kicker">Why this matters</div>
+      <h2 class="section-title">Key takeaways of the Plan phase automation loop</h2>
+    </div>
+    <div class="takeaways">
+      <div class="takeaway-card">
+        <div class="tk-kicker">Continuous, not a snapshot</div>
+        <p>The architecture model is versioned product data, and the STRIDE analysis re-runs on demand in seconds
+          whenever the design changes. <strong>The threat model ages with the system, not the slide deck.</strong></p>
+      </div>
+      <div class="takeaway-card">
+        <div class="tk-kicker">No manual bottleneck</div>
+        <p>One authenticated API call prompts the LLM analyzer and returns categorized, severity-ranked threats with
+          mitigations in seconds. <strong>No design ships blocked on a human auditor's calendar.</strong></p>
+      </div>
+      <div class="takeaway-card">
+        <div class="tk-kicker">Cost minimization</div>
+        <p>As the simulator above shows, remediating a design flaw in Plan is dramatically cheaper than an emergency
+          production patch. <strong>Shifting left isn't a slogan: it's a budget line.</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Part of the DevSecOps lifecycle series, Plan phase.
+    <div style="margin-top:6px">Next: <a href="code-phase-workspace.html">Code phase playbook</a> · <a href="#">Build phase playbook</a></div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Stage data + recipes ──────────────────────────────────────────────
+  var STAGES = [
+    {
+      id: 'aac',
+      name: 'Architecture Model Capture',
+      desc: 'The system design lives in the product as a typed, versioned component model, not a static diagram export.',
+      owner: 'Modeled by: staff/principal architect · stored via: backend/src/services/threatModelService.ts',
+      standards: ['Typed components', 'Trust levels', 'Versioned JSON'],
+      why: 'Diagrams exported as pictures can\'t be diffed or fed to an analyzer. Scorpion stores the architecture as structured JSON, every component typed (process, external entity, data store, trust boundary, data flow) and optionally tagged with a trust level, so the exact object the architect edits is the object the AI analysis in the next stage consumes.',
+      code: '<span class="cm">// threatAiService.ts — the component contract the analyzer consumes</span>\n<span class="kw">export interface</span> DiagramComponent {\n  id: <span class="kw">string</span>;\n  type: <span class="st">\'process\'</span> | <span class="st">\'externalEntity\'</span> | <span class="st">\'dataStore\'</span> | <span class="st">\'trustBoundary\'</span> | <span class="st">\'dataFlow\'</span>;\n  label: <span class="kw">string</span>;          <span class="cm">// "api-gateway", "payments-rds", …</span>\n  description?: <span class="kw">string</span>;\n  trustLevel?: <span class="st">\'high\'</span> | <span class="st">\'medium\'</span> | <span class="st">\'low\'</span>;\n}\n\n<span class="cm">// a threat model document versions the diagram together with its generated threats</span>\n{ name: <span class="st">"payments-api"</span>, diagramData: { nodes: [<span class="cm">/* DiagramComponent[] */</span>], edges: [] }, threats: [] }'
+    },
+    {
+      id: 'trigger',
+      name: 'On-Demand AI STRIDE Analysis',
+      desc: 'One click sends the architecture model to an LLM prompted as a threat-modeling expert; STRIDE threats come back as structured JSON.',
+      owner: 'Written by: backend platform · lives in: backend/src/services/threatAiService.ts · trigger: POST /api/plan/projects/:projectId/threats/ai-generate',
+      standards: ['STRIDE', 'Gemini (LLM)', 'Authenticated REST'],
+      why: 'When an engineer runs the AI STRIDE analysis from the Plan workspace, an authenticated REST endpoint prompts an LLM as a Senior Security Threat Modeling Expert over the model\'s typed components: processes, external entities, data stores, trust boundaries, data flows, each optionally tagged with a trust level. Threats come back as structured JSON (STRIDE category, severity, mitigations), get schema-validated, and are persisted on the project. No merge hook, no third-party SaaS: the analysis re-runs on demand, in seconds, whenever the design changes.',
+      code: '<span class="cm">// threatAiService.ts — called from POST /api/plan/projects/:projectId/threats/ai-generate</span>\n<span class="kw">export const</span> <span class="fn">generateStrideThreats</span> = <span class="kw">async</span> (diagramData): Promise&lt;Threat[]&gt; => {\n  <span class="kw">const</span> components: DiagramComponent[] = diagramData.nodes || [];\n\n  <span class="kw">const</span> prompt = <span class="st">`You are a Senior Security Threat Modeling Expert.\n    For each component, identify STRIDE threats. Respond as JSON:\n    { threats: [{ threatId, component, strideCategory,\n                  title, description, severity, mitigations }] }\n    COMPONENTS: ${JSON.stringify(components)}`</span>;\n\n  <span class="kw">const</span> res = <span class="kw">await</span> gemini.<span class="fn">generateContent</span>({ prompt, responseMimeType: <span class="st">"application/json"</span> });\n  <span class="kw">return</span> JSON.<span class="fn">parse</span>(res.text).threats;  <span class="cm">// → schema-validated, then persisted (next stages)</span>\n};'
+    },
+    {
+      id: 'controls',
+      name: 'Schema-Validated Threat Triage',
+      desc: 'AI output is treated as untrusted input: every generated threat is validated against the product schema before it can reach the backlog.',
+      owner: 'Enforced by: backend/src/services/planService.ts · applies to: every AI-generated threat',
+      standards: ['STRIDE taxonomy', 'Severity enum', 'Untrusted-AI validation'],
+      why: 'An LLM is a text generator, not a database. Before a generated threat is persisted, its STRIDE category must match the product\'s closed enum and its severity is normalized against the allowed set. Malformed rows are dropped, not best-effort coerced, so the backlog stage downstream only ever sees well-formed, prioritizable threats.',
+      code: '<span class="cm">// planService.ts — AI output is untrusted; only persist rows whose enums match our schema</span>\n<span class="kw">for</span> (<span class="kw">const</span> t <span class="kw">of</span> aiThreats) {\n  <span class="kw">if</span> (!STRIDE_CATEGORIES.includes(t.strideCategory)) <span class="kw">continue</span>;\n  <span class="kw">const</span> severity = SEVERITIES.includes(t.severity) ? t.severity : <span class="st">\'medium\'</span>;\n\n  created.push(<span class="kw">await</span> planRepository.<span class="fn">createThreat</span>(projectId, {\n    title: t.title,\n    strideCategory: t.strideCategory,\n    severity,\n    description: t.component ? <span class="st">`Component: ${t.component}\\n\\n${t.description}`</span> : t.description,\n    mitigation: Array.isArray(t.mitigations) ? t.mitigations.join(<span class="st">\'\\n\'</span>) : <span class="kw">undefined</span>,\n  }));\n}'
+    },
+    {
+      id: 'ticket',
+      name: 'One-Click Backlog Promotion',
+      desc: 'Any threat converts to a sprint-ready backlog issue, pre-filled, prioritized, and idempotent.',
+      owner: 'Written by: platform engineering · lives in: backend/src/services/planService.ts · trigger: POST /api/plan/projects/:projectId/threats/:id/convert',
+      standards: ['Mitigations → acceptance criteria', 'Severity → priority'],
+      why: 'Security requirements die in a wiki page nobody reads. They survive when they land in the same backlog the team already works from, pre-filled with acceptance criteria a developer can act on. One click converts a threat into a project issue: severity maps to priority, the mitigations become the acceptance-criteria checklist, and a threat already backed by an issue never spawns a duplicate.',
+      code: '<span class="cm">// planService.ts — threat to backlog issue, idempotent by design</span>\n<span class="kw">async function</span> <span class="fn">convertThreatToIssue</span>(projectId, threatId) {\n  <span class="kw">const</span> threat = <span class="kw">await</span> planRepository.<span class="fn">getThreat</span>(threatId);\n  <span class="kw">if</span> (threat.issueId) <span class="kw">return</span> threat;  <span class="cm">// already promoted — never duplicate</span>\n\n  <span class="kw">const</span> issue = <span class="kw">await</span> planRepository.<span class="fn">createIssue</span>({\n    projectId,\n    title: <span class="fn">`[Threat] ${threat.title}`</span>,\n    priority: <span class="fn">severityToPriority</span>(threat.severity),\n    labels: [<span class="st">\'security\'</span>, <span class="st">\'threat-model\'</span>, <span class="fn">`stride:${threat.strideCategory}`</span>],\n    description: <span class="fn">`**STRIDE:** ${threat.strideCategory}\\n**Acceptance criteria (mitigations):**\\n${threat.mitigation}`</span>,\n  });\n\n  <span class="kw">return</span> planRepository.<span class="fn">updateThreat</span>(threatId, { issueId: issue.$id, status: <span class="st">\'mitigated\'</span> });\n}'
+    },
+    {
+      id: 'policy',
+      name: 'Policy-as-Code Baselining',
+      desc: 'Rego rules turn the Plan-phase decision into an automated gate later pipelines can\'t bypass.',
+      owner: 'Written by: security platform · engine: backend/src/services/opaService.ts · enforced by: PR gate + release/deploy gate',
+      standards: ['Open Policy Agent', 'Rego'],
+      why: 'A requirement written only in a backlog ticket can be quietly skipped under deadline pressure. The same requirement expressed as a Rego rule fails the build automatically: the planning decision becomes a technical control, not a promise.',
+      code: '<span class="cm">package</span> plan.baseline\n\n<span class="cm"># deny any component crossing a trust boundary with no recorded threat model entry</span>\n<span class="kw">deny</span>[msg] {\n  component := input.architecture.components[_]\n  component.crosses_trust_boundary == <span class="kw">true</span>\n  <span class="kw">not</span> threat_modeled(component.id)\n\n  msg := <span class="fn">sprintf</span>(<span class="st">"%s crosses a trust boundary with no Plan-phase threat model entry"</span>, [component.id])\n}\n\nthreat_modeled(id) {\n  <span class="kw">some</span> t\n  input.threats[t].componentId == id\n  input.threats[t].status != <span class="st">"unreviewed"</span>\n}'
+    }
+  ];
+
+  var MULTIPLIER_LOCKED = { plan: true };
+
+  var PHASES = [
+    { id: 'plan', name: 'Plan', sub: 'Design & threat model', multiplier: 1, color: 'var(--ramp-1)' },
+    { id: 'code', name: 'Code', sub: 'Implementation', multiplier: 6.5, color: 'var(--ramp-2)' },
+    { id: 'build', name: 'Build', sub: 'CI / integration', multiplier: 10, color: 'var(--ramp-3)' },
+    { id: 'test', name: 'Test', sub: 'QA / staging', multiplier: 15, color: 'var(--ramp-4)' },
+    { id: 'production', name: 'Production', sub: 'Live / incident response', multiplier: 100, color: 'var(--ramp-5)' }
+  ];
+
+  // ── Workflow map + recipe panel ───────────────────────────────────────
+  var mapEl = document.getElementById('workflowMap');
+  var panelEl = document.getElementById('recipePanel');
+  var activeStage = STAGES[0].id;
+
+  function renderMap() {
+    mapEl.innerHTML = '';
+    STAGES.forEach(function (stage, i) {
+      if (i > 0) {
+        var arrow = document.createElement('div');
+        arrow.className = 'map-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '→';
+        mapEl.appendChild(arrow);
+      }
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'stage-card' + (stage.id === activeStage ? ' active' : '');
+      card.setAttribute('role', 'tab');
+      card.setAttribute('aria-selected', stage.id === activeStage ? 'true' : 'false');
+      card.innerHTML =
+        '<div class="stage-num"><span class="idx">' + (i + 1) + '</span>Stage ' + (i + 1) + '</div>' +
+        '<div class="stage-name">' + stage.name + '</div>' +
+        '<div class="stage-desc">' + stage.desc + '</div>' +
+        '<div class="stage-cta">View recipe →</div>';
+      card.addEventListener('click', function () { activeStage = stage.id; renderMap(); renderPanel(); });
+      mapEl.appendChild(card);
+    });
+  }
+
+  function renderPanel() {
+    var stage = STAGES.filter(function (s) { return s.id === activeStage; })[0];
+    var chips = stage.standards.map(function (s) { return '<span class="std-chip">' + s + '</span>'; }).join('');
+    panelEl.innerHTML =
+      '<div class="recipe-head">' +
+        '<div><h3 class="recipe-title">' + stage.name + '</h3><div class="recipe-owner">' + stage.owner + '</div></div>' +
+        '<div class="recipe-standards">' + chips + '</div>' +
+      '</div>' +
+      '<div class="recipe-body">' +
+        '<p class="recipe-why">' + stage.why + '</p>' +
+        '<pre class="code"><code>' + stage.code + '</code></pre>' +
+      '</div>';
+  }
+
+  renderMap();
+  renderPanel();
+
+  // ── ROI calculator ────────────────────────────────────────────────────
+  var flawCountInput = document.getElementById('flawCount');
+  var baseHoursInput = document.getElementById('baseHours');
+  var hourlyRateInput = document.getElementById('hourlyRate');
+  var multiplierRowsEl = document.getElementById('multiplierRows');
+  var barsEl = document.getElementById('bars');
+  var tableBodyEl = document.getElementById('roiTableBody');
+  var liveRegion = document.getElementById('liveRegion');
+
+  function renderMultiplierRows() {
+    multiplierRowsEl.innerHTML = '';
+    PHASES.forEach(function (phase) {
+      var row = document.createElement('div');
+      row.className = 'mrow' + (MULTIPLIER_LOCKED[phase.id] ? ' locked' : '');
+      row.innerHTML =
+        '<div class="mname"><span class="swatch" style="background:' + phase.color + '"></span>' + phase.name + '</div>' +
+        '<input type="number" min="1" max="500" step="0.5" value="' + phase.multiplier + '" data-phase="' + phase.id + '"' +
+        (MULTIPLIER_LOCKED[phase.id] ? ' disabled title="Plan is the 1x baseline">' : '>');
+      multiplierRowsEl.appendChild(row);
+    });
+    multiplierRowsEl.querySelectorAll('input[type="number"]').forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var phase = PHASES.filter(function (p) { return p.id === inp.dataset.phase; })[0];
+        phase.multiplier = parseFloat(inp.value) || 0;
+        update();
+      });
+    });
+  }
+
+  function money(n) {
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+    if (n >= 1000) return '$' + (n / 1000).toFixed(1) + 'K';
+    return '$' + Math.round(n).toLocaleString();
+  }
+
+  var currentView = 'chart';
+
+  function update() {
+    var flaws = parseFloat(flawCountInput.value);
+    var baseHours = parseFloat(baseHoursInput.value);
+    var rate = parseFloat(hourlyRateInput.value) || 0;
+    var baseCostPerFlaw = baseHours * rate;
+
+    document.getElementById('flawCountVal').textContent = flaws;
+    document.getElementById('baseHoursVal').textContent = baseHours;
+
+    var totals = PHASES.map(function (phase) {
+      var costPerFlaw = baseCostPerFlaw * phase.multiplier;
+      return { phase: phase, costPerFlaw: costPerFlaw, total: costPerFlaw * flaws };
+    });
+
+    var maxTotal = Math.max.apply(null, totals.map(function (t) { return t.total; })) || 1;
+    var planTotal = totals[0].total;
+    var prodTotal = totals[totals.length - 1].total;
+    var savings = prodTotal - planTotal;
+    var savingsPct = prodTotal > 0 ? Math.round((savings / prodTotal) * 100) : 0;
+
+    document.getElementById('statPlan').textContent = money(planTotal);
+    document.getElementById('statProd').textContent = money(prodTotal);
+    document.getElementById('statSavings').textContent = money(savings);
+    document.getElementById('statSavingsPct').textContent = savingsPct + '% cheaper caught in Plan';
+
+    // ── bar chart ──
+    barsEl.innerHTML = '';
+    var gridWrap = document.createElement('div');
+    [0.25, 0.5, 0.75].forEach(function (frac) {
+      var g = document.createElement('div');
+      g.className = 'gridline';
+      g.style.bottom = (frac * 100) + '%';
+      g.innerHTML = '<span>' + money(maxTotal * frac) + '</span>';
+      barsEl.appendChild(g);
+    });
+
+    totals.forEach(function (t) {
+      var col = document.createElement('div');
+      col.className = 'bar-col';
+      var heightFrac = Math.max(0.04, t.total / maxTotal);
+
+      var track = document.createElement('div');
+      track.className = 'bar-track';
+
+      var bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.transform = 'scaleY(' + heightFrac + ')';
+      bar.style.background = t.phase.color;
+      bar.tabIndex = 0;
+      bar.setAttribute('role', 'img');
+      bar.setAttribute('aria-label', t.phase.name + ': ' + money(t.total) + ' total, ' + t.phase.multiplier + 'x multiplier');
+
+      var tip = document.createElement('div');
+      tip.className = 'bar-tooltip';
+      tip.innerHTML = '<strong>' + t.phase.name + '</strong><br>' + t.phase.multiplier + 'x · ' + money(t.costPerFlaw) + '/flaw<br>Total: <strong>' + money(t.total) + '</strong>';
+
+      var val = document.createElement('div');
+      val.className = 'bar-value';
+      val.textContent = money(t.total);
+
+      var label = document.createElement('div');
+      label.className = 'bar-label';
+      label.innerHTML = t.phase.name + '<br><span class="bar-sub">' + t.phase.multiplier + 'x</span>';
+
+      track.appendChild(bar);
+      track.appendChild(tip);
+      col.appendChild(val);
+      col.appendChild(track);
+      col.appendChild(label);
+      barsEl.appendChild(col);
+    });
+
+    // ── table view ──
+    tableBodyEl.innerHTML = totals.map(function (t) {
+      return '<tr>' +
+        '<td><span class="swatch-cell" style="background:' + t.phase.color + '"></span>' + t.phase.name + '</td>' +
+        '<td class="num">' + t.phase.multiplier + 'x</td>' +
+        '<td class="num">' + money(t.costPerFlaw) + '</td>' +
+        '<td class="num">' + money(t.total) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    liveRegion.textContent = 'Shifting left saves ' + money(savings) + ' this quarter, ' + savingsPct + ' percent cheaper than fixing in production.';
+  }
+
+  document.getElementById('viewToggle').addEventListener('click', function () {
+    currentView = currentView === 'chart' ? 'table' : 'chart';
+    document.getElementById('chartArea').style.display = currentView === 'chart' ? '' : 'none';
+    document.getElementById('roiTable').style.display = currentView === 'table' ? '' : 'none';
+    this.textContent = currentView === 'chart' ? 'View as table' : 'View as chart';
+  });
+
+  [flawCountInput, baseHoursInput, hourlyRateInput].forEach(function (el) {
+    el.addEventListener('input', update);
+  });
+
+  renderMultiplierRows();
+  update();
+})();
+</script>
+</body>
+</html>
