@@ -56,6 +56,7 @@ export default function Sidebar({
       title: 'PLAN',
       items: [
         { icon: Layout, label: 'PLAN WORKSPACE', path: '/plan' },
+        { icon: Shield, label: 'POLICY BUILDER', path: '/policy-builder' },
         { icon: Ticket, label: 'TICKETS', path: '/tickets' },
         { icon: ListTodo, label: t('sidebar.tasks'), path: '/tasks' },
         { icon: Users, label: t('sidebar.teams'), path: '/teams' }
