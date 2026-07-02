@@ -1,7 +1,7 @@
 import { createAppAuth } from '@octokit/auth-app';
 import { Octokit } from '@octokit/rest';
 import { setCommitStatus } from './statusService';
-import { evaluatePolicy } from './policyEngine';
+import { evaluatePolicyForRepo } from './policyEngine';
 import { runScanPipeline } from '../scanners/pipeline';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logScanCompleted, logCIGateBlocked } from '../services/logEvents';
@@ -63,18 +63,23 @@ export async function triggerCIScan(options: CIJobOptions) {
       })
     );
 
-    // 3. Evaluate against policy
-    const { passed, summary, criticalCount, highCount } = evaluatePolicy(scanResults);
+    // 3. Evaluate against policy (baseline thresholds + per-repo policy + OPA/Rego)
+    const { passed, summary, criticalCount, highCount, denyReasons } = await evaluatePolicyForRepo(
+      scanResults,
+      options.repo,
+      'production'
+    );
 
     // 4. Set final commit status
+    const failureDescription = denyReasons.length > 0
+      ? `❌ Blocked: ${denyReasons.join('; ')}`.slice(0, 140)
+      : `❌ Blocked: ${criticalCount} critical, ${highCount} high vulnerabilities`;
     await setCommitStatus(octokit, {
       owner: options.owner,
       repo: options.repo,
       sha: options.sha,
       state: passed ? 'success' : 'failure',
-      description: passed
-        ? `✅ ${summary}`
-        : `❌ Blocked: ${criticalCount} critical, ${highCount} high vulnerabilities`,
+      description: passed ? `✅ ${summary}`.slice(0, 140) : failureDescription,
       context: 'scorpion/security-gate',
       target_url: `${process.env.FRONTEND_URL}/scans/${options.sha}`
     });
