@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
-  Activity, BarChart2, ShieldAlert, GitBranch, RefreshCw, AlertTriangle, Cpu
+  Activity, RefreshCw, Cpu
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query, ID, account } from '../lib/appwrite';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -25,7 +25,7 @@ export interface VulnerabilityItem {
 }
 
 export default function DeepAnalysis() {
-  const { t } = useTranslation();
+  const {} = useTranslation();
   const [vulns, setVulns] = useState<any[]>([]);
   const [repos, setRepos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,10 +73,6 @@ export default function DeepAnalysis() {
     }
   };
 
-  const generateFallbackCVSSNum = (severity: string, id: string): number => {
-    return Number(generateFallbackCVSS(severity, id));
-  };
-
   // Grouping utility function to merge duplicate findings contextually by CVE ID or Title
   const groupVulnerabilities = (rawVulns: any[]) => {
     const groups: Record<string, any> = {};
@@ -85,7 +81,7 @@ export default function DeepAnalysis() {
       const key = v.cveId || v.title || 'unknown-vuln';
       const filePath = v.filePath || v.file_path || 'unknown-file';
       const severity = (v.severity || 'LOW').toUpperCase();
-      const cvssScore = Number(v.cvssScore || v.cvss_score || generateFallbackCVSSNum(severity, v.$id || v.id || key));
+      const cvssScore = Number(v.cvssScore || v.cvss_score || generateFallbackCVSS(severity, v.$id || v.id || key));
 
       if (!groups[key]) {
         groups[key] = {
@@ -124,20 +120,51 @@ export default function DeepAnalysis() {
     return Object.values(groups).sort((a, b) => b.cvssScore - a.cvssScore);
   };
 
-  const handleCreateTask = async (v: any) => {
+  // Shared boilerplate for every per-vulnerability mutation: loading toast,
+  // processing/success state, error handling. Only the actual mutation and
+  // messaging differ per action.
+  const runVulnMutation = async (
+    v: any,
+    action: 'task' | 'false_positive' | 'snooze',
+    loadingMsg: string,
+    successMsg: string,
+    mutate: () => Promise<void>,
+    opts?: { removeAfterSuccess?: boolean }
+  ) => {
     setProcessingId(v.id);
-    setProcessingAction('task');
-    const loadToast = toast.loading(`Initiating task dispatch for ${v.cveId || v.title}...`);
+    setProcessingAction(action);
+    const loadToast = toast.loading(loadingMsg);
     try {
+      await mutate();
+      toast.success(successMsg, { id: loadToast });
+      setProcessingId(null);
+      setProcessingAction(null);
+      setSuccessId(v.id);
+      setTimeout(() => {
+        setSuccessId(null);
+        if (opts?.removeAfterSuccess) {
+          setVulns(prev => prev.filter(item => !v.occurrences.some((occ: any) => occ.id === (item.$id || item.id))));
+        }
+      }, opts?.removeAfterSuccess ? 1200 : 1500);
+    } catch (err: any) {
+      console.error(`Failed vuln action "${action}":`, err);
+      toast.error(`Operation failed: ${err.message || 'database error'}`, { id: loadToast });
+      setProcessingId(null);
+      setProcessingAction(null);
+    }
+  };
+
+  const dbOccurrencesOf = (v: any) =>
+    v.occurrences.filter((occ: any) => occ.id && !occ.id.startsWith('vuln-') && !occ.id.startsWith('group-'));
+
+  const handleCreateTask = (v: any) =>
+    runVulnMutation(v, 'task', `Initiating task dispatch for ${v.cveId || v.title}...`, `Successfully dispatched security task for ${v.cveId || v.title}`, async () => {
       let userId = '';
       try {
         const currentUser = await account.get();
         userId = currentUser.$id;
-      } catch (err) {
-        toast.error('Session expired. Please log in again.', { id: loadToast });
-        setProcessingId(null);
-        setProcessingAction(null);
-        return;
+      } catch {
+        throw new Error('Session expired. Please log in again.');
       }
 
       const firstOcc = v.occurrences[0];
@@ -154,130 +181,77 @@ export default function DeepAnalysis() {
         repo_url: repo ? repo.url : null,
         user_id: userId
       });
+    });
 
-      toast.success(`Successfully dispatched security task for ${v.cveId || v.title}`, { id: loadToast });
-      setProcessingId(null);
-      setProcessingAction(null);
-      setSuccessId(v.id);
-      setTimeout(() => {
-        setSuccessId(null);
-      }, 1500);
-    } catch (err: any) {
-      console.error('Failed to create task:', err);
-      toast.error(`Task creation failed: ${err.message || 'database error'}`, { id: loadToast });
-      setProcessingId(null);
-      setProcessingAction(null);
-    }
-  };
-
-  const handleFalsePositive = async (v: any) => {
-    setProcessingId(v.id);
-    setProcessingAction('false_positive');
-    const loadToast = toast.loading(`Marking ${v.cveId || v.title} as False Positive...`);
-    try {
-      // If we have actual database records, perform database update
-      const actualDbOccurrences = v.occurrences.filter((occ: any) => occ.id && !occ.id.startsWith('vuln-') && !occ.id.startsWith('group-'));
+  const handleFalsePositive = (v: any) =>
+    runVulnMutation(v, 'false_positive', `Marking ${v.cveId || v.title} as False Positive...`, `Marked ${v.cveId || v.title} as False Positive. Suppressing alerts.`, async () => {
+      const actualDbOccurrences = dbOccurrencesOf(v);
       if (actualDbOccurrences.length > 0) {
         await Promise.all(
-          actualDbOccurrences.map((occ: any) => 
-            databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, occ.id, {
-              status: 'false_positive'
-            })
+          actualDbOccurrences.map((occ: any) =>
+            databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, occ.id, { status: 'false_positive' })
           )
         );
       }
+    }, { removeAfterSuccess: true });
 
-      toast.success(`Marked ${v.cveId || v.title} as False Positive. Suppressing alerts.`, { id: loadToast });
-      setProcessingId(null);
-      setProcessingAction(null);
-      setSuccessId(v.id);
-      setTimeout(() => {
-        setSuccessId(null);
-        setVulns(prev => prev.filter(item => !v.occurrences.some((occ: any) => occ.id === (item.$id || item.id))));
-      }, 1200);
-    } catch (err: any) {
-      console.error('Failed to update status:', err);
-      toast.error(`Operation failed: ${err.message || 'database error'}`, { id: loadToast });
-      setProcessingId(null);
-      setProcessingAction(null);
-    }
-  };
-
-  const handleSnoozeSLA = async (v: any) => {
-    setProcessingId(v.id);
-    setProcessingAction('snooze');
-    const loadToast = toast.loading(`Snoozing SLA for ${v.cveId || v.title}...`);
-    try {
+  const handleSnoozeSLA = (v: any) =>
+    runVulnMutation(v, 'snooze', `Snoozing SLA for ${v.cveId || v.title}...`, `SLA deadline extended by 14 days for mitigation preparation.`, async () => {
       const snoozeUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      const actualDbOccurrences = v.occurrences.filter((occ: any) => occ.id && !occ.id.startsWith('vuln-') && !occ.id.startsWith('group-'));
-      
+      const actualDbOccurrences = dbOccurrencesOf(v);
       if (actualDbOccurrences.length > 0) {
         await Promise.all(
-          actualDbOccurrences.map((occ: any) => 
-            databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, occ.id, {
-              status: 'snoozed',
-              snoozeUntil: snoozeUntil
-            })
+          actualDbOccurrences.map((occ: any) =>
+            databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, occ.id, { status: 'snoozed', snoozeUntil })
           )
         );
       }
+    }, { removeAfterSuccess: true });
 
-      toast.success(`SLA deadline extended by 14 days for mitigation preparation.`, { id: loadToast });
-      setProcessingId(null);
-      setProcessingAction(null);
-      setSuccessId(v.id);
-      setTimeout(() => {
-        setSuccessId(null);
-        setVulns(prev => prev.filter(item => !v.occurrences.some((occ: any) => occ.id === (item.$id || item.id))));
-      }, 1200);
-    } catch (err: any) {
-      console.error('Failed to snooze SLA:', err);
-      toast.error(`Snooze operation failed: ${err.message || 'database error'}`, { id: loadToast });
-      setProcessingId(null);
-      setProcessingAction(null);
-    }
-  };
+  // Grouping, heatmap, and trend aggregation all derive from vulns/repos and
+  // were recomputing on every render (including on every keystroke elsewhere
+  // in the app that touches this component's state). One useMemo, one pass.
+  const { groupedVulns, heatmapData, chartData } = useMemo(() => {
+    // Filter out any vulnerabilities that are not 'open' (or no status defined yet)
+    const activeVulns = vulns.filter(v => !v.status || v.status === 'open');
+    const grouped = groupVulnerabilities(activeVulns);
 
-  // Filter out any vulnerabilities that are not 'open' (or no status defined yet)
-  const activeVulns = vulns.filter(v => !v.status || v.status === 'open');
-  const groupedVulns = groupVulnerabilities(activeVulns);
+    // Group by Repo/Severity for Heatmap (using grouped aggregates)
+    const heatmap: Record<string, Record<string, number>> = {};
+    repos.forEach(repo => {
+      heatmap[repo.name] = { critical: 0, high: 0, medium: 0, low: 0 };
+    });
 
-  // Group by Repo/Severity for Heatmap (using grouped aggregates)
-  const heatmapData: Record<string, Record<string, number>> = {};
-  repos.forEach(repo => {
-    heatmapData[repo.name] = { critical: 0, high: 0, medium: 0, low: 0 };
-  });
+    grouped.forEach(g => {
+      // Find matching repo (e.g. from the first occurrence)
+      const firstOcc = g.occurrences[0];
+      const rawVuln = activeVulns.find(v => (v.$id || v.id) === firstOcc.id);
+      const repo = rawVuln ? repos.find(r => r.$id === rawVuln.repo_id) : null;
+      const repoName = repo ? repo.name : 'Unknown';
 
-  groupedVulns.forEach(g => {
-    // Find matching repo (e.g. from the first occurrence)
-    const firstOcc = g.occurrences[0];
-    const rawVuln = activeVulns.find(v => (v.$id || v.id) === firstOcc.id);
-    const repo = rawVuln ? repos.find(r => r.$id === rawVuln.repo_id) : null;
-    const repoName = repo ? repo.name : 'Unknown';
-    
-    if (!heatmapData[repoName]) {
-      heatmapData[repoName] = { critical: 0, high: 0, medium: 0, low: 0 };
-    }
-    const sev = g.severity.toLowerCase();
-    const targetSev = sev === 'crit' ? 'critical' : (sev === 'high' ? 'high' : (sev === 'medium' ? 'medium' : 'low'));
-    if (heatmapData[repoName][targetSev] !== undefined) {
-      heatmapData[repoName][targetSev]++;
-    }
-  });
+      if (!heatmap[repoName]) {
+        heatmap[repoName] = { critical: 0, high: 0, medium: 0, low: 0 };
+      }
+      const sev = g.severity.toLowerCase();
+      const targetSev = sev === 'crit' ? 'critical' : (sev === 'high' ? 'high' : (sev === 'medium' ? 'medium' : 'low'));
+      if (heatmap[repoName][targetSev] !== undefined) {
+        heatmap[repoName][targetSev]++;
+      }
+    });
 
-  // Trend Graph Data (Grouping by Date)
-  const trendData: Record<string, number> = {};
-  groupedVulns.forEach(g => {
-    const firstOcc = g.occurrences[0];
-    const date = new Date(firstOcc.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    trendData[date] = (trendData[date] || 0) + 1;
-  });
+    // Trend Graph Data (Grouping by Date)
+    const trend: Record<string, number> = {};
+    grouped.forEach(g => {
+      const firstOcc = g.occurrences[0];
+      const date = new Date(firstOcc.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      trend[date] = (trend[date] || 0) + 1;
+    });
 
-  const trendLabels = Object.keys(trendData).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-  const chartData = trendLabels.map(label => ({
-    date: label,
-    count: trendData[label]
-  }));
+    const trendLabels = Object.keys(trend).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const chart = trendLabels.map(label => ({ date: label, count: trend[label] }));
+
+    return { groupedVulns: grouped, heatmapData: heatmap, chartData: chart };
+  }, [vulns, repos]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

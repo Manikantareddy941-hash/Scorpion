@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  Plus, Trash2, Calendar, Clock, Shield, Sparkles, Settings, BarChart2,
-  LayoutGrid, CheckCircle2, ChevronRight, X, AlertTriangle, Play, Check,
-  Edit3, ArrowRight, User, Tag, Zap, RefreshCw, Layers, ListTodo, MoreVertical,
-  ChevronDown, HelpCircle, FileText
+  Plus, Trash2, Calendar, Shield, Sparkles, Settings, BarChart2,
+  LayoutGrid, CheckCircle2, X, AlertTriangle, Play, Check, ArrowRight, User, Zap, RefreshCw, Layers, ListTodo, MoreVertical,
+  ChevronDown
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -130,7 +129,7 @@ export default function PlanWorkspace() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
-  const [filterEpic, setFilterEpic] = useState('all');
+  const [filterEpic] = useState('all');
 
   // Modal / Form Creators
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -201,24 +200,18 @@ export default function PlanWorkspace() {
       const token = await getJWT();
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      // Fetch Epics
-      const resEpics = await fetch(`/api/plan/projects/${projId}/epics`, { headers });
+      const [resEpics, resSprints, resIssues, resRules, resThreats] = await Promise.all([
+        fetch(`/api/plan/projects/${projId}/epics`, { headers }),
+        fetch(`/api/plan/projects/${projId}/sprints`, { headers }),
+        fetch(`/api/plan/projects/${projId}/issues`, { headers }),
+        fetch(`/api/plan/projects/${projId}/automation-rules`, { headers }),
+        fetch(`/api/plan/projects/${projId}/threats`, { headers })
+      ]);
+
       if (resEpics.ok) setEpics(await resEpics.json());
-
-      // Fetch Sprints
-      const resSprints = await fetch(`/api/plan/projects/${projId}/sprints`, { headers });
       if (resSprints.ok) setSprints(await resSprints.json());
-
-      // Fetch Issues
-      const resIssues = await fetch(`/api/plan/projects/${projId}/issues`, { headers });
       if (resIssues.ok) setIssues(await resIssues.json());
-
-      // Fetch Rules
-      const resRules = await fetch(`/api/plan/projects/${projId}/automation-rules`, { headers });
       if (resRules.ok) setAutomationRules(await resRules.json());
-
-      // Fetch Threats
-      const resThreats = await fetch(`/api/plan/projects/${projId}/threats`, { headers });
       if (resThreats.ok) setThreats(await resThreats.json());
     } catch (err) {
       console.error('Error fetching project detail data:', err);
@@ -599,6 +592,18 @@ export default function PlanWorkspace() {
   const currentProject = projects.find(p => p.$id === selectedProjId);
   const activeSprint = sprints.find(s => s.status === 'active');
 
+  const priorityCounts = useMemo(() => ({
+    critical: issues.filter(i => i.priority === 'critical').length,
+    high: issues.filter(i => i.priority === 'high').length,
+    medium: issues.filter(i => i.priority === 'medium').length,
+    low: issues.filter(i => i.priority === 'low').length
+  }), [issues]);
+
+  const unlinkedVulnerabilities = useMemo(
+    () => vulnerabilities.filter(v => !issues.some(i => i.vulnId === v.$id)),
+    [vulnerabilities, issues]
+  );
+
   const filteredIssues = issues.filter(iss => {
     if (searchQuery && !iss.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (filterAssignee !== 'all' && iss.assignee !== filterAssignee) return false;
@@ -611,7 +616,7 @@ export default function PlanWorkspace() {
   // interpolation from total points to zero across the sprint's real dates;
   // "actual" is the one real data point we have - today's remaining points.
   // There's no daily history stored, so no fabricated multi-day curve is drawn.
-  const burndownData = (() => {
+  const burndownData = useMemo(() => {
     if (!activeSprint?.startDate || !activeSprint?.endDate) return [];
     const sprintIssues = issues.filter(i => i.sprintId === activeSprint.$id);
     const totalPoints = sprintIssues.reduce((acc, i) => acc + (i.storyPoints || 0), 0);
@@ -629,28 +634,27 @@ export default function PlanWorkspace() {
       const date = new Date(start.getTime() + d * 86400000);
       const point: { day: string; ideal: number; actual?: number } = {
         day: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        ideal: Math.max(0, Math.round(totalPoints - (totalPoints / totalDays) * d)),
-      };
+        ideal: Math.max(0, Math.round(totalPoints - (totalPoints / totalDays) * d)) };
       if (d === elapsedDays) point.actual = remainingPoints;
       points.push(point);
     }
     return points;
-  })();
+  }, [activeSprint, issues]);
 
   // Real velocity per sprint: committed vs. completed story points, aggregated
   // directly from the actual issues assigned to each sprint.
-  const velocityData = sprints.map(s => {
+  const velocityData = useMemo(() => sprints.map(s => {
     const sprintIssues = issues.filter(i => i.sprintId === s.$id);
     const committed = sprintIssues.reduce((acc, i) => acc + (i.storyPoints || 0), 0);
     const completed = sprintIssues
       .filter(i => i.status === 'done')
       .reduce((acc, i) => acc + (i.storyPoints || 0), 0);
     return { sprint: s.name, committed, completed };
-  });
+  }), [sprints, issues]);
 
   // Real bug closure cohorts: bugs grouped by the week they were created,
   // split into closed vs. still-open based on their current status.
-  const closureVelocityData = (() => {
+  const closureVelocityData = useMemo(() => {
     const bugs = issues.filter(i => i.type === 'bug');
     const weeks: Record<string, { closed: number; open: number; sortKey: number }> = {};
     bugs.forEach(i => {
@@ -666,7 +670,7 @@ export default function PlanWorkspace() {
     return Object.entries(weeks)
       .sort((a, b) => a[1].sortKey - b[1].sortKey)
       .map(([date, v]) => ({ date, closed: v.closed, open: v.open }));
-  })();
+  }, [issues]);
 
   if (loading) {
     return (
@@ -1217,7 +1221,7 @@ export default function PlanWorkspace() {
                 </div>
 
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                  {vulnerabilities.filter(v => !issues.some(i => i.vulnId === v.$id)).map(vuln => (
+                  {unlinkedVulnerabilities.map(vuln => (
                     <div
                       key={vuln.$id}
                       className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] p-2.5 rounded-xl space-y-2"
@@ -1246,7 +1250,7 @@ export default function PlanWorkspace() {
                     </div>
                   ))}
 
-                  {vulnerabilities.filter(v => !issues.some(i => i.vulnId === v.$id)).length === 0 && (
+                  {unlinkedVulnerabilities.length === 0 && (
                     <div className="text-center py-6 text-[9px] uppercase italic text-[var(--text-secondary)] opacity-50">
                       All scanned vulnerabilities are currently linked.
                     </div>
@@ -1699,10 +1703,10 @@ export default function PlanWorkspace() {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Critical', value: issues.filter(i => i.priority === 'critical').length, color: '#ef4444' },
-                          { name: 'High', value: issues.filter(i => i.priority === 'high').length, color: '#f97316' },
-                          { name: 'Medium', value: issues.filter(i => i.priority === 'medium').length, color: '#eab308' },
-                          { name: 'Low', value: issues.filter(i => i.priority === 'low').length, color: '#10b981' }
+                          { name: 'Critical', value: priorityCounts.critical, color: '#ef4444' },
+                          { name: 'High', value: priorityCounts.high, color: '#f97316' },
+                          { name: 'Medium', value: priorityCounts.medium, color: '#eab308' },
+                          { name: 'Low', value: priorityCounts.low, color: '#10b981' }
                         ].filter(p => p.value > 0)}
                         cx="50%"
                         cy="50%"
@@ -1728,10 +1732,10 @@ export default function PlanWorkspace() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-[9px] font-black uppercase italic">
-                  <span className="text-red-500">Critical: {issues.filter(i => i.priority === 'critical').length}</span>
-                  <span className="text-orange-500">High: {issues.filter(i => i.priority === 'high').length}</span>
-                  <span className="text-yellow-500">Medium: {issues.filter(i => i.priority === 'medium').length}</span>
-                  <span className="text-green-500">Low: {issues.filter(i => i.priority === 'low').length}</span>
+                  <span className="text-red-500">Critical: {priorityCounts.critical}</span>
+                  <span className="text-orange-500">High: {priorityCounts.high}</span>
+                  <span className="text-yellow-500">Medium: {priorityCounts.medium}</span>
+                  <span className="text-green-500">Low: {priorityCounts.low}</span>
                 </div>
               </div>
 
