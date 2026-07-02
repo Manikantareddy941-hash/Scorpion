@@ -117,6 +117,7 @@ export default function PlanWorkspace() {
   const [newCommentBody, setNewCommentBody] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
   const [createThreatOpen, setCreateThreatOpen] = useState(false);
+  const [aiThreatLoading, setAiThreatLoading] = useState(false);
 
   // New Threat Form States
   const [newThreatTitle, setNewThreatTitle] = useState('');
@@ -511,6 +512,35 @@ export default function PlanWorkspace() {
       }
     } catch (err) {
       toast.error('Failed to convert threat');
+    }
+  };
+
+  const handleAiGenerateThreats = async () => {
+    if (!selectedProjId) return;
+    const architecture = window.prompt(
+      'List your system components (one per line) — the AI runs STRIDE against each:',
+      'React frontend\nExpress API\nPostgres database\nThird-party payment API'
+    );
+    if (architecture === null) return; // cancelled
+    setAiThreatLoading(true);
+    try {
+      const token = await getJWT();
+      const res = await fetch(`/api/plan/projects/${selectedProjId}/threats/ai-generate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ architecture })
+      });
+      if (res.ok) {
+        const generated: Threat[] = await res.json();
+        setThreats(prev => [...prev, ...generated]);
+        toast.success(`AI identified ${generated.length} threat${generated.length === 1 ? '' : 's'}`);
+      } else {
+        toast.error('AI threat generation failed');
+      }
+    } catch (err) {
+      toast.error('AI threat generation failed');
+    } finally {
+      setAiThreatLoading(false);
     }
   };
 
@@ -1239,13 +1269,24 @@ export default function PlanWorkspace() {
                   Identify design-time security flaws and generate remediation tasks.
                 </p>
               </div>
-              <button
-                onClick={() => setCreateThreatOpen(true)}
-                className="btn-premium flex items-center gap-2 py-2 px-4"
-              >
-                <Plus size={14} />
-                Log Threat Finding
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleAiGenerateThreats}
+                  disabled={aiThreatLoading || !selectedProjId}
+                  className="btn-ghost flex items-center gap-2 py-2 px-4 disabled:opacity-50"
+                  title="Run STRIDE analysis over your components with AI"
+                >
+                  <Sparkles size={14} />
+                  {aiThreatLoading ? 'Analyzing…' : 'AI Generate (STRIDE)'}
+                </button>
+                <button
+                  onClick={() => setCreateThreatOpen(true)}
+                  className="btn-premium flex items-center gap-2 py-2 px-4"
+                >
+                  <Plus size={14} />
+                  Log Threat Finding
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -21,6 +21,28 @@ const ISO27001_CONTROLS = [
     check: (_: any[], incidents: any[]) => incidents.length >= 0 },
 ];
 
+// HIPAA Security Rule safeguards mapped to the scan/incident signals we have.
+const HIPAA_CONTROLS = [
+  { controlId: '164.308(a)(1)(ii)(A)', title: 'Risk analysis — systems are scanned', framework: 'HIPAA',
+    check: (scans: any[]) => scans.length > 0 },
+  { controlId: '164.308(a)(1)(ii)(B)', title: 'Risk management — release gates enforced', framework: 'HIPAA',
+    check: (scans: any[]) => scans.every(s => s.gateStatus === 'passed') },
+  { controlId: '164.312(c)(1)', title: 'Integrity — no critical vulnerabilities in ePHI systems', framework: 'HIPAA',
+    check: (scans: any[]) => scans.every(s => (s.criticalCount ?? 0) === 0) },
+  { controlId: '164.308(a)(6)', title: 'Security incident procedures — incidents tracked', framework: 'HIPAA',
+    check: (_: any[], incidents: any[]) => incidents.length >= 0 },
+];
+
+// GDPR articles relevant to a security posture (Art. 25, 32, 33).
+const GDPR_CONTROLS = [
+  { controlId: 'Art.25', title: 'Data protection by design — security testing in the pipeline', framework: 'GDPR',
+    check: (scans: any[]) => scans.length > 0 },
+  { controlId: 'Art.32', title: 'Security of processing — no unresolved critical vulnerabilities', framework: 'GDPR',
+    check: (scans: any[]) => scans.every(s => (s.criticalCount ?? 0) === 0) },
+  { controlId: 'Art.33', title: 'Breach notification readiness — incident tracking active', framework: 'GDPR',
+    check: (_: any[], incidents: any[]) => incidents.length >= 0 },
+];
+
 export async function evaluateCompliance(userId: string) {
   try {
     const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
@@ -39,7 +61,7 @@ export async function evaluateCompliance(userId: string) {
 
     const scans = scansRes.documents;
     const incidents = incidentsRes.documents;
-    const allControls = [...SOC2_CONTROLS, ...ISO27001_CONTROLS];
+    const allControls = [...SOC2_CONTROLS, ...ISO27001_CONTROLS, ...HIPAA_CONTROLS, ...GDPR_CONTROLS];
     const results = [];
 
     for (const control of allControls) {

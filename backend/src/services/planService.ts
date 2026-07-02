@@ -1,9 +1,49 @@
 import { randomUUID } from 'crypto';
 import { planRepository } from '../repositories/planRepository';
 import { Issue, Threat } from '../types/plan.types';
+import { generateStrideThreats } from './threatAiService';
 
 function randomId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
+}
+
+const STRIDE_CATEGORIES: Threat['strideCategory'][] = [
+  'Spoofing', 'Tampering', 'Repudiation', 'Information Disclosure', 'Denial of Service', 'Elevation of Privilege',
+];
+const SEVERITIES: Threat['severity'][] = ['low', 'medium', 'high', 'critical'];
+
+// A threat's mitigation is a single text field that may hold several lines.
+// Render each as an acceptance-criteria checkbox so the dev has a concrete
+// definition of done, not a prose blob.
+export function buildThreatAcceptanceCriteria(mitigation?: string): string {
+  const lines = (mitigation || '')
+    .split('\n')
+    .map((l) => l.trim().replace(/^[-*]\s*/, ''))
+    .filter(Boolean);
+  if (lines.length === 0) return '- [ ] Define and implement a mitigation';
+  return lines.map((l) => `- [ ] ${l}`).join('\n');
+}
+
+// Pure: STRIDE threat -> issue fields. Extracted so the security-story shape
+// (type, priority, acceptance criteria, traceability labels) is unit-testable.
+export function buildThreatIssueFields(threat: Threat, projectId: string): Issue {
+  return {
+    $id: randomId('issue'),
+    projectId,
+    title: `[Threat] ${threat.title}`,
+    type: 'story',
+    priority: severityToPriority(threat.severity),
+    storyPoints: 3,
+    description:
+      `**STRIDE:** ${threat.strideCategory}\n` +
+      `**Severity:** ${threat.severity}\n\n` +
+      `${threat.description || 'N/A'}\n\n` +
+      `**Acceptance criteria (mitigations):**\n${buildThreatAcceptanceCriteria(threat.mitigation)}`,
+    createdAt: new Date().toISOString(),
+    status: 'todo',
+    timeLogged: 0,
+    labels: ['security', 'threat-model', `stride:${threat.strideCategory}`],
+  };
 }
 
 async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
@@ -168,21 +208,10 @@ export const planService = {
     const threat = await planRepository.getThreat(threatId);
     if (!threat) return 'not_found';
 
-    const newIssue: Issue = {
-      $id: randomId('issue'),
-      projectId,
-      title: `[Threat] ${threat.title}`,
-      type: 'bug',
-      priority: severityToPriority(threat.severity),
-      storyPoints: 3,
-      description: `Threat Category: ${threat.strideCategory}\n\nDescription:\n${threat.description || 'N/A'}\n\nProposed Mitigation:\n${threat.mitigation || 'N/A'}`,
-      createdAt: new Date().toISOString(),
-      status: 'todo',
-      timeLogged: 0,
-      labels: []
-    };
+    // Idempotent: a threat already backed by an issue must not spawn a duplicate.
+    if (threat.issueId) return { ok: true, data: threat };
 
-    const issueData = await planRepository.createIssue(newIssue);
+    const issueData = await planRepository.createIssue(buildThreatIssueFields(threat, projectId));
 
     const updatedThreat = await planRepository.updateThreat(threatId, {
       issueId: issueData.$id,
@@ -191,5 +220,48 @@ export const planService = {
 
     if (!updatedThreat) return 'not_found';
     return { ok: true, data: updatedThreat };
+  },
+
+  // Plan phase: AI STRIDE. Feed the project's components (or a free-text
+  // architecture) to the same Gemini analyzer the threat-model system uses,
+  // then persist each result as a project threat ready to convert to backlog.
+  async aiGenerateThreats(
+    projectId: string,
+    input: { components?: Array<{ label: string; type?: string }>; architecture?: string },
+    userId?: string
+  ): Promise<'forbidden' | { ok: true; data: Threat[] }> {
+    if (!(await assertProjectAccess(projectId, userId))) return 'forbidden';
+
+    const nodes = (input.components && input.components.length > 0)
+      ? input.components.map((c) => ({ label: c.label, type: c.type || 'process' }))
+      : (input.architecture || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .map((label) => ({ label, type: 'process' }));
+
+    if (nodes.length === 0) return { ok: true, data: [] };
+
+    const aiThreats = await generateStrideThreats({ nodes });
+    const created: Threat[] = [];
+
+    for (const t of aiThreats) {
+      // AI output is untrusted; only persist rows whose enums match our schema.
+      if (!STRIDE_CATEGORIES.includes(t.strideCategory as Threat['strideCategory'])) continue;
+      const severity = SEVERITIES.includes(t.severity as Threat['severity'])
+        ? (t.severity as Threat['severity'])
+        : 'medium';
+
+      const row = await planRepository.createThreat(projectId, {
+        title: t.title,
+        strideCategory: t.strideCategory as Threat['strideCategory'],
+        severity,
+        description: t.component ? `Component: ${t.component}\n\n${t.description}` : t.description,
+        mitigation: Array.isArray(t.mitigations) ? t.mitigations.join('\n') : undefined,
+      });
+      created.push(row);
+    }
+
+    return { ok: true, data: created };
   }
 };

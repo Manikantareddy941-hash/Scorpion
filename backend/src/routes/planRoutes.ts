@@ -158,4 +158,20 @@ router.post('/projects/:projectId/threats/:id/convert', async (req: Authenticate
   sendAccessResult(res, result === 'forbidden' || result === 'not_found' ? result : result);
 });
 
+// AI STRIDE: generate threats for the project from its components / architecture text
+router.post('/projects/:projectId/threats/ai-generate', async (req: AuthenticatedRequest, res: Response) => {
+  const { components, architecture } = req.body ?? {};
+  try {
+    const result = await planService.aiGenerateThreats(
+      req.params.projectId,
+      { components, architecture },
+      req.user?.$id
+    );
+    if (result === 'forbidden') return res.status(403).json({ error: 'You do not have access to this project' });
+    res.status(201).json(result.data);
+  } catch (err: unknown) {
+    res.status(502).json({ error: 'AI threat generation failed', details: err instanceof Error ? err.message : 'Unknown error' });
+  }
+});
+
 export default router;
