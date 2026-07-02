@@ -40,13 +40,13 @@ SCORPION is a production-grade security control plane that protects applications
 |---|---|
 | 🔍 **Scanning** | Parallel SAST (Semgrep), SCA (Trivy), secrets (Gitleaks), IaC (Checkov), Python (Bandit), DAST (OWASP ZAP) |
 | 🤖 **AI Remediation** | "TONY" engine — context-aware patch generation via Gemini, applied as reviewable diffs |
-| 🚪 **Policy Gates** | OPA/Rego policy-as-code blocking PR merges on GitHub commit status checks |
+| 🚪 **Policy Gates** | OPA/Rego policy-as-code authored in a Policy Builder UI, enforced at both the GitHub PR commit-status gate and the Kubernetes deploy gate |
 | 🏢 **Multi-Tenancy** | Team-scoped repos/scans/incidents, fine-grained IAM, Okta/Microsoft SSO via Appwrite OAuth2 |
 | 🧵 **Async Pipeline** | Redis-backed BullMQ scan queue, decoupled from the request thread |
-| 🧩 **Threat Modeling** | STRIDE-based React Flow canvas with Gemini-assisted analysis |
+| 🧩 **Threat Modeling** | STRIDE threat modeling with Gemini AI threat generation, one-click convert to acceptance-criteria security stories in the backlog |
 | 🔐 **Supply Chain** | cosign container image signing/verification, automated leaked-secret revocation |
 | 🚨 **Incident Response** | Slack alerting, automated containment, Falco runtime event ingestion |
-| 📋 **Compliance** | SOC 2 / ISO 27001 evidence export, hash-stamped audit ledger |
+| 📋 **Compliance** | SOC 2 / ISO 27001 / HIPAA / GDPR control evaluation, hash-stamped audit ledger |
 | 🧰 **Dev Integrations** | VS Code extension with inline diagnostics, GitHub App webhooks |
 
 ## Architecture
@@ -211,7 +211,7 @@ flowchart TD
 <details>
 <summary><b>6. Multi-Tenancy, Threat Modeling & Incident Response</b></summary>
 
-Repos/scans/incidents/compliance are team-scoped (closing cross-tenant IDOR); STRIDE threat modeling runs on a React Flow canvas; critical incidents trigger Slack alerts and automated containment, feeding the hash-stamped Audit Ledger.
+Repos/scans/incidents/compliance are team-scoped (closing cross-tenant IDOR); STRIDE threat modeling generates threats with Gemini AI and converts them into acceptance-criteria security stories; critical incidents trigger Slack alerts and automated containment, feeding the hash-stamped Audit Ledger.
 
 **Files:** [`backend/src/services/tenancyService.ts`](backend/src/services/tenancyService.ts) · [`backend/src/services/threatModelService.ts`](backend/src/services/threatModelService.ts) · [`backend/src/services/slackService.ts`](backend/src/services/slackService.ts) · [`src/pages/AuditLedger.tsx`](src/pages/AuditLedger.tsx)
 
