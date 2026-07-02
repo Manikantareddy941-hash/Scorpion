@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Shield, AlertTriangle, Bug, Wind, CheckCircle2, 
   ArrowLeft, Clock, Activity, FileText, Code, 
-  ExternalLink, Search, Filter, Terminal
+  ExternalLink, Search, Terminal
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +31,7 @@ export default function SastDetail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useTranslation();
+  const {} = useTranslation();
   
   const severityFilter = searchParams.get('filter')?.toLowerCase();
   const isAntipatterns = location.pathname.includes('/antipatterns');

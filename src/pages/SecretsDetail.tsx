@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Shield, AlertTriangle, Bug, Wind, CheckCircle2, 
-  ArrowLeft, Clock, Activity, FileText, Code, 
-  ExternalLink, Search, Filter, Terminal, Lock
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { CheckCircle2,
+  ArrowLeft, Activity, Lock, Search
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 interface Finding {
@@ -23,14 +20,11 @@ interface Finding {
 
 export default function SecretsDetail() {
   const { scanId } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { t } = useTranslation();
-  
+
   const [loading, setLoading] = useState(true);
   const [findings, setFindings] = useState<Finding[]>([]);
-  const [scan, setScan] = useState<any>(null);
+  const [, setScan] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSeverity, setActiveSeverity] = useState<string | null>(null);
 
@@ -82,6 +76,34 @@ export default function SecretsDetail() {
             <h1 className="text-2xl font-black text-[var(--text-primary)] uppercase italic">Secrets Detection Audit</h1>
             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1">Scan ID: {scanId}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by message or file path..."
+            className="w-full pl-9 pr-3 py-2 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:border-[var(--accent-primary)]"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setActiveSeverity(activeSeverity === s ? null : s)}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
+                activeSeverity === s
+                  ? 'border-[var(--accent-primary)] text-[var(--accent-primary)] bg-[var(--accent-primary)]/10'
+                  : 'border-[var(--border-subtle)] text-[var(--text-secondary)]'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
         </div>
       </div>
 

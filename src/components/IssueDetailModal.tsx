@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Send, User, Clock, Link2, ExternalLink, Activity, Tag, Calendar, ShieldAlert, Bug, Sparkles, Plus, AlertOctagon } from 'lucide-react';
+import { X, Loader2, Send, User, Clock, Link2, ExternalLink, Activity, Tag, ShieldAlert, Bug, Sparkles, AlertOctagon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTicket, updateTicket, addComment } from '../hooks/useTickets';
 import { Ticket } from '../../shared/types';

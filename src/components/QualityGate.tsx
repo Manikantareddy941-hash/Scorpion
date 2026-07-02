@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function GradeBadge({ grade, size = 'md' }: { grade: string; size?: 'sm' | 'md' | 'lg' }) {
   const gradeColor: Record<string, string> = {
@@ -26,7 +25,7 @@ export function GradeBadge({ grade, size = 'md' }: { grade: string; size?: 'sm' 
   );
 }
 
-export function QualityGateCard({ scan, loading }: { scan: any; loading?: boolean }) {
+export function QualityGateCard({ scan }: { scan: any; loading?: boolean }) {
   const grade = scan?.qualityGrade;
   const score = scan?.qualityScore ?? 0;
   const passed = grade && grade !== 'F' && grade !== 'D';

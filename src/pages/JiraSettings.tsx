@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { saveJiraConfig, testJiraConnection } from '../hooks/useTickets';
 import { JiraConfig } from '../../shared/types';
 import {
-  ArrowLeft, Settings, ShieldAlert, Key, Globe, Mail,
+  ArrowLeft, Key, Globe, Mail,
   Cpu, Save, Loader2, Link2, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';

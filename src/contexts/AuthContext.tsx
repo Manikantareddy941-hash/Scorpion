@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { useLocation } from "react-router-dom";
-import { account, ID } from "../lib/appwrite";
-import { Models, OAuthProvider } from "appwrite";
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { account, ID } from '../lib/appwrite';
+import { Models, OAuthProvider } from 'appwrite';
 
 type AppUser = Models.User<Models.Preferences>;
 
@@ -34,12 +33,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const BACKEND_URL = '';
-  const location = useLocation();
 
   useEffect(() => {
     const checkUser = async () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const isOAuthCallback = window.location.pathname === '/auth/callback' ||
+      const isOAuthCallback =
+        window.location.pathname === '/auth/callback' ||
         (urlParams.has('userId') && urlParams.has('secret'));
 
       if (isOAuthCallback) {
@@ -53,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const jwt = await account.createJWT();
         const roleResponse = await fetch(`${BACKEND_URL}/api/user/role`, {
-          headers: { 'Authorization': `Bearer ${jwt.jwt}` }
+          headers: { Authorization: `Bearer ${jwt.jwt}` },
         }).catch(() => null);
 
         if (roleResponse && roleResponse.ok) {
@@ -70,9 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkUser();
   }, []);
 
-  const signUp = async (email: string, password: string, name: string = "") => {
+  const signUp = async (email: string, password: string, name: string = '') => {
     try {
-      await account.create(ID.unique(), email, password, name || email.split("@")[0]);
+      await account.create(ID.unique(), email, password, name || email.split('@')[0]);
       await account.createEmailPasswordSession(email, password);
       const currentUser = await account.get();
       setUser(currentUser);
@@ -83,16 +82,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await account.createVerification(`${window.location.origin}/verify-email`);
       } catch (verifyErr) {
-        console.warn("Could not send verification email:", verifyErr);
+        console.warn('Could not send verification email:', verifyErr);
       }
 
-      const { auditLogger } = await import("../lib/auditLogger");
+      const { auditLogger } = await import('../lib/auditLogger');
       auditLogger.log({
         userId: currentUser.$id,
         action: 'sign_up',
         resource: 'user',
         details: `User signed up with email: ${email}`,
-        status: 'success'
+        status: 'success',
       });
 
       return { error: null };
@@ -107,13 +106,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = await account.get();
       setUser(currentUser);
 
-      const { auditLogger } = await import("../lib/auditLogger");
+      const { auditLogger } = await import('../lib/auditLogger');
       auditLogger.log({
         userId: currentUser.$id,
         action: 'login',
         resource: 'user',
         details: `User logged in with email: ${email}`,
-        status: 'success'
+        status: 'success',
       });
 
       return { error: null };
@@ -131,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider,
       `${baseUrl}/auth/callback`,
       `${baseUrl}/login`,
-      provider === OAuthProvider.Github ? ['repo', 'user:email'] : []
+      provider === OAuthProvider.Github ? ['repo', 'user:email'] : [],
     );
   };
 
@@ -150,64 +149,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const userId = user.$id;
     try {
-      await account.deleteSession("current");
+      await account.deleteSession('current');
       setUser(null);
 
-      const { auditLogger } = await import("../lib/auditLogger");
+      const { auditLogger } = await import('../lib/auditLogger');
       auditLogger.log({
         userId,
         action: 'logout',
         resource: 'user',
         details: 'User logged out',
-        status: 'success'
+        status: 'success',
       });
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error('Logout error:', error);
     }
   };
 
   const requestReset = async (email: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/request-reset`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
       const data = await response.json();
       if (!response.ok) return { error: data.error };
       return { message: data.message };
     } catch {
-      return { error: "Failed to connect to authentication server" };
+      return { error: 'Failed to connect to authentication server' };
     }
   };
 
   const verifyResetOtp = async (email: string, otp: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp }),
       });
       const data = await response.json();
       if (!response.ok) return { error: data.error };
       return { resetToken: data.resetToken };
     } catch {
-      return { error: "Failed to connect to authentication server" };
+      return { error: 'Failed to connect to authentication server' };
     }
   };
 
   const completeReset = async (resetToken: string, newPassword: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ resetToken, newPassword }),
       });
       const data = await response.json();
       if (!response.ok) return { error: data.error };
       return {};
     } catch {
-      return { error: "Failed to connect to authentication server" };
+      return { error: 'Failed to connect to authentication server' };
     }
   };
 
@@ -231,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return null;
     } catch (error) {
-      console.error("Provider token error:", error);
+      console.error('Provider token error:', error);
       return null;
     }
   };
@@ -241,11 +240,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const jwt = await account.createJWT();
       return jwt.jwt;
     } catch (error) {
-      console.error("JWT error:", error);
+      console.error('JWT error:', error);
       return null;
     }
   };
-
 
   return (
     <AuthContext.Provider
@@ -274,6 +272,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }

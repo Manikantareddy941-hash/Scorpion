@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Activity, Shield, CheckCircle,
-  Clock, RefreshCw, BarChart3, List, ChevronRight, ChevronDown, Server,
-  TrendingUp, Layout, Zap, Settings, Bell
+  Activity, Shield,
+  Clock, RefreshCw, Server,
+  TrendingUp, Zap
 } from 'lucide-react';
 import { 
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell, BarChart, Bar
+  Tooltip, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
-import { monitorService } from '../services/monitorService';
-import { client, databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { client, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';

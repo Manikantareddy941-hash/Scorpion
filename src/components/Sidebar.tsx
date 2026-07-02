@@ -18,7 +18,7 @@ export default function Sidebar({
 }) {
   const { t } = useTranslation();
   const location = useLocation();
-  const { theme } = useTheme();
+  const {} = useTheme();
   const [searchQuery] = useState('');
 
   // Keyboard Shortcut: Ctrl+K to focus search
@@ -160,8 +160,7 @@ export default function Sidebar({
         transition: 'width 0.3s ease',
         overflow: 'hidden',
         overflowY: 'auto',
-        flexShrink: 0,
-      }}>
+        flexShrink: 0 }}>
 
         {/* Header / Logo Area */}
         <div className={`flex ${isCollapsed ? 'flex-col gap-4 items-center px-0 pt-6 pb-4' : 'justify-between items-center p-4'} shrink-0 relative`}>
@@ -184,8 +183,7 @@ export default function Sidebar({
             style={{ 
               background: s.collapseBtnBg,
               borderColor: 'rgba(255,255,255,0.1)',
-              color: s.collapseBtnText,
-            }}
+              color: s.collapseBtnText }}
             onMouseOver={(e) => { e.currentTarget.style.backgroundColor = s.collapseBtnHover; e.currentTarget.style.color = '#ffffff'; }}
             onMouseOut={(e) => { e.currentTarget.style.backgroundColor = s.collapseBtnBg; e.currentTarget.style.color = s.collapseBtnText; }}
           >
@@ -244,8 +242,7 @@ export default function Sidebar({
                           backgroundColor: isCollapsed
                             ? (active ? s.collapsedActiveBg : 'transparent')
                             : (active ? s.activeBg : 'transparent'),
-                          borderLeftColor: isCollapsed ? (active ? s.collapsedActiveBorder : 'transparent') : undefined,
-                        }}
+                          borderLeftColor: isCollapsed ? (active ? s.collapsedActiveBorder : 'transparent') : undefined }}
                       >
                         <Icon
                           size={16}

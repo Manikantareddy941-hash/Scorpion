@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, ShieldCheck, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import UVScanOverlay from './UVScanOverlay';

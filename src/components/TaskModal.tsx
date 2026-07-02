@@ -12,7 +12,7 @@ interface TaskModalProps {
 
 export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const {} = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<string>('todo');
@@ -55,19 +55,16 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
         status,
         priority,
         due_date: dueDate || null,
-        repo_url: repoUrl || null,
-      };
+        repo_url: repoUrl || null };
 
       if (task) {
         await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, task.$id, {
           ...taskData,
-          user_id: userId,
-        });
+          user_id: userId });
       } else {
         await databases.createDocument(DB_ID, COLLECTIONS.TASKS, ID.unique(), {
           ...taskData,
-          user_id: userId,
-        });
+          user_id: userId });
       }
 
       onSave();

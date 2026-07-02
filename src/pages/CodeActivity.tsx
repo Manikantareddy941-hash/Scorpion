@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   GitCommit, Activity, ShieldAlert, GitBranch, RefreshCw, FileCode2, Clock, User
@@ -6,7 +6,7 @@ import {
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 
 export default function CodeActivity() {
-  const { t } = useTranslation();
+  const {} = useTranslation();
   const [commits, setCommits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

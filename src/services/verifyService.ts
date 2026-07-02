@@ -35,7 +35,7 @@ export const verifyService = {
     return await response.json();
   },
 
-  async markVulnerabilityAsVerified(repoId: string, titlePattern: string) {
+  async markVulnerabilityAsVerified(repoId: string) {
     // Find matching vulnerabilities for this repo and mark as verified if fixed
     const vulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
       Query.equal('repo_id', repoId),

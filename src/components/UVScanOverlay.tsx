@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Shield, CheckCircle, XCircle, Loader2, ExternalLink, Terminal, Clock, FileCode, AlertCircle, Play } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Shield, CheckCircle, XCircle, Loader2, ExternalLink, Clock, FileCode, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface LogEntry {

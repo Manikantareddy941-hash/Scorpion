@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme, type Theme } from '../contexts/ThemeContext';
@@ -7,7 +7,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useScan } from '../contexts/ScanContext';
 import {
     ChevronDown, Leaf,
-    Activity, ListTodo, Shield, Settings, LogOut, Bell, GitBranch, ShieldX, Clock, Layout
+    Activity, ListTodo, Shield, Settings, LogOut, Bell
 } from 'lucide-react';
 
 const THEME_CYCLE: Theme[] = ['aegis', 'terra'];

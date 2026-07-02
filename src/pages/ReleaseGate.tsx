@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
     Rocket, Shield, AlertTriangle, CheckCircle2, 
-    XCircle, RefreshCw, ChevronRight, ArrowRight,
-    Award, ShieldAlert, Loader2, Database
+    XCircle, ChevronRight, ShieldAlert, Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';

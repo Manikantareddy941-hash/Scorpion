@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Shield, AlertTriangle, Bug, Wind, CheckCircle2, 
-  ArrowLeft, Clock, Activity, FileText, Code, 
-  ExternalLink, Search, Filter, Terminal, Globe
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { CheckCircle2,
+  ArrowLeft, Activity, Globe
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 interface Finding {
@@ -23,14 +20,11 @@ interface Finding {
 
 export default function InfraDetail() {
   const { scanId } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { t } = useTranslation();
-  
+
   const [loading, setLoading] = useState(true);
   const [findings, setFindings] = useState<Finding[]>([]);
-  const [scan, setScan] = useState<any>(null);
+  const [, setScan] = useState<any>(null);
 
   useEffect(() => {
     const fetchData = async () => {
