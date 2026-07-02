@@ -1,5 +1,5 @@
 import { scanImage } from '../scanners/imageScanner';
-import { evaluatePolicy } from '../github/policyEngine';
+import { evaluatePolicyForRepo } from '../github/policyEngine';
 import { triggerRollback } from './rollbackService';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logDeployBlocked, logRollbackTriggered } from '../services/logEvents';
@@ -51,11 +51,15 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
     
     // 2. Evaluate against policy
     // We wrap image results to match the policy engine's expected structure
-    const policyResult = evaluatePolicy({
-      trivy: { Results: [{ Vulnerabilities: scanResult.vulnerabilities }] },
-      gitleaks: [], // Image scans usually focus on CVEs
-      semgrep: { results: [] }
-    });
+    const policyResult = await evaluatePolicyForRepo(
+      {
+        trivy: { Results: [{ Vulnerabilities: scanResult.vulnerabilities }] },
+        gitleaks: [], // Image scans usually focus on CVEs
+        semgrep: { results: [] }
+      },
+      payload.app,
+      payload.namespace || 'production'
+    );
     
     const { passed, criticalCount, highCount } = policyResult;
     
