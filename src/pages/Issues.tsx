@@ -3,7 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { createTicket, findTicketByFinding, useTickets, createTicketFromFinding } from '../hooks/useTickets';
+import { useTickets, createTicketFromFinding } from '../hooks/useTickets';
 import toast from 'react-hot-toast';
 
 
@@ -16,8 +16,19 @@ const TYPE_ICON: Record<string, any> = {
   security: Shield, reliability: AlertCircle, maintainability: Wind
 };
 
+const SEVERITY_SCORE: Record<string, number> = {
+  CRITICAL: 9.5, HIGH: 7.5, MEDIUM: 5.0, LOW: 2.5, INFO: 1.0
+};
+
+const SEVERITY_PRIORITY: Record<string, 'critical' | 'high' | 'medium' | 'low'> = {
+  CRITICAL: 'critical', HIGH: 'high', MEDIUM: 'medium', LOW: 'low', INFO: 'low'
+};
+
+const buildIssueDescription = (issue: any): string =>
+  `Issue detected by ${issue.tool || 'scanner'} in ${issue.file || 'workspace'}.\nMessage: ${issue.message}\n` +
+  (issue.code ? `Code:\n${issue.code}` : '');
+
 export default function Issues() {
-  const navigate = useNavigate();
   const { getJWT } = useAuth();
   const { tickets: allTickets, refetch: refetchTickets } = useTickets({});
   const [issues, setIssues] = useState<any[]>([]);
@@ -25,121 +36,24 @@ export default function Issues() {
   const [filter, setFilter] = useState({ severity: '', type: '', tool: '' });
   const [loading, setLoading] = useState(true);
   const [latestScan, setLatestScan] = useState<any>(null);
-  const [ticketMap, setTicketMap] = useState<Record<string, string>>({});
 
   const handleCreateTicketFromFinding = async (issue: any) => {
     const sevStr = (issue.severity || '').toUpperCase();
-    let severity = 2.5;
-    if (sevStr === 'CRITICAL') {
-      severity = 9.5;
-    } else if (sevStr === 'HIGH') {
-      severity = 7.5;
-    } else if (sevStr === 'MEDIUM') {
-      severity = 5.0;
-    } else if (sevStr === 'LOW') {
-      severity = 2.5;
-    } else if (sevStr === 'INFO') {
-      severity = 1.0;
-    }
-
-    const description = `Issue detected by ${issue.tool || 'scanner'} in ${issue.file || 'workspace'}.\nMessage: ${issue.message}\n` + (issue.code ? `Code:\n${issue.code}` : '');
+    const severity = SEVERITY_SCORE[sevStr] ?? 2.5;
 
     return await createTicketFromFinding(getJWT, {
       findingId: issue.$id,
       title: issue.title || `Scan Finding in ${issue.file || 'Workspace'}`,
-      description,
+      description: buildIssueDescription(issue),
       severity,
       type: 'vulnerability'
     });
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchIssues();
     fetchLatestScan();
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    const checkTickets = async () => {
-      try {
-        const token = await getJWT();
-        const getJWTStub = async () => token;
-        const results = await Promise.all(
-          issues.map(async (issue) => {
-            if (!issue.$id) return { id: null, ticketId: null };
-            const ticket = await findTicketByFinding(getJWTStub, issue.$id);
-            return { id: issue.$id, ticketId: ticket ? ticket.id : null };
-          })
-        );
-
-        if (active) {
-          const newMap: Record<string, string> = {};
-          results.forEach(({ id, ticketId }) => {
-            if (id && ticketId) {
-              newMap[id] = ticketId;
-            }
-          });
-          setTicketMap(newMap);
-        }
-      } catch (err) {
-        console.error('Error fetching linked tickets for issues:', err);
-      }
-    };
-
-    if (issues.length > 0) {
-      checkTickets();
-    }
-    return () => {
-      active = false;
-    };
-  }, [issues, getJWT]);
-
-  const handleCreateTicket = async (e: React.MouseEvent, issue: any) => {
-    e.stopPropagation();
-    const toastId = toast.loading('Creating ticket...');
-    try {
-      const sevStr = (issue.severity || '').toUpperCase();
-      let severity = 2.5;
-      let priority: 'critical' | 'high' | 'medium' | 'low' = 'low';
-
-      if (sevStr === 'CRITICAL') {
-        severity = 9.5;
-        priority = 'critical';
-      } else if (sevStr === 'HIGH') {
-        severity = 7.5;
-        priority = 'high';
-      } else if (sevStr === 'MEDIUM') {
-        severity = 5.0;
-        priority = 'medium';
-      } else if (sevStr === 'LOW') {
-        severity = 2.5;
-        priority = 'low';
-      } else if (sevStr === 'INFO') {
-        severity = 1.0;
-        priority = 'low';
-      }
-
-      const description = `Issue detected by ${issue.tool || 'scanner'} in ${issue.file || 'workspace'}.\nMessage: ${issue.message}\n` + (issue.code ? `Code:\n${issue.code}` : '');
-
-      const newTicket = await createTicket(getJWT, {
-        title: issue.title || `Scan Finding in ${issue.file || 'Workspace'}`,
-        description,
-        type: 'vulnerability',
-        severity,
-        priority,
-        assignee: '',
-        reporter: '',
-        tags: [issue.tool, issue.severity].filter(Boolean),
-        linkedFindings: [issue.$id],
-        status: 'todo'
-      });
-
-      setTicketMap(prev => ({ ...prev, [issue.$id]: newTicket.id }));
-      toast.success(`Ticket ${newTicket.id} created successfully!`, { id: toastId });
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create ticket', { id: toastId });
-    }
-  };
 
   const fetchIssues = async () => {
     setLoading(true);
@@ -194,8 +108,7 @@ export default function Issues() {
   const counts: Record<string, number> = {
     security: mappedIssues.filter(i => i.syntheticType === 'security').length,
     reliability: mappedIssues.filter(i => i.syntheticType === 'reliability').length,
-    maintainability: mappedIssues.filter(i => i.syntheticType === 'maintainability').length,
-  };
+    maintainability: mappedIssues.filter(i => i.syntheticType === 'maintainability').length };
 
   // 4. Group by repository context (fixing 'unknown')
   const byGroup = filteredIssues.reduce((acc: any, issue: any) => {

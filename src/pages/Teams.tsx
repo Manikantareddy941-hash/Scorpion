@@ -225,18 +225,20 @@ const EngineeringIcon = ({ color }: { color: string }) => (
     </svg>
 );
 
+const ICON_COMPONENTS: Record<string, (props: { color: string }) => React.JSX.Element> = {
+    'all-teams': AllTeamsIcon,
+    security: SecurityIcon,
+    devops: DevOpsIcon,
+    sre: SREIcon,
+    platform: PlatformIcon,
+    data: DataIcon,
+    network: NetworkIcon,
+    engineering: EngineeringIcon,
+};
+
 const getIconComponent = (iconType: string, color: string) => {
-    switch (iconType) {
-        case 'all-teams': return <AllTeamsIcon color={color} />;
-        case 'security': return <SecurityIcon color={color} />;
-        case 'devops': return <DevOpsIcon color={color} />;
-        case 'sre': return <SREIcon color={color} />;
-        case 'platform': return <PlatformIcon color={color} />;
-        case 'data': return <DataIcon color={color} />;
-        case 'network': return <NetworkIcon color={color} />;
-        case 'engineering': return <EngineeringIcon color={color} />;
-        default: return <AllTeamsIcon color={color} />;
-    }
+    const IconComponent = ICON_COMPONENTS[iconType] || AllTeamsIcon;
+    return <IconComponent color={color} />;
 };
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
@@ -399,10 +401,15 @@ export default function Teams() {
         if (!activeTeam) return;
         try {
             const token = await getJWT();
-            await fetch(`/api/teams/${activeTeam.$id}`, {
+            const response = await fetch(`/api/teams/${activeTeam.$id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                toast.error(data.error || 'Failed to delete team');
+                return;
+            }
             toast.success(t_term('Battalion dissolved', 'Team deleted'));
             setShowDeleteModal(false);
             fetchTeams();

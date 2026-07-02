@@ -50,35 +50,32 @@ export default function Alerts() {
             toast.error('Webhook URL is required');
             return;
         }
+        if (!user) return;
         setDiscordSaving(true);
         try {
-            const token = await getJWT();
-            const response = await fetch('/api/mesh/discord/config', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    webhookUrl: discordWebhook,
-                    username: discordUsername,
-                    avatarUrl: discordAvatar,
-                    alerts: {
-                        criticalVulnerabilities: alertCritical,
-                        policyBlocks: alertPolicy,
-                        deploymentSuccess: alertDeploy
-                    }
-                })
-            });
+            // Only discord_webhook has a backing Appwrite attribute today — username,
+            // avatar, and per-event toggles are UI-only until that schema grows.
+            const data = {
+                userId: user.$id,
+                discord_webhook: discordWebhook,
+                slack_webhook: slackWebhook,
+                pagerduty_key: pagerdutyKey,
+                opsgenie_key: opsgenieKey,
+                isEnabled,
+                activeSeverities,
+                integrationType: 'webhook'
+            };
 
-            if (response.ok) {
-                toast.success('Discord Mesh configuration committed successfully.');
+            if (docId) {
+                await databases.updateDocument(DB_ID, COLLECTIONS.INTEGRATIONS, docId, data);
             } else {
-                toast.error(`Save failed: ${response.status}`);
+                const res = await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), data);
+                setDocId(res.$id);
             }
+            toast.success('Discord Mesh configuration committed successfully.');
         } catch (err: any) {
             console.error('Discord config save error:', err);
-            toast.error('Failed to commit Discord configuration');
+            toast.error(err.message || 'Failed to commit Discord configuration');
         } finally {
             setDiscordSaving(false);
         }

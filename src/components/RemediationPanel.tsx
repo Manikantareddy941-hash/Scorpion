@@ -18,6 +18,7 @@ function codeOwner(repo: any): string | null {
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import VerifyFixButton from './VerifyFixButton';
 
 interface RemediationPanelProps {
     documentId: string;
@@ -404,14 +405,24 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                 )}
 
                                 {prState.status === 'success' && (
-                                    <a
-                                        href={prState.prUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)] text-white rounded-2xl hover:opacity-90 transition-all text-xs font-black uppercase italic tracking-widest shadow-lg shadow-[var(--status-success)]/20"
-                                    >
-                                        {t('remediation.view_pr_github', 'View PR on GitHub →')}
-                                    </a>
+                                    <>
+                                        <a
+                                            href={prState.prUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 px-6 py-3 bg-[var(--status-success)] text-white rounded-2xl hover:opacity-90 transition-all text-xs font-black uppercase italic tracking-widest shadow-lg shadow-[var(--status-success)]/20"
+                                        >
+                                            {t('remediation.view_pr_github', 'View PR on GitHub →')}
+                                        </a>
+                                        {repo?.$id && (
+                                            <VerifyFixButton
+                                                taskId={documentId}
+                                                repoId={repo.$id}
+                                                repoUrl={repo.repo_url || repo.name || ''}
+                                                onVerified={fetchFix}
+                                            />
+                                        )}
+                                    </>
                                 )}
 
                                 {prState.status === 'error' && (

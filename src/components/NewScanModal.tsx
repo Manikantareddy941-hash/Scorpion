@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Github, Upload, FolderOpen, Loader2, ExternalLink, Globe, Cloud } from 'lucide-react';
+import { X, Github, Upload, FolderOpen, Loader2, Cloud } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import UVScanOverlay from './UVScanOverlay';
@@ -11,10 +11,9 @@ import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 
 interface Props {
   onClose: () => void;
-  onScan: (data: { type: 'github' | 'upload'; value: string | File[] }) => void;
 }
 
-export default function NewScanModal({ onClose, onScan }: Props) {
+export default function NewScanModal({ onClose }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'github' | 'upload' | 'cloud'>('github');
   const [repoUrl, setRepoUrl] = useState('');
@@ -29,7 +28,6 @@ export default function NewScanModal({ onClose, onScan }: Props) {
   const { activeScan, startScan, updateScan, addLog, completeScan, failScan, clearScan } = useScan();
   
   const { user, getJWT } = useAuth();
-  const navigate = useNavigate();
 
   useEffect(() => {
     let interval: any;
@@ -76,7 +74,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
                 // Parse "[HH:MM:SS] Message"
                 const match = logStr.match(/^\[(.*?)\] (.*)$/);
                 if (match) {
-                    const [, timestamp, message] = match;
+                    const [, message] = match;
                     const type = message.includes('complete') || message.includes('Engine completed') ? 'success' : 
                                  message.includes('Protocol initiated') || message.includes('audit') ? 'progress' : 'info';
                     addLog(message, type);
@@ -91,9 +89,7 @@ export default function NewScanModal({ onClose, onScan }: Props) {
             stats: {
                 filesScanned: data.total_files || Math.min(100 + pollCount * 5, 250),
                 issuesFound: data.total_vulnerabilities || data.critical + data.high + data.medium + data.low || 0,
-                status: data.status === 'completed' ? 'COMPLETE' : data.status === 'failed' ? 'FAILED' : 'RUNNING',
-
-            }
+                status: data.status === 'completed' ? 'COMPLETE' : data.status === 'failed' ? 'FAILED' : 'RUNNING' }
         });
 
         if (data.status === 'completed') {
@@ -369,13 +365,6 @@ export default function NewScanModal({ onClose, onScan }: Props) {
                         Authorize GitLab, Bitbucket, or Azure DevOps to audit private cloud infrastructure.
                     </p>
                 </div>
-                <button 
-                    onClick={() => {}} // This will be handled by the rendered component
-                    className="flex items-center gap-2 px-8 py-3 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] text-[10px] font-black uppercase tracking-widest rounded-xl border border-[var(--accent-primary)]/30 hover:bg-[var(--accent-primary)]/20 transition-all"
-                >
-                    <ExternalLink size={14} />
-                    Open Provider Connector
-                </button>
            </div>
         )}
 

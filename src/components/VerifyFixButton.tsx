@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ShieldCheck, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { verifyService } from '../services/verifyService';
@@ -13,7 +13,7 @@ interface VerifyFixButtonProps {
   onVerified: () => void;
 }
 
-export default function VerifyFixButton({ taskId, repoId, repoUrl, onVerified }: VerifyFixButtonProps) {
+export default function VerifyFixButton({ taskId, repoId, onVerified }: VerifyFixButtonProps) {
   const { t } = useTranslation();
   const { getJWT } = useAuth();
   const [isVerifying, setIsVerifying] = useState(false);
@@ -53,7 +53,7 @@ export default function VerifyFixButton({ taskId, repoId, repoUrl, onVerified }:
       if (!completed) throw new Error("Verification timed out");
 
       // 3. Mark as verified
-      const verified = await verifyService.markVulnerabilityAsVerified(repoId, '');
+      const verified = await verifyService.markVulnerabilityAsVerified(repoId);
       
       if (verified) {
         setStatus('success');
