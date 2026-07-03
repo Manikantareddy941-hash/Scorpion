@@ -482,29 +482,18 @@ try {
   // 2. Reuse an in-flight run for the same commit instead of starting a duplicate
   // one - webhook providers (GitHub/GitLab) retry delivery on timeout/non-2xx, and
   // without this guard each retry re-ran the full build/test/deploy pipeline.
-  const inFlight = await databases.listDocuments(DB_ID, 'pipeline_runs', [
-    Query.equal('repoId', repoId),
-    Query.equal('branch', branch),
-    Query.equal('commitHash', commitHash),
-    Query.orderDesc('startedAt'),
-    Query.limit(5)
-  ]);
-  // Only reuse runs started recently - an orphaned run stuck in 'running' (e.g. the
-  // process crashed mid-pipeline, skipping the `finally` cleanup) must not block
-  // every future trigger for this branch forever.
+  // A deterministic doc ID (keyed on repo+branch+commit) makes the claim atomic:
+  // two concurrent retries both call createDocument with the SAME id, Appwrite
+  // only lets one succeed, and the loser fetches the winner's doc instead of
+  // racing past a read-then-write check. 'MANUAL' commits (button-triggered runs)
+  // skip this since every manual trigger should be allowed to run independently.
   const dedupeWindowMs = 15 * 60 * 1000;
-  const existingRun = inFlight.documents.find(d =>
-    (d.status === 'pending' || d.status === 'running') &&
-    Date.now() - new Date(d.startedAt).getTime() < dedupeWindowMs
-  );
-  if (existingRun) {
-    logger.info(`[PipelineTrigger] Reusing in-flight run ${existingRun.$id} for ${repoId}@${branch}#${commitHash}`);
-    return existingRun.$id;
-  }
+  const isRetriable = commitHash !== 'MANUAL';
+  const runId = isRetriable
+    ? `run_${crypto.createHash('sha1').update(`${repoId}:${branch}:${commitHash}`).digest('hex').slice(0, 32)}`
+    : ID.unique();
 
-  // 3. Create pipeline run doc
-  const runId = ID.unique();
-  await databases.createDocument(DB_ID, 'pipeline_runs', runId, {
+  const runData = {
     pipelineId,
     repoId,
     repoName: repoDoc.name || repoId,
@@ -523,7 +512,28 @@ try {
     startedAt: new Date().toISOString(),
     finishedAt: '',
     duration: 0
-  });
+  };
+
+  // 3. Create pipeline run doc
+  try {
+    await databases.createDocument(DB_ID, 'pipeline_runs', runId, runData);
+  } catch (err: any) {
+    if (!isRetriable || err?.code !== 409) throw err;
+
+    // Lost the atomic create race, or a prior run already occupies this
+    // deterministic id. Either way, resolve it deterministically instead of
+    // racing: reuse it if still active, otherwise restart it in place.
+    const existingRun = await databases.getDocument(DB_ID, 'pipeline_runs', runId);
+    const isActive = (existingRun.status === 'pending' || existingRun.status === 'running') &&
+      Date.now() - new Date(existingRun.startedAt).getTime() < dedupeWindowMs;
+
+    if (isActive) {
+      logger.info(`[PipelineTrigger] Reusing in-flight run ${existingRun.$id} for ${repoId}@${branch}#${commitHash}`);
+      return existingRun.$id;
+    }
+
+    await databases.updateDocument(DB_ID, 'pipeline_runs', runId, runData);
+  }
 
   // 4. Run pipeline asynchronously
   runPipeline(runId).catch(err => {
