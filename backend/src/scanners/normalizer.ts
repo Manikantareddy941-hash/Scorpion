@@ -25,6 +25,9 @@ export interface NormalizedIssue {
   category: string;    // unused-import, sql-injection etc
   ruleId: string;
   reachability?: Reachability; // SCA: is the vulnerable dep actually invoked
+  /** CVE-specific: whether a fixed version exists upstream. Undefined for
+   *  non-CVE findings (secrets, SAST, license, misconfig). */
+  fixAvailable?: boolean;
 }
 
 function resolveFullPath(workDir: string, relativeFile: string): string {
@@ -99,7 +102,8 @@ export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): Normalized
         code: `${vuln.PkgName}@${vuln.InstalledVersion} → fix: ${vuln.FixedVersion ?? 'no fix available'}`,
         effort: estimateEffort(vuln.Severity ?? ''),
         category: 'dependency-vulnerability',
-        ruleId: vuln.VulnerabilityID ?? ''
+        ruleId: vuln.VulnerabilityID ?? '',
+        fixAvailable: !!vuln.FixedVersion
       });
       vulns.push({
         pkgName: vuln.PkgName ?? '',
