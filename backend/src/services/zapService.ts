@@ -77,5 +77,41 @@ export const zapService = {
             params: { baseurl: targetUrl }
         });
         return response.data.alerts || [];
+    },
+
+    /**
+     * Inject an `Authorization: Bearer <token>` header on every outgoing ZAP
+     * request via a replacer rule, so the spider/active scan can reach routes
+     * behind bearer-token auth. `ruleName` must be removed afterwards
+     * (see removeBearerToken) so the token never bleeds into another scan.
+     */
+    setBearerToken: async (ruleName: string, token: string): Promise<void> => {
+        const client = getZapClient();
+        await client.get('/JSON/replacer/action/addRule/', {
+            params: {
+                description: ruleName,
+                enabled: 'true',
+                matchType: 'REQ_HEADER',
+                matchRegex: 'false',
+                matchString: 'Authorization',
+                replacement: `Bearer ${token}`,
+            }
+        });
+    },
+
+    /**
+     * Remove a previously added bearer-token replacer rule. Safe to call even
+     * if the rule was never added (ZAP returns an error we intentionally
+     * swallow) so it can live in a finally block.
+     */
+    removeBearerToken: async (ruleName: string): Promise<void> => {
+        const client = getZapClient();
+        try {
+            await client.get('/JSON/replacer/action/removeRule/', {
+                params: { description: ruleName }
+            });
+        } catch {
+            // Rule absent or already removed — nothing to clean up.
+        }
     }
 };

@@ -1,11 +1,8 @@
 import { Router, Response, Request } from 'express';
 import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
-import { enqueueDastScan } from '../queues/dastQueue';
+import { enqueueNucleiScan } from '../queues/nucleiQueue';
 import { logger } from '../services/logger';
-
-const VALID_SCAN_MODES = ['spider', 'active', 'passive'] as const;
-type ScanMode = (typeof VALID_SCAN_MODES)[number];
 
 interface AuthenticatedRequest extends Request {
     user?: { $id: string };
@@ -21,23 +18,19 @@ function errorCode(err: unknown): number | undefined {
 
 const router = Router();
 
-router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
-    const { target_url, scanMode = 'spider', auth } = req.body;
+router.post('/nuclei', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+    const { target_url, tags } = req.body;
     if (!target_url) return res.status(400).json({ error: 'target_url is required' });
-    if (!VALID_SCAN_MODES.includes(scanMode)) {
-        return res.status(400).json({ error: `scanMode must be one of: ${VALID_SCAN_MODES.join(', ')}` });
-    }
-    if (auth !== undefined && typeof auth?.bearerToken !== 'string') {
-        return res.status(400).json({ error: 'auth.bearerToken must be a string when auth is provided' });
+    if (tags !== undefined && typeof tags !== 'string') {
+        return res.status(400).json({ error: 'tags must be a comma-separated string when provided' });
     }
 
     try {
         const scanId = ID.unique();
         const userId = req.user?.$id || 'system';
 
-        logger.info(`[DAST API] Initializing ZAP scan for ${target_url} (Mode: ${scanMode})...`);
+        logger.info(`[Nuclei API] Initializing scan for ${target_url}...`);
 
-        // Create initial scan document
         await databases.createDocument(
             DB_ID,
             COLLECTIONS.SCANS,
@@ -50,30 +43,28 @@ router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response
                 repoUrl: target_url,
                 startedAt: new Date().toISOString(),
                 timestamp: new Date().toISOString(),
-                scannerVersion: 'ZAP',
+                scannerVersion: 'nuclei',
                 visibility: 'private',
-                details: JSON.stringify({ target: target_url, mode: scanMode })
+                details: JSON.stringify({ target: target_url, tags: tags || null })
             }
         );
 
-        // Hand off to the BullMQ worker: survives restarts, retries on failure.
-        await enqueueDastScan({
+        await enqueueNucleiScan({
             targetUrl: target_url,
-            scanMode: scanMode as ScanMode,
+            tags: tags || undefined,
             scanId,
-            userId,
-            auth: auth ? { bearerToken: auth.bearerToken } : undefined
+            userId
         });
 
         res.json({ scanId, status: 'started' });
 
     } catch (err: unknown) {
-        logger.error('[DAST API Error]', errorMessage(err));
+        logger.error('[Nuclei API Error]', errorMessage(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-router.get('/dast/:scanId/status', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/nuclei/:scanId/status', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     const { scanId } = req.params;
     if (!scanId) return res.status(400).json({ error: 'scanId is required' });
 
@@ -89,7 +80,7 @@ router.get('/dast/:scanId/status', verifyUser, async (req: AuthenticatedRequest,
         });
     } catch (err: unknown) {
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Scan not found' });
-        logger.error('[DAST API Status Error]', errorMessage(err));
+        logger.error('[Nuclei API Status Error]', errorMessage(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

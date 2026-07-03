@@ -3,7 +3,7 @@ import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
 import { orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
 import { parseSemgrep, parseGitleaks, parseTrivy, parseCheckov, parseBandit, Finding } from './scan/parsers';
-import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit } from '../scanners/normalizer';
+import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit, normalizeHadolint } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
 import { evaluateScan } from './policyService';
@@ -14,7 +14,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
 import { logger } from './logger';
-import { IngestableIssue, RepoWithScanStats, ScanRawResults, ScanTriggerOptions } from '../types/scan.types';
+import { HadolintRawOutput, IngestableIssue, RepoWithScanStats, ScanRawResults, ScanTriggerOptions } from '../types/scan.types';
 
 /**
  * Consistent security score formula — used here and must match Dashboard fallback.
@@ -24,6 +24,25 @@ import { IngestableIssue, RepoWithScanStats, ScanRawResults, ScanTriggerOptions 
 const computeSecurityScore = (critical: number, high: number, medium: number, low: number): number => {
     const penalty = (critical * 10) + (high * 4) + (medium * 1) + (low * 0.25);
     return Math.max(0, Math.round(100 - penalty));
+};
+
+/**
+ * Counts active suppression entries in repo-local ignore files (.trivyignore,
+ * .gitleaksignore) so silenced findings stay visible in the scan log instead
+ * of just disappearing from the report. The files themselves are the audit
+ * trail (version-controlled); this only surfaces that they're in effect.
+ */
+const countSuppressions = (scanPath: string): number => {
+    const ignoreFiles = ['.trivyignore', '.gitleaksignore'];
+    return ignoreFiles.reduce((total, name) => {
+        try {
+            const contents = fs.readFileSync(path.join(scanPath, name), 'utf-8');
+            const activeLines = contents.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+            return total + activeLines.length;
+        } catch {
+            return total; // file doesn't exist - no suppressions from this tool
+        }
+    }, 0);
 };
 
 export const ingestVulnerabilitiesDelta = async (
@@ -317,7 +336,12 @@ export const triggerScan = async (
         walkSync(scanPath);
         const detectedLanguage = Object.entries(languageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
 
-        logger.info(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}, Checkov: ${rawResults.find(r => r.tool === 'checkov')?.stdout.length || 0}, Bandit: ${rawResults.find(r => r.tool === 'bandit')?.stdout.length || 0}`);
+        logger.info(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}, Checkov: ${rawResults.find(r => r.tool === 'checkov')?.stdout.length || 0}, Bandit: ${rawResults.find(r => r.tool === 'bandit')?.stdout.length || 0}, Hadolint: ${rawResults.find(r => r.tool === 'hadolint')?.stdout.length || 0}`);
+
+        const suppressedCount = countSuppressions(scanPath);
+        if (suppressedCount > 0) {
+            logger.info(`[Scan] ${suppressedCount} finding(s) suppressed via .trivyignore/.gitleaksignore for repo ${repoId}`);
+        }
 
         // 8️⃣ Parse findings (Normalized)
         const scanResults: ScanRawResults = {};
@@ -342,7 +366,8 @@ export const triggerScan = async (
             ...normalizeSemgrep(scanResults.semgrep ?? {}, scanPath),
             ...normalizeGitleaks(rawGitleaks, scanPath),
             ...normalizeCheckov(scanResults.checkov ?? {}, scanPath),
-            ...normalizeBandit(scanResults.bandit ?? {}, scanPath)
+            ...normalizeBandit(scanResults.bandit ?? {}, scanPath),
+            ...normalizeHadolint((scanResults.hadolint ?? []) as HadolintRawOutput, scanPath)
         ];
 
 // Deduplicate overlapping findings across scanners

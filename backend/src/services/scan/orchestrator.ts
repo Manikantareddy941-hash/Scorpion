@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
 import { resolveToolCommand, validateTools } from '../../utils/toolCheck';
 import { logger } from '../logger';
 
@@ -8,11 +9,22 @@ const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
 const isWin = process.platform === 'win32';
 
 export interface ScanResult {
-    tool: 'semgrep' | 'gitleaks' | 'trivy' | 'checkov' | 'bandit';
+    tool: 'semgrep' | 'gitleaks' | 'trivy' | 'checkov' | 'bandit' | 'hadolint';
     stdout: string;
     stderr: string;
     error?: string;
     status?: number | null;
+}
+
+// Dockerfile naming conventions: plain, dotted, and dir/Dockerfile.env variants.
+const DOCKERFILE_NAMES = ['Dockerfile', 'dockerfile', 'Dockerfile.dev', 'Dockerfile.prod'];
+
+function findDockerfile(targetPath: string): string | null {
+    for (const name of DOCKERFILE_NAMES) {
+        const candidate = path.join(targetPath, name);
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
 }
 
 /**
@@ -25,7 +37,8 @@ const executeTool = async (toolId: string, userArgs: string[], toolName: ScanRes
             gitleaks: 'zricethezav/gitleaks:latest',
             trivy: 'aquasec/trivy:latest',
             checkov: 'bridgecrew/checkov:latest',
-            bandit: 'bandit:latest'
+            bandit: 'bandit:latest',
+            hadolint: 'hadolint/hadolint:latest'
         };
         const image = imageMap[toolName] ?? toolName;
 
@@ -110,7 +123,7 @@ export const orchestrateScan = async (
     // 3. SCA / Config / Secrets (Trivy)
     if (options.scanType === 'full' || options.scanType === 'sca' || options.scanType === 'secrets') {
         const depth = options.scanDepth === 'deep' ? ['--detection-priority', 'comprehensive'] : [];
-        const scanners = options.scanType === 'sca' ? 'vuln' : options.scanType === 'secrets' ? 'secret' : 'vuln,secret,misconfig';
+        const scanners = options.scanType === 'sca' ? 'vuln,license' : options.scanType === 'secrets' ? 'secret' : 'vuln,secret,misconfig,license';
         tasks.push(runWithLogging('trivy', ['fs', '--format', 'json', ...depth, '--scanners', scanners, '--severity', 'CRITICAL,HIGH,MEDIUM,LOW', targetPath], 'trivy'));
     }
 
@@ -122,6 +135,14 @@ export const orchestrateScan = async (
     // 5. Python SAST (Bandit)
     if (options.scanType === 'full' || options.scanType === 'sast') {
         tasks.push(runWithLogging('bandit', ['-r', targetPath, '-f', 'json'], 'bandit'));
+    }
+
+    // 6. Dockerfile lint (Hadolint) - only if a Dockerfile is present
+    if (options.scanType === 'full' || options.scanType === 'sca') {
+        const dockerfile = findDockerfile(targetPath);
+        if (dockerfile) {
+            tasks.push(runWithLogging('hadolint', ['--format', 'json', dockerfile], 'hadolint'));
+        }
     }
 
     const results = await Promise.allSettled(tasks);

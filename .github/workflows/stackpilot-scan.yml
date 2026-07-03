@@ -1,7 +1,7 @@
 name: Scorpion Security Scan
 
 # Scorpion dogfoods its own engines against its own source.
-# Same tools the product runs (Semgrep / Trivy / Gitleaks / Checkov),
+# Same tools the product runs (Semgrep / Trivy / Gitleaks / Checkov / Hadolint),
 # now pointed at this repo. Fails the PR on CRITICAL, mirroring the
 # product's gate policy (blockOnCritical in gateService).
 
@@ -92,6 +92,41 @@ jobs:
         with:
           name: sbom-cyclonedx
           path: sbom.cdx.json
+      - name: License scan (informational - copyleft only blocks in-app)
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: license
+          format: table
+          exit-code: '0'
+
+  dockerfile:
+    name: Dockerfile lint (Hadolint)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - id: web
+            path: Dockerfile
+          - id: backend
+            path: backend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ matrix.path }}
+          format: sarif
+          output-file: hadolint-${{ matrix.id }}.sarif
+          no-fail: true
+      - name: Upload Hadolint SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: hadolint-${{ matrix.id }}.sarif
+          category: hadolint-${{ matrix.id }}
 
   iac:
     name: IaC (Checkov)

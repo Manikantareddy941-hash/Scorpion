@@ -6,6 +6,7 @@ import {
   BanditRawOutput,
   CheckovFailedCheck,
   CheckovRawOutput,
+  HadolintRawOutput,
   SemgrepRawOutput,
   TrivyRawOutput
 } from '../types/scan.types';
@@ -24,6 +25,9 @@ export interface NormalizedIssue {
   category: string;    // unused-import, sql-injection etc
   ruleId: string;
   reachability?: Reachability; // SCA: is the vulnerable dep actually invoked
+  /** CVE-specific: whether a fixed version exists upstream. Undefined for
+   *  non-CVE findings (secrets, SAST, license, misconfig). */
+  fixAvailable?: boolean;
 }
 
 function resolveFullPath(workDir: string, relativeFile: string): string {
@@ -54,10 +58,37 @@ export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): Normal
   });
 }
 
+// Strong copyleft licenses that can force disclosure of proprietary source -
+// the ones legal actually cares about. Weak-copyleft (MPL, LGPL) and permissive
+// licenses are not flagged; Trivy reports every detected license and surfacing
+// all of them as findings would bury the ones that matter.
+const COPYLEFT_LICENSES = /^(A?GPL)-\d/i;
+
+function isCopyleftLicense(name?: string): boolean {
+  return !!name && COPYLEFT_LICENSES.test(name);
+}
+
 export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): NormalizedIssue[] {
   const issues: NormalizedIssue[] = [];
   const vulns: VulnerablePackage[] = [];
   for (const result of raw.Results ?? []) {
+    for (const license of result.Licenses ?? []) {
+      if (!isCopyleftLicense(license.Name)) continue;
+      issues.push({
+        tool: 'trivy',
+        type: 'security',
+        severity: 'CRITICAL',
+        title: `Copyleft license: ${license.Name}`,
+        message: `${license.PkgName ?? 'Dependency'} is licensed under ${license.Name}, a copyleft license that can require disclosing proprietary source code.`,
+        file: result.Target ?? '',
+        line: 0,
+        endLine: 0,
+        code: `${license.PkgName ?? 'unknown'} → ${license.Name}`,
+        effort: '30min',
+        category: 'license-compliance',
+        ruleId: license.Name ?? ''
+      });
+    }
     for (const vuln of result.Vulnerabilities ?? []) {
       issues.push({
         tool: 'trivy',
@@ -71,7 +102,8 @@ export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): Normalized
         code: `${vuln.PkgName}@${vuln.InstalledVersion} → fix: ${vuln.FixedVersion ?? 'no fix available'}`,
         effort: estimateEffort(vuln.Severity ?? ''),
         category: 'dependency-vulnerability',
-        ruleId: vuln.VulnerabilityID ?? ''
+        ruleId: vuln.VulnerabilityID ?? '',
+        fixAvailable: !!vuln.FixedVersion
       });
       vulns.push({
         pkgName: vuln.PkgName ?? '',
@@ -219,5 +251,38 @@ function mapBanditSeverity(s?: string): NormalizedIssue['severity'] {
     case 'MEDIUM': return 'MEDIUM';
     case 'LOW': return 'LOW';
     default: return 'INFO';
+  }
+}
+
+export function normalizeHadolint(raw: HadolintRawOutput, workDir: string): NormalizedIssue[] {
+  return (Array.isArray(raw) ? raw : []).map(h => {
+    const relativeFile = h.file ?? 'Dockerfile';
+    const fullPath = resolveFullPath(workDir, relativeFile);
+    const line = h.line ?? 0;
+
+    return {
+      tool: 'hadolint',
+      type: 'security',
+      severity: mapHadolintSeverity(h.level),
+      title: h.code ?? 'Dockerfile issue',
+      message: h.message ?? '',
+      file: relativeFile,
+      line,
+      endLine: line,
+      code: extractCodeSnippet(fullPath, line, line),
+      effort: '5min',
+      category: 'dockerfile-lint',
+      ruleId: h.code ?? ''
+    };
+  });
+}
+
+function mapHadolintSeverity(level?: string): NormalizedIssue['severity'] {
+  switch (level?.toUpperCase()) {
+    case 'ERROR':   return 'HIGH';
+    case 'WARNING': return 'MEDIUM';
+    case 'INFO':    return 'LOW';
+    case 'STYLE':   return 'INFO';
+    default:        return 'INFO';
   }
 }

@@ -38,7 +38,7 @@ SCORPION is a production-grade security control plane that protects applications
 
 | Category | Capability |
 |---|---|
-| 🔍 **Scanning** | Parallel SAST (Semgrep), SCA (Trivy), secrets (Gitleaks), IaC (Checkov), Python (Bandit), DAST (OWASP ZAP) |
+| 🔍 **Scanning** | Parallel SAST (Semgrep), SCA (Trivy), secrets (Gitleaks), IaC (Checkov), Python (Bandit), DAST (OWASP ZAP, Nuclei, ffuf) |
 | 🤖 **AI Remediation** | "TONY" engine — context-aware patch generation via Gemini, applied as reviewable diffs |
 | 🚪 **Policy Gates** | OPA/Rego policy-as-code authored in a Policy Builder UI, enforced at both the GitHub PR commit-status gate and the Kubernetes deploy gate |
 | 🏢 **Multi-Tenancy** | Team-scoped repos/scans/incidents, fine-grained IAM, Okta/Microsoft SSO via Appwrite OAuth2 |

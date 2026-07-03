@@ -1,0 +1,81 @@
+import request from 'supertest';
+import express, { Request, Response, NextFunction } from 'express';
+
+type MockAuthRequest = Request & { user?: { $id: string } };
+
+jest.mock('../lib/appwrite', () => ({
+    databases: { createDocument: jest.fn(), getDocument: jest.fn() },
+    DB_ID: 'test-db',
+    ID: { unique: () => 'scan-123' },
+    COLLECTIONS: { SCANS: 'scans' },
+}));
+jest.mock('../queues/nucleiQueue', () => ({
+    enqueueNucleiScan: jest.fn(),
+}));
+jest.mock('../middleware/auth', () => ({
+    verifyUser: (req: MockAuthRequest, _res: Response, next: NextFunction) => {
+        req.user = { $id: 'user-1' };
+        next();
+    },
+}));
+jest.mock('../services/logger', () => ({
+    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
+
+import nucleiRoutes from './nucleiRoutes';
+import { databases } from '../lib/appwrite';
+import { enqueueNucleiScan } from '../queues/nucleiQueue';
+
+const buildApp = () => {
+    const app = express();
+    app.use(express.json());
+    app.use('/api/scan', nucleiRoutes);
+    return app;
+};
+
+describe('POST /api/scan/nuclei', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (databases.createDocument as jest.Mock).mockResolvedValue({ $id: 'scan-123' });
+        (enqueueNucleiScan as jest.Mock).mockResolvedValue({ id: 'nuclei-scan-123' });
+    });
+
+    it('rejects a request without target_url', async () => {
+        const res = await request(buildApp()).post('/api/scan/nuclei').send({});
+        expect(res.status).toBe(400);
+        expect(enqueueNucleiScan).not.toHaveBeenCalled();
+    });
+
+    it('rejects non-string tags', async () => {
+        const res = await request(buildApp())
+            .post('/api/scan/nuclei')
+            .send({ target_url: 'https://staging.example.com', tags: ['cve'] });
+        expect(res.status).toBe(400);
+        expect(enqueueNucleiScan).not.toHaveBeenCalled();
+    });
+
+    it('enqueues a valid scan and returns the scanId', async () => {
+        const res = await request(buildApp())
+            .post('/api/scan/nuclei')
+            .send({ target_url: 'https://staging.example.com', tags: 'cve,exposure' });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ scanId: 'scan-123', status: 'started' });
+        expect(enqueueNucleiScan).toHaveBeenCalledWith({
+            targetUrl: 'https://staging.example.com',
+            tags: 'cve,exposure',
+            scanId: 'scan-123',
+            userId: 'user-1',
+        });
+    });
+
+    it('omits tags when not provided', async () => {
+        await request(buildApp())
+            .post('/api/scan/nuclei')
+            .send({ target_url: 'https://staging.example.com' });
+
+        expect(enqueueNucleiScan).toHaveBeenCalledWith(
+            expect.objectContaining({ tags: undefined })
+        );
+    });
+});

@@ -16,6 +16,18 @@ import { GateBlocker, GateResult, PipelineGateStatus } from '../types/gate.types
 // Off by default — opt in per environment once a repo workspace is mounted.
 const REACHABILITY_FILTER_ENABLED = process.env.SCA_REACHABILITY_FILTER === 'true';
 
+// Fix-availability filter: don't block a release over a CVE with no fix
+// upstream yet — there's no remediation action a developer could take. Only
+// drops blockers explicitly marked fixAvailable === false (normalizeTrivy sets
+// this for every CVE finding); undefined (non-CVE findings) is never dropped.
+// Off by default, same opt-in convention as the reachability filter above.
+const FIX_AVAILABLE_FILTER_ENABLED = process.env.SCA_FIX_AVAILABLE_FILTER === 'true';
+
+function filterByFixAvailability(blockers: GateBlocker[]): GateBlocker[] {
+  if (!FIX_AVAILABLE_FILTER_ENABLED) return blockers;
+  return blockers.filter(b => b.fixAvailable !== false);
+}
+
 /** Local source checkout for a repo, or null when none is mounted. Reachability
  *  needs source on disk; without it we cannot prove anything unreachable. */
 function resolveRepoSourceDir(repoId: string): string | null {
@@ -69,7 +81,8 @@ function formatBlockers(blockers: GateBlocker[]) {
 /** Computes whether a repository is allowed to be released. */
 export async function checkReleaseGate(repoId: string): Promise<GateResult> {
   const allBlockers = await gateRepository.listOpenFindings(repoId);
-  const blockers = await filterByReachability(repoId, allBlockers);
+  const reachableBlockers = await filterByReachability(repoId, allBlockers);
+  const blockers = filterByFixAvailability(reachableBlockers);
   const blockerCount = blockers.length;
 
   // Calculate score

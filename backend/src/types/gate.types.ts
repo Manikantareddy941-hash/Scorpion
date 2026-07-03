@@ -17,6 +17,10 @@ export interface GateBlocker {
   severity?: string;
   packageName?: string;
   package?: string;
+  /** CVE-specific: whether a fixed version exists. Undefined for non-CVE
+   *  findings (secrets, SAST, license, misconfig) - the fix-available filter
+   *  only ever drops findings that are explicitly known to have no fix. */
+  fixAvailable?: boolean;
 }
 
 export interface GateResult {
