@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { account, ID } from '../lib/appwrite';
 import { Models, OAuthProvider } from 'appwrite';
 
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkUser();
   }, []);
 
-  const signUp = async (email: string, password: string, name: string = '') => {
+  const signUp = useCallback(async (email: string, password: string, name: string = '') => {
     try {
       await account.create(ID.unique(), email, password, name || email.split('@')[0]);
       await account.createEmailPasswordSession(email, password);
@@ -98,9 +98,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       return { error };
     }
-  };
+  }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     try {
       await account.createEmailPasswordSession(email, password);
       const currentUser = await account.get();
@@ -119,9 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       return { error };
     }
-  };
+  }, []);
 
-  const signInWithOAuth = (provider: OAuthProvider) => {
+  const signInWithOAuth = useCallback((provider: OAuthProvider) => {
     const baseUrl = window.location.origin;
     const returnTo = sessionStorage.getItem('oauth_return_to') || '/dashboard';
     sessionStorage.setItem('oauth_return_to', returnTo);
@@ -132,9 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       `${baseUrl}/login`,
       provider === OAuthProvider.Github ? ['repo', 'user:email'] : [],
     );
-  };
+  }, []);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     try {
       const currentUser = await account.get();
       setUser(currentUser);
@@ -143,9 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       return null;
     }
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     if (!user) return;
     const userId = user.$id;
     try {
@@ -163,9 +163,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
+  }, [user]);
 
-  const requestReset = async (email: string) => {
+  const requestReset = useCallback(async (email: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/request-reset`, {
         method: 'POST',
@@ -178,9 +178,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: 'Failed to connect to authentication server' };
     }
-  };
+  }, []);
 
-  const verifyResetOtp = async (email: string, otp: string) => {
+  const verifyResetOtp = useCallback(async (email: string, otp: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/verify-otp`, {
         method: 'POST',
@@ -193,9 +193,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: 'Failed to connect to authentication server' };
     }
-  };
+  }, []);
 
-  const completeReset = async (resetToken: string, newPassword: string) => {
+  const completeReset = useCallback(async (resetToken: string, newPassword: string) => {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/reset-password`, {
         method: 'POST',
@@ -208,18 +208,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return { error: 'Failed to connect to authentication server' };
     }
-  };
+  }, []);
 
-  const updatePassword = async (newPassword: string) => {
+  const updatePassword = useCallback(async (newPassword: string) => {
     try {
       await account.updatePassword(newPassword);
       return { error: null };
     } catch (error: any) {
       return { error };
     }
-  };
+  }, []);
 
-  const getGithubToken = async () => {
+  const getGithubToken = useCallback(async () => {
     try {
       if (import.meta.env.DEV) {
         return 'mock-github-token';
@@ -233,9 +233,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Provider token error:', error);
       return null;
     }
-  };
+  }, []);
 
-  const getJWT = async () => {
+  const getJWT = useCallback(async () => {
     try {
       const jwt = await account.createJWT();
       return jwt.jwt;
@@ -243,31 +243,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('JWT error:', error);
       return null;
     }
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        setUser,
-        signUp,
-        signIn,
-        signOut,
-        signInWithOAuth,
-        requestReset,
-        verifyResetOtp,
-        completeReset,
-        updatePassword,
-        getJWT,
-        refreshUser,
-        getGithubToken,
-        role,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      loading,
+      setUser,
+      signUp,
+      signIn,
+      signOut,
+      signInWithOAuth,
+      requestReset,
+      verifyResetOtp,
+      completeReset,
+      updatePassword,
+      getJWT,
+      refreshUser,
+      getGithubToken,
+      role,
+    }),
+    [
+      user,
+      loading,
+      signUp,
+      signIn,
+      signOut,
+      signInWithOAuth,
+      requestReset,
+      verifyResetOtp,
+      completeReset,
+      updatePassword,
+      getJWT,
+      refreshUser,
+      getGithubToken,
+      role,
+    ],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
