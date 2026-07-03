@@ -6,6 +6,7 @@ import {
   BanditRawOutput,
   CheckovFailedCheck,
   CheckovRawOutput,
+  HadolintRawOutput,
   SemgrepRawOutput,
   TrivyRawOutput
 } from '../types/scan.types';
@@ -219,5 +220,38 @@ function mapBanditSeverity(s?: string): NormalizedIssue['severity'] {
     case 'MEDIUM': return 'MEDIUM';
     case 'LOW': return 'LOW';
     default: return 'INFO';
+  }
+}
+
+export function normalizeHadolint(raw: HadolintRawOutput, workDir: string): NormalizedIssue[] {
+  return (Array.isArray(raw) ? raw : []).map(h => {
+    const relativeFile = h.file ?? 'Dockerfile';
+    const fullPath = resolveFullPath(workDir, relativeFile);
+    const line = h.line ?? 0;
+
+    return {
+      tool: 'hadolint',
+      type: 'security',
+      severity: mapHadolintSeverity(h.level),
+      title: h.code ?? 'Dockerfile issue',
+      message: h.message ?? '',
+      file: relativeFile,
+      line,
+      endLine: line,
+      code: extractCodeSnippet(fullPath, line, line),
+      effort: '5min',
+      category: 'dockerfile-lint',
+      ruleId: h.code ?? ''
+    };
+  });
+}
+
+function mapHadolintSeverity(level?: string): NormalizedIssue['severity'] {
+  switch (level?.toUpperCase()) {
+    case 'ERROR':   return 'HIGH';
+    case 'WARNING': return 'MEDIUM';
+    case 'INFO':    return 'LOW';
+    case 'STYLE':   return 'INFO';
+    default:        return 'INFO';
   }
 }

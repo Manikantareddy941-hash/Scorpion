@@ -176,6 +176,34 @@ const mapBanditSeverity = (sev: string): Finding['severity'] => {
     }
 };
 
+// Hadolint parser - Dockerfile lint
+export const parseHadolint = (stdout: string): Finding[] => {
+    try {
+        if (!stdout || !stdout.trim()) return [];
+        const data = JSON.parse(stdout);
+        return (Array.isArray(data) ? data : []).map((h: any) => ({
+            tool: 'hadolint',
+            severity: mapHadolintSeverity(h.level),
+            message: `[DOCKERFILE] ${h.code}: ${h.message}`,
+            file_path: h.file,
+            line_number: h.line,
+        }));
+    } catch (e) {
+        logger.error('[Parser] Hadolint error:', e);
+        return [];
+    }
+};
+
+const mapHadolintSeverity = (level: string): Finding['severity'] => {
+    switch (level?.toLowerCase()) {
+        case 'error': return 'high';
+        case 'warning': return 'medium';
+        case 'info': return 'low';
+        case 'style': return 'info';
+        default: return 'info';
+    }
+};
+
 const mapTrivySeverity = (sev: string): Finding['severity'] => {
     switch (sev?.toUpperCase()) {
         case 'CRITICAL': return 'critical';

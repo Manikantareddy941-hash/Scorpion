@@ -38,6 +38,7 @@ export interface ScanRawResults {
   gitleaks?: unknown;
   checkov?: unknown;
   bandit?: unknown;
+  hadolint?: unknown;
   [tool: string]: unknown;
 }
 
@@ -105,3 +106,14 @@ export interface BanditRawResult {
 export interface BanditRawOutput {
   results?: BanditRawResult[];
 }
+
+export interface HadolintRawResult {
+  file?: string;
+  line?: number;
+  code?: string;
+  message?: string;
+  level?: string;
+}
+
+/** Hadolint emits a bare JSON array, not an object with a results field. */
+export type HadolintRawOutput = HadolintRawResult[];
