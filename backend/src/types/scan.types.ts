@@ -73,9 +73,17 @@ export interface TrivyRawVulnerability {
   FixedVersion?: string;
 }
 
+export interface TrivyRawLicense {
+  Severity?: string;
+  PkgName?: string;
+  Name?: string;
+  Category?: string;
+}
+
 export interface TrivyRawResult {
   Target?: string;
   Vulnerabilities?: TrivyRawVulnerability[];
+  Licenses?: TrivyRawLicense[];
 }
 
 export interface TrivyRawOutput {

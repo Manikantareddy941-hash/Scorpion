@@ -55,10 +55,37 @@ export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): Normal
   });
 }
 
+// Strong copyleft licenses that can force disclosure of proprietary source -
+// the ones legal actually cares about. Weak-copyleft (MPL, LGPL) and permissive
+// licenses are not flagged; Trivy reports every detected license and surfacing
+// all of them as findings would bury the ones that matter.
+const COPYLEFT_LICENSES = /^(A?GPL)-\d/i;
+
+function isCopyleftLicense(name?: string): boolean {
+  return !!name && COPYLEFT_LICENSES.test(name);
+}
+
 export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): NormalizedIssue[] {
   const issues: NormalizedIssue[] = [];
   const vulns: VulnerablePackage[] = [];
   for (const result of raw.Results ?? []) {
+    for (const license of result.Licenses ?? []) {
+      if (!isCopyleftLicense(license.Name)) continue;
+      issues.push({
+        tool: 'trivy',
+        type: 'security',
+        severity: 'CRITICAL',
+        title: `Copyleft license: ${license.Name}`,
+        message: `${license.PkgName ?? 'Dependency'} is licensed under ${license.Name}, a copyleft license that can require disclosing proprietary source code.`,
+        file: result.Target ?? '',
+        line: 0,
+        endLine: 0,
+        code: `${license.PkgName ?? 'unknown'} → ${license.Name}`,
+        effort: '30min',
+        category: 'license-compliance',
+        ruleId: license.Name ?? ''
+      });
+    }
     for (const vuln of result.Vulnerabilities ?? []) {
       issues.push({
         tool: 'trivy',

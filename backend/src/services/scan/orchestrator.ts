@@ -123,7 +123,7 @@ export const orchestrateScan = async (
     // 3. SCA / Config / Secrets (Trivy)
     if (options.scanType === 'full' || options.scanType === 'sca' || options.scanType === 'secrets') {
         const depth = options.scanDepth === 'deep' ? ['--detection-priority', 'comprehensive'] : [];
-        const scanners = options.scanType === 'sca' ? 'vuln' : options.scanType === 'secrets' ? 'secret' : 'vuln,secret,misconfig';
+        const scanners = options.scanType === 'sca' ? 'vuln,license' : options.scanType === 'secrets' ? 'secret' : 'vuln,secret,misconfig,license';
         tasks.push(runWithLogging('trivy', ['fs', '--format', 'json', ...depth, '--scanners', scanners, '--severity', 'CRITICAL,HIGH,MEDIUM,LOW', targetPath], 'trivy'));
     }
 
