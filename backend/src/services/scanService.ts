@@ -26,6 +26,25 @@ const computeSecurityScore = (critical: number, high: number, medium: number, lo
     return Math.max(0, Math.round(100 - penalty));
 };
 
+/**
+ * Counts active suppression entries in repo-local ignore files (.trivyignore,
+ * .gitleaksignore) so silenced findings stay visible in the scan log instead
+ * of just disappearing from the report. The files themselves are the audit
+ * trail (version-controlled); this only surfaces that they're in effect.
+ */
+const countSuppressions = (scanPath: string): number => {
+    const ignoreFiles = ['.trivyignore', '.gitleaksignore'];
+    return ignoreFiles.reduce((total, name) => {
+        try {
+            const contents = fs.readFileSync(path.join(scanPath, name), 'utf-8');
+            const activeLines = contents.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+            return total + activeLines.length;
+        } catch {
+            return total; // file doesn't exist - no suppressions from this tool
+        }
+    }, 0);
+};
+
 export const ingestVulnerabilitiesDelta = async (
     repoId: string,
     scanId: string,
@@ -318,6 +337,11 @@ export const triggerScan = async (
         const detectedLanguage = Object.entries(languageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
 
         logger.info(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}, Checkov: ${rawResults.find(r => r.tool === 'checkov')?.stdout.length || 0}, Bandit: ${rawResults.find(r => r.tool === 'bandit')?.stdout.length || 0}, Hadolint: ${rawResults.find(r => r.tool === 'hadolint')?.stdout.length || 0}`);
+
+        const suppressedCount = countSuppressions(scanPath);
+        if (suppressedCount > 0) {
+            logger.info(`[Scan] ${suppressedCount} finding(s) suppressed via .trivyignore/.gitleaksignore for repo ${repoId}`);
+        }
 
         // 8️⃣ Parse findings (Normalized)
         const scanResults: ScanRawResults = {};
