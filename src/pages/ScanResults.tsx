@@ -10,6 +10,7 @@ import {
   Clock,
   Activity,
   Loader2,
+  Globe,
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query } from 'appwrite';
@@ -20,6 +21,7 @@ const client = new Client()
   .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 import FindingsTable from '../components/FindingsTable';
 import SBOMExportButton from '../components/SBOMExportButton';
+import DastScanModal from '../components/DastScanModal';
 import { useTranslation } from 'react-i18next';
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -64,6 +66,7 @@ export default function ScanResults() {
   const [findings, setFindings] = useState<AppwriteFinding[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dastModalOpen, setDastModalOpen] = useState(false);
 
   /* ── Fetch scan + findings ── */
   useEffect(() => {
@@ -252,12 +255,22 @@ export default function ScanResults() {
               repoName={scan.repoUrl.split('/').pop() || 'repository'}
             />
 
+            <button
+              type="button"
+              onClick={() => setDastModalOpen(true)}
+              className="btn-premium flex items-center gap-2"
+            >
+              <Globe className="w-4 h-4" /> {t('scan_results.run_dast', 'Run DAST')}
+            </button>
+
             <Link to="/" className="btn-premium flex items-center gap-2">
               <ArrowLeft className="w-4 h-4" />{' '}
               {t('scan_results.back_to_control', 'Back to Control')}
             </Link>
           </div>
         </div>
+
+        {dastModalOpen && <DastScanModal onClose={() => setDastModalOpen(false)} />}
 
         {/* Summary Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
