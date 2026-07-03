@@ -29,26 +29,10 @@ import CoverageRadar from './charts/CoverageRadar';
 import VulnTrend from './charts/VulnTrend';
 import GateRulesDrawer, { evaluatePreflight, type Reachability } from './GateRulesDrawer';
 import { useGateRules } from '../hooks/useGateRules';
-import { VibrationTrace, type HeatmapDatum, type Severity } from './ui';
+import { VibrationTrace, severityVar, type HeatmapDatum, type Severity } from './ui';
 import { SLA_HOURS } from '../lib/sla';
 import PostureExportButton from './PostureExportButton';
 import DriftAlertsTable from './DriftAlertsTable';
-
-const SEVERITY_COLOR: Record<string, string> = {
-  CRITICAL: '#E11D48',
-  HIGH: '#EA580C',
-  MEDIUM: '#D97706',
-  LOW: '#15A34A',
-  INFO: '#64748B',
-};
-
-const SEVERITY_BG: Record<string, string> = {
-  CRITICAL: '#FEECEF',
-  HIGH: '#FEEFE4',
-  MEDIUM: '#FDF3E3',
-  LOW: '#E8F7EE',
-  INFO: '#F1F4F8',
-};
 
 // Frosted glassmorphism by gate status: red / amber / emerald. Purely static -
 // no component state feeds these values, so it lives at module scope instead
@@ -224,152 +208,177 @@ export default function Dashboard({
       try {
         const token = await getJWT();
 
-        let gateSummaryData: any[] = [];
-        try {
-          const gateRes = await fetch('/api/gates/summary', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (gateRes.ok) {
-            const gateData = await gateRes.json();
-            gateSummaryData = gateData.failedRepos || [];
-          }
-        } catch (err) {
-          console.warn('Failed to fetch gate summary:', err);
-        }
-        setGateSummary(gateSummaryData);
-
-        try {
-          const secRes = await fetch('/api/dashboard/security', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (secRes.ok) {
-            const secData = await secRes.json();
-            const t = secData?.by_type || {};
-            setByType({
-              secret: Number(t.secret ?? 0),
-              dependency: Number(t.dependency ?? 0),
-              sast: Number(t.sast ?? 0),
-              iac: Number(t.iac ?? 0),
+        // These six loads share no data dependency on each other (only the repo/scan
+        // fetches below need repoIds), so they run concurrently instead of one big
+        // sequential await chain. Each keeps its own try/catch so one failing fetch
+        // can't block or blank out the others.
+        const fetchGateSummary = async () => {
+          let gateSummaryData: any[] = [];
+          try {
+            const gateRes = await fetch('/api/gates/summary', {
+              headers: { Authorization: `Bearer ${token}` },
             });
-            setMttrDays(secData?.mttr_days ?? null);
-            const repos = (secData?.by_repo || []) as {
-              repo_id: string;
-              repo_name: string;
-              count: number;
-              critical: number;
-              high: number;
-            }[];
-            setRepoRisk(
-              [...repos]
-                .sort((a, b) => b.critical * 10 + b.high - (a.critical * 10 + a.high))
-                .slice(0, 5),
-            );
+            if (gateRes.ok) {
+              const gateData = await gateRes.json();
+              gateSummaryData = gateData.failedRepos || [];
+            }
+          } catch (err) {
+            console.warn('Failed to fetch gate summary:', err);
           }
-        } catch (err) {
-          console.warn('Failed to fetch security breakdown:', err);
-        }
+          setGateSummary(gateSummaryData);
+        };
 
-        try {
-          const startOfDay = new Date();
-          startOfDay.setHours(0, 0, 0, 0);
-          const [queueRes, remediatedTodayRes] = await Promise.all([
-            databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-              Query.equal('status', 'open'),
-              Query.limit(1),
-            ]),
-            databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-              Query.equal('resolution_status', 'remediated'),
-              Query.greaterThanEqual('$updatedAt', startOfDay.toISOString()),
-              Query.limit(50),
-            ]),
-          ]);
-          const detectionToPrDurationsMs = remediatedTodayRes.documents
-            .map((d: any) => new Date(d.$updatedAt).getTime() - new Date(d.$createdAt).getTime())
-            .filter((ms: number) => ms > 0);
-          const avgDetectionToPrDays =
-            detectionToPrDurationsMs.length > 0
-              ? Math.round(
-                  (detectionToPrDurationsMs.reduce((sum, ms) => sum + ms, 0) /
-                    detectionToPrDurationsMs.length /
-                    (1000 * 60 * 60 * 24)) *
-                    10,
-                ) / 10
-              : null;
-          setRemediationStats({
-            queueCount: queueRes.total,
-            prsCreatedToday: remediatedTodayRes.total,
-            avgDetectionToPrDays,
-          });
-        } catch (err) {
-          console.warn('Failed to fetch remediation queue stats:', err);
-        }
+        const fetchSecurityBreakdown = async () => {
+          try {
+            const secRes = await fetch('/api/dashboard/security', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (secRes.ok) {
+              const secData = await secRes.json();
+              const t = secData?.by_type || {};
+              setByType({
+                secret: Number(t.secret ?? 0),
+                dependency: Number(t.dependency ?? 0),
+                sast: Number(t.sast ?? 0),
+                iac: Number(t.iac ?? 0),
+              });
+              setMttrDays(secData?.mttr_days ?? null);
+              const repos = (secData?.by_repo || []) as {
+                repo_id: string;
+                repo_name: string;
+                count: number;
+                critical: number;
+                high: number;
+              }[];
+              setRepoRisk(
+                [...repos]
+                  .sort((a, b) => b.critical * 10 + b.high - (a.critical * 10 + a.high))
+                  .slice(0, 5),
+              );
+            }
+          } catch (err) {
+            console.warn('Failed to fetch security breakdown:', err);
+          }
+        };
+
+        const fetchRemediationStats = async () => {
+          try {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const [queueRes, remediatedTodayRes] = await Promise.all([
+              databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                Query.equal('status', 'open'),
+                Query.limit(1),
+              ]),
+              databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+                Query.equal('resolution_status', 'remediated'),
+                Query.greaterThanEqual('$updatedAt', startOfDay.toISOString()),
+                Query.limit(50),
+              ]),
+            ]);
+            const detectionToPrDurationsMs = remediatedTodayRes.documents
+              .map((d: any) => new Date(d.$updatedAt).getTime() - new Date(d.$createdAt).getTime())
+              .filter((ms: number) => ms > 0);
+            const avgDetectionToPrDays =
+              detectionToPrDurationsMs.length > 0
+                ? Math.round(
+                    (detectionToPrDurationsMs.reduce((sum, ms) => sum + ms, 0) /
+                      detectionToPrDurationsMs.length /
+                      (1000 * 60 * 60 * 24)) *
+                      10,
+                  ) / 10
+                : null;
+            setRemediationStats({
+              queueCount: queueRes.total,
+              prsCreatedToday: remediatedTodayRes.total,
+              avgDetectionToPrDays,
+            });
+          } catch (err) {
+            console.warn('Failed to fetch remediation queue stats:', err);
+          }
+        };
 
         // SLA breach/countdown — derived from each open finding's age vs its severity window.
-        try {
-          const openVulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-            Query.equal('status', 'open'),
-            Query.orderDesc('$createdAt'),
-            Query.limit(200),
-          ]);
-          const now = Date.now();
-          let breached = 0,
-            dueSoon = 0,
-            breachedCritical = 0;
-          let nextHours: number | null = null;
-          openVulns.documents.forEach((d: any) => {
-            const sev = String(d.severity || '').toLowerCase();
-            const slaH = SLA_HOURS[sev] ?? 168;
-            const hoursLeft = (new Date(d.$createdAt).getTime() + slaH * 3600_000 - now) / 3600_000;
-            if (hoursLeft <= 0) {
-              breached++;
-              if (sev === 'critical') breachedCritical++;
-            } else {
-              if (hoursLeft <= 24) dueSoon++;
-              nextHours = nextHours === null ? hoursLeft : Math.min(nextHours, hoursLeft);
+        const fetchSlaStats = async () => {
+          try {
+            const openVulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+              Query.equal('status', 'open'),
+              Query.orderDesc('$createdAt'),
+              Query.limit(200),
+            ]);
+            const now = Date.now();
+            let breached = 0,
+              dueSoon = 0,
+              breachedCritical = 0;
+            let nextHours: number | null = null;
+            openVulns.documents.forEach((d: any) => {
+              const sev = String(d.severity || '').toLowerCase();
+              const slaH = SLA_HOURS[sev] ?? 168;
+              const hoursLeft = (new Date(d.$createdAt).getTime() + slaH * 3600_000 - now) / 3600_000;
+              if (hoursLeft <= 0) {
+                breached++;
+                if (sev === 'critical') breachedCritical++;
+              } else {
+                if (hoursLeft <= 24) dueSoon++;
+                nextHours = nextHours === null ? hoursLeft : Math.min(nextHours, hoursLeft);
+              }
+            });
+            setSlaStats({ breached, dueSoon, breachedCritical, nextHours });
+          } catch (err) {
+            console.warn('Failed to compute SLA stats:', err);
+          }
+        };
+
+        const fetchAuditEntries = async () => {
+          try {
+            const auditRes = await fetch('/api/audit', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (auditRes.ok) {
+              const auditDocs = await auditRes.json();
+              setAuditEntries(
+                auditDocs.slice(0, 3).map((d: any) => ({
+                  action: `${d.action || 'action'} · ${d.resource || d.resourceId || 'system'}`,
+                  resource: d.actorEmail || d.actor || 'system',
+                  time: new Date(d.timestamp || d.$createdAt).toLocaleString([], {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  }),
+                })),
+              );
             }
-          });
-          setSlaStats({ breached, dueSoon, breachedCritical, nextHours });
-        } catch (err) {
-          console.warn('Failed to compute SLA stats:', err);
-        }
-
-        try {
-          const auditRes = await fetch('/api/audit', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (auditRes.ok) {
-            const auditDocs = await auditRes.json();
-            setAuditEntries(
-              auditDocs.slice(0, 3).map((d: any) => ({
-                action: `${d.action || 'action'} · ${d.resource || d.resourceId || 'system'}`,
-                resource: d.actorEmail || d.actor || 'system',
-                time: new Date(d.timestamp || d.$createdAt).toLocaleString([], {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                }),
-              })),
-            );
+          } catch (err) {
+            console.warn('Failed to fetch audit log:', err);
           }
-        } catch (err) {
-          console.warn('Failed to fetch audit log:', err);
-        }
+        };
 
-        try {
-          if (user) {
-            const integrationsRes = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [
-              Query.equal('userId', user.$id),
-              Query.limit(1),
-            ]);
-            const integration = integrationsRes.documents[0];
-            setMeshStatus([
-              { channel: 'Slack', configured: !!integration?.slack_webhook },
-              { channel: 'Discord', configured: !!integration?.discord_webhook },
-              { channel: 'PagerDuty', configured: !!integration?.pagerduty_key },
-            ]);
+        const fetchIntegrationStatus = async () => {
+          try {
+            if (user) {
+              const integrationsRes = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [
+                Query.equal('userId', user.$id),
+                Query.limit(1),
+              ]);
+              const integration = integrationsRes.documents[0];
+              setMeshStatus([
+                { channel: 'Slack', configured: !!integration?.slack_webhook },
+                { channel: 'Discord', configured: !!integration?.discord_webhook },
+                { channel: 'PagerDuty', configured: !!integration?.pagerduty_key },
+              ]);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch integration status:', err);
           }
-        } catch (err) {
-          console.warn('Failed to fetch integration status:', err);
-        }
+        };
+
+        await Promise.allSettled([
+          fetchGateSummary(),
+          fetchSecurityBreakdown(),
+          fetchRemediationStats(),
+          fetchSlaStats(),
+          fetchAuditEntries(),
+          fetchIntegrationStatus(),
+        ]);
 
         let reposDocuments: any[] = [];
         try {
@@ -1783,15 +1792,15 @@ export default function Dashboard({
                           <div key={v.$id} className="flex gap-4 items-center py-3 min-h-[64px]">
                             <div
                               className="w-[3px] h-8 rounded-full shrink-0"
-                              style={{ background: SEVERITY_COLOR[v.severity] ?? '#d1d5db' }}
+                              style={{ background: severityVar((v.severity || 'info').toLowerCase() as Severity) }}
                             />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-0.5">
                                 <span
                                   className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider"
                                   style={{
-                                    color: SEVERITY_COLOR[v.severity],
-                                    background: SEVERITY_BG[v.severity] ?? '#f3f4f6',
+                                    color: severityVar((v.severity || 'info').toLowerCase() as Severity),
+                                    background: `color-mix(in srgb, ${severityVar((v.severity || 'info').toLowerCase() as Severity)} 14%, transparent)`,
                                   }}
                                 >
                                   {v.severity}

@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueNucleiScan } from '../queues/nucleiQueue';
+import { assertSafeScanTarget } from '../utils/ssrfGuard';
 import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request {
@@ -23,6 +24,11 @@ router.post('/nuclei', verifyUser, async (req: AuthenticatedRequest, res: Respon
     if (!target_url) return res.status(400).json({ error: 'target_url is required' });
     if (tags !== undefined && typeof tags !== 'string') {
         return res.status(400).json({ error: 'tags must be a comma-separated string when provided' });
+    }
+    try {
+        await assertSafeScanTarget(target_url);
+    } catch (err: unknown) {
+        return res.status(400).json({ error: errorMessage(err) });
     }
 
     try {

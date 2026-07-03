@@ -155,7 +155,7 @@ export default function DeepAnalysis() {
   };
 
   const dbOccurrencesOf = (v: any) =>
-    v.occurrences.filter((occ: any) => occ.id && !occ.id.startsWith('vuln-') && !occ.id.startsWith('group-'));
+    v.occurrences.filter((occ: any) => occ.id && !occ.id.startsWith('vuln-') && !occ.id.startsWith('group-') && !occ.id.startsWith('occ-'));
 
   const handleCreateTask = (v: any) =>
     runVulnMutation(v, 'task', `Initiating task dispatch for ${v.cveId || v.title}...`, `Successfully dispatched security task for ${v.cveId || v.title}`, async () => {
@@ -233,7 +233,7 @@ export default function DeepAnalysis() {
         heatmap[repoName] = { critical: 0, high: 0, medium: 0, low: 0 };
       }
       const sev = g.severity.toLowerCase();
-      const targetSev = sev === 'crit' ? 'critical' : (sev === 'high' ? 'high' : (sev === 'medium' ? 'medium' : 'low'));
+      const targetSev = sev === 'critical' ? 'critical' : (sev === 'high' ? 'high' : (sev === 'medium' ? 'medium' : 'low'));
       if (heatmap[repoName][targetSev] !== undefined) {
         heatmap[repoName][targetSev]++;
       }

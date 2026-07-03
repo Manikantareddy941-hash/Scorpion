@@ -141,8 +141,10 @@ router.put('/:id/policy', async (req: AuthenticatedRequest, res: Response, next:
     try {
         const repoId = req.params.id;
         const { policy_name } = req.body;
+        if (!Object.prototype.hasOwnProperty.call(POLICY_PRESETS, policy_name)) {
+            return res.status(400).json({ error: 'Unknown policy_name' });
+        }
         const preset = POLICY_PRESETS[policy_name];
-        if (!preset) return res.status(400).json({ error: 'Unknown policy_name' });
 
         if (!(await hasRequiredRole(req.user!.$id, repoId, 'admin'))) {
             return res.status(403).json({ error: 'Only repo admins can change the governance policy' });

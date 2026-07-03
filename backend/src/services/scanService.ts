@@ -48,7 +48,17 @@ const countSuppressions = (scanPath: string): number => {
 export const ingestVulnerabilitiesDelta = async (
     repoId: string,
     scanId: string,
-    issues: IngestableIssue[]
+    issues: IngestableIssue[],
+    // When set, reconciliation only resolves open findings whose `tool` is in
+    // this list. The DAST workers (ZAP/Nuclei/ffuf) all ingest under the same
+    // repo_id ('dast'), so without a scope each scanner's delta would resolve
+    // the previous scanner's findings and silently pass a gate that should
+    // block. Omitted for triggerScan (single combined multi-tool batch), which
+    // keeps the original resolve-everything behaviour.
+    // ponytail: scopes by tool, not by tenant — one user's 'dast' scan still
+    // reconciles another user's same-tool 'dast' findings. Fix the shared
+    // global 'dast' repo_id (per-user/per-target id) if DAST goes multi-tenant.
+    toolScope?: string[]
 ) => {
     try {
         logger.info(`[Delta Ingestion] Starting delta ingestion for repo: ${repoId}, scan: ${scanId}`);
@@ -105,6 +115,9 @@ export const ingestVulnerabilitiesDelta = async (
         // Find resolved (in existing Appwrite, but missing from incoming)
         for (const [hash, doc] of activeHashMap.entries()) {
             if (!incomingHashMap.has(hash)) {
+                // Only reconcile within the ingesting tool's scope so sibling
+                // scanners sharing this repo_id aren't wrongly marked resolved.
+                if (toolScope && !toolScope.includes((doc as { tool?: string }).tool ?? '')) continue;
                 resolvedDocs.push(doc);
             }
         }
