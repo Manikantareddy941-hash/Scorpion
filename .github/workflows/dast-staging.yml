@@ -1,0 +1,65 @@
+name: DAST Staging Scan + Gate
+
+# Opt-in, manual trigger. Runs the DAST suite (ZAP, Nuclei, ffuf) against a
+# deployed staging URL, waits for every scan to finish, then enforces the
+# release gate. Kept separate from ci.yml on purpose: the PR pipeline must not
+# depend on a live staging box. Add a `schedule:` trigger once STAGING is stable.
+#
+# Required repo secrets:
+#   SCORPION_API_URL    Base URL of the Scorpion backend
+#   SCORPION_API_TOKEN  Bearer JWT with access to the DAST scans / gate
+#   DAST_TARGET_URL     Staging URL to scan
+# Optional:
+#   DAST_REPO_ID        Gate repo id to evaluate (defaults to "dast", which is
+#                       the repo_id the DAST routes ingest findings under)
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: Override staging URL to scan (else DAST_TARGET_URL secret)
+        required: false
+      scanners:
+        description: Comma list of zap,nuclei,ffuf (default all)
+        required: false
+
+jobs:
+  dast:
+    name: DAST suite + release gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Build Backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Run DAST suite against staging
+        working-directory: backend
+        env:
+          SCORPION_API_URL: ${{ secrets.SCORPION_API_URL }}
+          SCORPION_API_TOKEN: ${{ secrets.SCORPION_API_TOKEN }}
+          DAST_TARGET_URL: ${{ github.event.inputs.target_url || secrets.DAST_TARGET_URL }}
+          DAST_SCANNERS: ${{ github.event.inputs.scanners }}
+        run: node dist/backend/src/scripts/runDastSuite.js
+
+      - name: Enforce release gate (fails closed)
+        working-directory: backend
+        env:
+          SCORPION_API_URL: ${{ secrets.SCORPION_API_URL }}
+          SCORPION_API_TOKEN: ${{ secrets.SCORPION_API_TOKEN }}
+          REPO_ID: ${{ secrets.DAST_REPO_ID || 'dast' }}
+        run: node dist/backend/src/workers/pipelineEnforcer.js
