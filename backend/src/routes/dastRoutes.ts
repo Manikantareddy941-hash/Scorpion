@@ -1,8 +1,11 @@
 import { Router, Response, Request } from 'express';
 import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
-import { runZapScan } from '../workers/zapWorker';
+import { enqueueDastScan } from '../queues/dastQueue';
 import { logger } from '../services/logger';
+
+const VALID_SCAN_MODES = ['spider', 'active', 'passive'] as const;
+type ScanMode = (typeof VALID_SCAN_MODES)[number];
 
 interface AuthenticatedRequest extends Request {
     user?: { $id: string };
@@ -19,15 +22,21 @@ function errorCode(err: unknown): number | undefined {
 const router = Router();
 
 router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
-    const { target_url, scanMode = 'spider' } = req.body;
+    const { target_url, scanMode = 'spider', auth } = req.body;
     if (!target_url) return res.status(400).json({ error: 'target_url is required' });
+    if (!VALID_SCAN_MODES.includes(scanMode)) {
+        return res.status(400).json({ error: `scanMode must be one of: ${VALID_SCAN_MODES.join(', ')}` });
+    }
+    if (auth !== undefined && typeof auth?.bearerToken !== 'string') {
+        return res.status(400).json({ error: 'auth.bearerToken must be a string when auth is provided' });
+    }
 
     try {
         const scanId = ID.unique();
         const userId = req.user?.$id || 'system';
 
         logger.info(`[DAST API] Initializing ZAP scan for ${target_url} (Mode: ${scanMode})...`);
-        
+
         // Create initial scan document
         await databases.createDocument(
             DB_ID,
@@ -47,14 +56,13 @@ router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response
             }
         );
 
-        // Run worker asynchronously
-        runZapScan({
+        // Hand off to the BullMQ worker: survives restarts, retries on failure.
+        await enqueueDastScan({
             targetUrl: target_url,
-            scanMode,
+            scanMode: scanMode as ScanMode,
             scanId,
-            userId
-        }).catch(err => {
-            logger.error('[DAST API Worker Error]', err);
+            userId,
+            auth: auth ? { bearerToken: auth.bearerToken } : undefined
         });
 
         res.json({ scanId, status: 'started' });

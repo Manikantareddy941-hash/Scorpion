@@ -67,9 +67,11 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
+import { initDastQueueWorker } from './queues/dastQueueWorker';
 import { startDriftMonitor } from './workers/driftMonitor';
 import { startFallbackReplayer, stopFallbackReplayer } from './workers/fallbackReplayer';
 import { scanQueue } from './queues/scanQueue';
+import { dastQueue } from './queues/dastQueue';
 import { redisConnection } from './queues/redisConnection';
 
 // --- Startup Diagnostic ---
@@ -361,6 +363,7 @@ initScheduler();
 initReportScheduler();
 initScanWorker();
 const scanQueueWorker = initScanQueueWorker();
+const dastQueueWorker = initDastQueueWorker();
 initUptimeScheduler();
 // Continuous runtime drift monitor (undefined when no kube config is reachable).
 const driftMonitor = startDriftMonitor();
@@ -460,9 +463,11 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         );
         logger.info('[Shutdown] HTTP(S) listener(s) closed');
 
-        // 3. Drain the BullMQ worker (waits for the active job), then the queue.
+        // 3. Drain the BullMQ workers (waits for the active job), then the queues.
         await scanQueueWorker.close();
         await scanQueue.close();
+        await dastQueueWorker.close();
+        await dastQueue.close();
 
         // 4. Close the Redis connection backing BullMQ.
         await redisConnection.quit();
