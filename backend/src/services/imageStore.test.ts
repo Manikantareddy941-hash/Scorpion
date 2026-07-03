@@ -1,4 +1,4 @@
-import { putScan, getScan } from './imageStore';
+import { putScan, getScan, putProvenance, getProvenance } from './imageStore';
 
 const pkg = (id: string): { pkgName: string } => ({ pkgName: id });
 
@@ -28,5 +28,23 @@ describe('imageStore LRU + TTL fallback', () => {
     expect(await getScan('d-1', base)).toBeUndefined();
     expect(await getScan('d-0', base)).toEqual([pkg('0')]);
     expect(await getScan('d-new', base)).toEqual([pkg('new')]);
+  });
+});
+
+describe('provenance store fallback', () => {
+  it('returns stored provenance before expiry', async () => {
+    const t = 1_000_000;
+    await putProvenance('sha-p', '{"statement":{}}', t);
+    expect(await getProvenance('sha-p', t)).toBe('{"statement":{}}');
+  });
+
+  it('expires provenance past its TTL on read', async () => {
+    const t = 1_000_000;
+    await putProvenance('sha-p-ttl', '{}', t);
+    expect(await getProvenance('sha-p-ttl', t + 60 * 60 * 1000 + 1)).toBeUndefined();
+  });
+
+  it('returns undefined for unknown digests', async () => {
+    expect(await getProvenance('sha-p-missing')).toBeUndefined();
   });
 });
