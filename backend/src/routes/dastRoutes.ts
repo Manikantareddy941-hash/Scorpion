@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueDastScan } from '../queues/dastQueue';
+import { assertSafeScanTarget } from '../utils/ssrfGuard';
 import { logger } from '../services/logger';
 
 const VALID_SCAN_MODES = ['spider', 'active', 'passive'] as const;
@@ -29,6 +30,11 @@ router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response
     }
     if (auth !== undefined && typeof auth?.bearerToken !== 'string') {
         return res.status(400).json({ error: 'auth.bearerToken must be a string when auth is provided' });
+    }
+    try {
+        await assertSafeScanTarget(target_url);
+    } catch (err: unknown) {
+        return res.status(400).json({ error: errorMessage(err) });
     }
 
     try {

@@ -55,3 +55,45 @@ export async function assertSafeWebhookUrl(rawUrl: string): Promise<void> {
         }
     }
 }
+
+/**
+ * Throws if rawUrl is unsafe as a DAST scan target. Unlike webhooks, scanners
+ * legitimately hit http:// as well as https://. By default private/link-local/
+ * loopback/metadata targets are blocked (an authenticated user must not be able
+ * to point ZAP/Nuclei/ffuf at 169.254.169.254 or an internal service). Set
+ * DAST_ALLOW_PRIVATE_TARGETS=true to permit them when staging is itself internal.
+ * ponytail: resolves DNS once — not rebinding-proof (host could re-resolve to a
+ * private IP before the scanner connects). Pin the resolved IP through to the
+ * scanner if you need TOCTOU-safe SSRF protection.
+ */
+export async function assertSafeScanTarget(rawUrl: string): Promise<void> {
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        throw new Error('Invalid target URL');
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Target URL must use http or https');
+    }
+
+    if (process.env.DAST_ALLOW_PRIVATE_TARGETS === 'true') return;
+
+    const hostname = parsed.hostname;
+    if (hostname === 'localhost') {
+        throw new Error('Target URL not allowed (private/internal address)');
+    }
+
+    if (net.isIP(hostname)) {
+        if (isPrivateIp(hostname)) throw new Error('Target URL not allowed (private/internal address)');
+        return;
+    }
+
+    const addresses = await dns.promises.lookup(hostname, { all: true }).catch(() => []);
+    for (const { address } of addresses) {
+        if (isPrivateIp(address)) {
+            throw new Error('Target URL resolves to a disallowed (private/internal) address');
+        }
+    }
+}

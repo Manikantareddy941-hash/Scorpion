@@ -44,7 +44,7 @@ export const runFfufScan = async (payload: FfufWorkerPayload) => {
             detected_at: new Date().toISOString()
         }));
 
-        await ingestVulnerabilitiesDelta('dast', scanId, findings);
+        await ingestVulnerabilitiesDelta('dast', scanId, findings, ['ffuf']);
 
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
             status: 'completed',

@@ -61,7 +61,7 @@ export const runNucleiScan = async (payload: NucleiWorkerPayload) => {
             detected_at: new Date().toISOString()
         }));
 
-        await ingestVulnerabilitiesDelta('dast', scanId, findings);
+        await ingestVulnerabilitiesDelta('dast', scanId, findings, ['nuclei']);
 
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
             status: 'completed',

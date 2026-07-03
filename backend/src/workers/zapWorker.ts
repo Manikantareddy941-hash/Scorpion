@@ -55,7 +55,12 @@ const waitForCompletion = async (
             throw new Error(`${label} timed out after ${POLL_TIMEOUT_MS}ms`);
         }
         await delay(POLL_INTERVAL_MS);
-        status = await getStatus();
+        const raw = await getStatus();
+        // A malformed/missing ZAP status parses to NaN; `NaN < 100` is false, so
+        // without this guard the loop would exit and report the scan "complete"
+        // with 0 findings. Treat non-numeric as no-progress and let the deadline
+        // fail the scan rather than silently under-reporting.
+        status = Number.isFinite(raw) ? raw : status;
         logger.info(`[ZAP Worker] ${label} progress: ${status}%`);
     }
 };
@@ -126,7 +131,7 @@ export const runZapScan = async (payload: ZapWorkerPayload) => {
         }));
 
         // Deduplicate and ingest
-        await ingestVulnerabilitiesDelta('dast', scanId, findings);
+        await ingestVulnerabilitiesDelta('dast', scanId, findings, ['zap']);
 
         // Update scan record
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
