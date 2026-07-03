@@ -46,6 +46,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import gateRoutes from './routes/gateRoutes';
 import dockerScanRoutes from './routes/dockerScanRoutes';
 import dastRoutes from './routes/dastRoutes';
+import nucleiRoutes from './routes/nucleiRoutes';
 import scanRoutes from './routes/scanRoutes';
 import monitorRoutes from './routes/monitorRoutes';
 import issuesRoutes from './routes/issuesRoutes';
@@ -68,10 +69,12 @@ import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
 import { initDastQueueWorker } from './queues/dastQueueWorker';
+import { initNucleiQueueWorker } from './queues/nucleiQueueWorker';
 import { startDriftMonitor } from './workers/driftMonitor';
 import { startFallbackReplayer, stopFallbackReplayer } from './workers/fallbackReplayer';
 import { scanQueue } from './queues/scanQueue';
 import { dastQueue } from './queues/dastQueue';
+import { nucleiQueue } from './queues/nucleiQueue';
 import { redisConnection } from './queues/redisConnection';
 
 // --- Startup Diagnostic ---
@@ -300,6 +303,7 @@ app.use('/api/v1/drift', authenticate, driftRoutes);
 app.use('/api/scan', dockerScanRoutes);
 app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with /scan/docker
 app.use('/api/scan/dast', dastRoutes);
+app.use('/api/scan', nucleiRoutes);
 app.use('/api/monitor', monitorRoutes);
 app.use('/api/issues', authenticate, issuesRoutes);
 app.use('/api/builds', authenticate, buildRoutes);
@@ -364,6 +368,7 @@ initReportScheduler();
 initScanWorker();
 const scanQueueWorker = initScanQueueWorker();
 const dastQueueWorker = initDastQueueWorker();
+const nucleiQueueWorker = initNucleiQueueWorker();
 initUptimeScheduler();
 // Continuous runtime drift monitor (undefined when no kube config is reachable).
 const driftMonitor = startDriftMonitor();
@@ -468,6 +473,8 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         await scanQueue.close();
         await dastQueueWorker.close();
         await dastQueue.close();
+        await nucleiQueueWorker.close();
+        await nucleiQueue.close();
 
         // 4. Close the Redis connection backing BullMQ.
         await redisConnection.quit();
