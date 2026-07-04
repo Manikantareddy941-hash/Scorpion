@@ -71,16 +71,28 @@ export const FALCO_TEMPLATES: Record<FalcoTemplateId, TemplateDef> = {
   },
 };
 
+// Conservative whitelist for values interpolated into conditions. Anything
+// else (colons, parens, newlines, quotes) could break YAML/condition parsing
+// for the WHOLE rules file, silently disabling every rule. Dropping a bad
+// allowlist entry is the fail-secure direction: it means MORE alerting.
+const SAFE_PARAM = /^[A-Za-z0-9_./-]+$/;
+
+const safeValues = (values: string[] | undefined): string[] =>
+  (values ?? []).filter((v) => SAFE_PARAM.test(v));
+
 function conditionFor(rule: ManagedFalcoRule, def: TemplateDef): string {
   const parts = [def.baseCondition];
-  if (rule.params.allowedProcs?.length) {
-    parts.push(`and not proc.name in (${rule.params.allowedProcs.join(', ')})`);
+  const procs = safeValues(rule.params.allowedProcs);
+  if (procs.length) {
+    parts.push(`and not proc.name in (${procs.join(', ')})`);
   }
-  if (rule.template === 'outbound-unknown-domain' && rule.params.allowedDomains?.length) {
-    parts.push(`and not fd.sip.name in (${rule.params.allowedDomains.join(', ')})`);
+  const domains = safeValues(rule.params.allowedDomains);
+  if (rule.template === 'outbound-unknown-domain' && domains.length) {
+    parts.push(`and not fd.sip.name in (${domains.join(', ')})`);
   }
-  if (rule.template === 'write-below-etc' && rule.params.watchedPaths?.length) {
-    const extra = rule.params.watchedPaths.map((p) => `fd.name startswith ${p}`).join(' or ');
+  const paths = safeValues(rule.params.watchedPaths);
+  if (rule.template === 'write-below-etc' && paths.length) {
+    const extra = paths.map((p) => `fd.name startswith ${p}`).join(' or ');
     parts.push(`or (open_write and container and (${extra}))`);
   }
   return parts.join(' ');
@@ -110,13 +122,16 @@ export function classifyEvent(
   event: { rule: string; containerImage: string },
   rules: ManagedFalcoRule[],
 ): { suppressed: boolean; overridePriority?: FalcoPriority } {
-  const match = rules.find((r) => {
+  const candidates = rules.filter((r) => {
     if (!r.enabled) return false;
     const def = FALCO_TEMPLATES[r.template];
     if (def.falcoRuleName.toLowerCase() !== event.rule.toLowerCase()) return false;
     if (r.appScope && !event.containerImage.startsWith(r.appScope)) return false;
     return true;
   });
+  // Most specific wins: a scoped match beats a global one, regardless of
+  // array order. ponytail: two tiers only; longest-prefix-wins if scopes nest.
+  const match = candidates.find((r) => r.appScope) ?? candidates[0];
   if (!match) return { suppressed: false };
   return { suppressed: match.suppressed, overridePriority: match.severityOverride };
 }
