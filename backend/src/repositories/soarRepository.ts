@@ -78,14 +78,21 @@ export const soarRepository = {
     }
   },
 
+  // Mutations log with context then rethrow — silent fake success is data
+  // loss; callers (route error-middleware, BullMQ worker) handle propagation.
   async createPlaybook(p: Omit<Playbook, 'id'>): Promise<Playbook> {
-    const doc = await databases.createDocument(DB_ID, PLAYBOOKS, ID.unique(), {
-      name: p.name,
-      enabled: p.enabled,
-      trigger: JSON.stringify(p.trigger),
-      actions: JSON.stringify(p.actions),
-    });
-    return { ...p, id: doc.$id };
+    try {
+      const doc = await databases.createDocument(DB_ID, PLAYBOOKS, ID.unique(), {
+        name: p.name,
+        enabled: p.enabled,
+        trigger: JSON.stringify(p.trigger),
+        actions: JSON.stringify(p.actions),
+      });
+      return { ...p, id: doc.$id };
+    } catch (err) {
+      logger.error('[SoarRepository] createPlaybook failed:', toMessage(err));
+      throw err;
+    }
   },
 
   async updatePlaybook(id: string, p: Partial<Omit<Playbook, 'id'>>): Promise<void> {
@@ -94,28 +101,46 @@ export const soarRepository = {
     if (p.enabled !== undefined) patch.enabled = p.enabled;
     if (p.trigger !== undefined) patch.trigger = JSON.stringify(p.trigger);
     if (p.actions !== undefined) patch.actions = JSON.stringify(p.actions);
-    await databases.updateDocument(DB_ID, PLAYBOOKS, id, patch);
+    try {
+      await databases.updateDocument(DB_ID, PLAYBOOKS, id, patch);
+    } catch (err) {
+      logger.error('[SoarRepository] updatePlaybook failed:', toMessage(err));
+      throw err;
+    }
   },
 
   async createAction(a: Omit<SoarActionRecord, 'id' | 'createdAt'>): Promise<SoarActionRecord> {
     const createdAt = new Date().toISOString();
-    const doc = await databases.createDocument(DB_ID, ACTIONS, ID.unique(), { ...a, createdAt });
-    return { ...a, id: doc.$id, createdAt };
+    try {
+      const doc = await databases.createDocument(DB_ID, ACTIONS, ID.unique(), { ...a, createdAt });
+      return { ...a, id: doc.$id, createdAt };
+    } catch (err) {
+      logger.error('[SoarRepository] createAction failed:', toMessage(err));
+      throw err;
+    }
   },
 
   async getAction(id: string): Promise<SoarActionRecord | null> {
     try {
       return actionFromDoc(await databases.getDocument(DB_ID, ACTIONS, id));
-    } catch {
+    } catch (err) {
+      // Logged so an Appwrite outage is distinguishable from a clean not-found.
+      logger.warn('[SoarRepository] getAction failed:', toMessage(err));
       return null;
     }
   },
 
+  /** Read path — fail-secure like listPlaybooks: Appwrite down → []. */
   async listActions(status?: SoarActionStatus): Promise<SoarActionRecord[]> {
-    const queries = [Query.orderDesc('createdAt'), Query.limit(100)];
-    if (status) queries.push(Query.equal('status', status));
-    const list = await databases.listDocuments(DB_ID, ACTIONS, queries);
-    return list.documents.map(actionFromDoc);
+    try {
+      const queries = [Query.orderDesc('createdAt'), Query.limit(100)];
+      if (status) queries.push(Query.equal('status', status));
+      const list = await databases.listDocuments(DB_ID, ACTIONS, queries);
+      return list.documents.map(actionFromDoc);
+    } catch (err) {
+      logger.warn('[SoarRepository] action list failed:', toMessage(err));
+      return [];
+    }
   },
 
   async setActionStatus(
@@ -123,10 +148,15 @@ export const soarRepository = {
     status: SoarActionStatus,
     extra: { resolvedBy?: string; result?: string; error?: string } = {},
   ): Promise<void> {
-    await databases.updateDocument(DB_ID, ACTIONS, id, {
-      status,
-      resolvedAt: new Date().toISOString(),
-      ...extra,
-    });
+    try {
+      await databases.updateDocument(DB_ID, ACTIONS, id, {
+        status,
+        resolvedAt: new Date().toISOString(),
+        ...extra,
+      });
+    } catch (err) {
+      logger.error('[SoarRepository] setActionStatus failed:', toMessage(err));
+      throw err;
+    }
   },
 };

@@ -46,6 +46,41 @@ describe('soarRepository.listPlaybooks', () => {
   });
 });
 
+describe('soarRepository playbook mutations', () => {
+  const draft = {
+    name: 'Shell response', enabled: true,
+    trigger: { rulePattern: 'Terminal*', minPriority: 'Warning' as const },
+    actions: [{ type: 'kill_pod' as const, mode: 'approval' as const }],
+  };
+
+  it('createPlaybook stringifies trigger/actions and returns id', async () => {
+    mocked.createDocument.mockResolvedValue({ $id: 'pb-9' } as never);
+    const out = await soarRepository.createPlaybook(draft);
+    expect(out).toEqual({ ...draft, id: 'pb-9' });
+    expect(mocked.createDocument).toHaveBeenCalledWith('test-db', 'playbooks', 'new-id', {
+      name: draft.name, enabled: true,
+      trigger: JSON.stringify(draft.trigger),
+      actions: JSON.stringify(draft.actions),
+    });
+  });
+
+  it('createPlaybook rethrows on Appwrite failure', async () => {
+    mocked.createDocument.mockRejectedValue(new Error('down'));
+    await expect(soarRepository.createPlaybook(draft)).rejects.toThrow('down');
+  });
+
+  it('updatePlaybook patches only provided fields', async () => {
+    mocked.updateDocument.mockResolvedValue({} as never);
+    await soarRepository.updatePlaybook('pb-1', { enabled: false });
+    expect(mocked.updateDocument).toHaveBeenCalledWith('test-db', 'playbooks', 'pb-1', { enabled: false });
+  });
+
+  it('updatePlaybook rethrows on Appwrite failure', async () => {
+    mocked.updateDocument.mockRejectedValue(new Error('down'));
+    await expect(soarRepository.updatePlaybook('pb-1', { enabled: false })).rejects.toThrow('down');
+  });
+});
+
 describe('soarRepository actions', () => {
   it('createAction stamps createdAt and returns the record', async () => {
     mocked.createDocument.mockResolvedValue({ $id: 'act-1' } as never);
@@ -68,5 +103,39 @@ describe('soarRepository actions', () => {
   it('getAction returns null on not-found', async () => {
     mocked.getDocument.mockRejectedValue(new Error('404'));
     await expect(soarRepository.getAction('missing')).resolves.toBeNull();
+  });
+
+  it('createAction rethrows on Appwrite failure', async () => {
+    mocked.createDocument.mockRejectedValue(new Error('down'));
+    await expect(soarRepository.createAction({
+      incidentId: 'inc-1', actionType: 'kill_pod', playbookId: 'pb-1', playbookName: 'Shell response',
+      status: 'pending', containerImage: 'img', falcoRule: 'Terminal shell in container',
+    })).rejects.toThrow('down');
+  });
+
+  it('setActionStatus rethrows on Appwrite failure', async () => {
+    mocked.updateDocument.mockRejectedValue(new Error('down'));
+    await expect(soarRepository.setActionStatus('act-1', 'failed')).rejects.toThrow('down');
+  });
+
+  it('listActions filters by status', async () => {
+    mocked.listDocuments.mockResolvedValue({
+      total: 1,
+      documents: [{
+        $id: 'act-1', incidentId: 'inc-1', actionType: 'kill_pod', playbookId: 'pb-1',
+        playbookName: 'Shell response', status: 'pending', containerImage: 'img',
+        falcoRule: 'Terminal shell in container', createdAt: '2026-07-04T00:00:00.000Z',
+      }],
+    } as never);
+    const out = await soarRepository.listActions('pending');
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('act-1');
+    expect(mocked.listDocuments).toHaveBeenCalledWith('test-db', 'soar_actions',
+      expect.arrayContaining([{ equal: ['status', 'pending'] }]));
+  });
+
+  it('listActions returns [] when Appwrite is down (fail-secure)', async () => {
+    mocked.listDocuments.mockRejectedValue(new Error('down'));
+    await expect(soarRepository.listActions()).resolves.toEqual([]);
   });
 });
