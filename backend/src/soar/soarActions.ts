@@ -1,4 +1,4 @@
-import { databases, DB_ID, Query } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { sendSlackNotification } from '../services/slackService';
 import { auditLog } from '../services/auditService';
 import { logger } from '../services/logger';
@@ -6,6 +6,13 @@ import type { SoarActionRecord } from '../repositories/soarRepository';
 
 export const QUARANTINE_LABEL = 'scorpion-quarantine';
 export const QUARANTINE_POLICY_NAME = 'scorpion-quarantine-deny-all';
+
+/** RFC 6902 JSON Patch operation. @kubernetes/client-node v1.4.0 always
+ *  negotiates Content-Type: application/json-patch+json for patch calls
+ *  (ObjectSerializer.getPreferredMediaType picks the first of a fixed
+ *  candidate list; there is no per-call override), so the body must be a
+ *  patch array, never a plain merge object. */
+type JsonPatchOp = { op: 'add' | 'remove' | 'replace' | 'test'; path: string; value?: unknown };
 
 /** DIP seam: the executor is pure orchestration; cluster writes live here. */
 export interface K8sPodActions {
@@ -15,7 +22,7 @@ export interface K8sPodActions {
   ensureQuarantinePolicy(namespace: string): Promise<void>;
 }
 
-function createK8sPodActionsImpl(k8sClient: typeof import('@kubernetes/client-node')): K8sPodActions {
+export function createK8sPodActionsImpl(k8sClient: typeof import('@kubernetes/client-node')): K8sPodActions {
   const kc = new k8sClient.KubeConfig();
   kc.loadFromDefault();
   const core = kc.makeApiClient(k8sClient.CoreV1Api);
@@ -26,11 +33,15 @@ function createK8sPodActionsImpl(k8sClient: typeof import('@kubernetes/client-no
       return JSON.stringify(res);
     },
     async labelPod(namespace, pod, key, value) {
-      await core.patchNamespacedPod({
-        name: pod,
-        namespace,
-        body: { metadata: { labels: { [key]: value } } },
-      });
+      // "add" on a nested path like /metadata/labels/foo 400s when the pod
+      // has no labels map yet; replacing the whole map (merged from a fresh
+      // read) via "add" on /metadata/labels works whether or not it existed.
+      const current = await core.readNamespacedPod({ name: pod, namespace });
+      const existingLabels = (current.metadata?.labels ?? {}) as Record<string, string>;
+      const patch: JsonPatchOp[] = [
+        { op: 'add', path: '/metadata/labels', value: { ...existingLabels, [key]: value } },
+      ];
+      await core.patchNamespacedPod({ name: pod, namespace, body: patch });
     },
     async deletePod(namespace, pod) {
       await core.deleteNamespacedPod({ name: pod, namespace });
@@ -68,6 +79,10 @@ export interface SoarExecutionDeps {
   k8s: K8sPodActions;
   /** Raw Falco event JSON, attached to evidence captures when available. */
   falcoEventJson?: string;
+  /** Owner of the incident that triggered this action. Required for
+   *  slack_escalate — without it, the integration lookup would broadcast
+   *  to every tenant's webhook, so the action fails instead (fail-secure). */
+  ownerUserId?: string;
 }
 
 type ExecutionResult = { ok: true; result: string } | { ok: false; error: string };
@@ -76,9 +91,12 @@ function toMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function slackEscalate(action: SoarActionRecord): Promise<string> {
-  // Reuses the integration lookup convention from falcoHandler.
-  const integrations = await databases.listDocuments(DB_ID, 'integrations', [Query.limit(25)]);
+async function slackEscalate(action: SoarActionRecord, ownerUserId: string): Promise<string> {
+  // Scoped to the incident owner, same convention as falcoHandler — an
+  // unscoped list here would broadcast the incident to every tenant's webhook.
+  const integrations = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [
+    Query.equal('userId', ownerUserId),
+  ]);
   let sent = 0;
   for (const doc of integrations.documents) {
     const integ = doc as unknown as { isEnabled?: boolean; slack_webhook?: string };
@@ -125,8 +143,12 @@ export async function executeSoarAction(
         const evidence = JSON.stringify({ event, podSpec });
         return { ok: true, result: evidence };
       }
-      case 'slack_escalate':
-        return { ok: true, result: await slackEscalate(action) };
+      case 'slack_escalate': {
+        if (!deps.ownerUserId) {
+          return { ok: false, error: 'no owner user id for Slack escalation' };
+        }
+        return { ok: true, result: await slackEscalate(action, deps.ownerUserId) };
+      }
       case 'isolate_pod': {
         if (!action.namespace || !action.podName) {
           return { ok: false, error: 'missing namespace/pod on event; cannot isolate' };

@@ -1,15 +1,16 @@
-jest.mock('@kubernetes/client-node');
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
 jest.mock('../services/auditService', () => ({ auditLog: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 jest.mock('../lib/appwrite', () => ({
   databases: { listDocuments: jest.fn().mockResolvedValue({ total: 0, documents: [] }) },
   DB_ID: 'test-db',
+  COLLECTIONS: { INTEGRATIONS: 'integrations' },
   Query: { equal: jest.fn(), limit: jest.fn() },
 }));
 
-import { executeSoarAction, K8sPodActions } from './soarActions';
+import { executeSoarAction, createK8sPodActionsImpl, K8sPodActions, QUARANTINE_LABEL } from './soarActions';
 import type { SoarActionRecord } from '../repositories/soarRepository';
+import { databases, Query } from '../lib/appwrite';
 
 const k8s = (): jest.Mocked<K8sPodActions> => ({
   getPodJson: jest.fn().mockResolvedValue('{"kind":"Pod"}'),
@@ -60,5 +61,79 @@ describe('executeSoarAction', () => {
     deps.k8s.deletePod.mockRejectedValue(new Error('forbidden'));
     const out = await executeSoarAction(action({ actionType: 'kill_pod' }), deps);
     expect(out).toEqual({ ok: false, error: expect.stringContaining('forbidden') });
+  });
+
+  it('slack_escalate without an owner user id fails and never lists integrations (fail-secure)', async () => {
+    const deps = { k8s: k8s() };
+    const out = await executeSoarAction(action({ actionType: 'slack_escalate' }), deps);
+    expect(out).toEqual({ ok: false, error: expect.stringContaining('owner user id') });
+    expect(databases.listDocuments).not.toHaveBeenCalled();
+  });
+
+  it('slack_escalate scopes the integration lookup to the incident owner, not every tenant', async () => {
+    (databases.listDocuments as jest.Mock).mockResolvedValue({
+      total: 1,
+      documents: [{ isEnabled: true, slack_webhook: 'https://hooks.slack.test/x' }],
+    });
+    const deps = { k8s: k8s(), ownerUserId: 'user-42' };
+    const out = await executeSoarAction(action({ actionType: 'slack_escalate' }), deps);
+    expect(out.ok).toBe(true);
+    expect(Query.equal).toHaveBeenCalledWith('userId', 'user-42');
+    expect(databases.listDocuments).toHaveBeenCalledWith('test-db', 'integrations', expect.anything());
+  });
+});
+
+describe('createK8sPodActionsImpl', () => {
+  class FakeCoreV1Api {}
+  class FakeNetworkingV1Api {}
+
+  function fakeK8sClient(core: unknown, net: unknown): typeof import('@kubernetes/client-node') {
+    class FakeKubeConfig {
+      loadFromDefault(): void {}
+      makeApiClient(ctor: unknown): unknown {
+        return ctor === FakeCoreV1Api ? core : net;
+      }
+    }
+    return {
+      KubeConfig: FakeKubeConfig,
+      CoreV1Api: FakeCoreV1Api,
+      NetworkingV1Api: FakeNetworkingV1Api,
+    } as unknown as typeof import('@kubernetes/client-node');
+  }
+
+  // Pins the patch request shape: @kubernetes/client-node v1.4.0 always
+  // negotiates application/json-patch+json for patchNamespacedPod (fixed
+  // candidate order in ObjectSerializer, no per-call override), so the body
+  // must be an RFC 6902 JSON Patch array, not a merge-style plain object.
+  it('labelPod sends a JSON Patch array merging existing labels', async () => {
+    const patchNamespacedPod = jest.fn().mockResolvedValue(undefined);
+    const core = {
+      readNamespacedPod: jest.fn().mockResolvedValue({ metadata: { labels: { team: 'checkout' } } }),
+      patchNamespacedPod,
+    };
+    const k8sActions = createK8sPodActionsImpl(fakeK8sClient(core, {}));
+
+    await k8sActions.labelPod('prod', 'web-1', QUARANTINE_LABEL, 'true');
+
+    expect(patchNamespacedPod).toHaveBeenCalledTimes(1);
+    const { body } = patchNamespacedPod.mock.calls[0][0] as { body: unknown };
+    expect(Array.isArray(body)).toBe(true);
+    expect(body).toEqual([
+      { op: 'add', path: '/metadata/labels', value: { team: 'checkout', [QUARANTINE_LABEL]: 'true' } },
+    ]);
+  });
+
+  it('labelPod still produces a valid patch array when the pod has no existing labels map', async () => {
+    const patchNamespacedPod = jest.fn().mockResolvedValue(undefined);
+    const core = {
+      readNamespacedPod: jest.fn().mockResolvedValue({ metadata: {} }),
+      patchNamespacedPod,
+    };
+    const k8sActions = createK8sPodActionsImpl(fakeK8sClient(core, {}));
+
+    await k8sActions.labelPod('prod', 'web-1', QUARANTINE_LABEL, 'true');
+
+    const { body } = patchNamespacedPod.mock.calls[0][0] as { body: unknown };
+    expect(body).toEqual([{ op: 'add', path: '/metadata/labels', value: { [QUARANTINE_LABEL]: 'true' } }]);
   });
 });
