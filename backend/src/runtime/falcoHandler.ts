@@ -7,6 +7,9 @@ import { createIncident } from '../services/incidentService';
 import { auditLog } from '../services/auditService';
 import { sendSlackNotification } from '../services/slackService';
 import { logger } from '../services/logger';
+import { matchPlaybooks, normalizePriority } from '../soar/playbookMatcher';
+import { soarRepository } from '../repositories/soarRepository';
+import { enqueueSoarAction } from '../queues/soarQueue';
 
 export interface FalcoEvent {
   rule: string;
@@ -79,12 +82,16 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       actor: 'system',
       actorEmail: 'system@scorpion',
       resource: 'incident',
-      details: { 
-        rule: event.rule, 
-        priority: event.priority, 
-        image: containerImage 
+      details: {
+        rule: event.rule,
+        priority: event.priority,
+        image: containerImage
       }
     });
+
+    await dispatchSoar(event, incidentDoc.$id, ownerUserId || undefined).catch((err) =>
+      logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', err),
+    );
 
     // Loki Logging
     logRuntimeThreat(event.rule, event.priority, containerImage, !!correlatedScanId);
@@ -128,4 +135,34 @@ export async function handleFalcoEvent(event: FalcoEvent) {
   } catch (error) {
     logger.error('[Falco Handler] Failed to process runtime event:', error);
   }
+}
+
+async function dispatchSoar(event: FalcoEvent, incidentId: string, ownerUserId?: string): Promise<void> {
+  const playbooks = await soarRepository.listPlaybooks(); // [] on failure (fail-secure)
+  const priority = normalizePriority(event.priority);
+  const matched = matchPlaybooks({ rule: event.rule, priority }, playbooks);
+  if (matched.length === 0) return;
+
+  const namespace = event.output_fields?.['k8s.ns.name'] as string | undefined;
+  const podName = event.output_fields?.['k8s.pod.name'] as string | undefined;
+  const containerImage = event.output_fields?.['container.image.repository'] || 'unknown';
+
+  for (const m of matched) {
+    const record = await soarRepository.createAction({
+      incidentId,
+      actionType: m.type,
+      playbookId: m.playbookId,
+      playbookName: m.playbookName,
+      status: m.execution === 'auto' ? 'approved' : 'pending',
+      namespace,
+      podName,
+      ownerUserId,
+      containerImage,
+      falcoRule: event.rule,
+    });
+    if (m.execution === 'auto') {
+      await enqueueSoarAction({ actionId: record.id, falcoEventJson: JSON.stringify(event), ownerUserId });
+    }
+  }
+  logger.info(`[Falco Handler] SOAR dispatched ${matched.length} action(s) for '${event.rule}'`);
 }
