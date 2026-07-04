@@ -36,7 +36,12 @@ const router = Router();
 router.use(requireRole('admin', 'security'));
 
 router.get('/playbooks', async (_req: Request, res: Response) => {
-  res.json({ playbooks: await soarRepository.listPlaybooks() });
+  try {
+    res.json({ playbooks: await soarRepository.listPlaybooks() });
+  } catch (err) {
+    logger.error('[SOAR API] list playbooks failed:', errorMessage(err));
+    res.status(500).json({ error: 'Failed to list playbooks' });
+  }
 });
 
 router.post('/playbooks', async (req: Request, res: Response) => {
@@ -96,7 +101,8 @@ async function resolveAction(
   }
   const resolvedBy = req.user?.email ?? req.user?.$id ?? 'unknown';
   await soarRepository.setActionStatus(action.id, target, { resolvedBy });
-  if (target === 'approved') await enqueueSoarAction({ actionId: action.id });
+  // ownerUserId scopes downstream Slack escalation to the repo owner (fail-secure).
+  if (target === 'approved') await enqueueSoarAction({ actionId: action.id, ownerUserId: action.ownerUserId });
   res.json({ status: target });
 }
 

@@ -82,15 +82,28 @@ describe('soarRepository playbook mutations', () => {
 });
 
 describe('soarRepository actions', () => {
-  it('createAction stamps createdAt and returns the record', async () => {
+  it('createAction stamps createdAt and round-trips ownerUserId', async () => {
     mocked.createDocument.mockResolvedValue({ $id: 'act-1' } as never);
     const rec = await soarRepository.createAction({
       incidentId: 'inc-1', actionType: 'kill_pod', playbookId: 'pb-1', playbookName: 'Shell response',
       status: 'pending', containerImage: 'img', falcoRule: 'Terminal shell in container',
-      namespace: 'prod', podName: 'web-1',
+      namespace: 'prod', podName: 'web-1', ownerUserId: 'user-42',
     });
     expect(rec.id).toBe('act-1');
     expect(rec.createdAt).toBeTruthy();
+    expect(rec.ownerUserId).toBe('user-42');
+    expect(mocked.createDocument).toHaveBeenCalledWith('test-db', 'soar_actions', 'new-id',
+      expect.objectContaining({ ownerUserId: 'user-42' }));
+  });
+
+  it('getAction surfaces ownerUserId from the document', async () => {
+    mocked.getDocument.mockResolvedValue({
+      $id: 'act-1', incidentId: 'inc-1', actionType: 'kill_pod', playbookId: 'pb-1',
+      playbookName: 'Shell response', status: 'pending', containerImage: 'img',
+      falcoRule: 'r', createdAt: '2026-07-04T00:00:00.000Z', ownerUserId: 'user-42',
+    } as never);
+    const rec = await soarRepository.getAction('act-1');
+    expect(rec?.ownerUserId).toBe('user-42');
   });
 
   it('setActionStatus stamps resolvedAt', async () => {

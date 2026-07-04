@@ -42,7 +42,7 @@ const validPlaybook = {
 const pendingAction = {
   id: 'act-1', incidentId: 'inc-1', actionType: 'kill_pod', playbookId: 'pb-1',
   playbookName: 'p', status: 'pending', containerImage: 'img', falcoRule: 'r',
-  createdAt: 'now',
+  createdAt: 'now', ownerUserId: 'user-42',
 };
 
 beforeEach(() => jest.clearAllMocks());
@@ -67,7 +67,7 @@ describe('soarRoutes', () => {
     const res = await request(buildApp()).post('/api/soar/actions/act-1/approve');
     expect(res.statusCode).toBe(200);
     expect(repo.setActionStatus).toHaveBeenCalledWith('act-1', 'approved', { resolvedBy: 'sec@scorpion' });
-    expect(enqueueSoarAction).toHaveBeenCalledWith({ actionId: 'act-1' });
+    expect(enqueueSoarAction).toHaveBeenCalledWith({ actionId: 'act-1', ownerUserId: 'user-42' });
   });
 
   it('POST /actions/:id/approve returns 409 for non-pending (no double execution)', async () => {
@@ -82,6 +82,26 @@ describe('soarRoutes', () => {
     const res = await request(buildApp()).post('/api/soar/actions/act-1/reject');
     expect(res.statusCode).toBe(200);
     expect(repo.setActionStatus).toHaveBeenCalledWith('act-1', 'rejected', { resolvedBy: 'sec@scorpion' });
+  });
+
+  it('POST /actions/:id/approve returns 404 when action not found', async () => {
+    repo.getAction.mockResolvedValue(null);
+    const res = await request(buildApp()).post('/api/soar/actions/missing/approve');
+    expect(res.statusCode).toBe(404);
+    expect(enqueueSoarAction).not.toHaveBeenCalled();
+  });
+
+  it('POST /actions/:id/reject returns 404 when action not found', async () => {
+    repo.getAction.mockResolvedValue(null);
+    const res = await request(buildApp()).post('/api/soar/actions/missing/reject');
+    expect(res.statusCode).toBe(404);
+    expect(repo.setActionStatus).not.toHaveBeenCalled();
+  });
+
+  it('GET /playbooks returns 500 when listing throws', async () => {
+    repo.listPlaybooks.mockRejectedValue(new Error('down'));
+    const res = await request(buildApp()).get('/api/soar/playbooks');
+    expect(res.statusCode).toBe(500);
   });
 
   it('GET /actions filters by status', async () => {

@@ -17,6 +17,8 @@ export interface SoarActionRecord {
   status: SoarActionStatus;
   namespace?: string;
   podName?: string;
+  /** Repo owner for owner-scoped Slack escalation (fail-secure downstream). */
+  ownerUserId?: string;
   containerImage: string;
   falcoRule: string;
   createdAt: string;
@@ -55,6 +57,7 @@ function actionFromDoc(doc: Models.Document): SoarActionRecord {
     status: w.status,
     namespace: w.namespace ?? undefined,
     podName: w.podName ?? undefined,
+    ownerUserId: w.ownerUserId ?? undefined,
     containerImage: w.containerImage,
     falcoRule: w.falcoRule,
     createdAt: w.createdAt,
