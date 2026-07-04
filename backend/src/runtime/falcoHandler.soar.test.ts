@@ -25,10 +25,12 @@ jest.mock('../repositories/falcoRuleRepository', () => ({
 }), { virtual: true });
 
 import { handleFalcoEvent } from './falcoHandler';
+import { databases } from '../lib/appwrite';
 import { soarRepository } from '../repositories/soarRepository';
 import { enqueueSoarAction } from '../queues/soarQueue';
 
 const repo = soarRepository as jest.Mocked<typeof soarRepository>;
+const db = databases as jest.Mocked<typeof databases>;
 
 const event = {
   rule: 'Terminal shell in container',
@@ -74,6 +76,24 @@ describe('falcoHandler SOAR dispatch', () => {
 
     expect(repo.createAction).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending' }));
     expect(enqueueSoarAction).not.toHaveBeenCalled();
+  });
+
+  it('threads the resolved ownerUserId into createAction and the queue payload', async () => {
+    // First listDocuments call is the SCANS correlation query → yields the owner.
+    db.listDocuments.mockResolvedValueOnce(
+      { total: 1, documents: [{ $id: 'scan-1', user_id: 'user-9' }] } as never,
+    );
+    repo.listPlaybooks.mockResolvedValue([{
+      id: 'pb-1', name: 'p', enabled: true,
+      trigger: { minPriority: 'Warning' },
+      actions: [{ type: 'capture_evidence', mode: 'auto' }],
+    }]);
+    repo.createAction.mockResolvedValue({ id: 'act-3' } as never);
+
+    await handleFalcoEvent(event);
+
+    expect(repo.createAction).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: 'user-9' }));
+    expect(enqueueSoarAction).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: 'user-9' }));
   });
 
   it('SOAR failure never breaks the incident path', async () => {

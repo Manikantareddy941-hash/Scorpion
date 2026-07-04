@@ -89,10 +89,6 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       }
     });
 
-    await dispatchSoar(event, incidentDoc.$id, ownerUserId || undefined).catch((err) =>
-      logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', err),
-    );
-
     // Loki Logging
     logRuntimeThreat(event.rule, event.priority, containerImage, !!correlatedScanId);
 
@@ -132,12 +128,23 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       }
     }
 
+    // SOAR dispatch runs LAST so a slow Appwrite write can never delay the
+    // time-sensitive Critical/Error alerting above; errors are swallowed here.
+    await dispatchSoar(event, incidentDoc.$id, containerImage, ownerUserId || undefined).catch((err) =>
+      logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', err),
+    );
+
   } catch (error) {
     logger.error('[Falco Handler] Failed to process runtime event:', error);
   }
 }
 
-async function dispatchSoar(event: FalcoEvent, incidentId: string, ownerUserId?: string): Promise<void> {
+async function dispatchSoar(
+  event: FalcoEvent,
+  incidentId: string,
+  containerImage: string,
+  ownerUserId?: string,
+): Promise<void> {
   const playbooks = await soarRepository.listPlaybooks(); // [] on failure (fail-secure)
   const priority = normalizePriority(event.priority);
   const matched = matchPlaybooks({ rule: event.rule, priority }, playbooks);
@@ -145,7 +152,6 @@ async function dispatchSoar(event: FalcoEvent, incidentId: string, ownerUserId?:
 
   const namespace = event.output_fields?.['k8s.ns.name'] as string | undefined;
   const podName = event.output_fields?.['k8s.pod.name'] as string | undefined;
-  const containerImage = event.output_fields?.['container.image.repository'] || 'unknown';
 
   for (const m of matched) {
     const record = await soarRepository.createAction({
