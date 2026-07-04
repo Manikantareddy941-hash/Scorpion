@@ -61,6 +61,7 @@ import ingestRoutes from './routes/ingestRoutes';
 import gateRulesRoutes from './routes/gateRulesRoutes';
 import driftRoutes from './routes/driftRoutes';
 import canaryRoutes from './routes/canaryRoutes';
+import soarRoutes from './routes/soarRoutes';
 import { registerTicketRoutes } from './registerRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
@@ -74,6 +75,7 @@ import { initDastQueueWorker } from './queues/dastQueueWorker';
 import { initNucleiQueueWorker } from './queues/nucleiQueueWorker';
 import { initFfufQueueWorker } from './queues/ffufQueueWorker';
 import { initCanaryQueueWorker } from './queues/canaryQueueWorker';
+import { initSoarQueueWorker } from './queues/soarQueueWorker';
 import { startDriftMonitor } from './workers/driftMonitor';
 import { startFallbackReplayer, stopFallbackReplayer } from './workers/fallbackReplayer';
 import { scanQueue } from './queues/scanQueue';
@@ -81,6 +83,7 @@ import { dastQueue } from './queues/dastQueue';
 import { nucleiQueue } from './queues/nucleiQueue';
 import { ffufQueue } from './queues/ffufQueue';
 import { canaryQueue } from './queues/canaryQueue';
+import { soarQueue } from './queues/soarQueue';
 import { redisConnection } from './queues/redisConnection';
 
 // --- Startup Diagnostic ---
@@ -307,6 +310,7 @@ app.use('/api/gates', gateRoutes);
 app.use('/api/v1/rules', authenticate, gateRulesRoutes);
 app.use('/api/v1/drift', authenticate, driftRoutes);
 app.use('/api/canary', authenticate, canaryRoutes);
+app.use('/api/soar', authenticate, soarRoutes);
 app.use('/api/scan', dockerScanRoutes);
 app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with /scan/docker
 app.use('/api/scan/dast', dastRoutes);
@@ -379,6 +383,7 @@ const dastQueueWorker = initDastQueueWorker();
 const nucleiQueueWorker = initNucleiQueueWorker();
 const ffufQueueWorker = initFfufQueueWorker();
 const canaryQueueWorker = initCanaryQueueWorker();
+const soarQueueWorker = initSoarQueueWorker();
 initUptimeScheduler();
 // Continuous runtime drift monitor (undefined when no kube config is reachable).
 const driftMonitor = startDriftMonitor();
@@ -489,6 +494,8 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         await ffufQueue.close();
         await canaryQueueWorker.close();
         await canaryQueue.close();
+        await soarQueueWorker.close();
+        await soarQueue.close();
 
         // 4. Close the Redis connection backing BullMQ.
         await redisConnection.quit();
