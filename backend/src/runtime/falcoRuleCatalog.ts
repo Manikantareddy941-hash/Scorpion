@@ -75,7 +75,7 @@ export const FALCO_TEMPLATES: Record<FalcoTemplateId, TemplateDef> = {
 // else (colons, parens, newlines, quotes) could break YAML/condition parsing
 // for the WHOLE rules file, silently disabling every rule. Dropping a bad
 // allowlist entry is the fail-secure direction: it means MORE alerting.
-const SAFE_PARAM = /^[A-Za-z0-9_./-]+$/;
+export const SAFE_PARAM = /^[A-Za-z0-9_./-]+$/;
 
 const safeValues = (values: string[] | undefined): string[] =>
   (values ?? []).filter((v) => SAFE_PARAM.test(v));
