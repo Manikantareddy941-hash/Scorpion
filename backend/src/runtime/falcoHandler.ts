@@ -10,6 +10,8 @@ import { logger } from '../services/logger';
 import { matchPlaybooks, normalizePriority } from '../soar/playbookMatcher';
 import { soarRepository } from '../repositories/soarRepository';
 import { enqueueSoarAction } from '../queues/soarQueue';
+import { classifyEvent } from './falcoRuleCatalog';
+import { falcoRuleRepository } from '../repositories/falcoRuleRepository';
 
 export interface FalcoEvent {
   rule: string;
@@ -24,10 +26,32 @@ export interface FalcoEvent {
 }
 
 export async function handleFalcoEvent(event: FalcoEvent) {
-  const containerId = event.output_fields?.['container.id'] || 'unknown';
-  const containerImage = event.output_fields?.['container.image.repository'] || 'unknown';
-  
-  logger.info(`[Falco Handler] Processing incident: ${event.rule} on ${containerImage}`);
+  // --- classification gate (Component 2) ---
+  const managedRules = await falcoRuleRepository.listRules();
+  const classification = classifyEvent(
+    { rule: event.rule, containerImage: event.output_fields?.['container.image.repository'] || 'unknown' },
+    managedRules,
+  );
+  if (classification.suppressed) {
+    await auditLog({
+      action: 'falco.event.suppressed',
+      actor: 'system',
+      actorEmail: 'system@scorpion',
+      resource: 'falco_event',
+      details: { rule: event.rule, image: event.output_fields?.['container.image.repository'] ?? 'unknown' },
+    }).catch(() => undefined);
+    logger.info(`[Falco Handler] Suppressed event '${event.rule}' by managed rule`);
+    return;
+  }
+  let effectiveEvent = event;
+  if (classification.overridePriority) {
+    effectiveEvent = { ...effectiveEvent, priority: classification.overridePriority };
+  }
+
+  const containerId = effectiveEvent.output_fields?.['container.id'] || 'unknown';
+  const containerImage = effectiveEvent.output_fields?.['container.image.repository'] || 'unknown';
+
+  logger.info(`[Falco Handler] Processing incident: ${effectiveEvent.rule} on ${containerImage}`);
 
   try {
     // 1. Correlate with existing scan data
@@ -66,13 +90,13 @@ export async function handleFalcoEvent(event: FalcoEvent) {
 
     // 2. Persist incident to Appwrite
     const incidentDoc = await databases.createDocument(DB_ID, COLLECTIONS.INCIDENTS, ID.unique(), {
-      rule: event.rule,
-      priority: event.priority,
-      output: event.output,
+      rule: effectiveEvent.rule,
+      priority: effectiveEvent.priority,
+      output: effectiveEvent.output,
       container_id: containerId,
       container_image: containerImage,
       status: 'open',
-      timestamp: event.time || new Date().toISOString(),
+      timestamp: effectiveEvent.time || new Date().toISOString(),
       correlated_scan_id: correlatedScanId,
       ...(ownerUserId ? { user_id: ownerUserId } : {})
     });
@@ -83,26 +107,26 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       actorEmail: 'system@scorpion',
       resource: 'incident',
       details: {
-        rule: event.rule,
-        priority: event.priority,
+        rule: effectiveEvent.rule,
+        priority: effectiveEvent.priority,
         image: containerImage
       }
     });
 
     // Loki Logging
-    logRuntimeThreat(event.rule, event.priority, containerImage, !!correlatedScanId);
+    logRuntimeThreat(effectiveEvent.rule, effectiveEvent.priority, containerImage, !!correlatedScanId);
 
     // Metrics
-    runtimeThreats.inc({ priority: event.priority.toLowerCase() });
+    runtimeThreats.inc({ priority: effectiveEvent.priority.toLowerCase() });
 
     // Incident Response
-    if (event.priority === 'Critical' || event.priority === 'Error') {
+    if (effectiveEvent.priority === 'Critical' || effectiveEvent.priority === 'Error') {
       await createIncident({
-        title: `Runtime threat: ${event.rule}`,
-        severity: event.priority,
+        title: `Runtime threat: ${effectiveEvent.rule}`,
+        severity: effectiveEvent.priority,
         source: 'falco',
         relatedScanId: correlatedScanId,
-        description: event.output,
+        description: effectiveEvent.output,
         userId: ownerUserId || undefined
       });
 
@@ -130,7 +154,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
 
     // SOAR dispatch runs LAST so a slow Appwrite write can never delay the
     // time-sensitive Critical/Error alerting above; errors are swallowed here.
-    await dispatchSoar(event, incidentDoc.$id, containerImage, ownerUserId || undefined).catch((err) =>
+    await dispatchSoar(effectiveEvent, incidentDoc.$id, containerImage, ownerUserId || undefined).catch((err) =>
       logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', err),
     );
 

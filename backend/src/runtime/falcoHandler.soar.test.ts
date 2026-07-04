@@ -13,7 +13,7 @@ jest.mock('../services/logEvents', () => ({ logRuntimeThreat: jest.fn() }));
 jest.mock('../services/metrics', () => ({ runtimeThreats: { inc: jest.fn() } }));
 jest.mock('../services/tracing', () => ({ withSpan: (_n: string, _a: unknown, fn: () => unknown) => fn() }));
 jest.mock('../services/incidentService', () => ({ createIncident: jest.fn() }));
-jest.mock('../services/auditService', () => ({ auditLog: jest.fn() }));
+jest.mock('../services/auditService', () => ({ auditLog: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 jest.mock('../repositories/soarRepository', () => ({
@@ -22,7 +22,7 @@ jest.mock('../repositories/soarRepository', () => ({
 jest.mock('../queues/soarQueue', () => ({ enqueueSoarAction: jest.fn() }));
 jest.mock('../repositories/falcoRuleRepository', () => ({
   falcoRuleRepository: { listRules: jest.fn().mockResolvedValue([]) },
-}), { virtual: true });
+}));
 
 import { handleFalcoEvent } from './falcoHandler';
 import { databases } from '../lib/appwrite';

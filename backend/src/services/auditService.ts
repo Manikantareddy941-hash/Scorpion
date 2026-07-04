@@ -12,7 +12,8 @@ export type AuditAction =
   | 'build.triggered' | 'build.completed' | 'build.cancelled'
   | 'threat_model.created' | 'threat_model.updated' | 'threat_model.deleted' | 'threat_model.analyzed'
   | 'canary.started' | 'canary.promoted' | 'canary.rolled_back' | 'canary.aborted'
-  | 'soar.capture_evidence' | 'soar.slack_escalate' | 'soar.isolate_pod' | 'soar.kill_pod';
+  | 'soar.capture_evidence' | 'soar.slack_escalate' | 'soar.isolate_pod' | 'soar.kill_pod'
+  | 'falco.event.suppressed';
 
 export async function auditLog({
   action, actor, actorEmail, resource,
