@@ -103,6 +103,7 @@ export const COLLECTIONS = {
   ENVIRONMENTS: 'environments',
   THREAT_MODELS: 'threat_models',
   AUDIT_LOGS_V2: 'audit_logs_v2',
+  CANARIES: 'canaries',
 };
 
 export { ID, Query };

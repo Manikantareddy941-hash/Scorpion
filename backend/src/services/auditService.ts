@@ -10,7 +10,8 @@ export type AuditAction =
   | 'gate.blocked' | 'rollback.triggered'
   | 'evidence.exported'
   | 'build.triggered' | 'build.completed' | 'build.cancelled'
-  | 'threat_model.created' | 'threat_model.updated' | 'threat_model.deleted' | 'threat_model.analyzed';
+  | 'threat_model.created' | 'threat_model.updated' | 'threat_model.deleted' | 'threat_model.analyzed'
+  | 'canary.started' | 'canary.promoted' | 'canary.rolled_back' | 'canary.aborted';
 
 export async function auditLog({
   action, actor, actorEmail, resource,
