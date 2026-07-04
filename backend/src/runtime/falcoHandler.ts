@@ -27,25 +27,32 @@ export interface FalcoEvent {
 
 export async function handleFalcoEvent(event: FalcoEvent) {
   // --- classification gate (Component 2) ---
-  const managedRules = await falcoRuleRepository.listRules();
-  const classification = classifyEvent(
-    { rule: event.rule, containerImage: event.output_fields?.['container.image.repository'] || 'unknown' },
-    managedRules,
-  );
-  if (classification.suppressed) {
-    await auditLog({
-      action: 'falco.event.suppressed',
-      actor: 'system',
-      actorEmail: 'system@scorpion',
-      resource: 'falco_event',
-      details: { rule: event.rule, image: event.output_fields?.['container.image.repository'] ?? 'unknown' },
-    }).catch(() => undefined);
-    logger.info(`[Falco Handler] Suppressed event '${event.rule}' by managed rule`);
-    return;
-  }
+  // Fail-secure: any error here means no suppression, no override — the event
+  // proceeds untouched. Classification must never break incident creation.
   let effectiveEvent = event;
-  if (classification.overridePriority) {
-    effectiveEvent = { ...effectiveEvent, priority: classification.overridePriority };
+  try {
+    const managedRules = await falcoRuleRepository.listRules();
+    const classification = classifyEvent(
+      { rule: event.rule, containerImage: event.output_fields?.['container.image.repository'] || 'unknown' },
+      managedRules,
+    );
+    if (classification.suppressed) {
+      await auditLog({
+        action: 'falco.event.suppressed',
+        actor: 'system',
+        actorEmail: 'system@scorpion',
+        resource: 'falco_event',
+        details: { rule: event.rule, image: event.output_fields?.['container.image.repository'] ?? 'unknown' },
+      }).catch(() => undefined);
+      logger.info(`[Falco Handler] Suppressed event '${event.rule}' by managed rule`);
+      return;
+    }
+    if (classification.overridePriority) {
+      effectiveEvent = { ...event, priority: classification.overridePriority };
+    }
+  } catch (err) {
+    logger.error('[Falco Handler] Classification failed (event processed unmodified):', err);
+    effectiveEvent = event;
   }
 
   const containerId = effectiveEvent.output_fields?.['container.id'] || 'unknown';
@@ -61,7 +68,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     if (containerImage !== 'unknown') {
       correlatedScanId = await withSpan(
         'runtime.correlate',
-        { rule: event.rule, priority: event.priority, image: containerImage },
+        { rule: effectiveEvent.rule, priority: effectiveEvent.priority, image: containerImage },
         async () => {
           const latestScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repoUrl', containerImage),
@@ -140,10 +147,10 @@ export async function handleFalcoEvent(event: FalcoEvent) {
              const integration = integrationsRes.documents[0] as any;
              if (integration.isEnabled && integration.slack_webhook) {
                  await sendSlackNotification(integration.slack_webhook, {
-                     title: `Runtime threat: ${event.rule}`,
+                     title: `Runtime threat: ${effectiveEvent.rule}`,
                      repository: containerImage,
-                     severity: event.priority,
-                     rule: event.rule,
+                     severity: effectiveEvent.priority,
+                     rule: effectiveEvent.rule,
                      incidentId: incidentDoc.$id
                  });
                  logger.info('[Falco Handler] Dynamic Slack notification dispatched successfully.');

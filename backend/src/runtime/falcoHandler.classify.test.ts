@@ -75,4 +75,18 @@ describe('falcoHandler classification', () => {
     await handleFalcoEvent(event);
     expect(mockedDb.createDocument).toHaveBeenCalled();
   });
+
+  it('processes events normally when a rule row has an invalid template (classification error swallowed)', async () => {
+    rules.listRules.mockResolvedValue([{
+      id: 'r-bad', template: 'not-a-real-template' as never, params: {},
+      suppressed: true, enabled: true,
+    }]);
+    mockedDb.listDocuments.mockResolvedValue({ total: 0, documents: [] } as never);
+
+    await expect(handleFalcoEvent(event)).resolves.toBeUndefined();
+
+    // Fail-secure: broken rule config never suppresses — incident still created, priority untouched.
+    expect(mockedDb.createDocument).toHaveBeenCalledWith('test-db', 'incidents', 'new-id',
+      expect.objectContaining({ priority: 'Warning' }));
+  });
 });

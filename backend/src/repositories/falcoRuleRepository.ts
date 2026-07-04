@@ -1,6 +1,7 @@
 import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
+import { FALCO_TEMPLATES } from '../runtime/falcoRuleCatalog';
 import type { ManagedFalcoRule } from '../runtime/falcoRuleCatalog';
 
 const COLLECTION = 'falco_rules';
@@ -14,17 +15,32 @@ interface RuleWire {
   enabled: boolean;
 }
 
-function fromDoc(doc: Models.Document): ManagedFalcoRule {
+function toMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** null for malformed rows (unknown template / bad params JSON) — skipped
+ *  rules mean no suppression, which is the fail-secure direction. */
+function fromDoc(doc: Models.Document): ManagedFalcoRule | null {
   const w = doc as unknown as RuleWire & Models.Document;
-  return {
-    id: doc.$id,
-    template: w.template,
-    params: JSON.parse(w.params || '{}') as ManagedFalcoRule['params'],
-    appScope: w.appScope ?? undefined,
-    severityOverride: w.severityOverride ?? undefined,
-    suppressed: w.suppressed,
-    enabled: w.enabled,
-  };
+  if (!(w.template in FALCO_TEMPLATES)) {
+    logger.warn(`[FalcoRuleRepository] skipping rule ${doc.$id}: unknown template '${String(w.template)}'`);
+    return null;
+  }
+  try {
+    return {
+      id: doc.$id,
+      template: w.template,
+      params: JSON.parse(w.params || '{}') as ManagedFalcoRule['params'],
+      appScope: w.appScope ?? undefined,
+      severityOverride: w.severityOverride ?? undefined,
+      suppressed: w.suppressed,
+      enabled: w.enabled,
+    };
+  } catch (err) {
+    logger.warn(`[FalcoRuleRepository] skipping rule ${doc.$id}: ${toMessage(err)}`);
+    return null;
+  }
 }
 
 export const falcoRuleRepository = {
@@ -32,23 +48,30 @@ export const falcoRuleRepository = {
   async listRules(): Promise<ManagedFalcoRule[]> {
     try {
       const list = await databases.listDocuments(DB_ID, COLLECTION, [Query.limit(200)]);
-      return list.documents.map(fromDoc);
+      return list.documents.map(fromDoc).filter((r): r is ManagedFalcoRule => r !== null);
     } catch (err) {
-      logger.warn('[FalcoRuleRepository] load failed:', err instanceof Error ? err.message : String(err));
+      logger.warn('[FalcoRuleRepository] load failed:', toMessage(err));
       return [];
     }
   },
 
+  // Mutations log with context then rethrow — silent fake success is data
+  // loss; callers handle propagation.
   async createRule(r: Omit<ManagedFalcoRule, 'id'>): Promise<ManagedFalcoRule> {
-    const doc = await databases.createDocument(DB_ID, COLLECTION, ID.unique(), {
-      template: r.template,
-      params: JSON.stringify(r.params),
-      appScope: r.appScope ?? null,
-      severityOverride: r.severityOverride ?? null,
-      suppressed: r.suppressed,
-      enabled: r.enabled,
-    });
-    return { ...r, id: doc.$id };
+    try {
+      const doc = await databases.createDocument(DB_ID, COLLECTION, ID.unique(), {
+        template: r.template,
+        params: JSON.stringify(r.params),
+        appScope: r.appScope ?? null,
+        severityOverride: r.severityOverride ?? null,
+        suppressed: r.suppressed,
+        enabled: r.enabled,
+      });
+      return { ...r, id: doc.$id };
+    } catch (err) {
+      logger.error('[FalcoRuleRepository] createRule failed:', toMessage(err));
+      throw err;
+    }
   },
 
   async updateRule(id: string, r: Partial<Omit<ManagedFalcoRule, 'id'>>): Promise<void> {
@@ -59,6 +82,11 @@ export const falcoRuleRepository = {
     if (r.severityOverride !== undefined) patch.severityOverride = r.severityOverride ?? null;
     if (r.suppressed !== undefined) patch.suppressed = r.suppressed;
     if (r.enabled !== undefined) patch.enabled = r.enabled;
-    await databases.updateDocument(DB_ID, COLLECTION, id, patch);
+    try {
+      await databases.updateDocument(DB_ID, COLLECTION, id, patch);
+    } catch (err) {
+      logger.error('[FalcoRuleRepository] updateRule failed:', toMessage(err));
+      throw err;
+    }
   },
 };
