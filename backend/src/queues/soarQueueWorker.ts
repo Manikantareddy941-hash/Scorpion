@@ -31,7 +31,18 @@ export async function processSoarJob(
   });
 
   if (outcome.ok) {
-    await soarRepository.setActionStatus(action.id, 'executed', { result: outcome.result });
+    // Trade-off: if this record-write fails we swallow the error instead of
+    // rethrowing. A rethrow makes BullMQ retry the job against a record still
+    // marked 'approved', re-running an already-executed destructive action
+    // (second kill_pod). Stale status beats double execution.
+    try {
+      await soarRepository.setActionStatus(action.id, 'executed', { result: outcome.result });
+    } catch (err) {
+      logger.error(
+        `[SOAR] action ${action.id} executed but status write failed; record may still read 'approved':`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
     return;
   }
 

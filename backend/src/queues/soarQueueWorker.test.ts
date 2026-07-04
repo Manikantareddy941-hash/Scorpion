@@ -66,4 +66,22 @@ describe('processSoarJob', () => {
     repo.getAction.mockResolvedValue(null);
     await expect(processSoarJob({ actionId: 'gone' })).resolves.toBeUndefined();
   });
+
+  it('plumbs ownerUserId from the job payload into the executor context', async () => {
+    repo.getAction.mockResolvedValue(approved as never);
+    exec.mockResolvedValue({ ok: true, result: 'done' });
+    await processSoarJob({ actionId: 'act-1', ownerUserId: 'user-42' });
+    expect(exec).toHaveBeenCalledWith(
+      approved,
+      expect.objectContaining({ ownerUserId: 'user-42' }),
+    );
+  });
+
+  it('does not throw (no BullMQ retry) when status write fails after successful execution', async () => {
+    repo.getAction.mockResolvedValue(approved as never);
+    exec.mockResolvedValue({ ok: true, result: 'done' });
+    repo.setActionStatus.mockRejectedValue(new Error('appwrite down'));
+    await expect(processSoarJob({ actionId: 'act-1' })).resolves.toBeUndefined();
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
 });
