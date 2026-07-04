@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Rocket, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import CanaryPanel from '../components/CanaryPanel';
+import PodSecurityRulesPanel from '../components/PodSecurityRulesPanel';
 
 export default function Deploy() {
   const { getJWT } = useAuth();
@@ -180,6 +182,9 @@ export default function Deploy() {
           );
         })}
       </div>
+
+      <CanaryPanel />
+      <PodSecurityRulesPanel />
     </div>
   );
 }
