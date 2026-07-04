@@ -5,6 +5,13 @@ import { getScan, getSignature } from '../services/imageStore';
 import { verifyImageDigest } from '../services/cosignService';
 import { VulnerablePackage, ReachabilityResult } from '../services/reachabilityService';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
+import { podSecurityRepository } from '../repositories/podSecurityRepository';
+import {
+  evaluatePodSecurity,
+  DEFAULT_POD_SECURITY_CONFIG,
+  PodSecurityConfig,
+  PodLikeSpec,
+} from '../services/podSecurityService';
 
 /**
  * Kubernetes ValidatingWebhook. The kube-apiserver POSTs an AdmissionReview for
@@ -275,7 +282,9 @@ interface K8sContainer { image?: string }
 interface AdmissionRequest {
   uid?: string;
   namespace?: string;
-  object?: { spec?: { containers?: K8sContainer[]; initContainers?: K8sContainer[] } };
+  // Pod manifest — the container list feeds the image gate, the full shape
+  // (labels, securityContext, host flags) feeds the pod-security rules.
+  object?: PodLikeSpec & { spec?: { containers?: K8sContainer[]; initContainers?: K8sContainer[] } };
 }
 
 function extractImages(req: AdmissionRequest): string[] {
@@ -320,7 +329,38 @@ router.post('/k8s-admission', async (req: Request, res: Response) => {
     return res.status(200).json(admissionResponse(uid, false, reason));
   }
 
+  // Pod-security gate (Kyverno-style): config-driven checks over the pod spec
+  // itself — registry allowlist, privileged, runAsNonRoot, capabilities, host
+  // namespaces, labels. Static and cheap, so it runs before the scan-backed
+  // image gate. Fail-closed in prod when the config cannot be loaded.
+  let podConfig: PodSecurityConfig;
+  try {
+    podConfig = await withTimeout(podSecurityRepository.get(SYSTEM_USER_ID), GATE_TIMEOUT_MS);
+  } catch (err) {
+    if (env === 'prod') {
+      const reason = 'pod-security config unavailable — fail-closed in prod';
+      logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start, error: toMessage(err) });
+      return res.status(200).json(admissionResponse(uid, false, reason));
+    }
+    logger.warn('[k8s-admission] pod-security config unavailable, using built-in defaults', {
+      env,
+      error: toMessage(err),
+    });
+    podConfig = DEFAULT_POD_SECURITY_CONFIG;
+  }
+
   const warnings: string[] = [];
+  const podViolations = evaluatePodSecurity(admission.object ?? {}, podConfig);
+  const enforcedViolations = podViolations.filter(v => v.mode === 'enforce');
+  if (enforcedViolations.length > 0) {
+    const reason = `Pod security policy violation: ${enforcedViolations.map(v => v.message).join('; ')}`;
+    logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start });
+    return res.status(200).json(admissionResponse(uid, false, `Deployment blocked: ${reason}`));
+  }
+  for (const v of podViolations.filter(x => x.mode === 'audit')) {
+    warnings.push(`[audit] ${v.rule}: ${v.message}`);
+  }
+
   for (const image of images) {
     // Supply-chain gate first: an unsigned/tampered image is rejected before we
     // even weigh its vulnerabilities (opt-in via REQUIRE_IMAGE_SIGNATURE).

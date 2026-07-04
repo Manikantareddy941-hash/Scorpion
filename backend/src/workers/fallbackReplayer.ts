@@ -1,5 +1,6 @@
 import { driftRepository } from '../repositories/driftRepository';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
+import { podSecurityRepository } from '../repositories/podSecurityRepository';
 import { logger } from '../services/logger';
 
 /**
@@ -30,8 +31,9 @@ async function tick(): Promise<void> {
   try {
     const drift = await driftRepository.flushFallback();
     const gate = await gateRulesRepository.flushFallback();
-    if (drift + gate > 0) {
-      logger.info(`[FallbackReplayer] Flushed ${drift} drift + ${gate} gate record(s) to Appwrite`);
+    const podSec = await podSecurityRepository.flushFallback();
+    if (drift + gate + podSec > 0) {
+      logger.info(`[FallbackReplayer] Flushed ${drift} drift + ${gate} gate + ${podSec} pod-security record(s) to Appwrite`);
     }
   } catch (err) {
     logger.warn(
