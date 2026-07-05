@@ -261,8 +261,8 @@ export default function DeepAnalysis() {
             <Activity className="w-7 h-7" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">Deep Analysis</h1>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">CVSS & Risk Matrices</p>
+            <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">Deep analysis</h1>
+            <p className="text-[13px] text-[var(--text-secondary)] mt-1">CVSS scoring and risk breakdown across repositories</p>
           </div>
         </div>
         
@@ -279,7 +279,7 @@ export default function DeepAnalysis() {
         
         {/* Risk Heatmap */}
         <div className="premium-card p-8 relative overflow-hidden">
-          <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-6">Risk Heatmap</h2>
+          <h2 className="text-[16px] font-semibold text-[var(--text-primary)] mb-6">Risk heatmap</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
@@ -324,8 +324,8 @@ export default function DeepAnalysis() {
 
         {/* Trend Graph */}
         <div className="premium-card p-8 flex flex-col min-h-[350px]">
-          <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">Vulnerability Trend</h2>
-          <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-8 italic">New Detections Over Time</p>
+          <h2 className="text-[16px] font-semibold text-[var(--text-primary)] mb-2">Vulnerability trend</h2>
+          <p className="text-[13px] text-[var(--text-secondary)] mb-8">New detections over time</p>
           
           <div className="flex-1 w-full relative min-h-[200px]">
             {chartData.length === 0 ? (
@@ -367,8 +367,8 @@ export default function DeepAnalysis() {
       {/* CVSS Breakdown */}
       <div className="premium-card overflow-hidden">
         <div className="px-10 py-8 border-b border-[var(--border-subtle)] bg-white/5 dark:bg-white/10">
-          <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight">CVSS Score Breakdown</h2>
-          <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 italic font-mono">Top Severe Vulnerabilities</p>
+          <h2 className="text-[16px] font-semibold text-[var(--text-primary)]">CVSS breakdown</h2>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">Most severe vulnerabilities</p>
         </div>
 
         <div className="divide-y divide-[var(--border-subtle)] bg-transparent">

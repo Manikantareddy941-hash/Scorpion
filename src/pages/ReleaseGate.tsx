@@ -97,7 +97,7 @@ export default function ReleaseGate() {
                 <Rocket className="w-12 h-12 text-[#6db87a] animate-pulse mb-4" />
                 <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-[var(--text-secondary)]" />
-                    <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.3em] italic">Initializing Release Sequence...</p>
+                    <p className="text-[13px] text-[var(--text-secondary)]">Loading release gates…</p>
                 </div>
             </div>
         );
@@ -115,8 +115,8 @@ export default function ReleaseGate() {
                                 <Rocket size={32} />
                             </div>
                             <div>
-                                <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-[var(--text-primary)]">Release Gate</h1>
-                                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-2">Automated Security Policy Enforcement</p>
+                                <h1 className="text-[22px] font-semibold tracking-tight leading-none text-[var(--text-primary)]">Release gate</h1>
+                                <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">Automated security checks that decide whether a release can ship</p>
                             </div>
                         </div>
                     </div>
@@ -124,15 +124,15 @@ export default function ReleaseGate() {
                     {error ? (
                         <div className="premium-card p-24 text-center border-red-500/20">
                             <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-6 opacity-40" />
-                            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">Gate Uplink Disrupted</h3>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">{error}</p>
-                            <button onClick={fetchRepos} className="mt-6 btn-premium bg-orange-600">Reconnect to Fleet</button>
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Couldn't load release gates</h3>
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-2">{error}</p>
+                            <button onClick={fetchRepos} className="mt-6 btn-premium">Try again</button>
                         </div>
                     ) : repos.length === 0 ? (
                         <div className="premium-card p-24 text-center">
                             <Rocket className="w-16 h-16 text-[var(--text-secondary)] mx-auto mb-6 opacity-20" />
-                            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Repositories Found</h3>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">Connect a repository to begin enforcing release gates.</p>
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">No repositories yet</h3>
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-2">Connect a repository to start enforcing release gates.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 w-full">
@@ -169,12 +169,12 @@ export default function ReleaseGate() {
                                                 <ChevronRight className={`text-[var(--text-secondary)] transition-transform duration-300 ${isOpen ? 'rotate-90' : 'group-hover:translate-x-1'}`} />
                                             </div>
                                         </div>
-                                        <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2">{repo.repo_name}</h3>
+                                        <h3 className="text-[15px] font-semibold text-[var(--text-primary)] mb-2">{repo.repo_name}</h3>
 
                                         <div className="flex flex-col gap-4 mt-6">
                                             <div className="flex items-center gap-2">
-                                                <div className={`w-2 h-2 rounded-full animate-pulse ${status === 'PASSED' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                                <span className="text-[11px] font-black text-[var(--text-secondary)] uppercase tracking-widest">{repo.count} Total Findings</span>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${status === 'PASSED' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                                <span className="text-[12px] font-medium text-[var(--text-secondary)]">{repo.count} total findings</span>
                                             </div>
 
                                             <div className="p-3 rounded-lg border border-transparent"

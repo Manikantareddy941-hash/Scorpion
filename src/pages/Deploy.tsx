@@ -101,8 +101,8 @@ export default function Deploy() {
           <Rocket className="w-7 h-7" />
         </div>
         <div>
-          <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">Deployments</h1>
-          <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">Environment Delivery</p>
+          <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">Deployments</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">Ship releases to each environment and track their history</p>
         </div>
       </div>
 
@@ -117,7 +117,7 @@ export default function Deploy() {
                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                   <Rocket className="w-32 h-32" />
                 </div>
-                <h2 className="text-xl font-black text-[var(--text-primary)] uppercase tracking-widest relative z-10 mb-4">{env}</h2>
+                <h2 className="text-[16px] font-semibold text-[var(--text-primary)] capitalize relative z-10 mb-4">{env}</h2>
                 
                 {activeDeploy ? (
                   <div className="text-center relative z-10 mb-6">
@@ -133,7 +133,7 @@ export default function Deploy() {
                   </div>
                 ) : (
                   <div className="text-center relative z-10 mb-6">
-                    <p className="text-xs text-[var(--text-secondary)] uppercase tracking-widest italic">No active deployment</p>
+                    <p className="text-[13px] text-[var(--text-secondary)]">No active deployment</p>
                   </div>
                 )}
                 
@@ -147,7 +147,7 @@ export default function Deploy() {
 
               <div className="flex-1 bg-[var(--bg-card)] rounded-[16px] border border-[var(--border-subtle)] overflow-hidden flex flex-col">
                 <div className="p-4 border-b border-[var(--border-subtle)] bg-[var(--bg-primary)]/50">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)]">History</h3>
+                  <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">History</h3>
                 </div>
                 <div className="flex-1 overflow-y-auto max-h-[400px] divide-y divide-[var(--border-subtle)]">
                   {envDeploys.map(deploy => (
@@ -172,7 +172,7 @@ export default function Deploy() {
                     </div>
                   ))}
                   {envDeploys.length === 0 && (
-                    <div className="p-8 text-center text-[10px] text-[var(--text-secondary)] uppercase tracking-widest italic">
+                    <div className="p-8 text-center text-[13px] text-[var(--text-secondary)]">
                       Empty history
                     </div>
                   )}

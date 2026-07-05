@@ -184,8 +184,8 @@ export default function TestResults() {
             <TestTube2 className="w-7 h-7" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Test Results</h1>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1 italic">Unit · Integration · E2E · SAST · DAST</p>
+            <h1 className="text-[22px] font-semibold text-slate-800 tracking-tight">Test results</h1>
+            <p className="text-[13px] text-slate-500 mt-1">Unit · Integration · E2E · SAST · DAST</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -229,8 +229,8 @@ export default function TestResults() {
         ].map(card => (
           <div key={card.label} className="bg-white border border-[#e8e0d0] rounded-xl p-4 flex flex-col gap-1 shadow-sm">
             <div className="flex items-center justify-between text-slate-300 mb-1">{card.icon}</div>
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{card.label}</p>
-            <p className={`text-2xl font-black tracking-tighter ${card.color}`}>{loading ? '…' : card.value}</p>
+            <p className="text-[12px] font-medium text-slate-500">{card.label}</p>
+            <p className={`text-2xl font-semibold tabular-nums ${card.color}`}>{loading ? '…' : card.value}</p>
             {card.trend && <div className="mt-1">{card.trend}</div>}
           </div>
         ))}
@@ -240,8 +240,8 @@ export default function TestResults() {
       <div className="bg-white border border-[#e8e0d0] rounded-xl overflow-hidden mb-8 shadow-sm">
         <div className="px-6 py-4 border-b border-[#e8e0d0] flex flex-wrap justify-between items-center gap-3 bg-[#f5f0e8]/40">
           <div>
-            <h2 className="text-sm font-black text-slate-700 uppercase italic tracking-tight">Test Suite Breakdown</h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Click a suite to expand failed tests</p>
+            <h2 className="text-[15px] font-semibold text-slate-800">Test suites</h2>
+            <p className="text-[12px] text-slate-500 mt-0.5">Click a suite to see its failed tests</p>
           </div>
           {/* Suite type filter */}
           <div className="flex gap-1.5 flex-wrap">
@@ -260,12 +260,12 @@ export default function TestResults() {
 
         <div className="divide-y divide-[#e8e0d0]">
           {!hasData && filteredSuites.length === 0 ? (
-            <div className="text-center py-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+            <div className="text-center py-12 text-[13px] text-slate-500">
               No test runs recorded yet
             </div>
           ) : filteredSuites.length === 0 ? (
-            <div className="text-center py-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
-              No suites matching filter
+            <div className="text-center py-12 text-[13px] text-slate-500">
+              No suites match this filter
             </div>
           ) : filteredSuites.map(suite => {
             const isOpen = expandedSuite === suite.id;
@@ -354,11 +354,11 @@ export default function TestResults() {
       <div className="bg-white border border-[#e8e0d0] rounded-xl overflow-hidden shadow-sm">
         <div className="px-6 py-4 border-b border-[#e8e0d0] flex flex-wrap justify-between items-center gap-3 bg-[#f5f0e8]/40">
           <div>
-            <h2 className="text-sm font-black text-slate-700 uppercase italic tracking-tight flex items-center gap-2">
+            <h2 className="text-[15px] font-semibold text-slate-800 flex items-center gap-2">
               <Activity size={14} className="text-[#6db87a] animate-pulse" />
               CI Pipeline Log
             </h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Ordered stage-by-stage execution trace</p>
+            <p className="text-[12px] text-slate-500 mt-0.5">Each stage of the pipeline, in order</p>
           </div>
           {/* Log filter */}
           <div className="flex gap-1.5">
