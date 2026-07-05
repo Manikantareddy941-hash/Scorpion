@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale,
   ChevronLeft, ChevronRight, Layout, Clock, Map,
   TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug,
-  Zap, Package, Tag, Ticket, Bot
+  Zap, Package, Tag, Ticket, Bot, ShieldCheck
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -49,7 +49,8 @@ export default function Sidebar({
     {
       title: 'OVERVIEW',
       items: [
-        { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' }
+        { icon: LayoutDashboard, label: t('sidebar.dashboard'), path: '/' },
+        { icon: ShieldCheck, label: 'SECURITY OVERVIEW', path: '/overview' }
       ]
     },
     {
