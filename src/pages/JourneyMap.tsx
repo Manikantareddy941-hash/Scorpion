@@ -204,11 +204,11 @@ export default function JourneyMap() {
                 {/* Top Bar: Title & Score */}
                 <div className="absolute top-6 left-6 right-6 z-20 flex justify-between items-start pointer-events-none">
                     <div className="pointer-events-auto">
-                        <h1 className="text-2xl font-black uppercase italic tracking-tighter text-[var(--text-primary)]">
-                            Security JourneyMap
+                        <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">
+                            Security journey
                         </h1>
-                        <p className="text-[10px] font-bold text-[var(--accent-primary)] uppercase tracking-widest mt-1">
-                            DevSecOps Telemetry Grid
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+                            Every DevSecOps stage from commit to runtime, at a glance
                         </p>
                     </div>
 
@@ -227,8 +227,8 @@ export default function JourneyMap() {
                             </span>
                         </div>
                         <div>
-                            <h3 className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest leading-none">
-                                Posture Score
+                            <h3 className="text-[12px] font-medium text-[var(--text-secondary)] leading-none">
+                                Posture score
                             </h3>
                         </div>
 
@@ -341,7 +341,7 @@ export default function JourneyMap() {
             <div className="mt-4 p-4 w-[280px] shadow-lg" style={liquidGlassStyle}>
                 <div className="flex items-center gap-2 mb-3">
                     <ShieldAlert size={14} className="text-[var(--accent-primary)]" />
-                    <h3 className="text-[10px] font-black uppercase italic text-[var(--text-primary)] tracking-widest">
+                    <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">
                         Threat Intel Feed
                     </h3>
                 </div>
@@ -357,7 +357,7 @@ export default function JourneyMap() {
                             </div>
                         ))
                     ) : (
-                        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic">No active threats</p>
+                        <p className="text-[12px] text-[var(--text-secondary)]">No active threats</p>
                     )}
                 </div>
             </div>

@@ -126,7 +126,10 @@ export default function Issues() {
     <div className="p-6 md:p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-black uppercase italic tracking-tighter">Issues</h1>
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">Issues</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">Every finding across your repositories, by severity and scanner</p>
+        </div>
       </div>
 
       {/* High-Performance Executive Banner Grid */}
@@ -135,7 +138,7 @@ export default function Issues() {
         <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm relative overflow-hidden">
           <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
           <div className="flex items-center justify-between mb-4 pl-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-stone-500">Quality Gate</span>
+            <span className="text-[12px] font-medium text-stone-500">Quality gate</span>
             <span className="bg-stone-100 text-stone-600 border border-stone-200 px-3 py-1 rounded text-xs uppercase font-mono font-bold">
               {latestScan?.gateStatus || 'PASSED'}
             </span>
@@ -147,7 +150,7 @@ export default function Issues() {
 
         {/* Column 2: Dynamic Core Parameters */}
         <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm">
-          <span className="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-3">Core Parameters</span>
+          <span className="text-[12px] font-medium text-stone-500 mb-3">Ratings</span>
           <div className="flex items-center gap-2">
             {(['SECURITY', 'RELIABILITY', 'MAINTAINABILITY']).map(p => (
               <div key={p} className="flex-1 bg-stone-50 border border-stone-100 rounded-lg py-2 px-1 flex flex-col items-center justify-center">
@@ -160,7 +163,7 @@ export default function Issues() {
 
         {/* Column 3: Project Remediation Target Effort */}
         <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm">
-          <span className="text-[10px] font-black uppercase tracking-widest text-stone-500 mb-3">Remediation Target</span>
+          <span className="text-[12px] font-medium text-stone-500 mb-3">To remediate</span>
           <div className="flex flex-col gap-1">
             <p className="text-2xl font-black text-stone-800 tracking-tight leading-none">{filteredIssues.length} <span className="text-sm font-bold text-stone-500 uppercase tracking-normal">issues</span></p>
             <p className="text-[11px] font-mono text-emerald-600 font-bold tracking-widest uppercase">
@@ -196,7 +199,7 @@ export default function Issues() {
           {/* Filters (Unified vertical control board) */}
           <div className="flex flex-col gap-5 bg-[var(--bg-card)] border border-[var(--border-subtle)] p-5 rounded-[12px] shadow-[0_4px_16px_rgba(0,0,0,0.02)]">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-3">Severity Filters</p>
+              <p className="text-[12px] font-medium text-[var(--text-secondary)] mb-3">Severity</p>
               <div className="flex gap-2 flex-wrap">
                 {['CRITICAL','HIGH','MEDIUM','LOW'].map(s => (
                   <button key={s}
@@ -214,7 +217,7 @@ export default function Issues() {
             </div>
             <div className="h-px w-full bg-[var(--border-subtle)]"></div>
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-3">Scanner Engines</p>
+              <p className="text-[12px] font-medium text-[var(--text-secondary)] mb-3">Scanner</p>
               <div className="flex gap-2 flex-wrap">
                 {['semgrep','trivy','gitleaks'].map(t => (
                   <button key={t}

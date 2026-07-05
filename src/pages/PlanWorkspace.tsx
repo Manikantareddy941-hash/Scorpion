@@ -676,7 +676,7 @@ export default function PlanWorkspace() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <RefreshCw className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
-        <p className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)] italic">
+        <p className="text-[13px] text-[var(--text-secondary)]">
           Initializing PLAN Workspace...
         </p>
       </div>
@@ -691,18 +691,18 @@ export default function PlanWorkspace() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-[var(--border-subtle)] pb-6">
           <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter flex items-center gap-2">
-                <Layers className="text-[var(--accent-primary)] w-8 h-8" />
-                Plan Workspace
+              <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight flex items-center gap-2">
+                <Layers className="text-[var(--accent-primary)] w-6 h-6" />
+                Plan
               </h1>
               {currentProject && (
-                <span className="px-3 py-1 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 rounded-full text-[10px] font-black uppercase italic tracking-widest">
-                  {currentProject.type} Mode
+                <span className="px-2.5 py-0.5 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 rounded-full text-[11px] font-medium capitalize">
+                  {currentProject.type}
                 </span>
               )}
             </div>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] italic font-mono">
-              Scorpion Agile Security Orchestration Console
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              Plan and track security work across sprints and boards
             </p>
           </div>
 
@@ -748,10 +748,10 @@ export default function PlanWorkspace() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-5 py-3 border-b-2 text-xs font-black uppercase tracking-wider italic transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-5 py-3 border-b-2 text-[13px] font-medium transition-all shrink-0 ${
                   active
-                    ? 'border-[var(--accent-primary)] text-[var(--text-primary)] bg-[var(--accent-primary)]/5 rounded-t-xl'
-                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]/30'
+                    ? 'border-[var(--accent-primary)] text-[var(--text-primary)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <Icon size={14} />
@@ -846,7 +846,7 @@ export default function PlanWorkspace() {
                     className={`rounded-2xl border border-[var(--border-subtle)] p-4 min-h-[500px] flex flex-col gap-3 border-t-4 ${columnColors[colStatus]}`}
                   >
                     <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
-                      <span className="text-[10px] font-black uppercase italic tracking-widest text-[var(--text-primary)]">
+                      <span className="text-[12px] font-semibold text-[var(--text-primary)]">
                         {statusLabels[colStatus]}
                       </span>
                       <span className="bg-[var(--bg-secondary)] text-[9px] font-black italic px-2 py-0.5 rounded-full border border-[var(--border-subtle)] text-[var(--text-secondary)]">
@@ -929,7 +929,7 @@ export default function PlanWorkspace() {
                       {columnIssues.length === 0 && (
                         <div className="flex flex-col items-center justify-center p-8 border border-dashed border-[var(--border-subtle)] rounded-2xl text-center opacity-40">
                           <CheckCircle2 size={24} className="mb-2" />
-                          <span className="text-[9px] font-black uppercase italic">Column Empty</span>
+                          <span className="text-[12px]">No issues</span>
                         </div>
                       )}
                     </div>
@@ -950,7 +950,7 @@ export default function PlanWorkspace() {
               {currentProject?.type === 'scrum' && (
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-black uppercase italic tracking-wider text-[var(--text-primary)]">
+                    <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">
                       Sprints
                     </h3>
                     <button
@@ -984,7 +984,7 @@ export default function PlanWorkspace() {
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-3">
                           <div>
                             <div className="flex items-center gap-2.5">
-                              <h4 className="text-xs font-black uppercase italic text-[var(--text-primary)]">
+                              <h4 className="text-[13px] font-medium text-[var(--text-primary)]">
                                 {sprint.name}
                               </h4>
                               <span className={`px-2 py-0.5 text-[8px] font-black uppercase border rounded italic tracking-wider ${
@@ -1053,7 +1053,7 @@ export default function PlanWorkspace() {
                                 }`}>
                                   {issue.type}
                                 </span>
-                                <h5 className="text-[10px] font-black uppercase italic text-[var(--text-primary)] truncate">
+                                <h5 className="text-[12px] font-medium text-[var(--text-primary)] truncate">
                                   {issue.title}
                                 </h5>
                               </div>
@@ -1112,7 +1112,7 @@ export default function PlanWorkspace() {
                   {issues.filter(i => !i.sprintId).length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center opacity-40">
                       <ListTodo size={36} className="mb-2" />
-                      <span className="text-[10px] font-black uppercase italic">Backlog is Empty</span>
+                      <span className="text-[12px]">Backlog is empty</span>
                     </div>
                   ) : (
                     <div className="space-y-2">
