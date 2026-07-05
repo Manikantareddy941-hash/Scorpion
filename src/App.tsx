@@ -157,10 +157,8 @@ function App() {
         <div className="flex flex-col flex-1 min-w-0 bg-transparent transition-all duration-300">
           {/* Navbar sticky */}
           {user && !isAuthPage && (
-            <div className="sticky top-0 z-40 p-3 pb-0 bg-transparent">
-              <Navbar 
-                className="rounded-2xl shrink-0" 
-              />
+            <div className="sticky top-0 z-40">
+              <Navbar className="shrink-0" />
             </div>
           )}
 

@@ -129,8 +129,8 @@ export default function Sidebar({
     sidebarBorder: '1px solid var(--border-subtle)',
     sectionLabel: 'var(--text-muted)',
     navText: 'var(--text-secondary)',
-    activeBg: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)',
-    activeText: 'var(--text-primary)',
+    activeBg: 'color-mix(in srgb, var(--accent-primary) 9%, transparent)',
+    activeText: 'var(--accent-primary)',
     hoverBg: 'var(--bg-secondary)',
     newScanBg: 'var(--accent-primary)',
     logoRing: 'color-mix(in srgb, var(--accent-primary) 10%, transparent)',
@@ -140,7 +140,7 @@ export default function Sidebar({
     collapseBtnBg: 'var(--bg-secondary)',
     collapseBtnText: 'var(--text-secondary)',
     collapseBtnHover: 'var(--accent-primary)',
-    collapsedActiveBg: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)',
+    collapsedActiveBg: 'color-mix(in srgb, var(--accent-primary) 9%, transparent)',
     collapsedActiveBorder: 'var(--accent-primary)',
     collapsedHoverBg: 'var(--bg-secondary)',
     collapsedActiveIconColor: 'var(--accent-primary)'
@@ -157,8 +157,6 @@ export default function Sidebar({
         flexDirection: 'column', 
         zIndex: 100, 
         borderRadius: '0px',
-        boxShadow: '4px 0 24px rgba(0, 0, 0, 0.04)',
-        transition: 'width 0.3s ease',
         overflow: 'hidden',
         overflowY: 'auto',
         flexShrink: 0 }}>
@@ -172,8 +170,8 @@ export default function Sidebar({
             </div>
             {!isCollapsed && (
               <div className="flex flex-col">
-                <h1 className="text-[12px] font-black tracking-tighter leading-none italic" style={{ color: s.logoText || s.navText }}>SCORPION</h1>
-                <span className="text-[7px] font-bold tracking-[0.2em] uppercase opacity-60" style={{ color: s.logoSubtext || s.navText }}>SECops Platform</span>
+                <h1 className="text-[13px] font-semibold tracking-tight leading-none" style={{ color: s.logoText || s.navText }}>Scorpion</h1>
+                <span className="text-[9px] font-medium tracking-[0.08em] uppercase opacity-60" style={{ color: s.logoSubtext || s.navText }}>SecOps Platform</span>
               </div>
             )}
           </div>
@@ -276,8 +274,8 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event('scorpion:open-chat'))}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl font-bold transition-opacity hover:opacity-90 ${isCollapsed ? 'h-10' : 'py-3'}`}
-            style={{ background: 'var(--accent-secondary)', color: 'var(--text-on-accent)' }}
+            className={`w-full flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ${isCollapsed ? 'h-10' : 'py-2.5'}`}
+            style={{ background: 'var(--accent-primary)', color: 'var(--text-on-accent)' }}
             title="Open Echo AI"
           >
             <Bot size={18} />
