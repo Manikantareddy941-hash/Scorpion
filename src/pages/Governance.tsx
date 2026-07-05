@@ -30,30 +30,30 @@ export interface GovernancePolicy {
 const DEFAULT_GUARDRAILS: GovernancePolicy[] = [
     {
         id: "pol-1",
-        name: "SAST ZERO-CRITICAL GATEKEEPER",
+        name: "Block critical SAST findings",
         isEnabled: true,
         frameworks: ["SOC 2", "ISO 27001"],
-        threshold: "CRITICAL ISSUES > 0",
-        scope: "ALL REPOSITORIES",
-        ruleDetail: "Automatically BLOCKS the release cycle if any Static Analysis tool detects an unmitigated Critical risk."
+        threshold: "Any critical issue",
+        scope: "All repositories",
+        ruleDetail: "Blocks the release if static analysis finds an unmitigated critical issue."
     },
     {
         id: "pol-2",
-        name: "PRODUCTION DEPENDENCY COMPLIANCE",
+        name: "Production dependency policy",
         isEnabled: true,
-        frameworks: ["OWASP TOP 10"],
-        threshold: "HIGH/CRITICAL CVSS",
-        scope: "PRODUCTION REPOS",
-        ruleDetail: "Enforces a mandatory build failure if Trivy detects unpatched CVEs with a score above 8.0."
+        frameworks: ["OWASP Top 10"],
+        threshold: "High or critical CVSS",
+        scope: "Production repos",
+        ruleDetail: "Fails the build if Trivy finds unpatched CVEs scoring above 8.0."
     },
     {
         id: "pol-3",
-        name: "RUNTIME MONITORING GUARDRAIL",
+        name: "Runtime monitoring guardrail",
         isEnabled: false,
         frameworks: ["SOC 2 Trust Criteria"],
-        threshold: "MISSING FALCO AGENT",
-        scope: "K8S / GITOPS INFRASTRUCTURE",
-        ruleDetail: "Flags warning reports during the operate phase if runtime threat detection is missing."
+        threshold: "Falco agent missing",
+        scope: "Kubernetes / GitOps",
+        ruleDetail: "Warns during the operate phase when runtime threat detection isn't running."
     }
 ];
 
@@ -103,12 +103,12 @@ export default function Governance() {
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 relative z-10">
                         <div>
                             <div className="flex items-center gap-4">
-                                <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Governance Engine</h1>
-                                <div className="w-12 h-12 rounded-2xl bg-[var(--accent-primary)]/10 border border-[var(--border-subtle)] flex items-center justify-center">
-                                    <Shield className="text-[var(--accent-primary)]" size={22} />
+                                <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">Governance</h1>
+                                <div className="w-9 h-9 rounded-xl bg-[var(--accent-primary)]/10 border border-[var(--border-subtle)] flex items-center justify-center">
+                                    <Shield className="text-[var(--accent-primary)]" size={18} />
                                 </div>
                             </div>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Policy-as-Code & Security Guardrails</p>
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-1">Policy-as-code guardrails that gate every release and scan</p>
                         </div>
 
                         <div className="flex flex-col items-end relative">
@@ -128,9 +128,9 @@ export default function Governance() {
                             <Scale className="text-emerald-500" size={24} />
                         </div>
                         <div>
-                            <h3 className="text-sm font-black text-[var(--text-primary)] uppercase italic">Security Compliance Protocol</h3>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 leading-relaxed">
-                                Define automated gatekeeper rules. Policies are evaluated during every release cycle and scan event to ensure repository integrity aligns with enterprise standards.
+                            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">How policies work</h3>
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-1 leading-relaxed">
+                                Define automated rules that run on every release and scan. When a rule fails, Scorpion blocks the release so nothing ships that breaks your standards.
                             </p>
                         </div>
                     </div>
@@ -145,7 +145,7 @@ export default function Governance() {
                                             <Shield size={20} />
                                         </div>
                                         <div>
-                                            <h3 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight">{policy.name}</h3>
+                                            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{policy.name}</h3>
                                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                                                 {policy.frameworks.map(fw => (
                                                     <span
@@ -163,8 +163,8 @@ export default function Governance() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className={`text-[9px] font-black uppercase tracking-widest ${policy.isEnabled ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}>
-                                            {policy.isEnabled ? 'ON' : 'OFF'}
+                                        <span className={`text-[12px] font-medium ${policy.isEnabled ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                                            {policy.isEnabled ? 'On' : 'Off'}
                                         </span>
                                         <button
                                             type="button"
@@ -188,16 +188,14 @@ export default function Governance() {
 
                                 <div className="grid grid-cols-2 gap-4 mb-6">
                                     <div className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                        <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">Enforcement Threshold</p>
-                                        {/* FIX: was text-white — invisible on light beige bg. Now uses text-primary */}
-                                        <p className="text-sm font-black text-[var(--text-primary)] italic uppercase tracking-tighter">
+                                        <p className="text-[11px] font-medium text-[var(--text-secondary)] mb-1">Threshold</p>
+                                        <p className="text-[14px] font-semibold text-[var(--text-primary)]">
                                             {policy.threshold}
                                         </p>
                                     </div>
                                     <div className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
-                                        <p className="text-[9px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">Application Scope</p>
-                                        {/* FIX: was text-white — invisible on light beige bg. Now uses text-primary */}
-                                        <p className="text-sm font-black text-[var(--text-primary)] italic uppercase tracking-tighter">
+                                        <p className="text-[11px] font-medium text-[var(--text-secondary)] mb-1">Scope</p>
+                                        <p className="text-[14px] font-semibold text-[var(--text-primary)]">
                                             {policy.scope}
                                         </p>
                                     </div>

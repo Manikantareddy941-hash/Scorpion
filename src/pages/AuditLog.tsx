@@ -137,30 +137,30 @@ export default function AuditLog() {
     };
 
     const getActionBadge = (action: string) => {
-        const style = "px-2.5 py-0.5 rounded text-[8px] font-black uppercase italic border tracking-wider font-mono";
+        const style = "px-2 py-0.5 rounded-full text-[11px] font-medium border";
         switch (action) {
             case 'BREAK_GLASS_BYPASS':
-                return <span className={`${style} bg-red-100 text-red-700 border-red-200 animate-pulse`}>CRIT BYPASS</span>;
+                return <span className={`${style} bg-red-50 text-red-700 border-red-200`}>Break-glass bypass</span>;
             case 'ALARM_CLEAR':
-                return <span className={`${style} bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border-[var(--border-subtle)]`}>ALARM CLEAR</span>;
+                return <span className={`${style} bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border-[var(--border-subtle)]`}>Alarm cleared</span>;
             case 'SCAN_STARTED':
-                return <span className={`${style} bg-blue-50 text-blue-800 border-blue-100`}>SCAN INIT</span>;
+                return <span className={`${style} bg-blue-50 text-blue-800 border-blue-100`}>Scan started</span>;
             case 'SCAN_COMPLETED':
-                return <span className={`${style} bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border-[var(--border-subtle)]`}>SCAN DONE</span>;
+                return <span className={`${style} bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border-[var(--border-subtle)]`}>Scan completed</span>;
             case 'GATE_CHECK':
-                return <span className={`${style} bg-purple-50 text-purple-800 border-purple-100`}>GATE PROBE</span>;
+                return <span className={`${style} bg-purple-50 text-purple-800 border-purple-100`}>Gate check</span>;
             default:
                 return <span className={`${style} bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border-[var(--border-subtle)]`}>{action}</span>;
         }
     };
 
     const filterOptions = [
-        { value: 'all', label: 'ALL SYSTEM VECTORS' },
-        { value: 'BREAK_GLASS_BYPASS', label: 'BREAK GLASS BYPASS' },
-        { value: 'ALARM_CLEAR', label: 'ALARM CLEAR' },
-        { value: 'SCAN_STARTED', label: 'SCAN INIT' },
-        { value: 'SCAN_COMPLETED', label: 'SCAN DONE' },
-        { value: 'GATE_CHECK', label: 'GATE PROBE' }
+        { value: 'all', label: 'All events' },
+        { value: 'BREAK_GLASS_BYPASS', label: 'Break-glass bypass' },
+        { value: 'ALARM_CLEAR', label: 'Alarm cleared' },
+        { value: 'SCAN_STARTED', label: 'Scan started' },
+        { value: 'SCAN_COMPLETED', label: 'Scan completed' },
+        { value: 'GATE_CHECK', label: 'Gate check' }
     ];
 
     const filteredLogs = logs.filter(log => {
@@ -174,33 +174,30 @@ export default function AuditLog() {
             <div className="min-h-screen bg-[var(--bg-primary)] py-12 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent-primary)] p-6 rounded-xl shadow-sm">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 bg-[var(--bg-card)] border border-[var(--border-subtle)] p-6 rounded-xl shadow-sm">
                         <div>
-                            <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase tracking-widest italic flex items-center gap-2">
-                                <Terminal className="text-[var(--accent-primary)] animate-pulse" size={28} />
-                                AUDIT LEDGER
+                            <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)] flex items-center gap-2">
+                                <Terminal className="text-[var(--accent-primary)]" size={22} />
+                                Audit log
                             </h1>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mt-1 font-mono">
-                                [ SECURE CRYPTOGRAPHICALLY CHAINED SYSTEM METRICS ]
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+                                Tamper-evident record of every security action, cryptographically chained
                             </p>
                         </div>
 
-                        <div className="flex gap-4">
+                        <div className="flex gap-3 items-center">
                             <div className="px-4 py-2 flex items-center gap-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)]">
                                 <div className="text-center">
-                                    <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase">Ledger Blocks</p>
-                                    <p className="text-sm font-black text-[var(--text-primary)]">{logs.length}</p>
+                                    <p className="text-[11px] font-medium text-[var(--text-secondary)]">Entries</p>
+                                    <p className="text-sm font-semibold tabular-nums text-[var(--text-primary)]">{logs.length}</p>
                                 </div>
                                 <div className="w-px h-6 bg-[var(--border-subtle)]" />
                                 <div className="text-center flex flex-col items-center">
-                                    <p className="text-[8px] font-black text-[var(--accent-primary)] uppercase flex items-center gap-1.5 justify-center">
-                                        <span className="relative flex h-1.5 w-1.5">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[var(--accent-primary)]"></span>
-                                        </span>
-                                        [ SYNC_CHANNEL: ACTIVE ]
+                                    <p className="text-[11px] font-medium text-[var(--status-success)] flex items-center gap-1.5 justify-center">
+                                        <span className="inline-flex rounded-full h-1.5 w-1.5 bg-[var(--status-success)]"></span>
+                                        Live
                                     </p>
-                                    <p className="text-[9px] font-black text-[var(--accent-primary)] uppercase tracking-widest mt-0.5 animate-pulse">✓ INTEGRITY SECURE</p>
+                                    <p className="text-[11px] font-medium text-[var(--status-success)] mt-0.5">Integrity verified</p>
                                 </div>
                             </div>
                             <button
@@ -220,9 +217,9 @@ export default function AuditLog() {
 
                             {/* Widget A: Chain Health */}
                             <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm rounded-xl p-5 font-mono">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                                <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                                     <Shield size={14} className="text-[var(--accent-primary)]" />
-                                    SYSTEM MATH INTEGRITY
+                                    Chain integrity
                                 </h3>
 
                                 <div className="space-y-4">
@@ -243,26 +240,26 @@ export default function AuditLog() {
                                                 <div className="flex items-center gap-3 bg-[var(--bg-primary)] p-3 rounded-lg border border-[var(--border-subtle)]">
                                                     <div className={`h-2 w-2 rounded-full shrink-0 ${intact ? 'bg-[var(--accent-primary)] animate-ping' : isLegacy ? 'bg-[var(--text-secondary)]' : 'bg-red-500 animate-pulse'}`} />
                                                     <div>
-                                                        <p className="text-[8px] font-black uppercase text-[var(--text-secondary)]">Ledger Health</p>
-                                                        <p className={`text-xs font-black uppercase tracking-wider ${healthColor}`}>{healthLabel}</p>
+                                                        <p className="text-[11px] font-medium text-[var(--text-secondary)]">Ledger health</p>
+                                                        <p className={`text-[13px] font-semibold ${healthColor}`}>{healthLabel}</p>
                                                     </div>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-3 text-[10px]">
                                                     <div className="bg-[var(--bg-primary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
-                                                        <span className="text-[8px] block text-[var(--text-secondary)] uppercase">Verified Blocks</span>
-                                                        <span className="font-black text-[var(--text-primary)] text-xs">{chainStatus?.verified ?? 0}</span>
+                                                        <span className="text-[11px] block text-[var(--text-secondary)]">Verified blocks</span>
+                                                        <span className="font-semibold text-[var(--text-primary)] text-sm tabular-nums">{chainStatus?.verified ?? 0}</span>
                                                     </div>
                                                     <div className="bg-[var(--bg-primary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
-                                                        <span className="text-[8px] block text-[var(--text-secondary)] uppercase">Tamper Audits</span>
-                                                        <span className={`font-black text-xs ${broken > 0 ? 'text-red-500' : 'text-[var(--text-primary)]'}`}>{broken} BROKEN</span>
+                                                        <span className="text-[11px] block text-[var(--text-secondary)]">Tamper audits</span>
+                                                        <span className={`font-semibold text-sm ${broken > 0 ? 'text-[var(--status-error)]' : 'text-[var(--text-primary)]'}`}>{broken} broken</span>
                                                     </div>
                                                 </div>
 
-                                                <div className="text-[9px] bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent-primary)] p-3 rounded-lg space-y-2 font-mono leading-relaxed shadow-sm">
-                                                    <p className="text-[var(--accent-primary)] font-bold uppercase text-[8px] tracking-widest">[CRYPTO_ENGINE: SHA-256_VERIFIED]</p>
-                                                    <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)] font-bold uppercase">LATEST_HASH:</span> {logs[0]?.tamper_hash || 'N/A'}</p>
-                                                    <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)] font-bold uppercase">ANCHOR_HASH:</span> {chainStatus?.anchorHash || 'N/A'}</p>
+                                                <div className="text-[11px] bg-[var(--bg-primary)] border border-[var(--border-subtle)] p-3 rounded-lg space-y-2 font-mono leading-relaxed">
+                                                    <p className="text-[var(--accent-primary)] font-medium text-[11px]">SHA-256 verified</p>
+                                                    <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)]">Latest hash:</span> {logs[0]?.tamper_hash || 'N/A'}</p>
+                                                    <p className="truncate text-[var(--text-secondary)]"><span className="text-[var(--text-secondary)]">Anchor hash:</span> {chainStatus?.anchorHash || 'N/A'}</p>
                                                 </div>
                                             </>
                                         );
@@ -272,9 +269,9 @@ export default function AuditLog() {
 
                             {/* Widget B: Vector Volume Filter Panel */}
                             <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm rounded-xl p-5">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                                <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                                     <Filter size={14} className="text-[var(--accent-primary)]" />
-                                    SYSTEM VECTORS
+                                    Event types
                                 </h3>
 
                                 <div className="space-y-2">
@@ -285,7 +282,7 @@ export default function AuditLog() {
                                             <button
                                                 key={opt.value}
                                                 onClick={() => setFilterAction(opt.value)}
-                                                className={`w-full text-left px-3 py-2.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all duration-300 flex justify-between items-center cursor-pointer ${isActive
+                                                className={`w-full text-left px-3 py-2.5 rounded-lg border text-[12px] font-medium transition-colors flex justify-between items-center cursor-pointer ${isActive
                                                         ? 'bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border-[var(--border-subtle)] shadow-sm'
                                                         : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-primary)] hover:text-[var(--text-primary)]'
                                                     }`}
@@ -309,25 +306,25 @@ export default function AuditLog() {
 
                             {loading ? (
                                 <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm rounded-xl p-12 flex flex-col items-center justify-center min-h-[400px]">
-                                    <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Synchronizing cryptographic chain...</p>
+                                    <Loader2 className="w-10 h-10 text-[var(--accent-primary)] animate-spin mb-4" />
+                                    <p className="text-[13px] text-[var(--text-secondary)]">Loading audit log…</p>
                                 </div>
                             ) : error ? (
-                                <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm rounded-xl p-12 text-center bg-red-50 border-red-200">
-                                    <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-4 opacity-60 animate-bounce" />
-                                    <h3 className="text-sm font-black text-red-800 uppercase tracking-wider">Synchronization Aborted</h3>
-                                    <p className="text-[9px] font-bold text-red-600 mt-2 font-mono">{error}</p>
-                                    <button onClick={fetchLogs} className="mt-4 px-4 py-2 border border-red-300 text-[10px] text-red-700 font-bold uppercase rounded-lg hover:bg-red-100 cursor-pointer">
-                                        RETRY HANDSHAKE
+                                <div className="border border-red-200 shadow-sm rounded-xl p-12 text-center bg-red-50">
+                                    <AlertTriangle className="w-10 h-10 text-red-600 mx-auto mb-4" />
+                                    <h3 className="text-base font-semibold text-red-800">Couldn't load the audit log</h3>
+                                    <p className="text-[13px] text-red-600 mt-2">{error}</p>
+                                    <button onClick={fetchLogs} className="mt-4 px-4 py-2 border border-red-300 text-[13px] text-red-700 font-medium rounded-lg hover:bg-red-100 cursor-pointer">
+                                        Try again
                                     </button>
                                 </div>
                             ) : filteredLogs.length === 0 ? (
                                 <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-sm rounded-xl p-8 min-h-[400px] flex flex-col justify-between font-mono">
                                     <div>
                                         <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3 mb-6">
-                                            <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+                                            <div className="flex items-center gap-2 text-[13px] font-medium text-[var(--text-primary)]">
                                                 <Terminal size={14} className="text-[var(--accent-primary)]" />
-                                                <span>SYSTEM_SHELL // LOOPBACK_LISTENER</span>
+                                                <span>Event stream</span>
                                             </div>
                                             <div className="flex items-center gap-1.5">
                                                 <span className="h-2 w-2 rounded-full bg-red-400" />
@@ -336,17 +333,16 @@ export default function AuditLog() {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2.5 text-xs text-[var(--text-secondary)] leading-relaxed">
-                                            <p className="text-[var(--text-primary)] font-bold">&gt; [SYSTEM]: Listening on secure event vector loopback...</p>
-                                            <p className="text-[var(--text-primary)] font-bold">&gt; [ENGINE]: Chained block hash ledger initialized.</p>
-                                            <p className="text-[var(--text-primary)] font-bold">&gt; [STATUS]: 0 tamper-vectors captured in current workspace.</p>
-                                            <p className="text-[var(--text-secondary)]">&gt; [READY]: Awaiting secure transmission packets...</p>
+                                        <div className="space-y-2.5 text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                                            <p className="text-[var(--text-primary)]">Audit chain initialized and verified.</p>
+                                            <p className="text-[var(--text-primary)]">No events recorded in this workspace yet.</p>
+                                            <p className="text-[var(--text-secondary)]">New security actions will appear here as they happen.</p>
                                         </div>
                                     </div>
 
-                                    <div className="border-t border-[var(--border-subtle)] pt-4 mt-8 flex justify-between items-center text-[9px] text-[var(--text-secondary)]">
-                                        <span>CHANNEL: MULTI_CAST_LOCAL</span>
-                                        <span>LISTENING: PORT 3001</span>
+                                    <div className="border-t border-[var(--border-subtle)] pt-4 mt-8 flex justify-between items-center text-[11px] text-[var(--text-muted)]">
+                                        <span>Waiting for activity</span>
+                                        <span>Live</span>
                                     </div>
                                 </div>
                             ) : (
@@ -375,8 +371,8 @@ export default function AuditLog() {
                                                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 {getActionBadge(log.action)}
-                                                                <span className="text-[9px] font-black text-[var(--text-secondary)] bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border-subtle)] font-mono">
-                                                                    ACTOR: {log.actor}
+                                                                <span className="text-[11px] font-medium text-[var(--text-secondary)] bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border-subtle)] font-mono">
+                                                                    {log.actor}
                                                                 </span>
                                                             </div>
                                                             <div className="flex items-center gap-1.5 text-[9px] text-[var(--text-secondary)]">
@@ -387,20 +383,20 @@ export default function AuditLog() {
                                                             </div>
                                                         </div>
 
-                                                        <p className="text-[11px] font-black text-[var(--text-primary)] leading-relaxed uppercase italic mb-3">
+                                                        <p className="text-[13px] font-medium text-[var(--text-primary)] leading-relaxed mb-3">
                                                             {log.details}
                                                         </p>
 
                                                         <div className="mt-3 pt-3 border-t border-[var(--border-subtle)] flex flex-wrap justify-between items-center gap-3">
                                                             <div className="flex items-center gap-1 text-[9px] text-[var(--text-secondary)] bg-[var(--bg-card)] px-2 py-0.5 rounded border border-[var(--border-subtle)]">
                                                                 <Lock size={10} className="text-[var(--accent-primary)] shrink-0" />
-                                                                <span>REPO_ID:</span>
-                                                                <span className="text-[var(--text-primary)] font-bold">{log.repo_id}</span>
+                                                                <span>Repo:</span>
+                                                                <span className="text-[var(--text-primary)] font-medium">{log.repo_id}</span>
                                                             </div>
 
                                                             <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-primary)] font-mono">
                                                                 <Key size={11} className="text-[var(--accent-primary)] shrink-0" />
-                                                                <span className="font-bold uppercase tracking-wider text-[8px] text-[var(--text-secondary)]">CHAIN_HASH:</span>
+                                                                <span className="font-medium text-[11px] text-[var(--text-secondary)]">Hash:</span>
                                                                 <span className="text-white font-bold bg-[var(--accent-primary)] px-2 py-0.5 rounded border border-[var(--border-subtle)] text-xs">
                                                                     {log.tamper_hash.substring(0, 16)}...
                                                                 </span>
@@ -421,8 +417,8 @@ export default function AuditLog() {
     } catch (renderError: any) {
         console.error('[AuditLog] Render crash:', renderError);
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] text-red-700 font-black uppercase italic p-8 text-center font-mono border-t-4 border-red-600">
-                CRITICAL TIMELINE RENDER FAILURE.<br />LEDGER SYSTEM OFF-LINE.
+            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] text-red-700 font-medium p-8 text-center">
+                Something went wrong displaying the audit log. Refresh to try again.
             </div>
         );
     }

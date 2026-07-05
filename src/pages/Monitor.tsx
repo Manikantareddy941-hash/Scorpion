@@ -104,12 +104,12 @@ export default function Monitor() {
             <Activity className="text-[var(--accent-primary)] w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-[var(--text-primary)] uppercase tracking-tighter italic">
-              System Telemetry
+            <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">
+              Monitoring
             </h1>
-            <p className="text-[var(--text-secondary)] text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              Live Feed • {lastUpdated.toLocaleTimeString()}
+            <p className="text-[var(--text-secondary)] text-[13px] flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-[var(--status-success)] rounded-full" />
+              Live • updated {lastUpdated.toLocaleTimeString()}
             </p>
           </div>
         </div>
@@ -151,11 +151,11 @@ export default function Monitor() {
             {loading ? <div className="h-10 w-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : (
               <>
                 <div>
-                  <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-widest mb-1">{m.label}</p>
-                  <p className="text-xl font-black text-[var(--text-primary)]">{m.value}</p>
+                  <p className="text-[12px] font-medium text-[var(--text-secondary)] mb-1">{m.label}</p>
+                  <p className="text-xl font-semibold tabular-nums text-[var(--text-primary)]">{m.value}</p>
                 </div>
                 <div className="text-right">
-                  <div className="flex items-center gap-1 text-[var(--status-success)] font-black text-[10px]">
+                  <div className="flex items-center gap-1 text-[var(--status-success)] font-medium text-[12px]">
                     <TrendingUp size={12} /> {m.trend}
                   </div>
                 </div>
@@ -170,7 +170,7 @@ export default function Monitor() {
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="premium-card p-4 h-[250px] flex flex-col">
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 shrink-0">
+              <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2 shrink-0">
                 <Activity size={14} className="text-[var(--accent-primary)]" /> Infrastructure Health
               </h3>
               <div className="flex-1 min-h-0">
@@ -196,7 +196,7 @@ export default function Monitor() {
             </div>
 
             <div className="premium-card p-4 h-[250px] flex flex-col" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 shrink-0">
+              <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2 shrink-0">
                 <Shield size={14} className="text-[var(--status-success)]" /> Security Events
               </h3>
               <div className="flex-1 min-h-0">
@@ -222,12 +222,12 @@ export default function Monitor() {
             </div>
 
             <div className="premium-card p-4 h-[250px] flex flex-col" style={{ overflow: 'hidden', borderRadius: 'inherit' }}>
-              <h3 className="text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2 shrink-0">
+              <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2 shrink-0">
                 <Server size={14} className="text-emerald-500" /> Latency & Uptime
               </h3>
               <div className="flex-1 min-h-0">
                 {loading ? <div className="w-full h-full animate-pulse bg-[var(--bg-secondary)] rounded-lg" /> : healthChecksData.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">
+                  <div className="w-full h-full flex items-center justify-center text-[13px] text-[var(--text-secondary)]">
                     No health-check data yet
                   </div>
                 ) : (
@@ -258,11 +258,11 @@ export default function Monitor() {
 
           {/* Fleet Health scorecards */}
           <div className="space-y-4">
-            <h2 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-[15px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center border border-emerald-500/20">
                 <Server className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              Fleet Health Scorecards
+              Repository health
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {loading ? [1, 2, 3, 4].map(i => <div key={i} className="h-24 w-full animate-pulse bg-[var(--bg-secondary)] rounded-xl" />) : health?.map((repo) => (
@@ -276,13 +276,13 @@ export default function Monitor() {
                       <Shield size={20} />
                     </div>
                     <div>
-                      <p className="text-[12px] font-black text-[var(--text-primary)] uppercase truncate max-w-[150px]">{repo.name}</p>
-                      <p className="text-[8px] font-bold text-[var(--text-secondary)] uppercase">
-                        {repo.vulnerabilities} Issues • {repo.status}
+                      <p className="text-[13px] font-medium text-[var(--text-primary)] truncate max-w-[150px]">{repo.name}</p>
+                      <p className="text-[11px] text-[var(--text-secondary)]">
+                        {repo.vulnerabilities} issues • {repo.status}
                       </p>
                     </div>
                   </div>
-                  <div className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest ${
+                  <div className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
                     repo.health === 'Critical' ? 'bg-red-500 text-white' :
                     repo.health === 'At Risk' ? 'bg-orange-500 text-white' :
                     'bg-green-500 text-white'
@@ -298,17 +298,17 @@ export default function Monitor() {
         {/* Real-time Finding Stream */}
         <div className="premium-card p-4 flex flex-col h-full min-h-[500px]">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xs font-black text-[var(--text-primary)] uppercase tracking-widest flex items-center gap-2">
-              <Clock size={16} className="text-[var(--accent-primary)]" /> Pipeline Stream
+            <h2 className="text-[15px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <Clock size={16} className="text-[var(--accent-primary)]" /> Activity stream
             </h2>
             <div className="flex bg-[var(--bg-secondary)] p-1 rounded-lg gap-1">
               {['All', 'Errors', 'Warnings'].map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-3 py-1 text-[8px] font-black uppercase tracking-widest rounded-md transition-all ${
-                    filter === f 
-                      ? 'bg-[var(--accent-primary)] text-white shadow-lg' 
+                  className={`px-3 py-1 text-[12px] font-medium rounded-md transition-all ${
+                    filter === f
+                      ? 'bg-[var(--accent-primary)] text-white shadow-sm'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -331,8 +331,8 @@ export default function Monitor() {
                 if (filtered?.length === 0) {
                   return (
                     <div className="text-center py-20">
-                      <Activity size={32} className="mx-auto text-gray-300 mb-4 animate-pulse" />
-                      <p className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">No {filter} Found</p>
+                      <Activity size={32} className="mx-auto text-gray-300 mb-4" />
+                      <p className="text-[13px] text-[var(--text-secondary)]">Nothing here right now</p>
                     </div>
                   );
                 }
@@ -349,9 +349,9 @@ export default function Monitor() {
                           {f.severity}
                         </span>
                         <div className="min-w-0">
-                          <p className="text-[10px] font-black text-[var(--text-primary)] truncate leading-tight">{f.title}</p>
+                          <p className="text-[13px] font-medium text-[var(--text-primary)] truncate leading-tight">{f.title}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-[7px] font-bold text-[var(--text-secondary)] uppercase tracking-tighter truncate max-w-[100px]">{f.repo}</p>
+                            <p className="text-[11px] text-[var(--text-secondary)] truncate max-w-[100px]">{f.repo}</p>
                             <span className="text-[7px] text-[var(--text-secondary)] font-mono opacity-50">
                               {new Date(f.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>

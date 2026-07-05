@@ -304,10 +304,10 @@ export default function Reports() {
               {currentHeader.icon}
             </div>
             <div>
-              <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-[var(--text-primary)]">
+              <h1 className="text-[22px] font-semibold tracking-tight leading-none text-[var(--text-primary)]">
                 {currentHeader.title}
               </h1>
-              <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-2">
+              <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">
                 {currentHeader.desc}
               </p>
             </div>
@@ -348,7 +348,7 @@ export default function Reports() {
             <div className="premium-card p-10 space-y-10">
               {/* Repo Selection */}
               <div className="space-y-4">
-                <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic flex items-center gap-2">
+                <label className="text-[12px] font-medium text-[var(--text-secondary)] flex items-center gap-2">
                   <Database size={12} /> Target Infrastructure
                 </label>
                 <select
@@ -367,7 +367,7 @@ export default function Reports() {
               {/* Date Range */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-[var(--text-secondary)] flex items-center gap-2">
                     <Calendar size={12} /> From Date
                   </label>
                   <input
@@ -378,7 +378,7 @@ export default function Reports() {
                   />
                 </div>
                 <div className="space-y-4">
-                  <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic flex items-center gap-2">
+                  <label className="text-[12px] font-medium text-[var(--text-secondary)] flex items-center gap-2">
                     <Calendar size={12} /> To Date
                   </label>
                   <input
@@ -392,23 +392,23 @@ export default function Reports() {
 
               {/* Format Selection */}
               <div className="space-y-4">
-                <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic flex items-center gap-2">
+                <label className="text-[12px] font-medium text-[var(--text-secondary)] flex items-center gap-2">
                   <Filter size={12} /> Intelligence Format
                 </label>
                 <div className="flex gap-4">
                   <button
                     onClick={() => setFormat('pdf')}
-                    className={`flex-1 py-4 rounded-2xl border font-black uppercase italic text-xs transition-all flex items-center justify-center gap-3
-                                            ${format === 'pdf' ? 'bg-[var(--accent-primary)] text-white border-[var(--accent-primary)] shadow-lg shadow-[var(--accent-primary)]/20' : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'}`}
+                    className={`flex-1 py-3.5 rounded-xl border font-medium text-[13px] transition-all flex items-center justify-center gap-2.5
+                                            ${format === 'pdf' ? 'bg-[var(--accent-primary)] text-white border-[var(--accent-primary)] shadow-sm' : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'}`}
                   >
-                    <FileDown size={16} /> PDF Document
+                    <FileDown size={16} /> PDF document
                   </button>
                   <button
                     onClick={() => setFormat('csv')}
-                    className={`flex-1 py-4 rounded-2xl border font-black uppercase italic text-xs transition-all flex items-center justify-center gap-3
-                                            ${format === 'csv' ? 'bg-[var(--accent-primary)] text-white border-[var(--accent-primary)] shadow-lg shadow-[var(--accent-primary)]/20' : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'}`}
+                    className={`flex-1 py-3.5 rounded-xl border font-medium text-[13px] transition-all flex items-center justify-center gap-2.5
+                                            ${format === 'csv' ? 'bg-[var(--accent-primary)] text-white border-[var(--accent-primary)] shadow-sm' : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--accent-primary)]/50'}`}
                   >
-                    <Database size={16} /> CSV Spreadsheet
+                    <Database size={16} /> CSV spreadsheet
                   </button>
                 </div>
               </div>
@@ -416,17 +416,17 @@ export default function Reports() {
               <button
                 onClick={handleExport}
                 disabled={exporting}
-                className="w-full bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white py-5 rounded-2xl font-black uppercase tracking-widest italic text-sm flex items-center justify-center gap-4 hover:scale-[1.01] transition-all disabled:opacity-50 shadow-2xl shadow-[var(--accent-primary)]/20"
+                className="w-full bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white py-4 rounded-xl font-semibold text-[14px] flex items-center justify-center gap-3 transition-colors disabled:opacity-50 shadow-sm"
               >
-                {exporting ? <Loader2 className="animate-spin" /> : <Download size={20} />}
-                {exporting ? 'Compiling Report...' : 'Generate Intelligence Report'}
+                {exporting ? <Loader2 className="animate-spin" /> : <Download size={18} />}
+                {exporting ? 'Generating…' : 'Generate report'}
               </button>
             </div>
 
             {/* Recent Reports List */}
             <div className="premium-card p-10">
-              <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-8 italic">
-                Recently Generated Reports
+              <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-6">
+                Recent reports
               </h3>
               <div className="space-y-4">
                 {recentReports.length > 0 ? (
@@ -440,10 +440,10 @@ export default function Reports() {
                           <FileText size={18} />
                         </div>
                         <div>
-                          <h4 className="text-[11px] font-black text-[var(--text-primary)] uppercase italic">
+                          <h4 className="text-[13px] font-medium text-[var(--text-primary)]">
                             {report.title}
                           </h4>
-                          <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-0.5">
+                          <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                             {new Date(report.createdAt || report.$createdAt).toLocaleString()} •{' '}
                             {report.type}
                           </p>
@@ -549,7 +549,7 @@ export default function Reports() {
             ) : (
               <>
                 <div className="premium-card p-8">
-                  <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-[0.2em] mb-8 italic">
+                  <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-6">
                     {activeTabSpecs.title}
                   </h3>
 
@@ -560,8 +560,8 @@ export default function Reports() {
                   </div>
 
                   <div className="mt-12 pt-8 border-t border-[var(--border-subtle)]">
-                    <div className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl italic">
-                      <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase leading-relaxed">
+                    <div className="p-4 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl">
+                      <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
                         {activeTabSpecs.footer}
                       </p>
                     </div>
@@ -569,13 +569,13 @@ export default function Reports() {
                 </div>
 
                 <div
-                  className="p-8 rounded-3xl bg-gradient-to-br from-indigo-600 to-purple-700 text-white relative overflow-hidden group cursor-pointer"
+                  className="p-8 rounded-2xl bg-[var(--accent-primary)] text-white relative overflow-hidden group cursor-pointer"
                   onClick={() => setActiveTab('ai')}
                 >
-                  <h3 className="text-lg font-black uppercase italic leading-tight">
-                    SOC2 / ISO 27001 <br /> Compliance Ready
+                  <h3 className="text-[17px] font-semibold leading-tight">
+                    SOC 2 &amp; ISO 27001 ready
                   </h3>
-                  <p className="text-[10px] font-bold uppercase text-white/70 mt-4">
+                  <p className="text-[13px] text-white/80 mt-3 leading-relaxed">
                     Evidence generated here meets standard auditor requirements for continuous
                     security monitoring.
                   </p>
@@ -597,10 +597,10 @@ function SpecRow({ icon, title, desc }: { icon: any; title: string; desc: string
         {icon}
       </div>
       <div>
-        <h4 className="text-[11px] font-black text-[var(--text-primary)] uppercase italic tracking-tight">
+        <h4 className="text-[13px] font-semibold text-[var(--text-primary)]">
           {title}
         </h4>
-        <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 leading-relaxed">
+        <p className="text-[12px] text-[var(--text-secondary)] mt-1 leading-relaxed">
           {desc}
         </p>
       </div>
@@ -622,9 +622,9 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex-1 justify-center ${
+      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-[13px] transition-all flex-1 justify-center ${
         active
-          ? 'bg-[var(--accent-primary)] text-white shadow-lg shadow-[var(--accent-primary)]/20'
+          ? 'bg-[var(--accent-primary)] text-white shadow-sm'
           : 'text-[var(--text-secondary)] hover:bg-[var(--accent-primary)]/10 hover:text-[var(--text-primary)]'
       }`}
     >

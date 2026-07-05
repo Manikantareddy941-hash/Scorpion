@@ -234,25 +234,25 @@ export default function Alerts() {
                             <Bell size={32} />
                         </div>
                         <div>
-                            <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none text-[var(--text-primary)]">Alert Mesh</h1>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-2">Real-time Threat Propagation Control</p>
+                            <h1 className="text-[22px] font-semibold tracking-tight leading-none text-[var(--text-primary)]">Alerts</h1>
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-1.5">Route security events to your team's channels in real time</p>
                         </div>
                     </div>
 
                     <div className="flex gap-2 p-1 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)]">
                         <button 
                             onClick={() => setActiveTab('config')}
-                            className={`px-6 py-3 rounded-xl font-black uppercase italic tracking-widest text-[10px] transition-all
-                                ${activeTab === 'config' ? 'bg-[var(--accent-primary)] text-white shadow-lg shadow-[var(--accent-primary)]/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                            className={`px-5 py-2.5 rounded-xl font-medium text-[13px] transition-all
+                                ${activeTab === 'config' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                         >
                             Configuration
                         </button>
-                        <button 
+                        <button
                             onClick={() => setActiveTab('feed')}
-                            className={`px-6 py-3 rounded-xl font-black uppercase italic tracking-widest text-[10px] transition-all flex items-center gap-2
-                                ${activeTab === 'feed' ? 'bg-[var(--accent-primary)] text-white shadow-lg shadow-[var(--accent-primary)]/20' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                            className={`px-5 py-2.5 rounded-xl font-medium text-[13px] transition-all flex items-center gap-2
+                                ${activeTab === 'feed' ? 'bg-[var(--accent-primary)] text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
                         >
-                            <Activity size={14} /> Neural Feed
+                            <Activity size={14} /> Live feed
                         </button>
                     </div>
                 </div>
@@ -264,8 +264,8 @@ export default function Alerts() {
                         <div className="premium-card p-10">
                             <div className="flex items-center justify-between mb-10 pb-10 border-b border-[var(--border-subtle)]">
                                 <div>
-                                    <h3 className="text-sm font-black text-[var(--text-primary)] uppercase tracking-[0.2em] italic mb-2">Master Interceptor Switch</h3>
-                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic">Enable or disable all external threat propagation</p>
+                                    <h3 className="text-[15px] font-semibold text-[var(--text-primary)] mb-1">Master switch</h3>
+                                    <p className="text-[13px] text-[var(--text-secondary)]">Turn all outbound alerts on or off</p>
                                 </div>
                                 <div 
                                     onClick={() => setIsEnabled(!isEnabled)}
@@ -276,14 +276,14 @@ export default function Alerts() {
                             </div>
 
                             <div className="space-y-6">
-                                <h3 className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest italic">Severity Filters</h3>
+                                <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">Severity filters</h3>
                                 <div className="flex flex-wrap gap-4">
                                     {['critical', 'high', 'medium', 'low'].map(sev => (
                                         <button
                                             key={sev}
                                             onClick={() => toggleSeverity(sev)}
-                                            className={`px-6 py-3 rounded-2xl border-2 font-black uppercase italic tracking-widest text-[11px] transition-all flex items-center gap-3
-                                                ${activeSeverities.includes(sev) ? SEVERITY_COLORS[sev] : 'bg-transparent border-[var(--border-subtle)] text-[var(--text-secondary)] opacity-50'}`}
+                                            className={`px-4 py-2 rounded-xl border font-medium capitalize text-[13px] transition-all flex items-center gap-2
+                                                ${activeSeverities.includes(sev) ? SEVERITY_COLORS[sev] : 'bg-transparent border-[var(--border-subtle)] text-[var(--text-secondary)] opacity-60'}`}
                                         >
                                             <SeverityIcon severity={sev} /> {sev}
                                         </button>
@@ -303,11 +303,11 @@ export default function Alerts() {
                                                 <MessageSquare size={24} />
                                             </div>
                                             <div>
-                                                <h3 className="text-xs font-black text-[#5865F2] uppercase tracking-[0.2em] italic">Discord Mesh Interceptor</h3>
-                                                <p className="text-[9px] text-[var(--text-secondary)] uppercase mt-0.5 font-bold font-mono">Deep Ingress Integration Gateway</p>
+                                                <h3 className="text-[15px] font-semibold text-[#5865F2]">Discord</h3>
+                                                <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">Post alerts to a Discord channel via webhook</p>
                                             </div>
                                         </div>
-                                        <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20">Active Node</span>
+                                        <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20">Connected</span>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -344,7 +344,7 @@ export default function Alerts() {
                                     </div>
 
                                     <div className="mb-6">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-[var(--text-secondary)] block mb-3 font-mono">Alert Trigger Events</span>
+                                        <span className="text-[13px] font-semibold text-[var(--text-primary)] block mb-3">Trigger on</span>
                                         <div className="flex flex-wrap gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
                                             <label className="flex items-center gap-2.5 cursor-pointer select-none">
                                                 <input 
@@ -353,7 +353,7 @@ export default function Alerts() {
                                                     onChange={(e) => setAlertCritical(e.target.checked)} 
                                                     className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#5865F2] focus:ring-[#5865F2] bg-[var(--bg-primary)]"
                                                 />
-                                                <span className="text-[10px] font-black uppercase italic text-[var(--text-primary)] pr-2">Critical Vulns</span>
+                                                <span className="text-[13px] font-medium text-[var(--text-primary)] pr-2">Critical vulnerabilities</span>
                                             </label>
                                             <label className="flex items-center gap-2.5 cursor-pointer select-none">
                                                 <input 
@@ -362,7 +362,7 @@ export default function Alerts() {
                                                     onChange={(e) => setAlertPolicy(e.target.checked)} 
                                                     className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#5865F2] focus:ring-[#5865F2] bg-[var(--bg-primary)]"
                                                 />
-                                                <span className="text-[10px] font-black uppercase italic text-[var(--text-primary)] pr-2">Policy Blocks</span>
+                                                <span className="text-[13px] font-medium text-[var(--text-primary)] pr-2">Policy blocks</span>
                                             </label>
                                             <label className="flex items-center gap-2.5 cursor-pointer select-none">
                                                 <input 
@@ -371,7 +371,7 @@ export default function Alerts() {
                                                     onChange={(e) => setAlertDeploy(e.target.checked)} 
                                                     className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#5865F2] focus:ring-[#5865F2] bg-[var(--bg-primary)]"
                                                 />
-                                                <span className="text-[10px] font-black uppercase italic text-[var(--text-primary)] pr-2">Deployment Success</span>
+                                                <span className="text-[13px] font-medium text-[var(--text-primary)] pr-2">Successful deployments</span>
                                             </label>
                                         </div>
                                     </div>
@@ -381,25 +381,25 @@ export default function Alerts() {
                                     <button 
                                         onClick={handleSaveDiscordMesh}
                                         disabled={discordSaving || !discordWebhook}
-                                        className="flex-1 py-3.5 bg-[#5865F2] hover:bg-[#4752c4] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-30 shadow-[0_4px_12px_rgba(88,101,242,0.2)] hover:scale-[1.01]"
+                                        className="flex-1 py-3 bg-[#5865F2] hover:bg-[#4752c4] text-white rounded-xl text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-40"
                                     >
-                                        {discordSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save size={12} />}
-                                        Save Discord Configuration
+                                        {discordSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save size={14} />}
+                                        Save Discord
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => handleTest('discord', discordWebhook)}
                                         disabled={testing === 'discord' || !discordWebhook}
-                                        className="px-6 py-3.5 bg-[var(--bg-primary)] border border-[var(--border-subtle)] hover:border-[#5865F2] text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-30 text-[var(--text-primary)]"
+                                        className="px-5 py-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] hover:border-[#5865F2] rounded-xl text-[13px] font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-40 text-[var(--text-primary)]"
                                     >
-                                        {testing === 'discord' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send size={12} />}
-                                        Dispatch Test Payload
+                                        {testing === 'discord' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send size={14} />}
+                                        Send test
                                     </button>
                                 </div>
                             </div>
                             <IntegrationCard 
                                 icon={<Slack size={24} />} 
                                 color="text-[#E01E5A]" 
-                                title="Slack Block Kit" 
+                                title="Slack"
                                 value={slackWebhook} 
                                 setValue={setSlackWebhook} 
                                 onTest={() => handleTest('slack', slackWebhook)}
@@ -409,7 +409,7 @@ export default function Alerts() {
                             <IntegrationCard 
                                 icon={<PhoneCall size={24} />} 
                                 color="text-[#12AD2B]" 
-                                title="PagerDuty V2" 
+                                title="PagerDuty"
                                 value={pagerdutyKey} 
                                 setValue={setPagerdutyKey} 
                                 onTest={() => handleTest('pagerduty', pagerdutyKey)}
@@ -419,7 +419,7 @@ export default function Alerts() {
                             <IntegrationCard 
                                 icon={<Zap size={24} />} 
                                 color="text-[#FF9900]" 
-                                title="OpsGenie Alerts" 
+                                title="Opsgenie"
                                 value={opsgenieKey} 
                                 setValue={setOpsgenieKey} 
                                 onTest={() => handleTest('opsgenie', opsgenieKey)}
@@ -435,7 +435,7 @@ export default function Alerts() {
                                 className="btn-premium px-12 py-5 text-sm"
                             >
                                 {saving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-                                {saving ? 'Committing...' : 'Commit Alert Mesh Config'}
+                                {saving ? 'Saving…' : 'Save alert settings'}
                             </button>
                         </div>
 

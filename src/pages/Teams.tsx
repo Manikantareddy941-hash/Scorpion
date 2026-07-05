@@ -262,11 +262,11 @@ function DeleteTeamModal({
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'color-mix(in srgb, var(--status-error) 15%, transparent)', border: '1px solid var(--status-error)' }}>
                         <AlertTriangle size={18} style={{ color: 'var(--status-error)' }} />
                     </div>
-                    <h2 className="text-base font-black uppercase italic tracking-wider" style={{ color: 'var(--text-primary)' }}>DISSOLVE BATTALION</h2>
+                    <h2 className="text-[17px] font-semibold" style={{ color: 'var(--text-primary)' }}>Delete team</h2>
                 </div>
-                <p className="text-[10px] leading-relaxed mb-4 font-mono" style={{ color: 'var(--text-secondary)' }}>
-                    This is a <span className="font-black" style={{ color: 'var(--status-error)' }}>PERMANENT</span> destructive action. All members, policy attachments, and repository scopes will be irrevocably removed.
-                    Type <span className="font-black px-1 rounded" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-primary)' }}>{team.name}</span> to confirm.
+                <p className="text-[13px] leading-relaxed mb-4" style={{ color: 'var(--text-secondary)' }}>
+                    This <span className="font-semibold" style={{ color: 'var(--status-error)' }}>permanently</span> removes all members, policy attachments, and repository scopes.
+                    Type <span className="font-semibold px-1 rounded" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-primary)' }}>{team.name}</span> to confirm.
                 </p>
                 <input
                     type="text"
@@ -427,12 +427,12 @@ export default function Teams() {
                 {/* Header */}
                 <div className="flex justify-between items-center mb-8">
                     <div>
-                        <h1 className="text-3xl font-black uppercase italic tracking-widest flex items-center gap-3" style={{ color: 'var(--text-primary)' }}>
-                            <Users style={{ color: 'var(--accent-primary)' }} size={32} />
-                            {t_term('TACTICAL BATTALIONS', 'TEAMS')}
+                        <h1 className="text-[22px] font-semibold tracking-tight flex items-center gap-2.5" style={{ color: 'var(--text-primary)' }}>
+                            <Users style={{ color: 'var(--accent-primary)' }} size={22} />
+                            Teams
                         </h1>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mt-1" style={{ color: 'var(--text-secondary)' }}>
-                            {t_term('[ MULTI-TENANT WORKSPACE SEGREGATION & OPERATOR ROSTER ]', '[ WORKSPACE ISOLATION & TEAM MEMBER ROSTER ]')}
+                        <p className="text-[13px] mt-1" style={{ color: 'var(--text-secondary)' }}>
+                            Group members into teams and scope their access to repositories
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -447,11 +447,11 @@ export default function Teams() {
                         </button>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg flex items-center gap-2 cursor-pointer"
+                            className="px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
                             style={{ backgroundColor: 'var(--accent-primary)', color: '#ffffff' }}
                         >
                             <Plus size={14} />
-                            {t_term('INITIALIZE BATTALION', 'INITIALIZE TEAM')}
+                            {t_term('New team', 'New team')}
                         </button>
                     </div>
                 </div>
@@ -501,17 +501,17 @@ export default function Teams() {
                 ) : teams.length === 0 ? (
                     <div className="rounded-2xl p-12 text-center" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
                         <Users className="mb-4 mx-auto" size={64} style={{ color: 'var(--text-secondary)' }} />
-                        <h3 className="text-xl font-black uppercase italic tracking-wider mb-3" style={{ color: 'var(--text-primary)' }}>[ NO ACTIVE BATTALIONS ]</h3>
-                        <p className="text-[11px] font-medium leading-relaxed max-w-md mb-8 mx-auto" style={{ color: 'var(--text-secondary)' }}>
-                            No tactical battalions or teams were found for your security scope.
+                        <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>No teams yet</h3>
+                        <p className="text-[13px] leading-relaxed max-w-md mb-6 mx-auto" style={{ color: 'var(--text-secondary)' }}>
+                            Create your first team to organize members and scope their repository access.
                         </p>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="px-6 py-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg flex items-center gap-2 cursor-pointer hover:scale-[1.02] mx-auto"
+                            className="px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-colors shadow-sm flex items-center gap-2 cursor-pointer mx-auto"
                             style={{ backgroundColor: 'var(--accent-primary)', color: '#ffffff' }}
                         >
                             <Plus size={14} />
-                            {t_term('INITIALIZE FIRST BATTALION', 'INITIALIZE FIRST TEAM')}
+                            Create team
                         </button>
                     </div>
                 ) : (
@@ -578,9 +578,9 @@ export default function Teams() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <div className="absolute inset-0 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShowCreateModal(false)} />
                         <div className="max-w-md w-full p-8 rounded-2xl relative z-10 font-mono shadow-2xl" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
-                            <h2 className="text-lg font-black uppercase italic tracking-wider mb-6 flex items-center gap-2 pb-3" style={{ color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)' }}>
+                            <h2 className="text-[17px] font-semibold mb-6 flex items-center gap-2 pb-3" style={{ color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)' }}>
                                 <Users style={{ color: 'var(--accent-primary)' }} size={20} />
-                                {t_term('INITIALIZE BATTALION', 'INITIALIZE TEAM')}
+                                New team
                             </h2>
                             <form onSubmit={handleCreateTeam} className="space-y-6">
                                 <div>
@@ -613,9 +613,9 @@ export default function Teams() {
                                         {t_term('Abort', 'Cancel')}
                                     </button>
                                     <button type="submit"
-                                        className="flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg cursor-pointer"
+                                        className="flex-1 py-2.5 text-[13px] font-semibold rounded-lg transition-colors shadow-sm cursor-pointer"
                                         style={{ backgroundColor: 'var(--accent-primary)', color: '#ffffff' }}>
-                                        {t_term('INITIALIZE', 'CREATE')}
+                                        Create team
                                     </button>
                                 </div>
                             </form>
@@ -628,9 +628,9 @@ export default function Teams() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <div className="absolute inset-0 backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShowInviteModal(false)} />
                         <div className="max-w-md w-full p-8 rounded-2xl relative z-10 font-mono shadow-2xl" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
-                            <h2 className="text-lg font-black uppercase italic tracking-wider mb-6 flex items-center gap-2 pb-3" style={{ color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)' }}>
+                            <h2 className="text-[17px] font-semibold mb-6 flex items-center gap-2 pb-3" style={{ color: 'var(--text-primary)', borderBottom: '1px solid var(--border-subtle)' }}>
                                 <UserPlus style={{ color: 'var(--accent-primary)' }} size={20} />
-                                {t_term('DEPLOY OPERATOR', 'INVITE MEMBER')}
+                                Invite member
                             </h2>
                             <form onSubmit={handleInviteMember} className="space-y-6">
                                 <div>
@@ -674,9 +674,9 @@ export default function Teams() {
                                         {t_term('Cancel', 'Cancel')}
                                     </button>
                                     <button type="submit"
-                                        className="flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg cursor-pointer"
+                                        className="flex-1 py-2.5 text-[13px] font-semibold rounded-lg transition-colors shadow-sm cursor-pointer"
                                         style={{ backgroundColor: 'var(--accent-primary)', color: '#ffffff' }}>
-                                        {t_term('DEPLOY', 'INVITE')}
+                                        Send invite
                                     </button>
                                 </div>
                             </form>
