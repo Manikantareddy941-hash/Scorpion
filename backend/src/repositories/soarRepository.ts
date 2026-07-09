@@ -35,15 +35,21 @@ function toMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function playbookFromDoc(doc: Models.Document): Playbook {
+/** null for malformed rows (bad trigger/actions JSON) — skip the row, keep siblings. */
+function playbookFromDoc(doc: Models.Document): Playbook | null {
   const w = doc as unknown as PlaybookWire & Models.Document;
-  return {
-    id: doc.$id,
-    name: w.name,
-    enabled: w.enabled,
-    trigger: JSON.parse(w.trigger) as Playbook['trigger'],
-    actions: JSON.parse(w.actions) as Playbook['actions'],
-  };
+  try {
+    return {
+      id: doc.$id,
+      name: w.name,
+      enabled: w.enabled,
+      trigger: JSON.parse(w.trigger) as Playbook['trigger'],
+      actions: JSON.parse(w.actions) as Playbook['actions'],
+    };
+  } catch (err) {
+    logger.warn(`[SoarRepository] skipping playbook ${doc.$id}: ${toMessage(err)}`);
+    return null;
+  }
 }
 
 function actionFromDoc(doc: Models.Document): SoarActionRecord {
@@ -74,7 +80,7 @@ export const soarRepository = {
   async listPlaybooks(): Promise<Playbook[]> {
     try {
       const list = await databases.listDocuments(DB_ID, PLAYBOOKS, [Query.limit(100)]);
-      return list.documents.map(playbookFromDoc);
+      return list.documents.map(playbookFromDoc).filter((p): p is Playbook => p !== null);
     } catch (err) {
       logger.warn('[SoarRepository] playbook load failed:', toMessage(err));
       return [];

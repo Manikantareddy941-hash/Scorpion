@@ -99,6 +99,9 @@ export async function runPostureScan(reader: ClusterReader): Promise<void> {
 
 export function startPostureScanner(reader: ClusterReader = createClusterReader()): NodeJS.Timeout {
   logger.info(`[PostureScanner] starting, interval ${DEFAULT_INTERVAL_MS}ms`);
+  // Fire one tick immediately so the UI isn't empty for the first interval
+  // after every boot; non-blocking, same catch as the interval below.
+  void runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed:', err));
   return setInterval(() => {
     runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed:', err));
   }, DEFAULT_INTERVAL_MS);

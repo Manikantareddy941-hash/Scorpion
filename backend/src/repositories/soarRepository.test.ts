@@ -44,6 +44,23 @@ describe('soarRepository.listPlaybooks', () => {
     mocked.listDocuments.mockRejectedValue(new Error('down'));
     await expect(soarRepository.listPlaybooks()).resolves.toEqual([]);
   });
+
+  it('skips a malformed row but returns its valid sibling', async () => {
+    mocked.listDocuments.mockResolvedValue({
+      total: 2,
+      documents: [
+        { $id: 'pb-bad', name: 'Broken', enabled: true, trigger: 'not json', actions: '[]' },
+        {
+          $id: 'pb-1', name: 'Shell response', enabled: true,
+          trigger: JSON.stringify({ rulePattern: 'Terminal*', minPriority: 'Warning' }),
+          actions: JSON.stringify([{ type: 'kill_pod', mode: 'approval' }]),
+        },
+      ],
+    } as never);
+    const out = await soarRepository.listPlaybooks();
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('pb-1');
+  });
 });
 
 describe('soarRepository playbook mutations', () => {

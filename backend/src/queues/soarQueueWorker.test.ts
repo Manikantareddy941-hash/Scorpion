@@ -84,4 +84,32 @@ describe('processSoarJob', () => {
     await expect(processSoarJob({ actionId: 'act-1' })).resolves.toBeUndefined();
     expect(exec).toHaveBeenCalledTimes(1);
   });
+
+  it('falls back to the action record ownerUserId when the job payload omits it', async () => {
+    const withOwner = { ...approved, ownerUserId: 'action-owner-1' };
+    repo.getAction.mockResolvedValue(withOwner as never);
+    exec.mockResolvedValue({ ok: true, result: 'done' });
+    await processSoarJob({ actionId: 'act-1' });
+    expect(exec).toHaveBeenCalledWith(
+      withOwner,
+      expect.objectContaining({ ownerUserId: 'action-owner-1' }),
+    );
+  });
+
+  it('still creates the fail-loud incident when setActionStatus(failed) rejects', async () => {
+    repo.getAction.mockResolvedValue(approved as never);
+    exec.mockResolvedValue({ ok: false, error: 'forbidden' });
+    repo.setActionStatus.mockRejectedValue(new Error('appwrite down'));
+    await expect(processSoarJob({ actionId: 'act-1' })).rejects.toThrow('appwrite down');
+    expect(createIncident).toHaveBeenCalled();
+  });
+
+  it('still marks the action failed when createIncident rejects', async () => {
+    repo.getAction.mockResolvedValue(approved as never);
+    repo.setActionStatus.mockResolvedValue(undefined);
+    exec.mockResolvedValue({ ok: false, error: 'forbidden' });
+    (createIncident as jest.Mock).mockRejectedValue(new Error('incident svc down'));
+    await expect(processSoarJob({ actionId: 'act-1' })).resolves.toBeUndefined();
+    expect(repo.setActionStatus).toHaveBeenCalledWith('act-1', 'failed', { error: 'forbidden' });
+  });
 });

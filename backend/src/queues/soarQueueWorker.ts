@@ -27,7 +27,9 @@ export async function processSoarJob(
   const outcome = await executeSoarAction(action, {
     k8s,
     falcoEventJson: payload.falcoEventJson,
-    ownerUserId: payload.ownerUserId,
+    // Fall back to the action record's own owner so Slack scoping stays
+    // correct even if a future enqueue path forgets to pass ownerUserId.
+    ownerUserId: payload.ownerUserId ?? action.ownerUserId,
   });
 
   if (outcome.ok) {
@@ -47,13 +49,25 @@ export async function processSoarJob(
   }
 
   // Fail-loud: a containment action that could not run is itself an incident.
+  // createIncident runs first and in its own try/catch: if it threw after a
+  // successful setActionStatus('failed'), a BullMQ retry would see status
+  // 'failed', skip re-processing (see the status check above), and the
+  // "containment failed" incident would never get created. Isolating the two
+  // writes means one failing can never suppress the other.
+  try {
+    await createIncident({
+      title: `SOAR action failed: ${action.actionType} for ${action.falcoRule}`,
+      severity: 'Critical',
+      source: 'soar',
+      description: outcome.error,
+    });
+  } catch (err) {
+    logger.error(
+      `[SOAR] action ${action.id} failed but incident creation also failed:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
   await soarRepository.setActionStatus(action.id, 'failed', { error: outcome.error });
-  await createIncident({
-    title: `SOAR action failed: ${action.actionType} for ${action.falcoRule}`,
-    severity: 'Critical',
-    source: 'soar',
-    description: outcome.error,
-  });
 }
 
 let soarWorker: Worker<SoarJobPayload> | null = null;

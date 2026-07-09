@@ -10,7 +10,7 @@ jest.mock('../repositories/postureRepository', () => ({
 }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 
-import { runPostureScan, ClusterReader } from './postureScanner';
+import { runPostureScan, startPostureScanner, ClusterReader } from './postureScanner';
 import { postureRepository } from '../repositories/postureRepository';
 import { logger } from '../services/logger';
 
@@ -63,5 +63,21 @@ describe('runPostureScan', () => {
     await expect(runPostureScan(reader)).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('save failed'), 'appwrite down');
     expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining('scanned'));
+  });
+});
+
+describe('startPostureScanner', () => {
+  it('fires an immediate scan before the first interval elapses', async () => {
+    jest.useFakeTimers();
+    const reader: ClusterReader = {
+      readSnapshot: async () => ({ pods: [], namespaces: [] }),
+    };
+    const timer = startPostureScanner(reader);
+    // Flush the immediate (non-awaited) scan without advancing the interval.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(repo.saveSnapshot).toHaveBeenCalledTimes(1);
+    clearInterval(timer);
+    jest.useRealTimers();
   });
 });

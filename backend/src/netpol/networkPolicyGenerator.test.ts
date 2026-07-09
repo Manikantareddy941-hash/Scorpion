@@ -20,9 +20,20 @@ describe('generateNetworkPolicies', () => {
     const yaml = generateNetworkPolicies(input);
     expect(yaml).toContain('name: allow-web-to-api-8080');
     expect(yaml).toContain('name: allow-egress-web-to-api-8080');
-    expect(yaml).toContain('app: web');
-    expect(yaml).toContain('app: api');
+    expect(yaml).toContain('app: "web"');
+    expect(yaml).toContain('app: "api"');
     expect(yaml).toContain('port: 8080');
+  });
+
+  it('quotes label values so an all-numeric service name stays a YAML string', () => {
+    const yaml = generateNetworkPolicies({
+      namespace: 'prod',
+      flows: [{ from: '123', to: '456', port: 8080 }],
+    });
+    expect(yaml).toContain('app: "123"');
+    expect(yaml).toContain('app: "456"');
+    expect(yaml).not.toMatch(/app: 123\b/);
+    expect(yaml).not.toMatch(/app: 456\b/);
   });
 
   it('same pair on different ports yields distinct policy names', () => {
