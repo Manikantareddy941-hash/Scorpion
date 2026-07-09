@@ -77,6 +77,37 @@ describe('falcoRuleRoutes', () => {
     expect(repo.updateRule).toHaveBeenCalledWith('r-1', { enabled: false });
   });
 
+  it('POST / accepts a >64-char domain and watched path (up to 256)', async () => {
+    const longDomain = `${'a'.repeat(120)}.example.com`; // 132 chars
+    const longPath = `/var/lib/${'d'.repeat(100)}/config`; // 116 chars
+    const rule = {
+      template: 'outbound-unknown-domain',
+      params: { allowedDomains: [longDomain], watchedPaths: [longPath] },
+      suppressed: false,
+      enabled: true,
+    };
+    repo.createRule.mockResolvedValue({ id: 'r-2', ...rule } as never);
+    const res = await request(buildApp()).post('/api/falco-rules').send(rule);
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('POST / rejects a >256-char domain and a >64-char proc with 400', async () => {
+    const domainRes = await request(buildApp()).post('/api/falco-rules').send({
+      template: 'outbound-unknown-domain',
+      params: { allowedDomains: [`${'a'.repeat(260)}.example.com`] },
+      suppressed: false,
+      enabled: true,
+    });
+    expect(domainRes.statusCode).toBe(400);
+
+    const procRes = await request(buildApp()).post('/api/falco-rules').send({
+      ...validRule,
+      params: { allowedProcs: ['p'.repeat(65)] },
+    });
+    expect(procRes.statusCode).toBe(400);
+    expect(repo.createRule).not.toHaveBeenCalled();
+  });
+
   it('PATCH /:id rejects unsafe param values with 400', async () => {
     const unsafeUpdate = { params: { watchedPaths: ['/etc\n rm -rf /'] } };
     const res = await request(buildApp()).patch('/api/falco-rules/r-1').send(unsafeUpdate);

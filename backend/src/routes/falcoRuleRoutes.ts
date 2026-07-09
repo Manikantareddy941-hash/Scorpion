@@ -7,14 +7,16 @@ import { logger } from '../services/logger';
 
 const prioritySchema = z.enum(['Emergency', 'Alert', 'Critical', 'Error', 'Warning', 'Notice', 'Informational', 'Debug']);
 
-const safeStringArray = z.array(z.string().min(1).max(64).regex(SAFE_PARAM, 'Invalid characters')).max(50).optional();
+// Per brief: procs cap at 64 chars, domains/paths at 256 (FQDNs and container paths run long).
+const safeStringArray = (maxLen: number) =>
+  z.array(z.string().min(1).max(maxLen).regex(SAFE_PARAM, 'Invalid characters')).max(50).optional();
 
 const ruleSchema = z.object({
   template: z.enum(['terminal-shell-in-container', 'outbound-unknown-domain', 'write-below-etc', 'sensitive-file-read', 'spawn-package-manager']),
   params: z.object({
-    allowedProcs: safeStringArray,
-    allowedDomains: safeStringArray,
-    watchedPaths: safeStringArray,
+    allowedProcs: safeStringArray(64),
+    allowedDomains: safeStringArray(256),
+    watchedPaths: safeStringArray(256),
   }),
   appScope: z.string().min(1).max(512).optional(),
   severityOverride: prioritySchema.optional(),
