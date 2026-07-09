@@ -12,12 +12,17 @@ import { client, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import SoarPanel from '../components/SoarPanel';
+import FalcoRulesPanel from '../components/FalcoRulesPanel';
+import PosturePanel from '../components/PosturePanel';
+import NetPolPanel from '../components/NetPolPanel';
 
 export default function Monitor() {
   const { t } = useTranslation();
   const { getJWT } = useAuth();
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('24h');
+  const [netpolPrefillNamespace, setNetpolPrefillNamespace] = useState<string | undefined>(undefined);
   const [trends, setTrends] = useState<any[]>([]);
   const [health, setHealth] = useState<any[]>([]);
   const [findings, setFindings] = useState<any[]>([]);
@@ -371,6 +376,20 @@ export default function Monitor() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Operate: SOAR, Falco rules, posture, NetworkPolicy generation */}
+      <div className="space-y-2">
+        <h2 className="text-[15px] font-semibold text-[var(--text-primary)] flex items-center gap-2 pt-2">
+          <div className="w-8 h-8 bg-[var(--accent-primary)]/10 rounded-lg flex items-center justify-center border border-[var(--accent-primary)]/20">
+            <Zap className="w-4 h-4 text-[var(--accent-primary)]" />
+          </div>
+          Operate
+        </h2>
+        <SoarPanel />
+        <FalcoRulesPanel />
+        <PosturePanel onGeneratePolicies={setNetpolPrefillNamespace} />
+        <NetPolPanel prefillNamespace={netpolPrefillNamespace} />
       </div>
     </div>
   );
