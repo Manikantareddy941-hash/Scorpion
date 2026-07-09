@@ -63,6 +63,7 @@ import driftRoutes from './routes/driftRoutes';
 import canaryRoutes from './routes/canaryRoutes';
 import soarRoutes from './routes/soarRoutes';
 import falcoRuleRoutes from './routes/falcoRuleRoutes';
+import postureRoutes from './routes/postureRoutes';
 import { registerTicketRoutes } from './registerRoutes';
 import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
@@ -314,6 +315,7 @@ app.use('/api/v1/drift', authenticate, driftRoutes);
 app.use('/api/canary', authenticate, canaryRoutes);
 app.use('/api/soar', authenticate, soarRoutes);
 app.use('/api/falco-rules', authenticate, falcoRuleRoutes);
+app.use('/api/posture', authenticate, postureRoutes);
 app.use('/api/scan', dockerScanRoutes);
 app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with /scan/docker
 app.use('/api/scan/dast', dastRoutes);
