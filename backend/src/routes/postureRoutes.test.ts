@@ -7,6 +7,7 @@ jest.mock('../repositories/postureRepository', () => ({
 jest.mock('../middleware/requireRole', () => ({
   requireRole: () => (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
+jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 
 import postureRoutes from './postureRoutes';
 import { postureRepository } from '../repositories/postureRepository';
@@ -16,9 +17,6 @@ const repo = postureRepository as jest.Mocked<typeof postureRepository>;
 const buildApp = () => {
   const app = express();
   app.use('/api/posture', postureRoutes);
-  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    res.status(500).json({ error: err.message });
-  });
   return app;
 };
 
@@ -40,5 +38,6 @@ describe('postureRoutes', () => {
     repo.listSnapshots.mockRejectedValue(new Error('down'));
     const res = await request(buildApp()).get('/api/posture');
     expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: 'Failed to list posture snapshots' });
   });
 });
