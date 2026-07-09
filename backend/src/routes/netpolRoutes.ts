@@ -33,23 +33,36 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
   const { namespace, flows, createPr, repo } = parsed.data;
 
-  let yaml: string;
   try {
-    yaml = generateNetworkPolicies({ namespace, flows });
-  } catch (err) {
-    return res.status(400).json({ error: errorMessage(err) });
-  }
+    let yaml: string;
+    try {
+      yaml = generateNetworkPolicies({ namespace, flows });
+    } catch (err) {
+      // Defense-in-depth: the zod namespace regex above should fully guard the
+      // generator's DNS_1123 check, so this branch is a safety net, not the
+      // primary boundary. Echoing the message is safe here — it is the
+      // generator's single static throw text, never derived from user input.
+      const msg = errorMessage(err);
+      if (msg.startsWith('Invalid namespace')) {
+        return res.status(400).json({ error: msg });
+      }
+      throw err; // anything else is a real failure — fall to the outer 500
+    }
 
-  if (!createPr || !repo) return res.json({ yaml });
+    if (!createPr || !repo) return res.json({ yaml });
 
-  try {
-    const { prUrl } = await openNetpolPr({ repo, namespace, yaml });
-    res.json({ yaml, prUrl });
+    try {
+      const { prUrl } = await openNetpolPr({ repo, namespace, yaml });
+      return res.json({ yaml, prUrl });
+    } catch (err) {
+      // The artifact is still useful even when the PR fails — return both.
+      const msg = errorMessage(err);
+      logger.error('[NetPol API] PR failed:', msg);
+      return res.json({ yaml, prError: msg });
+    }
   } catch (err) {
-    // The artifact is still useful even when the PR fails — return both.
-    const msg = errorMessage(err);
-    logger.error('[NetPol API] PR failed:', msg);
-    res.json({ yaml, prError: msg });
+    logger.error('[NetPol API] generate failed:', errorMessage(err));
+    return res.status(500).json({ error: 'Failed to generate network policies' });
   }
 });
 
