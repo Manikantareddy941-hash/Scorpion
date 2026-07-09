@@ -1,4 +1,10 @@
-jest.mock('@kubernetes/client-node');
+// Factory mock scoped to this file: the real package is ESM and unparseable
+// under ts-jest CJS; the factory keeps the real module from ever loading.
+jest.mock('@kubernetes/client-node', () => ({
+  KubeConfig: class { loadFromDefault(): void {} makeApiClient(): object { return {}; } },
+  CoreV1Api: class {},
+  NetworkingV1Api: class {},
+}));
 jest.mock('../repositories/postureRepository', () => ({
   postureRepository: { saveSnapshot: jest.fn(), listSnapshots: jest.fn() },
 }));
@@ -6,6 +12,7 @@ jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.f
 
 import { runPostureScan, ClusterReader } from './postureScanner';
 import { postureRepository } from '../repositories/postureRepository';
+import { logger } from '../services/logger';
 
 const repo = postureRepository as jest.Mocked<typeof postureRepository>;
 
@@ -46,5 +53,15 @@ describe('runPostureScan', () => {
     const reader: ClusterReader = { readSnapshot: async () => { throw new Error('no cluster'); } };
     await expect(runPostureScan(reader)).resolves.toBeUndefined();
     expect(repo.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('save failure is swallowed and logged, never thrown', async () => {
+    const reader: ClusterReader = {
+      readSnapshot: async () => ({ pods: [], namespaces: [{ name: 'ns', podCount: 0, networkPolicyCount: 0 }] }),
+    };
+    repo.saveSnapshot.mockRejectedValue(new Error('appwrite down'));
+    await expect(runPostureScan(reader)).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('save failed'), 'appwrite down');
+    expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining('scanned'));
   });
 });

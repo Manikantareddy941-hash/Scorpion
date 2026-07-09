@@ -18,19 +18,25 @@ function toMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function fromDoc(doc: Models.Document): NamespaceSnapshot {
+/** null for malformed rows (bad findings JSON) — skip the row, keep siblings. */
+function fromDoc(doc: Models.Document): NamespaceSnapshot | null {
   const w = doc as unknown as SnapshotWire & Models.Document;
-  return {
-    namespace: w.namespace,
-    score: w.score,
-    findings: JSON.parse(w.findings || '[]') as PostureFinding[],
-    updatedAt: w.updatedAt,
-  };
+  try {
+    return {
+      namespace: w.namespace,
+      score: w.score,
+      findings: JSON.parse(w.findings || '[]') as PostureFinding[],
+      updatedAt: w.updatedAt,
+    };
+  } catch (err) {
+    logger.warn(`[PostureRepository] skipping snapshot ${doc.$id}: ${toMessage(err)}`);
+    return null;
+  }
 }
 
 export const postureRepository = {
-  /** Upsert one document per namespace. Never throws — a failed save loses one
-   *  tick, not the scanner. */
+  // Mutations log with context then rethrow — silent fake success is data
+  // loss; the scanner tick catches so the interval loop never crashes.
   async saveSnapshot(namespaces: { namespace: string; score: number; findings: PostureFinding[] }[]): Promise<void> {
     const updatedAt = new Date().toISOString();
     for (const ns of namespaces) {
@@ -50,16 +56,22 @@ export const postureRepository = {
           await databases.createDocument(DB_ID, COLLECTION, ID.unique(), payload);
         }
       } catch (err) {
-        logger.warn(`[PostureRepository] save for '${ns.namespace}' failed:`,
-          toMessage(err));
+        logger.error(`[PostureRepository] save for '${ns.namespace}' failed:`, toMessage(err));
+        throw err;
       }
     }
   },
 
+  /** [] on failure — a read outage must not take the posture read path down. */
   async listSnapshots(): Promise<NamespaceSnapshot[]> {
-    const list = await databases.listDocuments(DB_ID, COLLECTION, [
-      Query.orderDesc('updatedAt'), Query.limit(200),
-    ]);
-    return list.documents.map(fromDoc);
+    try {
+      const list = await databases.listDocuments(DB_ID, COLLECTION, [
+        Query.orderDesc('updatedAt'), Query.limit(200),
+      ]);
+      return list.documents.map(fromDoc).filter((s): s is NamespaceSnapshot => s !== null);
+    } catch (err) {
+      logger.warn('[PostureRepository] list failed:', toMessage(err));
+      return [];
+    }
   },
 };

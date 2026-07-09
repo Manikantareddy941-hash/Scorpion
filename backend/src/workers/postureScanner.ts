@@ -88,7 +88,12 @@ export async function runPostureScan(reader: ClusterReader): Promise<void> {
     const nsFindings = findings.filter((f) => f.namespace === ns.name);
     return { namespace: ns.name, score: scoreNamespace(nsFindings), findings: nsFindings };
   });
-  await postureRepository.saveSnapshot(grouped);
+  try {
+    await postureRepository.saveSnapshot(grouped);
+  } catch (err) {
+    logger.warn('[PostureScanner] snapshot save failed, tick lost:', toMessage(err));
+    return;
+  }
   logger.info(`[PostureScanner] scanned ${snapshot.namespaces.length} namespace(s), ${findings.length} finding(s)`);
 }
 
