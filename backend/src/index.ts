@@ -78,6 +78,7 @@ import { initFfufQueueWorker } from './queues/ffufQueueWorker';
 import { initCanaryQueueWorker } from './queues/canaryQueueWorker';
 import { initSoarQueueWorker } from './queues/soarQueueWorker';
 import { startDriftMonitor } from './workers/driftMonitor';
+import { startPostureScanner } from './workers/postureScanner';
 import { startFallbackReplayer, stopFallbackReplayer } from './workers/fallbackReplayer';
 import { scanQueue } from './queues/scanQueue';
 import { dastQueue } from './queues/dastQueue';
@@ -389,6 +390,13 @@ const soarQueueWorker = initSoarQueueWorker();
 initUptimeScheduler();
 // Continuous runtime drift monitor (undefined when no kube config is reachable).
 const driftMonitor = startDriftMonitor();
+// Continuous posture scanner (read-only cluster snapshot collection).
+let postureTimer: NodeJS.Timeout | undefined;
+try {
+  postureTimer = startPostureScanner();
+} catch (err) {
+  logger.warn('[Startup] posture scanner initialization failed:', err instanceof Error ? err.message : String(err));
+}
 // Periodically replays repo JSON fallback buffers back into Appwrite on recovery.
 startFallbackReplayer();
 
@@ -468,9 +476,10 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
     forceExit.unref();
 
     try {
-        // 1. Halt drift polling and the fallback replayer first so no new work
+        // 1. Halt drift polling, posture scanner, and the fallback replayer first so no new work
         //    starts mid-shutdown.
         driftMonitor?.stop();
+        if (postureTimer) clearInterval(postureTimer);
         stopFallbackReplayer();
 
         // 2. Stop accepting new connections on both listeners; resolves once
