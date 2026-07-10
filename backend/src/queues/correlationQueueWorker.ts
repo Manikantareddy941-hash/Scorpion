@@ -15,8 +15,11 @@ import type { Correlation, CorrelationRule } from '../monitor/securityEvent.type
 
 const MAX_WINDOW = 30 * 60_000;
 const TICK_MS = 60_000;
+const RETENTION_MINUTES = 5;
+const SYSTEM_OWNER = 'system';
 
-// ponytail: in-memory spike dedupe, ages out with minute buckets
+// ponytail: in-memory spike dedupe keyed by `${key}:${minute}`, pruned each tick to the
+// same 5-minute retention window as statusTelemetry (see pruneSpikeDedupe below).
 const spikeIncidentKeys = new Set<string>();
 
 /** Test-only: clears the module-level spike dedupe set between test cases. */
@@ -24,35 +27,50 @@ export function __resetSpikeDedupeForTests(): void {
   spikeIncidentKeys.clear();
 }
 
+function pruneSpikeDedupe(now: number): void {
+  const cutoff = Math.floor(now / 60_000) - RETENTION_MINUTES;
+  for (const dedupeKey of spikeIncidentKeys) {
+    const minute = Number(dedupeKey.slice(dedupeKey.lastIndexOf(':') + 1));
+    if (minute < cutoff) spikeIncidentKeys.delete(dedupeKey);
+  }
+}
+
 export async function runCorrelationTick(ownerUserId: string): Promise<Correlation[]> {
   const now = Date.now();
 
   statusTelemetry.prune(now);
-  const spikes = detectStatusSpike(statusTelemetry.snapshot(), { minDenied: 10, minShare: 0.5 });
+  pruneSpikeDedupe(now);
   const suppressions = await suppressionRepository.listForOwner(ownerUserId);
 
-  for (const s of spikes) {
-    await recordSecurityEvent({ type: 'status_spike', srcIp: s.key, ownerUserId, severity: 'high',
-      timestamp: now, metadata: { denied: s.denied, total: s.total } });
+  // status_spike telemetry is a single app-global counter (no ownerUserId), so it is only
+  // ever processed on the system tick — per-owner ticks would misattribute a global spike
+  // to whichever owner's tick happens to run first.
+  if (ownerUserId === SYSTEM_OWNER) {
+    const spikes = detectStatusSpike(statusTelemetry.snapshot(), { minDenied: 10, minShare: 0.5 });
 
-    const dedupeKey = `${s.key}:${s.minute}`;
-    if (spikeIncidentKeys.has(dedupeKey)) continue;
+    for (const s of spikes) {
+      const dedupeKey = `${s.key}:${s.minute}`;
+      if (spikeIncidentKeys.has(dedupeKey)) continue;
 
-    const candidate = { ruleId: 'apm-status-spike', severity: 'high', actor: s.key };
-    const suppression = isSuppressed(candidate, suppressions, now);
-    if (suppression.suppressed) {
-      logger.warn('apm_spike_suppressed', { srcIp: s.key, ownerUserId });
-      continue;
+      const candidate = { ruleId: 'apm-status-spike', severity: 'high', actor: s.key };
+      const suppression = isSuppressed(candidate, suppressions, now);
+      if (suppression.suppressed) {
+        logger.warn('apm_spike_suppressed', { srcIp: s.key, ownerUserId });
+        continue;
+      }
+
+      await recordSecurityEvent({ type: 'status_spike', srcIp: s.key, ownerUserId, severity: 'high',
+        timestamp: now, metadata: { denied: s.denied, total: s.total } });
+
+      await createIncident({
+        title: `Auth failure / access-denial spike from ${s.key}`,
+        severity: 'high',
+        source: 'apm',
+        description: `${s.denied}/${s.total} denied responses in one minute`,
+        userId: ownerUserId,
+      });
+      spikeIncidentKeys.add(dedupeKey);
     }
-
-    await createIncident({
-      title: `Auth failure / access-denial spike from ${s.key}`,
-      severity: 'high',
-      source: 'apm',
-      description: `${s.denied}/${s.total} denied responses in one minute`,
-      userId: ownerUserId,
-    });
-    spikeIncidentKeys.add(dedupeKey);
   }
 
   const events = await securityEventSource.collect(ownerUserId, MAX_WINDOW);

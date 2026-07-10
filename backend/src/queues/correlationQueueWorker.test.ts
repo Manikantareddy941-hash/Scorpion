@@ -64,18 +64,28 @@ test('creates an apm incident from a status spike', async () => {
   for (let i = 0; i < 12; i += 1) statusTelemetry.record('spike-src', 403);
   for (let i = 0; i < 3; i += 1) statusTelemetry.record('spike-src', 200);
 
-  await runCorrelationTick('u1');
+  await runCorrelationTick('system');
 
-  expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({ source: 'apm', userId: 'u1' }));
+  expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({ source: 'apm', userId: 'system' }));
 });
 
 test('does not double-fire an apm incident for the same spike within one minute', async () => {
   for (let i = 0; i < 12; i += 1) statusTelemetry.record('spike-src', 403);
   for (let i = 0; i < 3; i += 1) statusTelemetry.record('spike-src', 200);
 
-  await runCorrelationTick('u1');
-  await runCorrelationTick('u1');
+  await runCorrelationTick('system');
+  await runCorrelationTick('system');
 
   const apmCalls = (createIncident as jest.Mock).mock.calls.filter(([arg]) => arg.source === 'apm');
   expect(apmCalls).toHaveLength(1);
+});
+
+test('does not process app-global status spikes on a non-system owner tick', async () => {
+  for (let i = 0; i < 12; i += 1) statusTelemetry.record('spike-src', 403);
+  for (let i = 0; i < 3; i += 1) statusTelemetry.record('spike-src', 200);
+
+  await runCorrelationTick('u1');
+
+  const apmCalls = (createIncident as jest.Mock).mock.calls.filter(([arg]) => arg.source === 'apm');
+  expect(apmCalls).toHaveLength(0);
 });
