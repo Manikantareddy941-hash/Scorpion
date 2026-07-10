@@ -135,16 +135,15 @@ export default function Issues() {
       {/* High-Performance Executive Banner Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {/* Column 1: Operational Status Gauge */}
-        <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-          <div className="flex items-center justify-between mb-4 pl-2">
+        <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm">
+          <div className="flex items-center justify-between mb-4">
             <span className="text-[12px] font-medium text-stone-500">Quality gate</span>
-            <span className="bg-stone-100 text-stone-600 border border-stone-200 px-3 py-1 rounded text-xs uppercase font-mono font-bold">
-              {latestScan?.gateStatus || 'PASSED'}
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-medium capitalize">
+              {(latestScan?.gateStatus || 'passed').toLowerCase()}
             </span>
           </div>
-          <div className="pl-2">
-            <p className="text-2xl font-black text-stone-800 tracking-tight">Score: {latestScan?.score || '100'}/100</p>
+          <div>
+            <p className="text-2xl font-semibold tabular-nums text-stone-800 tracking-tight">{latestScan?.score || '100'}<span className="text-sm font-medium text-stone-400">/100</span></p>
           </div>
         </div>
 
@@ -154,8 +153,8 @@ export default function Issues() {
           <div className="flex items-center gap-2">
             {(['SECURITY', 'RELIABILITY', 'MAINTAINABILITY']).map(p => (
               <div key={p} className="flex-1 bg-stone-50 border border-stone-100 rounded-lg py-2 px-1 flex flex-col items-center justify-center">
-                <p className="text-[8px] font-black uppercase tracking-widest text-stone-500 mb-1 truncate w-full text-center">{p}</p>
-                <p className="text-sm font-black text-stone-800">Grade: A</p>
+                <p className="text-[11px] font-medium capitalize text-stone-500 mb-1 truncate w-full text-center">{p.toLowerCase()}</p>
+                <p className="text-sm font-semibold text-stone-800">A</p>
               </div>
             ))}
           </div>
@@ -165,9 +164,9 @@ export default function Issues() {
         <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm">
           <span className="text-[12px] font-medium text-stone-500 mb-3">To remediate</span>
           <div className="flex flex-col gap-1">
-            <p className="text-2xl font-black text-stone-800 tracking-tight leading-none">{filteredIssues.length} <span className="text-sm font-bold text-stone-500 uppercase tracking-normal">issues</span></p>
-            <p className="text-[11px] font-mono text-emerald-600 font-bold tracking-widest uppercase">
-              {Math.floor(totalEffortMins / 60)}h {totalEffortMins % 60}min effort
+            <p className="text-2xl font-semibold tabular-nums text-stone-800 tracking-tight leading-none">{filteredIssues.length} <span className="text-sm font-medium text-stone-400">issues</span></p>
+            <p className="text-[12px] text-emerald-600 font-medium mt-1">
+              ~{Math.floor(totalEffortMins / 60)}h {totalEffortMins % 60}m to fix
             </p>
           </div>
         </div>
@@ -188,9 +187,9 @@ export default function Issues() {
                   className={`premium-card p-4 text-left transition-all ${filter.type === t ? 'border-[var(--accent-primary)]' : ''}`}>
                   <div className="flex items-center gap-3 mb-2">
                     <Icon className="w-5 h-5 text-[var(--accent-primary)]" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-secondary)]">{t}</span>
+                    <span className="text-[13px] font-medium capitalize text-[var(--text-secondary)]">{t}</span>
                   </div>
-                  <p className="text-3xl font-black italic">{counts[t]}</p>
+                  <p className="text-3xl font-semibold tabular-nums">{counts[t]}</p>
                 </button>
               );
             })}
@@ -356,7 +355,7 @@ function IssueRow({
         <div className="flex-shrink-0 flex items-center">
           {existingTicket ? (
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 bg-stone-500/10 text-stone-400 border border-stone-500/30 rounded-2xl text-[9px] font-black uppercase italic">
+              <span className="px-2.5 py-1 bg-stone-100 text-stone-500 border border-stone-200 rounded-full text-[11px] font-medium">
                 Ticketed
               </span>
               <button
@@ -364,9 +363,9 @@ function IssueRow({
                   e.stopPropagation();
                   navigate(`/tickets/${existingTicket.id}`);
                 }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-emerald-500 hover:text-black transition-all"
+                className="flex items-center gap-1 px-2.5 py-1 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 rounded-full text-[11px] font-medium hover:bg-[var(--accent-primary)] hover:text-white transition-all"
               >
-                <TicketIcon size={10} /> View Ticket
+                <TicketIcon size={10} /> View ticket
               </button>
             </div>
           ) : createdTicketInfo ? (
@@ -400,9 +399,9 @@ function IssueRow({
                   setCreating(false);
                 }
               }}
-              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-2xl text-[9px] font-black uppercase italic hover:bg-cyan-500 hover:text-black transition-all disabled:opacity-50"
+              className="flex items-center gap-1 px-2.5 py-1 bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 rounded-full text-[11px] font-medium hover:bg-[var(--accent-primary)] hover:text-white transition-all disabled:opacity-50"
             >
-              <TicketIcon size={10} /> Create Ticket
+              <TicketIcon size={10} /> Create ticket
             </button>
           )}
         </div>

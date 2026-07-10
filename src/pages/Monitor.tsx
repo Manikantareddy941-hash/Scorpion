@@ -124,13 +124,13 @@ export default function Monitor() {
             <button
               key={range}
               onClick={() => setTimeRange(range)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
-                timeRange === range 
-                  ? 'bg-[var(--accent-primary)] text-white shadow-lg' 
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
+                timeRange === range
+                  ? 'bg-[var(--accent-primary)] text-white shadow-sm'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
-              {range === '15m' ? '15 Mins' : range === '1h' ? '1 Hour' : range === '24h' ? '24 Hours' : '7 Days'}
+              {range === '15m' ? '15 min' : range === '1h' ? '1 hour' : range === '24h' ? '24 hours' : '7 days'}
             </button>
           ))}
           <div className="w-px h-4 bg-[var(--border-subtle)] mx-1" />
