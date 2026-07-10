@@ -50,3 +50,30 @@ test('separates groups by key — cross-actor events never correlate', () => {
   ];
   expect(evaluate(events, [rule], t + 2)).toHaveLength(0);
 });
+
+test('finds two independent complete sequences for the same key in one group', () => {
+  const rule = catalogById('recon-to-exploit')!;
+  const t = 1_000_000;
+  const events: SecurityEvent[] = [
+    ev({ type: 'recon', srcIp: 'A', timestamp: t }),
+    ev({ type: 'exploit', srcIp: 'A', timestamp: t + 1 }),
+    ev({ type: 'recon', srcIp: 'A', timestamp: t + 2 }),
+    ev({ type: 'exploit', srcIp: 'A', timestamp: t + 3 }),
+  ];
+  expect(evaluate(events, [rule], t + 4)).toHaveLength(2);
+});
+
+test('an out-of-window partial does not swallow a later valid in-window pair', () => {
+  const rule = catalogById('ssrf-metadata-exfil')!; // window 5m
+  const t = 1_000_000;
+  const events: SecurityEvent[] = [
+    // early partial: metadata_access then cloud_api 6 minutes later — exceeds window, aborts
+    ev({ type: 'metadata_access', srcIp: '2.2.2.2', target: '169.254.169.254', timestamp: t }),
+    ev({ type: 'cloud_api', srcIp: '2.2.2.2', timestamp: t + 6 * 60_000 }),
+    // valid later pair, well within window
+    ev({ type: 'metadata_access', srcIp: '2.2.2.2', target: '169.254.169.254', timestamp: t + 10 * 60_000 }),
+    ev({ type: 'cloud_api', srcIp: '2.2.2.2', timestamp: t + 10 * 60_000 + 1 }),
+  ];
+  const out = evaluate(events, [rule], t + 20 * 60_000);
+  expect(out).toHaveLength(1);
+});
