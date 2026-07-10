@@ -54,15 +54,10 @@ jobs:
   sca:
     name: SCA + SBOM (Trivy)
     runs-on: ubuntu-latest
-    # Pull the vuln DB from the AWS ECR mirror instead of ghcr.io, which
-    # anonymous-rate-limits (429) on GitHub-hosted runners and fast-fails the job.
-    env:
-      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
-      TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -71,7 +66,7 @@ jobs:
           ignore-unfixed: true
           format: table
       - name: Trivy SARIF (all severities, non-blocking)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         if: always()
         with:
           scan-type: fs
@@ -86,7 +81,7 @@ jobs:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -99,7 +94,7 @@ jobs:
           path: sbom.cdx.json
       - name: License scan (informational - copyleft only blocks in-app)
         if: always()
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -157,16 +152,12 @@ jobs:
   container:
     name: Container image (Trivy)
     runs-on: ubuntu-latest
-    # Same ghcr.io rate-limit mitigation as the sca job.
-    env:
-      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
-      TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db
     steps:
       - uses: actions/checkout@v4
       - name: Build web image (no push)
         run: docker build -t scorpion-web:ci -f Dockerfile .
       - name: Trivy image scan (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: scorpion-web:ci
