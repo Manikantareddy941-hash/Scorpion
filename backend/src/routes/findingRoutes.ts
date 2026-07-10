@@ -33,11 +33,17 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
             return res.status(403).json({ error: 'You do not have access to this finding' });
         }
 
+        const wasResolved = existingFinding.status === 'resolved';
+        const nowReopened = status !== 'resolved';
+        const patch: Record<string, unknown> = { status };
+        if (status === 'resolved') patch.resolvedAt = new Date().toISOString();
+        if (wasResolved && nowReopened) patch.reopenCount = Number(existingFinding.reopenCount ?? 0) + 1;
+
         const updatedFinding = await databases.updateDocument(
             DB_ID,
             'findings',
             id,
-            { status }
+            patch
         );
 
         await logAuditEvent('FINDING_RESOLVED', `Security finding "${updatedFinding.title}" marked as ${status}`, userId, updatedFinding.repo_id);
