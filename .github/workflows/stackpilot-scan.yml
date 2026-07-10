@@ -61,6 +61,7 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          scanners: vuln
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
@@ -69,8 +70,12 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         if: always()
         with:
+          # vuln only: secret scanning is Gitleaks' job. Without this, Trivy's
+          # secret scanner re-flags the dummy tokens in .gitleaks.toml's allowlist
+          # and uploads them as code-scanning HIGH alerts.
           scan-type: fs
           scan-ref: .
+          scanners: vuln
           format: sarif
           output: trivy-fs.sarif
           ignore-unfixed: true
