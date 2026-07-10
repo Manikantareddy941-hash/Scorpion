@@ -1,5 +1,5 @@
 import { Router, Response, Request, NextFunction } from 'express';
-import { Models, ID } from 'node-appwrite';
+import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { getRemediationFix, recordFeedback } from '../services/aiService';
 import { recordAIEvent, getAIAggregates, getAITrends } from '../services/metricsService';

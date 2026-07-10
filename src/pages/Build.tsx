@@ -273,15 +273,15 @@ export default function Build() {
             <Hammer className="w-7 h-7 text-[var(--accent-primary)]" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)] tracking-tighter uppercase italic">CI/CD Pipelines</h1>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 italic font-mono">Automated Code Orchestration</p>
+            <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">Pipelines</h1>
+            <p className="text-[13px] text-[var(--text-secondary)] mt-1">Run and track CI/CD pipelines for your repositories</p>
           </div>
         </div>
 
         {/* Manual Trigger Panel */}
         <div className="flex flex-wrap items-center gap-4 bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border-subtle)]">
           <div className="flex flex-col">
-            <label className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-wider mb-1">Select Repository</label>
+            <label className="text-[12px] font-medium text-[var(--text-secondary)] mb-1">Repository</label>
             <select
               value={selectedRepoId}
               onChange={(e) => setSelectedRepoId(e.target.value)}
@@ -295,7 +295,7 @@ export default function Build() {
           </div>
 
           <div className="flex flex-col">
-            <label className="text-[8px] font-black text-[var(--text-secondary)] uppercase tracking-wider mb-1">Branch</label>
+            <label className="text-[12px] font-medium text-[var(--text-secondary)] mb-1">Branch</label>
             <input
               type="text"
               value={selectedBranch}
@@ -323,7 +323,7 @@ export default function Build() {
             <RefreshCw className="w-10 h-10 animate-spin text-[var(--accent-primary)]" />
           </div>
         ) : runs.length === 0 ? (
-          <div className="premium-card p-16 text-center text-[var(--text-secondary)] text-sm font-bold uppercase tracking-widest italic">
+          <div className="premium-card p-16 text-center text-[var(--text-secondary)] text-[14px]">
             No pipeline runs detected. Push code or trigger manually to execute a pipeline.
           </div>
         ) : (

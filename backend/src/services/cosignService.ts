@@ -39,48 +39,54 @@ export const getImageDigest = async (imageTag: string): Promise<string> => {
 };
 
 /**
- * Signs an image's digest with the key at COSIGN_KEY_PATH. Returns null
+ * Signs arbitrary blob content with the key at COSIGN_KEY_PATH. Returns null
  * (not an error) if cosign isn't installed or no key is configured -
  * signing is opt-in infrastructure, not a hard requirement to build.
+ * Shared primitive: image digests (signImageDigest) and SLSA provenance
+ * statements (provenanceService) both sign through here.
  */
-export const signImageDigest = async (digest: string): Promise<{ signature: string; publicKeyPath?: string } | null> => {
+export const signBlobContent = async (content: string): Promise<{ signature: string; publicKeyPath?: string } | null> => {
     if (!isSigningConfigured()) {
-        logger.info('[Cosign] COSIGN_KEY_PATH not set, skipping image signing');
+        logger.info('[Cosign] COSIGN_KEY_PATH not set, skipping blob signing');
         return null;
     }
     const resolved = await resolveToolCommand('cosign');
     if (resolved.status !== 'installed') {
-        logger.warn('[Cosign] cosign CLI not found, skipping image signing');
+        logger.warn('[Cosign] cosign CLI not found, skipping blob signing');
         return null;
     }
 
     const runId = randomBytes(6).toString('hex');
-    const digestFile = path.join(os.tmpdir(), `cosign-digest-${runId}.txt`);
+    const blobFile = path.join(os.tmpdir(), `cosign-blob-${runId}.txt`);
 
     try {
-        await fs.writeFile(digestFile, digest, 'utf8');
+        await fs.writeFile(blobFile, content, 'utf8');
         const { stdout } = await execFileAsync(
             resolved.cmd,
-            [...resolved.prefixArgs, 'sign-blob', '--key', process.env.COSIGN_KEY_PATH!, '--yes', '--output-signature', '-', digestFile],
+            [...resolved.prefixArgs, 'sign-blob', '--key', process.env.COSIGN_KEY_PATH!, '--yes', '--output-signature', '-', blobFile],
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return { signature: stdout.trim(), publicKeyPath: process.env.COSIGN_PUB_KEY_PATH };
     } catch (err: any) {
-        logger.error('[Cosign] Failed to sign image digest:', err.message);
+        logger.error('[Cosign] Failed to sign blob:', err.message);
         return null;
     } finally {
-        await fs.unlink(digestFile).catch(() => {});
+        await fs.unlink(blobFile).catch(() => {});
     }
 };
 
+/** Signs an image's content digest. See signBlobContent for skip semantics. */
+export const signImageDigest = (digest: string): Promise<{ signature: string; publicKeyPath?: string } | null> =>
+    signBlobContent(digest);
+
 /**
- * Verifies a previously-signed digest against COSIGN_PUB_KEY_PATH. Returns
- * true only on a confirmed-valid signature; throws on any other outcome
- * (verification error, missing key, cosign missing) so the caller can
- * distinguish "verification failed" from "couldn't even attempt it" -
+ * Verifies previously-signed blob content against COSIGN_PUB_KEY_PATH.
+ * Returns true only on a confirmed-valid signature; throws on any other
+ * outcome (missing key, cosign missing) so the caller can distinguish
+ * "verification failed" from "couldn't even attempt it" -
  * deployService.ts treats those differently (block vs. skip).
  */
-export const verifyImageDigest = async (digest: string, signature: string): Promise<boolean> => {
+export const verifyBlobContent = async (content: string, signature: string): Promise<boolean> => {
     const pubKeyPath = process.env.COSIGN_PUB_KEY_PATH;
     if (!pubKeyPath) {
         throw new Error('COSIGN_PUB_KEY_PATH is not configured');
@@ -91,23 +97,27 @@ export const verifyImageDigest = async (digest: string, signature: string): Prom
     }
 
     const runId = randomBytes(6).toString('hex');
-    const digestFile = path.join(os.tmpdir(), `cosign-verify-digest-${runId}.txt`);
+    const blobFile = path.join(os.tmpdir(), `cosign-verify-blob-${runId}.txt`);
     const sigFile = path.join(os.tmpdir(), `cosign-verify-sig-${runId}.sig`);
 
     try {
-        await fs.writeFile(digestFile, digest, 'utf8');
+        await fs.writeFile(blobFile, content, 'utf8');
         await fs.writeFile(sigFile, signature, 'utf8');
         await execFileAsync(
             resolved.cmd,
-            [...resolved.prefixArgs, 'verify-blob', '--key', pubKeyPath, '--signature', sigFile, digestFile],
+            [...resolved.prefixArgs, 'verify-blob', '--key', pubKeyPath, '--signature', sigFile, blobFile],
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return true;
     } catch (err: any) {
-        logger.error(`[Cosign] Signature verification failed for digest ${digest}:`, err.message);
+        logger.error('[Cosign] Blob signature verification failed:', err.message);
         return false;
     } finally {
-        await fs.unlink(digestFile).catch(() => {});
+        await fs.unlink(blobFile).catch(() => {});
         await fs.unlink(sigFile).catch(() => {});
     }
 };
+
+/** Verifies a signed image digest. See verifyBlobContent for throw semantics. */
+export const verifyImageDigest = (digest: string, signature: string): Promise<boolean> =>
+    verifyBlobContent(digest, signature);

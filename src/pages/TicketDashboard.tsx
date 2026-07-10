@@ -172,35 +172,35 @@ export default function TicketDashboard() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
           <div>
-            <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">
-              Ticket Operations
+            <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">
+              Tickets
             </h1>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">
-              Jira-integrated task dispatcher & remediation control
+            <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+              Track remediation tickets and keep them in sync with Jira
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/jira-settings')}
-              className="p-3 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:text-white transition-all flex items-center gap-2 text-xs font-black uppercase italic"
+              className="px-3.5 py-2.5 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all flex items-center gap-2 text-[13px] font-medium"
             >
               <Settings size={16} />
-              Jira Integration
+              Jira settings
             </button>
             <button
               onClick={handleBulkSync}
               disabled={syncingAll}
-              className="px-4 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-black uppercase italic rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/5 disabled:opacity-50"
+              className="px-4 py-2.5 bg-[var(--bg-card)] hover:bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-[13px] font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50"
             >
               <RefreshCw size={16} className={syncingAll ? 'animate-spin' : ''} />
-              Sync All to Jira
+              Sync to Jira
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-5 py-3 bg-[var(--accent-primary)] hover:bg-opacity-95 text-black text-xs font-black uppercase italic tracking-widest rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-[var(--accent-primary)]/15"
+              className="px-4 py-2.5 bg-[var(--accent-primary)] hover:bg-[var(--accent-secondary)] text-white text-[13px] font-semibold rounded-lg transition-all flex items-center gap-2 shadow-sm"
             >
-              <Plus size={16} strokeWidth={3} />
-              New Ticket
+              <Plus size={16} />
+              New ticket
             </button>
           </div>
         </div>
@@ -288,11 +288,11 @@ export default function TicketDashboard() {
         {error ? (
           <div className="premium-card p-16 text-center border-red-500/20 max-w-xl mx-auto my-12 bg-[var(--bg-card)]">
             <AlertOctagon className="w-16 h-16 text-red-500 mx-auto mb-6 animate-pulse" />
-            <h3 className="text-xl font-black text-red-500 uppercase italic">Error Loading Tickets</h3>
-            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-2">{error}</p>
+            <h3 className="text-lg font-semibold text-red-500">Couldn't load tickets</h3>
+            <p className="text-[13px] text-[var(--text-secondary)] mt-2">{error}</p>
             <button
               onClick={() => refetch()}
-              className="mt-6 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+              className="mt-6 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[13px] font-semibold rounded-lg transition-all"
             >
               Retry Connection
             </button>
@@ -307,7 +307,7 @@ export default function TicketDashboard() {
         ) : tickets.length === 0 ? (
           <div className="premium-card p-24 text-center bg-[var(--bg-card)]">
             <CheckCircle2 className="w-16 h-16 text-[var(--status-success)] mx-auto mb-6 opacity-20" />
-            <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Tickets Found</h3>
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">No tickets yet</h3>
             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">
               Your security perimeter is completely synchronized
             </p>
@@ -373,7 +373,7 @@ export default function TicketDashboard() {
                         </div>
 
                         {/* Title */}
-                        <h4 className="text-[11px] font-black uppercase italic leading-tight text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
+                        <h4 className="text-[13px] font-semibold leading-tight text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors">
                           {ticket.title}
                         </h4>
 

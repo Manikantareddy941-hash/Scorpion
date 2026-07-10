@@ -1,5 +1,4 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import axios from 'axios';
 import { logRuntimeThreat } from '../services/logEvents';
 import { runtimeThreats } from '../services/metrics';
 import { withSpan } from '../services/tracing';
@@ -7,6 +6,11 @@ import { createIncident } from '../services/incidentService';
 import { auditLog } from '../services/auditService';
 import { sendSlackNotification } from '../services/slackService';
 import { logger } from '../services/logger';
+import { matchPlaybooks, normalizePriority } from '../soar/playbookMatcher';
+import { soarRepository } from '../repositories/soarRepository';
+import { enqueueSoarAction } from '../queues/soarQueue';
+import { classifyEvent } from './falcoRuleCatalog';
+import { falcoRuleRepository } from '../repositories/falcoRuleRepository';
 
 export interface FalcoEvent {
   rule: string;
@@ -21,10 +25,39 @@ export interface FalcoEvent {
 }
 
 export async function handleFalcoEvent(event: FalcoEvent) {
-  const containerId = event.output_fields?.['container.id'] || 'unknown';
-  const containerImage = event.output_fields?.['container.image.repository'] || 'unknown';
-  
-  logger.info(`[Falco Handler] Processing incident: ${event.rule} on ${containerImage}`);
+  // --- classification gate (Component 2) ---
+  // Fail-secure: any error here means no suppression, no override — the event
+  // proceeds untouched. Classification must never break incident creation.
+  let effectiveEvent = event;
+  try {
+    const managedRules = await falcoRuleRepository.listRules();
+    const classification = classifyEvent(
+      { rule: event.rule, containerImage: event.output_fields?.['container.image.repository'] || 'unknown' },
+      managedRules,
+    );
+    if (classification.suppressed) {
+      await auditLog({
+        action: 'falco.event.suppressed',
+        actor: 'system',
+        actorEmail: 'system@scorpion',
+        resource: 'falco_event',
+        details: { rule: event.rule, image: event.output_fields?.['container.image.repository'] ?? 'unknown' },
+      }).catch(() => undefined);
+      logger.info(`[Falco Handler] Suppressed event '${event.rule}' by managed rule`);
+      return;
+    }
+    if (classification.overridePriority) {
+      effectiveEvent = { ...event, priority: classification.overridePriority };
+    }
+  } catch (err) {
+    logger.error('[Falco Handler] Classification failed (event processed unmodified):', err);
+    effectiveEvent = event;
+  }
+
+  const containerId = effectiveEvent.output_fields?.['container.id'] || 'unknown';
+  const containerImage = effectiveEvent.output_fields?.['container.image.repository'] || 'unknown';
+
+  logger.info(`[Falco Handler] Processing incident: ${effectiveEvent.rule} on ${containerImage}`);
 
   try {
     // 1. Correlate with existing scan data
@@ -34,7 +67,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     if (containerImage !== 'unknown') {
       correlatedScanId = await withSpan(
         'runtime.correlate',
-        { rule: event.rule, priority: event.priority, image: containerImage },
+        { rule: effectiveEvent.rule, priority: effectiveEvent.priority, image: containerImage },
         async () => {
           const latestScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
             Query.equal('repoUrl', containerImage),
@@ -63,13 +96,13 @@ export async function handleFalcoEvent(event: FalcoEvent) {
 
     // 2. Persist incident to Appwrite
     const incidentDoc = await databases.createDocument(DB_ID, COLLECTIONS.INCIDENTS, ID.unique(), {
-      rule: event.rule,
-      priority: event.priority,
-      output: event.output,
+      rule: effectiveEvent.rule,
+      priority: effectiveEvent.priority,
+      output: effectiveEvent.output,
       container_id: containerId,
       container_image: containerImage,
       status: 'open',
-      timestamp: event.time || new Date().toISOString(),
+      timestamp: effectiveEvent.time || new Date().toISOString(),
       correlated_scan_id: correlatedScanId,
       ...(ownerUserId ? { user_id: ownerUserId } : {})
     });
@@ -79,27 +112,27 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       actor: 'system',
       actorEmail: 'system@scorpion',
       resource: 'incident',
-      details: { 
-        rule: event.rule, 
-        priority: event.priority, 
-        image: containerImage 
+      details: {
+        rule: effectiveEvent.rule,
+        priority: effectiveEvent.priority,
+        image: containerImage
       }
     });
 
     // Loki Logging
-    logRuntimeThreat(event.rule, event.priority, containerImage, !!correlatedScanId);
+    logRuntimeThreat(effectiveEvent.rule, effectiveEvent.priority, containerImage, !!correlatedScanId);
 
     // Metrics
-    runtimeThreats.inc({ priority: event.priority.toLowerCase() });
+    runtimeThreats.inc({ priority: effectiveEvent.priority.toLowerCase() });
 
     // Incident Response
-    if (event.priority === 'Critical' || event.priority === 'Error') {
+    if (effectiveEvent.priority === 'Critical' || effectiveEvent.priority === 'Error') {
       await createIncident({
-        title: `Runtime threat: ${event.rule}`,
-        severity: event.priority,
+        title: `Runtime threat: ${effectiveEvent.rule}`,
+        severity: effectiveEvent.priority,
         source: 'falco',
         relatedScanId: correlatedScanId,
-        description: event.output,
+        description: effectiveEvent.output,
         userId: ownerUserId || undefined
       });
 
@@ -113,10 +146,10 @@ export async function handleFalcoEvent(event: FalcoEvent) {
              const integration = integrationsRes.documents[0] as any;
              if (integration.isEnabled && integration.slack_webhook) {
                  await sendSlackNotification(integration.slack_webhook, {
-                     title: `Runtime threat: ${event.rule}`,
+                     title: `Runtime threat: ${effectiveEvent.rule}`,
                      repository: containerImage,
-                     severity: event.priority,
-                     rule: event.rule,
+                     severity: effectiveEvent.priority,
+                     rule: effectiveEvent.rule,
                      incidentId: incidentDoc.$id
                  });
                  logger.info('[Falco Handler] Dynamic Slack notification dispatched successfully.');
@@ -125,7 +158,47 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       }
     }
 
+    // SOAR dispatch runs LAST so a slow Appwrite write can never delay the
+    // time-sensitive Critical/Error alerting above; errors are swallowed here.
+    await dispatchSoar(effectiveEvent, incidentDoc.$id, containerImage, ownerUserId || undefined).catch((err) =>
+      logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', err),
+    );
+
   } catch (error) {
     logger.error('[Falco Handler] Failed to process runtime event:', error);
   }
+}
+
+async function dispatchSoar(
+  event: FalcoEvent,
+  incidentId: string,
+  containerImage: string,
+  ownerUserId?: string,
+): Promise<void> {
+  const playbooks = await soarRepository.listPlaybooks(); // [] on failure (fail-secure)
+  const priority = normalizePriority(event.priority);
+  const matched = matchPlaybooks({ rule: event.rule, priority }, playbooks);
+  if (matched.length === 0) return;
+
+  const namespace = event.output_fields?.['k8s.ns.name'] as string | undefined;
+  const podName = event.output_fields?.['k8s.pod.name'] as string | undefined;
+
+  for (const m of matched) {
+    const record = await soarRepository.createAction({
+      incidentId,
+      actionType: m.type,
+      playbookId: m.playbookId,
+      playbookName: m.playbookName,
+      status: m.execution === 'auto' ? 'approved' : 'pending',
+      namespace,
+      podName,
+      ownerUserId,
+      containerImage,
+      falcoRule: event.rule,
+    });
+    if (m.execution === 'auto') {
+      await enqueueSoarAction({ actionId: record.id, falcoEventJson: JSON.stringify(event), ownerUserId });
+    }
+  }
+  logger.info(`[Falco Handler] SOAR dispatched ${matched.length} action(s) for '${event.rule}'`);
 }

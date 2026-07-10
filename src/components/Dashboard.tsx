@@ -1,25 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { client, databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
-  Activity,
-  AlertCircle,
-  FileText,
   XCircle,
-  ShieldX,
   ShieldCheck,
-  ShieldAlert,
   Zap,
-  Bug,
   RefreshCw,
   ArrowRight,
-  Shield,
   Lock,
   Package,
   Code2,
   Cloud,
-  ChevronDown,
 } from 'lucide-react';
 import RemediationPanel from './RemediationPanel';
 import NewScanModal from './NewScanModal';
@@ -34,40 +26,12 @@ import { SLA_HOURS } from '../lib/sla';
 import PostureExportButton from './PostureExportButton';
 import DriftAlertsTable from './DriftAlertsTable';
 
-// Frosted glassmorphism by gate status: red / amber / emerald. Purely static -
-// no component state feeds these values, so it lives at module scope instead
-// of being rebuilt into a new object on every render.
-const PREFLIGHT_GLASS: Record<'blocked' | 'warning' | 'ready', React.CSSProperties> = {
-  blocked: {
-    background: 'color-mix(in srgb, var(--status-error) 16%, transparent)',
-    border: '1px solid color-mix(in srgb, var(--status-error) 45%, transparent)',
-    backdropFilter: 'blur(14px)',
-    WebkitBackdropFilter: 'blur(14px)',
-    boxShadow: '0 8px 32px -12px color-mix(in srgb, var(--status-error) 50%, transparent)',
-  },
-  warning: {
-    background: 'color-mix(in srgb, var(--status-warning) 16%, transparent)',
-    border: '1px solid color-mix(in srgb, var(--status-warning) 45%, transparent)',
-    backdropFilter: 'blur(14px)',
-    WebkitBackdropFilter: 'blur(14px)',
-    boxShadow: '0 8px 32px -12px color-mix(in srgb, var(--status-warning) 50%, transparent)',
-  },
-  ready: {
-    background: 'color-mix(in srgb, var(--status-success) 16%, transparent)',
-    border: '1px solid color-mix(in srgb, var(--status-success) 45%, transparent)',
-    backdropFilter: 'blur(14px)',
-    WebkitBackdropFilter: 'blur(14px)',
-    boxShadow: '0 8px 32px -12px color-mix(in srgb, var(--status-success) 50%, transparent)',
-  },
-};
-
 export default function Dashboard({
   isSidebarCollapsed: _isSidebarCollapsed,
 }: {
   isSidebarCollapsed: boolean;
 }) {
   const { getJWT, user } = useAuth();
-  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   // Workbench deep-link: ?findingId=<id> drives the side drawer. Refresh / direct URL auto-opens, shareable.
@@ -87,7 +51,6 @@ export default function Dashboard({
   const [remediationQueue, setRemediationQueue] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [individualErrors] = useState<Record<string, boolean>>({});
 
   const [ciGateStats, setCiGateStats] = useState({ passed: 0, blocked: 0, rate: 0 });
   const [policyPassRate, setPolicyPassRate] = useState(100);
@@ -117,9 +80,6 @@ export default function Dashboard({
   loadingRef.current = loading;
   isRefreshingRef.current = isRefreshing;
 
-  const [detailsExpanded, setDetailsExpanded] = useState<boolean>(() => {
-    return localStorage.getItem('scorpion_dashboard_details_expanded') === 'true';
-  });
   const [qualityGateScore, setQualityGateScore] = useState<number>(0);
   const [lastBuildStatus, setLastBuildStatus] = useState<string>('N/A');
   const [deploymentsToday, setDeploymentsToday] = useState<number>(0);
@@ -182,11 +142,6 @@ export default function Dashboard({
       : ratio >= 0.5
         ? 'var(--status-warning)'
         : 'var(--status-error)';
-
-  const recentSecretEntries = latestVulnerabilities
-    .filter((v: any) => (v.category || v.type || '').toLowerCase().includes('secret'))
-    .map((v: any) => v.title || v.message)
-    .filter(Boolean);
 
   // ── All data-fetching logic preserved exactly ──────────────────────────────
 
@@ -739,71 +694,6 @@ export default function Dashboard({
     .reduce((s, d) => s + d.count, 0);
   const maxRepoFindings = Math.max(1, ...repoRisk.map((r) => r.critical + r.high));
 
-  const ringMetrics: {
-    id: string;
-    label: string;
-    value: number;
-    max: number;
-    severity: Severity;
-    icon: typeof ShieldX;
-    path?: string;
-  }[] = [
-    {
-      id: 'critical',
-      label: 'Critical',
-      value: vulnStats.critical,
-      max: 10,
-      severity: 'critical',
-      icon: ShieldX,
-      path: `/scans/${latestScanId}/sast?filter=critical`,
-    },
-    {
-      id: 'high',
-      label: 'High',
-      value: vulnStats.high,
-      max: 25,
-      severity: 'high',
-      icon: ShieldAlert,
-      path: `/scans/${latestScanId}/sast?filter=high`,
-    },
-    {
-      id: 'medium',
-      label: 'Medium',
-      value: vulnStats.medium,
-      max: 50,
-      severity: 'medium',
-      icon: AlertCircle,
-      path: `/scans/${latestScanId}/sast?filter=medium`,
-    },
-    {
-      id: 'low',
-      label: 'Low',
-      value: vulnStats.low,
-      max: 100,
-      severity: 'low',
-      icon: ShieldCheck,
-      path: `/scans/${latestScanId}/sast?filter=low`,
-    },
-    {
-      id: 'bugs',
-      label: 'Bugs',
-      value: vulnStats.bugs,
-      max: 50,
-      severity: 'info',
-      icon: Bug,
-      path: `/scans/${latestScanId}/antipatterns`,
-    },
-    {
-      id: 'vulns',
-      label: 'Open vulns',
-      value: vulnStats.total,
-      max: 150,
-      severity: vulnStats.total > 100 ? 'high' : vulnStats.total > 30 ? 'medium' : 'low',
-      icon: Activity,
-      path: `/scans/${latestScanId}/sast`,
-    },
-  ];
-
   const gateRows = [
     {
       id: 'ci',
@@ -903,46 +793,41 @@ export default function Dashboard({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  const CARD =
+    'rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] shadow-[0_1px_2px_rgba(28,25,23,0.04),0_4px_16px_rgba(28,25,23,0.04)]';
+
+  const sevLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+  const severityCounts = [
+    { key: 'critical' as Severity, count: vulnStats.critical },
+    { key: 'high' as Severity, count: vulnStats.high },
+    { key: 'medium' as Severity, count: vulnStats.medium },
+    { key: 'low' as Severity, count: vulnStats.low },
+  ];
+
   return (
-    <div
-      className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]"
-      style={{ fontFamily: 'var(--font-body)' }}
-    >
-      <div className="px-6 py-6 mx-auto space-y-6 max-w-[1600px]">
-        {/* ── Inline header (replaces sticky top bar) ── */}
-        <div
-          className="flex justify-between items-end pb-4 border-b"
-          style={{ borderColor: 'var(--border-strong, var(--border-subtle))' }}
-        >
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <div className="mx-auto max-w-[1400px] space-y-8 px-6 py-8">
+        {/* Header */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1
-              className="text-4xl font-extrabold uppercase tracking-tight leading-none"
-              style={{ fontFamily: 'var(--font-display)', color: 'var(--text-primary)' }}
-            >
-              Dashboard
-            </h1>
-            <p className="text-sm text-[var(--text-secondary)] mt-2">
-              Security posture, findings, and pipeline health at a glance
+            <h1 className="text-[22px] font-semibold tracking-tight">Security dashboard</h1>
+            <p className="mt-1 text-[13px] text-[var(--text-secondary)]">
+              Posture, findings, and pipeline health across every stage
             </p>
           </div>
-          <div className="flex gap-3 items-center">
+          <div className="flex items-center gap-2">
             <span
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider"
+              className="hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium md:inline-flex"
               style={{
                 color: 'var(--status-success)',
-                background: 'color-mix(in srgb, var(--status-success) 12%, transparent)',
+                background: 'color-mix(in srgb, var(--status-success) 10%, transparent)',
               }}
             >
-              <span className="relative flex w-1.5 h-1.5">
-                <span
-                  className="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping"
-                  style={{ background: 'var(--status-success)' }}
-                />
-                <span
-                  className="relative inline-flex w-1.5 h-1.5 rounded-full"
-                  style={{ background: 'var(--status-success)' }}
-                />
-              </span>
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: 'var(--status-success)' }}
+              />
               Live
             </span>
             <PostureExportButton
@@ -980,1242 +865,492 @@ export default function Dashboard({
               type="button"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="p-2.5 rounded border transition-colors hover:border-[var(--accent-primary)]"
-              style={{
-                color: 'var(--text-secondary)',
-                borderColor: 'var(--border-subtle)',
-                background: 'var(--bg-card)',
-              }}
               aria-label="Refresh dashboard"
+              className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-card)] p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
             >
-              <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+              <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} />
             </button>
             <button
               type="button"
               onClick={() => setShowNewScanModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors hover:opacity-90"
+              className="inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-semibold transition-colors hover:opacity-90"
               style={{ background: 'var(--accent-primary)', color: 'var(--text-on-accent)' }}
             >
-              <Zap size={14} strokeWidth={2.5} />
-              New Scan
+              <Zap size={14} />
+              New scan
             </button>
           </div>
         </div>
 
-        {/* ── Risk Command Bar — preflight / score / SLA / debt ── */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Pre-flight Status — reachability-driven, env-aware, frosted glass */}
-          <div className="p-5 rounded" style={PREFLIGHT_GLASS[preflight.status]}>
-            <p
-              className="text-[10px] font-bold uppercase tracking-wider"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              Pre-flight Status · {gateEnv.toUpperCase()}
-            </p>
-            {loading ? (
-              <div
-                className="mt-3 w-24 h-12 rounded animate-pulse"
-                style={{ background: 'var(--bg-secondary)' }}
-              />
-            ) : (
-              <>
-                <p
-                  className="mt-2 text-4xl font-extrabold leading-none"
-                  style={{ color: preflightColor, fontFamily: 'var(--font-display)' }}
-                >
-                  {preflight.label}
-                </p>
-                <p className="mt-2 text-[11px] font-semibold" style={{ color: preflightColor }}>
-                  {preflightBadge}
-                </p>
-              </>
-            )}
+        {loading && !latestScan ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
-
-          {/* Overall Risk Score */}
-          <div
-            className="p-5 rounded border"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-subtle)',
-              boxShadow: 'var(--card-shadow)',
-            }}
-          >
-            <p
-              className="text-[10px] font-bold uppercase tracking-wider"
-              style={{ color: 'var(--text-secondary)' }}
+        ) : (
+          <>
+            {/* Release gate verdict */}
+            <section
+              aria-label="Release gate"
+              className={`${CARD} flex flex-wrap items-center justify-between gap-3 px-5 py-4`}
             >
-              Overall Risk Score
-            </p>
-            {loading ? (
-              <div
-                className="mt-3 w-24 h-12 rounded animate-pulse"
-                style={{ background: 'var(--bg-secondary)' }}
-              />
-            ) : (
-              <div className="flex items-baseline gap-2 mt-2">
+              <div className="flex min-w-0 items-center gap-3">
                 <span
-                  className="text-5xl font-extrabold leading-none tabular-nums"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
                   style={{
-                    color: gateColor(vulnStats.score / 100),
-                    fontFamily: 'var(--font-display)',
+                    background: `color-mix(in srgb, ${preflightColor} 12%, transparent)`,
                   }}
+                  aria-hidden
                 >
-                  {vulnStats.score}
+                  <ShieldCheck size={16} style={{ color: preflightColor }} />
                 </span>
-                <span className="text-sm font-bold" style={{ color: 'var(--text-muted)' }}>
-                  /100
-                </span>
-              </div>
-            )}
-            <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-              {vulnStats.score >= 85
-                ? 'Healthy'
-                : vulnStats.score >= 65
-                  ? 'Needs Attention'
-                  : 'High Risk — act now'}
-            </p>
-          </div>
-
-          {/* SLA Status */}
-          <div
-            className="p-5 rounded border"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: slaStats.breached > 0 ? 'var(--status-error)' : 'var(--border-subtle)',
-              boxShadow: 'var(--card-shadow)',
-            }}
-          >
-            <p
-              className="text-[10px] font-bold uppercase tracking-wider"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              SLA Status
-            </p>
-            {loading ? (
-              <div
-                className="mt-3 w-24 h-12 rounded animate-pulse"
-                style={{ background: 'var(--bg-secondary)' }}
-              />
-            ) : slaStats.breached > 0 ? (
-              <>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span
-                    className="text-5xl font-extrabold leading-none tabular-nums"
-                    style={{ color: 'var(--status-error)', fontFamily: 'var(--font-display)' }}
-                  >
-                    {slaStats.breached}
-                  </span>
-                  <span className="text-sm font-bold" style={{ color: 'var(--status-error)' }}>
-                    Breached
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                  🚨 {slaStats.breachedCritical} Critical · {slaStats.dueSoon} Due in &lt; 24h
-                </p>
-              </>
-            ) : slaStats.dueSoon > 0 ? (
-              <>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span
-                    className="text-5xl font-extrabold leading-none tabular-nums"
-                    style={{ color: 'var(--status-warning)', fontFamily: 'var(--font-display)' }}
-                  >
-                    {slaStats.dueSoon}
-                  </span>
-                  <span className="text-sm font-bold" style={{ color: 'var(--status-warning)' }}>
-                    Due &lt; 24h
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                  Approaching SLA
-                  {slaStats.nextHours !== null
-                    ? ` · next in ${Math.max(1, Math.round(slaStats.nextHours))}h`
-                    : ''}
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span
-                    className="text-5xl font-extrabold leading-none tabular-nums"
-                    style={{ color: 'var(--status-success)', fontFamily: 'var(--font-display)' }}
-                  >
-                    0
-                  </span>
-                  <span className="text-sm font-bold" style={{ color: 'var(--status-success)' }}>
-                    On track
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                  No overdue findings
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Security Debt */}
-          <div
-            className="p-5 rounded border"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-subtle)',
-              boxShadow: 'var(--card-shadow)',
-            }}
-          >
-            <p
-              className="text-[10px] font-bold uppercase tracking-wider"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              Security Debt
-            </p>
-            {loading ? (
-              <div
-                className="mt-3 w-24 h-12 rounded animate-pulse"
-                style={{ background: 'var(--bg-secondary)' }}
-              />
-            ) : (
-              <div className="flex items-baseline gap-2 mt-2">
-                <span
-                  className="text-5xl font-extrabold leading-none tabular-nums"
-                  style={{
-                    color:
-                      securityDebtHours > 80
-                        ? 'var(--status-error)'
-                        : securityDebtHours > 20
-                          ? 'var(--status-warning)'
-                          : 'var(--status-success)',
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  {securityDebtHours}
-                </span>
-                <span className="text-sm font-bold" style={{ color: 'var(--text-muted)' }}>
-                  Hours
-                </span>
-              </div>
-            )}
-            <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-              Est. fix for {vulnStats.total} items · Crit 8h / High 4h / Med 2h / Low 0.5h
-            </p>
-          </div>
-        </div>
-
-        {/* ── Tech & Corporate Trust — Bento hero (60/40) ── */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-          {/* Primary trust box — 60% */}
-          <div
-            className="flex flex-col p-4 rounded-md border lg:col-span-3"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-subtle)',
-              boxShadow: 'var(--card-shadow)',
-            }}
-          >
-            <div className="flex justify-between items-start gap-4 mb-6">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex justify-center items-center w-9 h-9 rounded-xl shrink-0"
-                  style={{
-                    background: 'color-mix(in srgb, var(--accent-primary) 12%, transparent)',
-                    color: 'var(--accent-primary)',
-                  }}
-                >
-                  <Shield size={18} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <p
-                    className="text-[11px] font-bold tracking-wider uppercase"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    Posture Overview
+                <div className="min-w-0">
+                  <p className="text-[14px] font-semibold" style={{ color: preflightColor }}>
+                    Release gate · {sevLabel(preflight.label)}
                   </p>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-                  >
-                    Live security signal across all assets
+                  <p className="truncate text-[12px] text-[var(--text-secondary)]">
+                    {preflightReason}
                   </p>
                 </div>
               </div>
-              <Link
-                to="/issues"
-                className="flex items-center gap-1.5 text-xs font-semibold shrink-0 transition-colors hover:opacity-80"
-                style={{ color: 'var(--accent-primary)' }}
-              >
-                Open queue <ArrowRight size={14} />
-              </Link>
-            </div>
-
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-3">
-                <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Live posture signal
-                </p>
-                {loading ? (
-                  <div
-                    className="w-14 h-6 rounded-full animate-pulse"
-                    style={{ background: 'var(--bg-secondary)' }}
-                  />
-                ) : (
-                  <span
-                    className="px-2.5 py-1 rounded-full text-xs font-bold tabular-nums"
-                    style={{
-                      background: `color-mix(in srgb, ${gateColor(vulnStats.score / 100)} 14%, transparent)`,
-                      color: gateColor(vulnStats.score / 100),
-                    }}
+              <div className="flex items-center gap-2">
+                <span className="rounded-md bg-[var(--bg-secondary)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)]">
+                  {gateEnv}
+                </span>
+                {gateSummary.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowGateSummary(true)}
+                    className="rounded-md px-2.5 py-1.5 text-[12px] font-medium text-[var(--status-error)] transition-colors hover:bg-[var(--bg-secondary)]"
                   >
-                    {vulnStats.score}/100
-                  </span>
+                    {gateSummary.length} failing {gateSummary.length === 1 ? 'repo' : 'repos'}
+                  </button>
                 )}
-              </div>
-              <VibrationTrace
-                activity={Math.min(1, vulnStats.total / 60)}
-                critical={vulnStats.critical > 0}
-                height={48}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-6 sm:grid-cols-4">
-              {[
-                { label: 'Secrets', count: byType.secret, icon: Lock },
-                { label: 'Dependencies', count: byType.dependency, icon: Package },
-                { label: 'Static analysis', count: byType.sast, icon: Code2 },
-                { label: 'Infra (IaC)', count: byType.iac, icon: Cloud },
-              ].map((b) => (
-                <div
-                  key={b.label}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-md"
-                  style={{ background: 'var(--bg-secondary)' }}
+                <button
+                  type="button"
+                  onClick={() => setShowGateRules(true)}
+                  className="rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5 text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
                 >
-                  <b.icon
-                    size={14}
-                    style={{
-                      color: b.count > 0 ? 'var(--status-warning)' : 'var(--status-success)',
-                    }}
+                  Gate rules
+                </button>
+              </div>
+            </section>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className={`${CARD} p-5`}>
+                <p className="text-[13px] font-medium text-[var(--text-secondary)]">Risk score</p>
+                <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
+                  {vulnStats.score}
+                  <span className="text-[15px] font-medium text-[var(--text-muted)]"> /100</span>
+                </p>
+                <div className="mt-2">
+                  <VibrationTrace
+                    activity={Math.min(1, vulnStats.total / 60)}
+                    critical={vulnStats.critical > 0}
+                    height={28}
                   />
-                  <div className="min-w-0">
-                    <p
-                      className="text-sm font-bold leading-none"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      {b.count}
-                    </p>
-                    <p
-                      className="text-[10px] font-semibold tracking-wide uppercase truncate"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {b.label}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-5 mt-auto border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <p
-                className="text-[10px] font-bold uppercase tracking-wider mb-4"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                AI remediation queue
-              </p>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Open queue
-                  </p>
-                  {loading ? (
-                    <div
-                      className="w-12 h-7 rounded animate-pulse"
-                      style={{ background: 'var(--bg-secondary)' }}
-                    />
-                  ) : (
-                    <p
-                      className="text-2xl font-bold"
-                      style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-                    >
-                      {remediationStats.queueCount}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    PRs today
-                  </p>
-                  {loading ? (
-                    <div
-                      className="w-12 h-7 rounded animate-pulse"
-                      style={{ background: 'var(--bg-secondary)' }}
-                    />
-                  ) : (
-                    <p
-                      className="text-2xl font-bold"
-                      style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-                    >
-                      {remediationStats.prsCreatedToday}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p
-                    className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Detection → PR
-                  </p>
-                  {loading ? (
-                    <div
-                      className="w-12 h-7 rounded animate-pulse"
-                      style={{ background: 'var(--bg-secondary)' }}
-                    />
-                  ) : (
-                    <p
-                      className="text-2xl font-bold"
-                      style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
-                    >
-                      {remediationStats.avgDetectionToPrDays !== null
-                        ? `${remediationStats.avgDetectionToPrDays}d`
-                        : '—'}
-                    </p>
-                  )}
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Satellite bento cells — 40% */}
-          <div className="grid grid-cols-2 gap-4 lg:col-span-2">
-            {gateRows
-              .filter((row) => row.id !== 'build')
-              .map((row) => (
-                <div
-                  key={row.id}
-                  onClick={() => (row.id === 'ci' ? setShowGateSummary(true) : undefined)}
-                  onKeyDown={
-                    row.id === 'ci'
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setShowGateSummary(true);
-                          }
-                        }
-                      : undefined
-                  }
-                  role={row.id === 'ci' ? 'button' : undefined}
-                  tabIndex={row.id === 'ci' ? 0 : undefined}
-                  className={`rounded-md p-4 border flex flex-col justify-between ${row.id === 'ci' ? 'cursor-pointer hover:brightness-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2' : ''}`}
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
-                    boxShadow: 'var(--card-shadow)',
-                    ...(row.id === 'ci'
-                      ? ({
-                          '--tw-ring-color': 'var(--accent-primary)',
-                          '--tw-ring-offset-color': 'var(--bg-card)',
-                        } as React.CSSProperties)
-                      : {}),
-                  }}
-                >
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {row.label}
-                  </p>
-                  {loading ? (
-                    <div
-                      className="w-16 h-8 rounded animate-pulse"
-                      style={{ background: 'var(--bg-secondary)' }}
-                    />
-                  ) : (
-                    <div>
-                      <p
-                        className="text-3xl font-bold tracking-tight leading-none mt-2"
-                        style={{ color: row.color, fontFamily: 'var(--font-display)' }}
-                      >
-                        {row.value}
-                      </p>
-                      <p className="text-[10px] mt-2" style={{ color: 'var(--text-secondary)' }}>
-                        {row.id === 'deploy'
-                          ? `Last build: ${lastBuildStatus.toUpperCase()}`
-                          : row.sub}
-                      </p>
-                    </div>
-                  )}
+              <div className={`${CARD} p-5`}>
+                <p className="text-[13px] font-medium text-[var(--text-secondary)]">Open findings</p>
+                <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
+                  {vulnStats.total}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {severityCounts.map((s) => (
+                    <Link
+                      key={s.key}
+                      to={latestScanId ? `/scans/${latestScanId}/sast?filter=${s.key}` : '/issues'}
+                      className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    >
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: severityVar(s.key) }}
+                        aria-hidden
+                      />
+                      {sevLabel(s.key)}
+                      <span className="font-semibold tabular-nums">{s.count}</span>
+                    </Link>
+                  ))}
                 </div>
-              ))}
-          </div>
-        </div>
+              </div>
 
-        {/* ── Security posture + Threat radar ── */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div
-            className="flex flex-col p-4 rounded-md border"
-            style={{
-              height: 460,
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-subtle)',
-              boxShadow: 'var(--card-shadow)',
-            }}
-          >
-            <p
-              className="mb-4 text-[11px] font-semibold tracking-wider uppercase shrink-0"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              SECURITY POSTURE
-            </p>
-            <div className="flex-1 min-h-0">
-              <PostureDonut
-                critical={vulnStats.critical}
-                high={vulnStats.high}
-                medium={vulnStats.medium}
-                low={vulnStats.low}
-              />
-            </div>
-          </div>
-
-          <div
-            className="flex flex-col p-4 rounded-md border"
-            style={{
-              height: 460,
-              background: 'var(--bg-card)',
-              borderColor: 'var(--border-subtle)',
-              boxShadow: 'var(--card-shadow)',
-            }}
-          >
-            <p
-              className="mb-4 text-[11px] font-semibold tracking-wider uppercase shrink-0"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              COVERAGE — THREAT RADAR
-            </p>
-            <div className="flex flex-1 justify-center items-center min-h-0">
-              <CoverageRadar />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Runtime drift anomalies — closes the observability loop ── */}
-        <DriftAlertsTable />
-
-        {/* ── Details — collapsed by default (anti-bloat; command bar is the focus) ── */}
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={() => {
-              const next = !detailsExpanded;
-              setDetailsExpanded(next);
-              localStorage.setItem('scorpion_dashboard_details_expanded', String(next));
-            }}
-            className="flex items-center gap-2 py-2 text-[11px] font-bold tracking-wider uppercase transition-colors hover:opacity-80"
-            style={{ color: 'var(--text-secondary)' }}
-            aria-expanded={detailsExpanded}
-          >
-            <ChevronDown
-              size={14}
-              style={{
-                transform: detailsExpanded ? 'rotate(180deg)' : 'none',
-                transition: 'transform 0.2s',
-              }}
-            />
-            {detailsExpanded
-              ? 'Hide details'
-              : 'More signal — findings, scan health, repo risk, KPIs, pipeline, trend'}
-          </button>
-
-          {detailsExpanded && (
-            <div className="mt-4 space-y-6">
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                {/* ── Scan health — ring metrics ── */}
-                <div
-                  className="p-4 rounded-md border"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
-                    boxShadow: 'var(--card-shadow)',
-                  }}
+              <div className={`${CARD} p-5`}>
+                <p className="text-[13px] font-medium text-[var(--text-secondary)]">SLA health</p>
+                <p
+                  className="mt-2 text-3xl font-semibold tracking-tight tabular-nums"
+                  style={{ color: slaStats.breached > 0 ? 'var(--status-error)' : 'var(--text-primary)' }}
                 >
-                  <p
-                    className="mb-6 text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    SCAN HEALTH
-                  </p>
-                  <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-                    {ringMetrics.map((m) => {
-                      const severityVar =
-                        m.id === 'bugs' ? 'var(--accent-primary)' : `var(--severity-${m.severity})`;
+                  {slaStats.breached}
+                  <span className="text-[15px] font-medium text-[var(--text-muted)]"> breached</span>
+                </p>
+                <p className="mt-2 text-[12px] text-[var(--text-muted)]">
+                  {slaStats.dueSoon} due within 24h
+                  {slaStats.nextHours !== null && ` · next in ${Math.max(0, Math.round(slaStats.nextHours))}h`}
+                </p>
+              </div>
 
-                      return loading ? (
-                        <SkeletonCard key={m.id} />
-                      ) : (
-                        <div
-                          key={m.id}
-                          onClick={
-                            m.path && !m.path.includes('null') ? () => navigate(m.path!) : undefined
-                          }
-                          className={`rounded-md p-4 border ${m.path && !m.path.includes('null') ? 'cursor-pointer hover:brightness-95 transition-all' : ''}`}
-                          style={{
-                            background: 'var(--bg-card)',
-                            borderColor: 'var(--border-subtle)',
-                            boxShadow: 'var(--card-shadow)',
-                          }}
-                        >
-                          <div className="flex justify-between items-start mb-3">
-                            <p
-                              className="font-bold tracking-wider uppercase text-[10px]"
-                              style={{ color: severityVar }}
-                            >
-                              {m.label}
-                            </p>
-                            <div className="shrink-0" style={{ color: severityVar }}>
-                              <m.icon size={14} strokeWidth={2.5} />
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-1 items-start mt-2">
+              <div className={`${CARD} p-5`}>
+                <p className="text-[13px] font-medium text-[var(--text-secondary)]">Security debt</p>
+                <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
+                  {securityDebtHours}
+                  <span className="text-[15px] font-medium text-[var(--text-muted)]"> hours</span>
+                </p>
+                <p className="mt-2 text-[12px] text-[var(--text-muted)]">
+                  {mttrDays !== null ? `MTTR ${mttrDays} days` : 'MTTR not yet measured'}
+                  {` · ${remediationStats.queueCount} in queue`}
+                </p>
+              </div>
+            </div>
+
+            {/* Findings + gates */}
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <section aria-label="Latest findings" className={`${CARD} xl:col-span-2`}>
+                <header className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
+                  <h2 className="text-base font-semibold tracking-tight">Latest findings</h2>
+                  <Link
+                    to="/issues"
+                    className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--accent-primary)] hover:opacity-80"
+                  >
+                    View all
+                    <ArrowRight size={14} />
+                  </Link>
+                </header>
+                {remediationQueue.length > 0 ? (
+                  <ul className="divide-y divide-[var(--border-subtle)]">
+                    {remediationQueue.map((f: any) => {
+                      const sev = String(f.severity || 'info').toLowerCase();
+                      return (
+                        <li key={f.$id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRemediationFindingId(f.$id)}
+                            className="flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors hover:bg-[var(--bg-secondary)]"
+                          >
                             <span
-                              className="text-3xl font-bold tracking-tight"
+                              className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
                               style={{
-                                color: 'var(--text-primary)',
-                                fontFamily: 'var(--font-display)',
+                                color: severityVar(sev as Severity),
+                                background: `color-mix(in srgb, ${severityVar(sev as Severity)} 10%, transparent)`,
                               }}
                             >
-                              {m.value}
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: severityVar(sev as Severity) }}
+                                aria-hidden
+                              />
+                              {sevLabel(sev)}
                             </span>
-                            {(() => {
-                              const ratio = m.max > 0 ? m.value / m.max : 0;
-                              const status =
-                                ratio === 0 ? 'Healthy' : ratio < 0.5 ? 'WARNING' : 'FAILING';
-                              const color =
-                                ratio === 0
-                                  ? 'var(--status-success)'
-                                  : ratio < 0.5
-                                    ? 'var(--status-warning)'
-                                    : 'var(--status-error)';
-                              if (
-                                ratio === 0 &&
-                                (m.severity === 'critical' || m.severity === 'high')
-                              )
-                                return null;
-                              if (m.value > 0)
-                                return (
-                                  <span
-                                    className="font-bold uppercase text-[10px]"
-                                    style={{ color }}
-                                  >
-                                    {status}
-                                  </span>
-                                );
-                              return <span className="h-3" />;
-                            })()}
-                          </div>
-                        </div>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13px] font-medium">
+                                {f.title || f.message || 'Untitled finding'}
+                              </span>
+                              <span className="mt-0.5 block text-[12px] text-[var(--text-muted)]">
+                                {[
+                                  f.repo_name,
+                                  f.file_path,
+                                  f.$createdAt &&
+                                    new Date(f.$createdAt).toLocaleString([], {
+                                      dateStyle: 'short',
+                                      timeStyle: 'short',
+                                    }),
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </span>
+                            </span>
+                            <ArrowRight
+                              size={14}
+                              className="mt-1 shrink-0 text-[var(--text-muted)]"
+                            />
+                          </button>
+                        </li>
                       );
                     })}
-                    {loading ? (
-                      <SkeletonCard />
-                    ) : (
-                      <div
-                        className="rounded-md p-4 border"
-                        style={{
-                          background: 'var(--bg-secondary)',
-                          borderColor: 'var(--border-subtle)',
-                          boxShadow: 'var(--card-shadow)',
-                        }}
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <p
-                            className="text-[10px] font-bold tracking-wider uppercase"
-                            style={{ color: 'var(--accent-primary)' }}
-                          >
-                            OPEN VULNS
-                          </p>
-                          <div className="shrink-0" style={{ color: 'var(--accent-primary)' }}>
-                            <Zap size={14} strokeWidth={2.5} />
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-1 items-start mt-2">
-                          <span
-                            className="text-3xl font-bold tracking-tight"
-                            style={{
-                              color: 'var(--accent-primary)',
-                              fontFamily: 'var(--font-display)',
-                            }}
-                          >
-                            {vulnStats.critical + vulnStats.high + vulnStats.medium}
-                          </span>
-                          {vulnStats.critical + vulnStats.high + vulnStats.medium > 0 ? (
-                            <span
-                              className="text-[10px] font-bold uppercase"
-                              style={{ color: 'var(--status-warning)' }}
-                            >
-                              WARNING
-                            </span>
-                          ) : (
-                            <span className="h-3" />
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {loading ? (
-                      <SkeletonCard />
-                    ) : (
-                      <div
-                        className="rounded-md p-4 border"
-                        style={{
-                          background: 'var(--bg-secondary)',
-                          borderColor: 'var(--border-subtle)',
-                          boxShadow: 'var(--card-shadow)',
-                        }}
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <p
-                            className="text-[10px] font-bold tracking-wider uppercase"
-                            style={{ color: 'var(--accent-primary)' }}
-                          >
-                            LINES SCANNED
-                          </p>
-                          <div className="shrink-0" style={{ color: 'var(--accent-primary)' }}>
-                            <FileText size={14} strokeWidth={2.5} />
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-1 items-start mt-2">
-                          <span
-                            className="text-3xl font-bold tracking-tight"
-                            style={{
-                              color: 'var(--accent-primary)',
-                              fontFamily: 'var(--font-display)',
-                            }}
-                          >
-                            {vulnStats.linesScanned?.toLocaleString() || '0'}
-                          </span>
-                          <span className="h-3" />
-                        </div>
-                      </div>
-                    )}
-                    {loading ? (
-                      <SkeletonCard />
-                    ) : (
-                      <div
-                        onClick={() => navigate('/repos')}
-                        className="rounded-md p-4 border cursor-pointer hover:brightness-95 transition-all"
-                        style={{
-                          background: 'var(--bg-secondary)',
-                          borderColor: 'var(--border-subtle)',
-                          boxShadow: 'var(--card-shadow)',
-                        }}
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <p
-                            className="text-[10px] font-bold tracking-wider uppercase"
-                            style={{ color: 'var(--accent-primary)' }}
-                          >
-                            ACTIVE SCANS
-                          </p>
-                          <div className="shrink-0" style={{ color: 'var(--accent-primary)' }}>
-                            <Zap size={14} strokeWidth={2.5} />
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-1 items-start mt-2">
-                          <span
-                            className="text-3xl font-bold tracking-tight"
-                            style={{
-                              color: 'var(--accent-primary)',
-                              fontFamily: 'var(--font-display)',
-                            }}
-                          >
-                            {activeScansCount}
-                          </span>
-                          <span className="h-3" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* ── Findings & recent activity (Signal stream) ── */}
-                <div
-                  className="flex flex-col justify-between p-4 rounded-md border"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
-                    boxShadow: 'var(--card-shadow)',
-                  }}
-                >
-                  <div>
-                    <div className="flex justify-between items-center mb-6">
-                      <div>
-                        <p
-                          className="text-[10px] font-bold uppercase tracking-wider mb-1"
-                          style={{ color: 'var(--text-secondary)' }}
-                        >
-                          FINDINGS & RECENT ACTIVITY
-                        </p>
-                        <p
-                          className="text-sm font-semibold"
-                          style={{
-                            color: 'var(--text-primary)',
-                            fontFamily: 'var(--font-display)',
-                          }}
-                        >
-                          Signal stream
-                        </p>
-                      </div>
-                      <Link
-                        to="/issues"
-                        className="text-xs font-semibold transition-colors hover:opacity-80"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        View all →
-                      </Link>
-                    </div>
-
-                    {loading ? (
-                      <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                          <div
-                            key={i}
-                            className="h-14 rounded-2xl animate-pulse"
-                            style={{ background: 'var(--bg-secondary)' }}
-                          />
-                        ))}
-                      </div>
-                    ) : latestVulnerabilities.length > 0 ? (
-                      <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-                        {latestVulnerabilities.map((v: any) => (
-                          <div key={v.$id} className="flex gap-4 items-center py-3 min-h-[64px]">
-                            <div
-                              className="w-[3px] h-8 rounded-full shrink-0"
-                              style={{ background: severityVar((v.severity || 'info').toLowerCase() as Severity) }}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <span
-                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider"
-                                  style={{
-                                    color: severityVar((v.severity || 'info').toLowerCase() as Severity),
-                                    background: `color-mix(in srgb, ${severityVar((v.severity || 'info').toLowerCase() as Severity)} 14%, transparent)`,
-                                  }}
-                                >
-                                  {v.severity}
-                                </span>
-                                <p
-                                  className="pr-4 text-xs font-medium truncate"
-                                  style={{ color: 'var(--text-primary)' }}
-                                >
-                                  {v.title || v.message}
-                                </p>
-                              </div>
-                              <p
-                                className="font-mono text-[10px] truncate pr-4"
-                                style={{ color: 'var(--text-muted)' }}
-                              >
-                                {v.file_path || v.location || v.file || 'unknown'}
-                                {v.line ? `:${v.line}` : ''}
-                              </p>
-                              {v.fixedVersion && (
-                                <p
-                                  className="text-[10px] font-semibold mt-0.5"
-                                  style={{ color: 'var(--status-success)' }}
-                                >
-                                  Fix available: {v.fixedVersion}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex gap-2 items-center shrink-0">
-                              <span
-                                className="px-2 py-0.5 text-[10px] font-semibold rounded"
-                                style={{
-                                  background: 'var(--bg-secondary)',
-                                  color: 'var(--text-secondary)',
-                                }}
-                              >
-                                Open
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedRemediationFindingId(v.$id)}
-                                className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold border rounded hover:opacity-80 transition-colors shrink-0"
-                                style={{
-                                  borderColor: 'var(--border-subtle)',
-                                  color: 'var(--text-primary)',
-                                }}
-                              >
-                                Fix <ArrowRight size={10} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-6">
-                        <div className="flex justify-between items-center mb-4">
-                          <p
-                            className="text-sm font-semibold"
-                            style={{ color: 'var(--text-primary)' }}
-                          >
-                            Compliance delta sweep
-                          </p>
-                          <span
-                            className="text-[11px] font-bold"
-                            style={{ color: 'var(--status-success)' }}
-                          >
-                            100% secure
-                          </span>
-                        </div>
-                        <div
-                          className="w-full h-1.5 rounded-full overflow-hidden mb-5"
-                          style={{ background: 'var(--bg-secondary)' }}
-                        >
-                          <div
-                            className="w-full h-full rounded-full"
-                            style={{ background: 'var(--status-success)' }}
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          {[
-                            ['OWASP Top 10', '100% passed'],
-                            ['Secrets & key leaks', '0 detected'],
-                            ['Dependency delta vulns', '0 open'],
-                            ['Container baseline runtime', 'Verified'],
-                          ].map(([label, value]) => (
-                            <div
-                              key={label}
-                              className="flex justify-between items-center px-3 py-2 text-[10px] rounded-lg"
-                              style={{
-                                color: 'var(--text-secondary)',
-                                background: 'var(--bg-secondary)',
-                              }}
-                            >
-                              <span className="font-semibold">{label}</span>
-                              <span
-                                className="font-bold"
-                                style={{ color: 'var(--status-success)' }}
-                              >
-                                {value}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>{' '}
-              {/* Close grid-cols-2 for Scan Health + Signal Stream */}
-              <div
-                className="p-4 rounded-md border"
-                style={{
-                  background: 'var(--bg-card)',
-                  borderColor: 'var(--border-subtle)',
-                  boxShadow: 'var(--card-shadow)',
-                }}
-              >
-                <div className="flex justify-between items-center mb-4">
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    REPO RISK RANKING
-                  </p>
-                  <Link
-                    to="/repos"
-                    className="text-xs font-medium transition-colors hover:opacity-80"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    View all repos →
-                  </Link>
-                </div>
-                {loading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="h-10 rounded-lg animate-pulse"
-                        style={{ background: 'var(--bg-secondary)' }}
-                      />
-                    ))}
-                  </div>
-                ) : repoRisk.length > 0 ? (
-                  <div className="space-y-3">
-                    {repoRisk.map((r, i) => (
-                      <div key={r.repo_id}>
-                        <div className="flex justify-between items-center mb-1.5">
-                          <div className="flex gap-2.5 items-center min-w-0">
-                            <span
-                              className="w-4 text-[11px] font-bold tabular-nums shrink-0"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
-                              {i + 1}
-                            </span>
-                            <span
-                              className="text-sm font-medium truncate"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              {r.repo_name}
-                            </span>
-                          </div>
-                          <span
-                            className="font-mono text-[11px] font-bold tabular-nums shrink-0"
-                            style={{
-                              color:
-                                r.critical > 0
-                                  ? 'var(--severity-critical)'
-                                  : r.high > 0
-                                    ? 'var(--severity-high)'
-                                    : 'var(--status-success)',
-                            }}
-                          >
-                            {r.critical}C · {r.high}H
-                          </span>
-                        </div>
-                        <div
-                          className="flex w-full h-1.5 rounded-full overflow-hidden"
-                          style={{ background: 'var(--bg-secondary)' }}
-                        >
-                          <div
-                            style={{
-                              width: `${(r.critical / maxRepoFindings) * 100}%`,
-                              background: 'var(--severity-critical)',
-                            }}
-                          />
-                          <div
-                            style={{
-                              width: `${(r.high / maxRepoFindings) * 100}%`,
-                              background: 'var(--severity-high)',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  </ul>
                 ) : (
-                  <p className="py-4 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    No open findings across monitored repos.
-                  </p>
+                  <div className="px-5 py-10 text-center text-[13px] text-[var(--text-secondary)]">
+                    No open findings. Run a scan to check the latest code.
+                  </div>
                 )}
-              </div>
-              {/* ── Posture KPIs ── */}
-              <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-                {[
-                  {
-                    label: 'MTTR',
-                    value: mttrDays !== null ? `${mttrDays}d` : '—',
-                    sub: 'vs <1d target',
-                    color:
-                      mttrDays === null
-                        ? 'var(--text-muted)'
-                        : mttrDays <= 1
-                          ? 'var(--status-success)'
-                          : mttrDays <= 3
-                            ? 'var(--status-warning)'
-                            : 'var(--status-error)',
-                  },
-                  {
-                    label: 'Scan Freshness',
-                    value: `${scansLast7}`,
-                    sub: 'scans · last 7d',
-                    color: scansLast7 > 0 ? 'var(--status-success)' : 'var(--status-warning)',
-                  },
-                  {
-                    label: 'Remediation PRs',
-                    value: `${remediationStats.prsCreatedToday}`,
-                    sub: 'merged today',
-                    color: 'var(--accent-primary)',
-                  },
-                  {
-                    label: 'Open Queue',
-                    value: `${remediationStats.queueCount}`,
-                    sub: 'awaiting fix',
-                    color:
-                      remediationStats.queueCount > 0
-                        ? 'var(--status-warning)'
-                        : 'var(--status-success)',
-                  },
-                ].map((k) => (
-                  <div
-                    key={k.label}
-                    className="p-4 rounded border"
-                    style={{
-                      background: 'var(--bg-card)',
-                      borderColor: 'var(--border-subtle)',
-                      boxShadow: 'var(--card-shadow)',
-                    }}
-                  >
-                    <p
-                      className="text-[10px] font-bold uppercase tracking-wider"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {k.label}
-                    </p>
-                    {loading ? (
-                      <div
-                        className="mt-3 w-12 h-8 rounded animate-pulse"
-                        style={{ background: 'var(--bg-secondary)' }}
-                      />
-                    ) : (
-                      <>
-                        <p
-                          className="mt-2 text-4xl font-bold leading-none tabular-nums"
-                          style={{ color: k.color, fontFamily: 'var(--font-display)' }}
-                        >
-                          {k.value}
-                        </p>
-                        <p className="mt-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          {k.sub}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {/* ── Pipeline gates + Vulnerability trend ── */}
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div
-                  className="p-4 rounded border"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
-                    boxShadow: 'var(--card-shadow)',
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <p
-                      className="text-[10px] font-bold uppercase tracking-wider"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      PIPELINE GATE STATUS
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setShowGateRules(true)}
-                      className="text-[10px] font-semibold transition-colors hover:opacity-80"
-                      style={{ color: 'var(--accent-primary)' }}
-                    >
-                      Configure Rules →
-                    </button>
-                  </div>
-                  <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-                    {pipelineGateStatus.map((g) => (
-                      <div key={g.env} className="flex justify-between items-center py-2.5">
-                        <span
-                          className="text-xs font-bold tracking-wide"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
-                          {g.env}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-[11px] capitalize"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            {g.status}
-                          </span>
-                          <span
-                            className="text-sm font-bold w-4 text-center"
-                            style={{ color: g.color }}
-                          >
-                            {g.icon}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              </section>
 
-                <div
-                  className="p-4 rounded border"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--border-subtle)',
-                    boxShadow: 'var(--card-shadow)',
-                  }}
-                >
+              <div className="space-y-4">
+                <section aria-label="Pipeline gates" className={CARD}>
+                  <header className="border-b border-[var(--border-subtle)] px-5 py-4">
+                    <h2 className="text-base font-semibold tracking-tight">Pipeline gates</h2>
+                  </header>
+                  <ul className="divide-y divide-[var(--border-subtle)]">
+                    {gateRows.map((row) => (
+                      <li key={row.id} className="flex items-center justify-between px-5 py-3">
+                        <div>
+                          <p className="text-[13px] font-medium">{row.label}</p>
+                          <p className="text-[11px] text-[var(--text-muted)]">{row.sub}</p>
+                        </div>
+                        <span
+                          className="text-[13px] font-semibold tabular-nums"
+                          style={{ color: row.color }}
+                        >
+                          {row.value}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section aria-label="Environments" className={CARD}>
+                  <header className="border-b border-[var(--border-subtle)] px-5 py-4">
+                    <h2 className="text-base font-semibold tracking-tight">Environments</h2>
+                  </header>
+                  <ul className="divide-y divide-[var(--border-subtle)]">
+                    {pipelineGateStatus.map((env) => (
+                      <li key={env.env} className="flex items-center justify-between px-5 py-3">
+                        <span className="text-[13px] font-medium">{sevLabel(env.env)}</span>
+                        <span className="text-[12px] capitalize" style={{ color: env.color }}>
+                          {env.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </div>
+            </div>
+
+            {/* Charts */}
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <section aria-label="Posture by severity" className={`${CARD} flex flex-col p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Posture by severity</h2>
+                <div className="mt-3 min-h-[260px] flex-1">
+                  <PostureDonut
+                    critical={vulnStats.critical}
+                    high={vulnStats.high}
+                    medium={vulnStats.medium}
+                    low={vulnStats.low}
+                  />
+                </div>
+              </section>
+              <section aria-label="Scan coverage" className={`${CARD} flex flex-col p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Scan coverage</h2>
+                <div className="mt-3 min-h-[260px] flex-1">
+                  <CoverageRadar />
+                </div>
+              </section>
+              <section aria-label="Vulnerability trend" className={`${CARD} flex flex-col p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Vulnerability trend</h2>
+                <div className="mt-3 min-h-[260px] flex-1">
                   <VulnTrend total={vulnStats.total} />
                 </div>
-              </div>
+              </section>
             </div>
-          )}
-        </div>
+
+            {/* Sources + repos at risk */}
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <section aria-label="Findings by source" className={`${CARD} p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Findings by source</h2>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    { label: 'Secrets', count: byType.secret, icon: Lock },
+                    { label: 'Dependencies', count: byType.dependency, icon: Package },
+                    { label: 'Static analysis', count: byType.sast, icon: Code2 },
+                    { label: 'Infrastructure', count: byType.iac, icon: Cloud },
+                  ].map((b) => (
+                    <div
+                      key={b.label}
+                      className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-3"
+                    >
+                      <b.icon size={14} className="text-[var(--text-muted)]" aria-hidden />
+                      <p className="mt-2 text-xl font-semibold tabular-nums">{b.count}</p>
+                      <p className="text-[11px] text-[var(--text-secondary)]">{b.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section aria-label="Repositories at risk" className={CARD}>
+                <header className="flex items-center justify-between border-b border-[var(--border-subtle)] px-5 py-4">
+                  <h2 className="text-base font-semibold tracking-tight">Repositories at risk</h2>
+                  <Link
+                    to="/repos"
+                    className="text-[13px] font-medium text-[var(--accent-primary)] hover:opacity-80"
+                  >
+                    All repos
+                  </Link>
+                </header>
+                {repoRisk.length > 0 ? (
+                  <ul className="divide-y divide-[var(--border-subtle)]">
+                    {repoRisk.map((r) => {
+                      const load = r.critical + r.high;
+                      return (
+                        <li key={r.repo_id} className="px-5 py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-[13px] font-medium">{r.repo_name}</p>
+                            <p className="shrink-0 text-[12px] text-[var(--text-muted)] tabular-nums">
+                              {r.critical} critical · {r.high} high
+                            </p>
+                          </div>
+                          <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--bg-secondary)]">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.max(6, (load / maxRepoFindings) * 100)}%`,
+                                background:
+                                  r.critical > 0
+                                    ? 'var(--severity-critical)'
+                                    : 'var(--severity-high)',
+                              }}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="px-5 py-10 text-center text-[13px] text-[var(--text-secondary)]">
+                    No repository risk data yet.
+                  </div>
+                )}
+              </section>
+            </div>
+
+            {/* Runtime drift */}
+            <DriftAlertsTable />
+
+            {/* Operations */}
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <section aria-label="Remediation" className={`${CARD} p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Remediation</h2>
+                <ul className="mt-3 space-y-2 text-[13px] text-[var(--text-secondary)]">
+                  <li className="flex justify-between">
+                    <span>Open in queue</span>
+                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                      {remediationStats.queueCount}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Fixed today</span>
+                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                      {remediationStats.prsCreatedToday}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Avg. detection to fix</span>
+                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                      {remediationStats.avgDetectionToPrDays !== null
+                        ? `${remediationStats.avgDetectionToPrDays} days`
+                        : '—'}
+                    </span>
+                  </li>
+                </ul>
+              </section>
+
+              <section aria-label="Scan activity" className={`${CARD} p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Scan activity</h2>
+                <ul className="mt-3 space-y-2 text-[13px] text-[var(--text-secondary)]">
+                  <li className="flex justify-between">
+                    <span>Scans · last 7 days</span>
+                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                      {scansLast7}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Running now</span>
+                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                      {activeScansCount}
+                    </span>
+                  </li>
+                  {auditEntries.slice(0, 2).map((a, i) => (
+                    <li key={i} className="flex justify-between gap-3">
+                      <span className="truncate">{a.action}</span>
+                      <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{a.time}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section aria-label="Alert channels" className={`${CARD} p-5`}>
+                <h2 className="text-base font-semibold tracking-tight">Alert channels</h2>
+                <ul className="mt-3 space-y-2">
+                  {(meshStatus.length > 0
+                    ? meshStatus
+                    : [
+                        { channel: 'Slack', configured: false },
+                        { channel: 'Discord', configured: false },
+                        { channel: 'PagerDuty', configured: false },
+                      ]
+                  ).map((m) => (
+                    <li key={m.channel} className="flex items-center justify-between text-[13px]">
+                      <span className="text-[var(--text-secondary)]">{m.channel}</span>
+                      <span
+                        className="inline-flex items-center gap-1.5 text-[12px] font-medium"
+                        style={{
+                          color: m.configured ? 'var(--status-success)' : 'var(--text-muted)',
+                        }}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{
+                            background: m.configured
+                              ? 'var(--status-success)'
+                              : 'var(--text-muted)',
+                          }}
+                          aria-hidden
+                        />
+                        {m.configured ? 'Connected' : 'Not set up'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to="/alerts"
+                  className="mt-3 inline-block text-[13px] font-medium text-[var(--accent-primary)] hover:opacity-80"
+                >
+                  Manage channels
+                </Link>
+              </section>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* ── CI gate modal ── */}
+      {/* Failing repos modal */}
       {showGateSummary && (
-        <div className="flex fixed inset-0 z-50 justify-center items-center p-4 bg-black/40">
-          <div
-            className="p-6 w-full max-w-lg rounded-2xl"
-            style={{ background: 'var(--bg-card)', boxShadow: 'var(--card-shadow)' }}
-          >
-            <div className="flex gap-2 items-center mb-5">
-              <ShieldAlert size={18} style={{ color: 'var(--status-error)' }} />
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className={`${CARD} w-full max-w-lg p-6`}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold tracking-tight">Repositories failing the gate</h3>
+              <button
+                type="button"
+                onClick={() => setShowGateSummary(false)}
+                aria-label="Close"
+                className="rounded-md p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
               >
-                Policy blocking summary
-              </h2>
+                <XCircle size={18} />
+              </button>
             </div>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              {gateSummary.length > 0 ? (
-                gateSummary.map((repo, i) => (
-                  <div
-                    key={i}
-                    className="p-4 rounded-2xl border"
-                    style={{
-                      background: 'var(--bg-secondary)',
-                      borderColor: 'var(--border-subtle)',
-                    }}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span
-                        className="text-sm font-medium"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {repo.name}
-                      </span>
-                      <span
-                        className="text-[10px] font-semibold uppercase"
-                        style={{ color: 'var(--status-error)' }}
-                      >
-                        Blocked
-                      </span>
-                    </div>
-                    <p
-                      className="text-xs leading-relaxed"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {repo.reason}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="py-10 text-center">
-                  <ShieldCheck size={28} className="mx-auto mb-2 text-emerald-500" />
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    All monitored assets are compliant.
-                  </p>
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowGateSummary(false)}
-              className="w-full mt-5 py-2.5 text-sm font-medium rounded-2xl transition-colors hover:opacity-90"
-              style={{ background: 'var(--accent-primary)', color: 'var(--text-on-accent)' }}
-            >
-              Acknowledge
-            </button>
+            <ul className="mt-4 max-h-80 space-y-2 overflow-y-auto">
+              {gateSummary.map((repo: any, i: number) => (
+                <li
+                  key={repo.repo_id || i}
+                  className="flex items-center justify-between rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-4 py-3"
+                >
+                  <span className="truncate text-[13px] font-medium">
+                    {repo.repo_name || repo.name || 'Repository'}
+                  </span>
+                  <span className="shrink-0 text-[12px] text-[var(--status-error)]">
+                    {repo.reason || 'Gate failed'}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}
 
-      {/* ── Remediation panel ── */}
+      {/* Remediation drawer */}
       {selectedRemediationFindingId && (
         <RemediationPanel
           documentId={selectedRemediationFindingId}

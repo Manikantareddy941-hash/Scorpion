@@ -60,7 +60,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const [echoFreeRoam, setEchoFreeRoamState] = useState<boolean>(() => {
         const saved = localStorage.getItem('echoFreeRoam');
-        return saved === null ? true : saved === 'true';
+        // Off by default: a mascot wandering across live security data reads
+        // as noise in an enterprise console. Users can re-enable in Settings.
+        return saved === null ? false : saved === 'true';
     });
 
     const setEchoFreeRoam = (enabled: boolean) => {

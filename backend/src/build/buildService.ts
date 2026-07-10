@@ -5,6 +5,8 @@ import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
 import { getImageDigest, signImageDigest } from '../services/cosignService';
+import { attestProvenance } from '../services/provenanceService';
+import { putProvenance } from '../services/imageStore';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -152,9 +154,30 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
           } else {
             logs += `Image signing skipped (cosign/COSIGN_KEY_PATH not configured).\n`;
           }
+
+          // SLSA provenance: statement over this digest + repo/commit, signed
+          // with the same cosign key. attestProvenance skips (null) when
+          // signing isn't configured — same opt-in semantics as above.
+          const { stdout: shaOut } = await execAsync('git rev-parse HEAD', { cwd: tempDir });
+          const provenance = await attestProvenance({
+            imageName,
+            imageDigest: digest,
+            repoUrl,
+            branch,
+            commitSha: shaOut.trim(),
+            invocationId: pipelineId,
+            startedOn: startTimeIso,
+            finishedOn: new Date().toISOString(),
+          });
+          if (provenance) {
+            await putProvenance(digest, JSON.stringify(provenance));
+            logs += `SLSA provenance attested for ${digest} (commit ${shaOut.trim()}).\n`;
+          } else {
+            logs += `Provenance attestation skipped (signing not configured).\n`;
+          }
         } catch (signErr: any) {
-          logger.warn(`[BuildService] Image signing step failed for ${imageName}:`, signErr.message);
-          logs += `Image signing step failed: ${signErr.message}\n`;
+          logger.warn(`[BuildService] Image signing/provenance step failed for ${imageName}:`, signErr.message);
+          logs += `Image signing/provenance step failed: ${signErr.message}\n`;
         }
       } else if (buildTool === 'gradle') {
         const res1 = await execWithLogs('./gradlew build -x test', tempDir, pipelineId, logs);

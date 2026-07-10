@@ -56,6 +56,7 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
 const PlanWorkspace = lazy(() => import('./pages/PlanWorkspace'));
 const PolicyBuilder = lazy(() => import('./pages/PolicyBuilder'));
+const SecurityOverview = lazy(() => import('./pages/SecurityOverview'));
 const TicketDashboard = lazy(() => import('./pages/TicketDashboard'));
 const TicketDetail = lazy(() => import('./pages/TicketDetail'));
 const JiraSettings = lazy(() => import('./pages/JiraSettings'));
@@ -156,10 +157,8 @@ function App() {
         <div className="flex flex-col flex-1 min-w-0 bg-transparent transition-all duration-300">
           {/* Navbar sticky */}
           {user && !isAuthPage && (
-            <div className="sticky top-0 z-40 p-3 pb-0 bg-transparent">
-              <Navbar 
-                className="rounded-2xl shrink-0" 
-              />
+            <div className="sticky top-0 z-40">
+              <Navbar className="shrink-0" />
             </div>
           )}
 
@@ -185,6 +184,7 @@ function App() {
               <Route path="/jira-settings" element={<ProtectedRoute><JiraSettings /></ProtectedRoute>} />
               <Route path="/plan/*" element={<ProtectedRoute><PlanWorkspace /></ProtectedRoute>} />
               <Route path="/policy-builder" element={<ProtectedRoute><PolicyBuilder /></ProtectedRoute>} />
+              <Route path="/overview" element={<ProtectedRoute><SecurityOverview /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><Dashboard isSidebarCollapsed={isSidebarCollapsed} /></ProtectedRoute>} />
               <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />

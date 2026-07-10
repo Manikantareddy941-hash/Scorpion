@@ -1,4 +1,4 @@
-import { RepoProvider, Repo, StatusParams } from './types';
+import { RepoProvider, Repo } from './types';
 import axios from 'axios';
 
 export const AzureProvider: RepoProvider = {

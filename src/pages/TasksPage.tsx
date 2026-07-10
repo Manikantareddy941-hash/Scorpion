@@ -236,7 +236,7 @@ export default function TasksPage() {
 
                 {/* ── Title ── */}
                 <div className="px-4 pb-2 flex-1">
-                    <h4 className={`text-[11px] font-black uppercase italic leading-tight ${isResolved ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'
+                    <h4 className={`text-[13px] font-semibold leading-tight ${isResolved ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'
                         }`}>
                         {finding.title}
                     </h4>
@@ -244,7 +244,7 @@ export default function TasksPage() {
 
                 {/* ── Repo + file path ── */}
                 <div className="px-4 pb-3">
-                    <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic flex items-center gap-1.5 truncate">
+                    <p className="text-[11px] text-[var(--text-secondary)] flex items-center gap-1.5 truncate font-mono">
                         <Globe size={10} className="text-[var(--accent-primary)] shrink-0" />
                         <span className="truncate">{finding.repo_name}</span>
                         <span className="opacity-30 shrink-0">·</span>
@@ -350,8 +350,8 @@ export default function TasksPage() {
                                 {new Date(finding.created_at).toLocaleDateString()}
                             </span>
                         </div>
-                        <h4 className={`text-sm font-black uppercase italic truncate ${isResolved ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'}`}>
-                            {finding.title}
+                        <h4 className={`text-[14px] font-semibold truncate ${isResolved ? 'text-[var(--text-secondary)] line-through' : 'text-[var(--text-primary)]'}`}>
+    {finding.title}
                         </h4>
                         <p className="text-[9px] font-bold text-[var(--text-secondary)] uppercase italic mt-1 flex items-center gap-2">
                             <Globe size={10} className="text-[var(--accent-primary)]" />
@@ -373,24 +373,24 @@ export default function TasksPage() {
                 {/* Header & Stats */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                     <div>
-                        <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Security Tasks</h1>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Remediation pipeline & finding lifecycle</p>
+                        <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">Tasks</h1>
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-1">Track and resolve security findings through remediation</p>
                     </div>
                     <div className="flex gap-4">
                         <div className="premium-card px-6 py-3 flex items-center gap-4">
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase italic">Open Issues</p>
-                                <p className="text-xl font-black text-[var(--text-primary)] italic">{stats.open}</p>
+                                <p className="text-[11px] font-medium text-[var(--text-secondary)]">Open</p>
+                                <p className="text-xl font-semibold tabular-nums text-[var(--text-primary)]">{stats.open}</p>
                             </div>
                             <div className="w-px h-8 bg-[var(--border-subtle)]" />
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-red-500 uppercase italic">Critical</p>
-                                <p className="text-xl font-black text-red-500 italic">{stats.critical}</p>
+                                <p className="text-[11px] font-medium text-red-500">Critical</p>
+                                <p className="text-xl font-semibold tabular-nums text-red-500">{stats.critical}</p>
                             </div>
                             <div className="w-px h-8 bg-[var(--border-subtle)]" />
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-[var(--status-success)] uppercase italic">Resolved</p>
-                                <p className="text-xl font-black text-[var(--status-success)] italic">{stats.resolved}</p>
+                                <p className="text-[11px] font-medium text-[var(--status-success)]">Resolved</p>
+                                <p className="text-xl font-semibold tabular-nums text-[var(--status-success)]">{stats.resolved}</p>
                             </div>
                         </div>
                         <button onClick={fetchFindings} className="p-3 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors">
@@ -429,20 +429,20 @@ export default function TasksPage() {
                 {hasError ? (
                     <div className="premium-card p-16 text-center border-red-500/20 max-w-xl mx-auto my-12">
                         <XCircle className="w-16 h-16 text-red-500 mx-auto mb-6 animate-pulse" />
-                        <h3 className="text-xl font-black text-red-500 uppercase italic">Unable to load findings</h3>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-2">Check your connection or scanner configuration</p>
-                        <button onClick={fetchFindings} className="mt-6 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer">Retry</button>
+                        <h3 className="text-lg font-semibold text-red-500">Couldn't load findings</h3>
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-2">Check your connection or scanner configuration.</p>
+                        <button onClick={fetchFindings} className="mt-6 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-500 text-[13px] font-semibold rounded-lg transition-all cursor-pointer">Try again</button>
                     </div>
                 ) : loading ? (
                     <div className="flex flex-col items-center justify-center py-24">
                         <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
-                        <p className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Scanning Task Matrix...</p>
+                        <p className="text-[13px] text-[var(--text-secondary)]">Loading tasks…</p>
                     </div>
                 ) : filteredFindings.length === 0 ? (
                     <div className="premium-card p-24 text-center">
                         <CheckCircle2 className="w-16 h-16 text-[var(--status-success)] mx-auto mb-6 opacity-20" />
-                        <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Tasks Detected</h3>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">The security perimeter is currently clear</p>
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)]">All clear</h3>
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-2">No open tasks right now.</p>
                     </div>
                 ) : viewMode === 'grid' ? (
                     // Grid: 3 cols, compact cards with left severity border accent

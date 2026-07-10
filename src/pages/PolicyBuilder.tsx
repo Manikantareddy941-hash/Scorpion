@@ -29,7 +29,7 @@ interface EvalResult {
 
 const INPUT_CLS =
   'w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] outline-none';
-const LABEL_CLS = 'block text-[9px] font-black uppercase italic text-[var(--text-secondary)] mb-1.5';
+const LABEL_CLS = 'block text-[12px] font-medium text-[var(--text-secondary)] mb-1.5';
 
 const EMPTY_FORM: PolicyForm = {
   name: '',
@@ -186,16 +186,16 @@ export default function PolicyBuilder() {
     <div className="p-6 space-y-6">
       <div className="premium-card p-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-sm font-black uppercase italic tracking-wider text-[var(--text-primary)]">
-            Policy Builder (Policy-as-Code)
+          <h1 className="text-[18px] font-semibold tracking-tight text-[var(--text-primary)]">
+            Policy builder
           </h1>
-          <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase mt-0.5 tracking-wider font-mono">
-            Author release-gate policies before code ships — thresholds plus optional OPA/Rego.
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            Write release-gate policies as code — thresholds plus optional OPA/Rego.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span
-            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
+            className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${
               opaAvailable === null
                 ? 'bg-[var(--bg-primary)] text-[var(--text-secondary)]'
                 : opaAvailable
@@ -215,7 +215,7 @@ export default function PolicyBuilder() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Policy list */}
         <div className="premium-card p-4 space-y-2">
-          <h2 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)] mb-2">Policies</h2>
+          <h2 className="text-[15px] font-semibold text-[var(--text-primary)] mb-2">Policies</h2>
           {policies.length === 0 && (
             <p className="text-xs text-[var(--text-secondary)]">No policies yet. Create one to gate releases.</p>
           )}
@@ -322,7 +322,7 @@ export default function PolicyBuilder() {
 
           {/* Test / evaluate */}
           <div className="border-t border-[var(--border-subtle)] pt-4 space-y-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">Test this policy</h3>
+            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">Test this policy</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
                 <label className={LABEL_CLS}>Critical</label>

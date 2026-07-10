@@ -122,8 +122,8 @@ export default function Repositories() {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                     <div>
-                        <h1 className="text-3xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter">Repositories</h1>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">Manage your code perimeters & scan vectors</p>
+                        <h1 className="text-[22px] font-semibold text-[var(--text-primary)] tracking-tight">Repositories</h1>
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-1">Connect repositories and set how often they're scanned</p>
                     </div>
 
                     <button 
@@ -139,13 +139,13 @@ export default function Repositories() {
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-24">
                         <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
-                        <p className="text-xs font-black uppercase tracking-widest text-[var(--text-secondary)] italic">Mapping Repository Mesh...</p>
+                        <p className="text-[13px] text-[var(--text-secondary)]">Loading repositories…</p>
                     </div>
                 ) : repos.length === 0 ? (
                     <div className="premium-card p-24 text-center">
                         <Github className="w-16 h-16 text-[var(--text-secondary)] mx-auto mb-6 opacity-20" />
-                        <h3 className="text-xl font-black text-[var(--text-primary)] uppercase italic">No Repositories Linked</h3>
-                        <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2">Connect a repository to begin security orchestration</p>
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)]">No repositories yet</h3>
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-2">Connect a repository to start scanning it for security issues.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -171,7 +171,7 @@ export default function Repositories() {
                                     </div>
                                 </div>
 
-                                <h3 className="text-lg font-black text-[var(--text-primary)] uppercase italic tracking-tight mb-2 truncate">{repo.name}</h3>
+                                <h3 className="text-[15px] font-semibold text-[var(--text-primary)] mb-2 truncate">{repo.name}</h3>
                                 <p className="text-[10px] font-mono text-[var(--text-secondary)] mb-6 truncate opacity-60 italic">{repo.url}</p>
 
                                 <div className="space-y-4 mb-8">
@@ -179,7 +179,7 @@ export default function Repositories() {
                                         <div className="flex flex-col gap-0.5 min-w-[90px] shrink-0">
                                             <div className="flex items-center gap-2">
                                                 <Clock size={12} className="text-[var(--accent-primary)]" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest text-[var(--text-primary)]">Scan Schedule</span>
+                                                <span className="text-[12px] font-medium text-[var(--text-primary)]">Scan schedule</span>
                                             </div>
                                             <span className="text-xs font-mono text-white/50">
                                                 {repo.cron_enabled ? repo.cron_schedule : 'Manual'}
@@ -256,12 +256,12 @@ export default function Repositories() {
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-center">
-                                            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase italic">Created</p>
-                                            <p className="text-[10px] font-black text-[var(--text-primary)] italic mt-0.5">{new Date(repo.$createdAt).toLocaleDateString()}</p>
+                                            <p className="text-[11px] font-medium text-[var(--text-secondary)]">Created</p>
+                                            <p className="text-[13px] font-medium text-[var(--text-primary)] mt-0.5">{new Date(repo.$createdAt).toLocaleDateString()}</p>
                                         </div>
                                         <div className="p-3 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-xl text-center">
-                                            <p className="text-[8px] font-black text-[var(--text-secondary)] uppercase italic">Status</p>
-                                            <p className="text-[10px] font-black text-[var(--status-success)] italic mt-0.5 uppercase">Active</p>
+                                            <p className="text-[11px] font-medium text-[var(--text-secondary)]">Status</p>
+                                            <p className="text-[13px] font-medium text-[var(--status-success)] mt-0.5">Active</p>
                                         </div>
                                     </div>
                                 </div>
@@ -269,7 +269,7 @@ export default function Repositories() {
                                 <button 
                                     onClick={() => handleTriggerScan(repo.$id)}
                                     disabled={scanning === repo.$id}
-                                    className={`w-full py-3 rounded-xl text-[10px] font-black uppercase italic tracking-widest transition-all flex items-center justify-center gap-2
+                                    className={`w-full py-2.5 rounded-lg text-[13px] font-semibold transition-all flex items-center justify-center gap-2
                                         ${scanning === repo.$id 
                                             ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]' 
                                             : 'bg-[var(--accent-primary)] text-black shadow-lg shadow-[var(--accent-primary)]/20 hover:scale-[1.02] active:scale-[0.98]'}`}
@@ -287,12 +287,12 @@ export default function Repositories() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
                         <div className="premium-card max-w-md w-full p-10 relative z-10 animate-in zoom-in-95 duration-200">
-                            <h2 className="text-xl font-black text-[var(--text-primary)] uppercase italic tracking-tighter mb-2">Deploy Repository</h2>
-                            <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mb-8">Establish a new security vector</p>
+                            <h2 className="text-[17px] font-semibold text-[var(--text-primary)] mb-1">Add repository</h2>
+                            <p className="text-[13px] text-[var(--text-secondary)] mb-6">Connect a GitHub repository to start scanning it</p>
                             
                             <form onSubmit={handleAddRepo} className="space-y-6">
                                 <div>
-                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block mb-2">Vector Name</label>
+                                    <label className="text-[12px] font-medium text-[var(--text-secondary)] block mb-2">Repository name</label>
                                     <input 
                                         type="text" 
                                         required
@@ -303,7 +303,7 @@ export default function Repositories() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest block mb-2">GitHub Binary URL</label>
+                                    <label className="text-[12px] font-medium text-[var(--text-secondary)] block mb-2">GitHub URL</label>
                                     <input 
                                         type="url" 
                                         required
@@ -318,13 +318,13 @@ export default function Repositories() {
                                     <button 
                                         type="button"
                                         onClick={() => setShowAddModal(false)}
-                                        className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] transition-all"
+                                        className="flex-1 px-6 py-3 rounded-xl text-[13px] font-semibold border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] transition-all"
                                     >
                                         Abort
                                     </button>
                                     <button 
                                         type="submit"
-                                        className="flex-1 px-6 py-4 rounded-2xl text-[10px] font-black uppercase italic tracking-widest bg-[var(--accent-primary)] text-black shadow-lg shadow-[var(--accent-primary)]/20 hover:scale-[1.02] transition-all"
+                                        className="flex-1 px-6 py-3 rounded-xl text-[13px] font-semibold bg-[var(--accent-primary)] text-white shadow-sm hover:bg-[var(--accent-secondary)] transition-all"
                                     >
                                         Initialize
                                     </button>

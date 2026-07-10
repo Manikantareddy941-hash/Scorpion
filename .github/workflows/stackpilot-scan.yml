@@ -57,20 +57,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
+          scanners: vuln
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
           format: table
       - name: Trivy SARIF (all severities, non-blocking)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         if: always()
         with:
+          # vuln only: secret scanning is Gitleaks' job. Without this, Trivy's
+          # secret scanner re-flags the dummy tokens in .gitleaks.toml's allowlist
+          # and uploads them as code-scanning HIGH alerts.
           scan-type: fs
           scan-ref: .
+          scanners: vuln
           format: sarif
           output: trivy-fs.sarif
           ignore-unfixed: true
@@ -81,7 +86,7 @@ jobs:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
       - name: Generate SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -94,7 +99,7 @@ jobs:
           path: sbom.cdx.json
       - name: License scan (informational - copyleft only blocks in-app)
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -146,7 +151,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: results/checkov.sarif
+          sarif_file: checkov.sarif
           category: checkov
 
   container:
@@ -157,7 +162,7 @@ jobs:
       - name: Build web image (no push)
         run: docker build -t scorpion-web:ci -f Dockerfile .
       - name: Trivy image scan (fail on CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: scorpion-web:ci

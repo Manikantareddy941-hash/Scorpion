@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTheme, type Theme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useScan } from '../contexts/ScanContext';
 import {
-    ChevronDown, Leaf,
+    ChevronDown,
     Activity, ListTodo, Shield, Settings, LogOut, Bell
 } from 'lucide-react';
-
-const THEME_CYCLE: Theme[] = ['aegis', 'terra'];
 
 interface NavbarProps {
     className?: string;
@@ -18,12 +15,10 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
     const { user, signOut } = useAuth();
-    const { theme, setTheme } = useTheme();
     const { activeScan, updateScan } = useScan();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [isNavOpen, setIsNavOpen] = useState(false);
-    const [showThemeMenu, setShowThemeMenu] = useState(false);
 
     // Notifications state
     const [showNotifications, setShowNotifications] = useState(false);
@@ -56,6 +51,9 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
             setNotifications(withRead);
             setUnreadCount(withRead.filter(d => !d.read).length);
         }).catch(err => console.error(err));
+        // getReadIds only reads localStorage keyed by the same user; re-running
+        // solely on user change is intended, so it is deliberately not a dep.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     const markAllAsRead = async () => {
@@ -70,17 +68,17 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
 
 
     return (
-        <nav className={`h-16 flex items-center justify-between px-8 z-40 transition-all duration-300 bg-[var(--bg-primary)]/50 backdrop-blur-md ${className}`}>
-            {/* Left: Dynamic Greeting */}
-            <div className="flex items-center min-w-[200px] animate-in fade-in duration-700">
-                <h1 className="text-[20px] font-bold text-[var(--text-primary)] transition-all">
+        <nav className={`h-14 flex items-center justify-between px-6 z-40 border-b border-[var(--border-subtle)] bg-white/85 backdrop-blur ${className}`}>
+            {/* Left: Greeting */}
+            <div className="flex items-center min-w-[200px]">
+                <h1 className="text-[15px] font-semibold tracking-tight text-[var(--text-primary)]">
                     {(() => {
                         const hour = new Date().getHours();
                         const firstName = user?.name?.split(' ')[0] || 'Operator';
-                        if (hour >= 5 && hour < 12) return `Good Morning, ${firstName} 🌅`;
-                        if (hour >= 12 && hour < 17) return `Good Afternoon, ${firstName} ☀️`;
-                        if (hour >= 17 && hour < 21) return `Good Evening, ${firstName} 🌆`;
-                        return `Welcome Back, ${firstName} 🌙`;
+                        if (hour >= 5 && hour < 12) return `Good morning, ${firstName}`;
+                        if (hour >= 12 && hour < 17) return `Good afternoon, ${firstName}`;
+                        if (hour >= 17 && hour < 21) return `Good evening, ${firstName}`;
+                        return `Welcome back, ${firstName}`;
                     })()}
                 </h1>
             </div>
@@ -100,10 +98,10 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                         </div>
                         <div className="hidden lg:block min-w-[120px]">
                             <div className="flex justify-between items-center mb-1">
-                                <span className="text-[9px] font-black uppercase italic text-[var(--text-primary)] truncate max-w-[80px]">
+                                <span className="text-[10px] font-medium text-[var(--text-primary)] truncate max-w-[80px]">
                                     {activeScan.repoName}
                                 </span>
-                                <span className="text-[9px] font-black text-[var(--accent-primary)]">{activeScan.progress}%</span>
+                                <span className="text-[10px] font-semibold tabular-nums text-[var(--accent-primary)]">{activeScan.progress}%</span>
                             </div>
                             <div className="h-1 w-full bg-black/10 rounded-full overflow-hidden">
                                 <div 
@@ -117,51 +115,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
             </div>
 
             {/* Right: Actions */}
-            <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <div className="relative">
-                        <div className="flex items-center gap-1">
-                            <button
-                                onClick={() => setTheme(THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length])}
-                                className="p-2 text-[var(--text-secondary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 rounded-md transition-all"
-                                title={t('dashboard.toggle_theme')}
-                            >
-                                {theme === 'aegis' && <Shield size={20} />}
-                                {theme === 'terra' && <Leaf size={20} />}
-                            </button>
-                            <button 
-                                onClick={() => setShowThemeMenu(!showThemeMenu)}
-                                className="p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-lg transition-all"
-                            >
-                                <ChevronDown size={14} className={`transition-transform ${showThemeMenu ? 'rotate-180' : ''}`} />
-                            </button>
-                        </div>
-
-                        {showThemeMenu && (
-                            <>
-                                <div className="fixed inset-0 z-[9998]" onClick={() => setShowThemeMenu(false)} />
-                                <div className="absolute right-0 mt-2 p-3 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] z-[9999] animate-in fade-in zoom-in duration-200 grid grid-cols-3 gap-2 min-w-[180px]" style={{ boxShadow: 'var(--card-shadow)' }}>
-                                {
-                                    [
-                                        { id: 'aegis', icon: Shield },
-                                        { id: 'terra', icon: Leaf },
-                                    ].map((themeOption) => (
-                                        <button
-                                            key={themeOption.id}
-                                            onClick={() => { setTheme(themeOption.id as any); setShowThemeMenu(false); }}
-                                            className={`rounded-xl transition-all flex items-center justify-center w-10 h-10
-                                                ${theme === themeOption.id ? 'text-[var(--accent-primary)] bg-[var(--accent-primary)]/10' : 'text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]'}`}
-                                        >
-                                            <themeOption.icon size={16} />
-                                        </button>
-                                    ))
-                                }
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-
+            <div className="flex items-center gap-3">
                 <div className="relative">
                     <button 
                         onClick={() => setShowNotifications(!showNotifications)}
@@ -243,7 +197,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                                     <button
                                         key={item.label}
                                         onClick={() => { navigate(item.path); setIsNavOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] transition-colors"
                                     >
                                         <item.icon className="w-4 h-4" />
                                         {item.label}
@@ -252,7 +206,7 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
                                 <div className="my-2 border-t border-[var(--border-subtle)]" />
                                 <button
                                     onClick={signOut}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest italic text-[var(--status-error)] hover:bg-[var(--status-error)]/5 transition-colors"
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-medium text-[var(--status-error)] hover:bg-[var(--status-error)]/5 transition-colors"
                                 >
                                     <LogOut className="w-4 h-4" />
                                     {t('dashboard.disconnect')}

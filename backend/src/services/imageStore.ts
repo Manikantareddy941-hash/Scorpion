@@ -73,6 +73,45 @@ export async function getSignature(digest: string, now: number = Date.now()): Pr
   return entry.signature;
 }
 
+/**
+ * Signed SLSA provenance (serialized SignedProvenance JSON) recorded per image
+ * digest at build time by buildService. Written on a separate path from
+ * putScan (build vs. CI-ingest), so it lives under its own key/fallback map
+ * rather than inside Entry. Same Redis-primary + bounded local LRU semantics.
+ */
+const PROV_PREFIX = 'prov:';
+const provFallback = new Map<string, { value: string; expiresAt: number }>();
+
+export async function putProvenance(digest: string, provenanceJson: string, now: number = Date.now()): Promise<void> {
+  provFallback.delete(digest);
+  while (provFallback.size >= MAX_ENTRIES) {
+    const oldest = provFallback.keys().next().value;
+    if (oldest === undefined) break;
+    provFallback.delete(oldest);
+  }
+  provFallback.set(digest, { value: provenanceJson, expiresAt: now + TTL_MS });
+  if (!redisReady()) return;
+  try {
+    await redisConnection.set(PROV_PREFIX + digest, provenanceJson, 'PX', TTL_MS);
+  } catch (err) {
+    logger.warn('[imageStore] redis provenance put failed — kept local fallback', { digest, error: toMessage(err) });
+  }
+}
+
+export async function getProvenance(digest: string, now: number = Date.now()): Promise<string | undefined> {
+  if (redisReady()) {
+    try {
+      const raw = await redisConnection.get(PROV_PREFIX + digest);
+      if (raw !== null) return raw;
+    } catch (err) {
+      logger.warn('[imageStore] redis provenance get failed — serving local fallback', { digest, error: toMessage(err) });
+    }
+  }
+  const entry = provFallback.get(digest);
+  if (entry === undefined || entry.expiresAt <= now) return undefined;
+  return entry.value;
+}
+
 export async function getScan(digest: string, now: number = Date.now()): Promise<VulnerablePackage[] | undefined> {
   if (redisReady()) {
     try {

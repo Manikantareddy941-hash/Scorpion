@@ -1,15 +1,60 @@
-@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Literata:wght@400;600;700;900&family=Nunito+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @layer base {
   html {
     font-size: 14px;
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Scorpion Light — the single design system.
+   Premium, authoritative, ultra-clean: warm stone canvas, white surfaces,
+   hairline borders, one indigo accent for interaction, semantic severity
+   colors reserved for state. Inter everywhere; JetBrains Mono for data.
+   Both legacy theme classes (terra/aegis) resolve to these tokens.
+--------------------------------------------------------------------------- */
 :root {
-  --color-primary: #2563eb;
-  --font-display: 'Big Shoulders', 'Arial Narrow', sans-serif;
-  --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  --color-primary: #4f46e5;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --background: #fafaf9;
+  --bg-page: #fafaf9;
+  --card-background: #ffffff;
+  --bg-primary: var(--background);
+  --bg-card: var(--card-background);
+  --bg-secondary: #f5f5f4;
+  --primary: #4f46e5;
+  --border: #e7e5e4;
+  --border-subtle: var(--border);
+  --border-strong: #d6d3d1;
+  --border-color: var(--border);
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
+  --text-on-accent: #ffffff;
+  --accent: #4f46e5;
+  --accent-primary: var(--primary);
+  --accent-secondary: #4338ca;
+  --status-success: #16a34a;
+  --status-error: #dc2626;
+  --status-warning: #d97706;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --severity-critical: #dc2626;
+  --severity-high: #ea580c;
+  --severity-medium: #d97706;
+  --severity-low: #16a34a;
+  --severity-info: #64748b;
+  --card-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 4px 16px rgba(28, 25, 23, 0.04);
+  --chart-bg: transparent;
+  --chart-grid: var(--border-subtle);
+  --chart-label: var(--text-secondary);
+  --chart-fill: var(--accent-primary);
+  --chart-fill-opacity: 0.16;
+  --glass-blur: none;
+  --glass-border: var(--border);
+  --glass-shadow: none;
 }
 
 @tailwind base;
@@ -27,63 +72,57 @@
   display: none;
 }
 
-/* Terra — organic daylight console. Default theme. Forest green on warm cream, Literata
-   headlines over Nunito Sans body. Soft 12px rounding, no harsh shadows. */
-html.terra {
-  --background: #faf6f0;
-  --bg-page: #faf6f0;
-  --card-background: #ffffff;
-  --bg-primary: var(--background);
-  --bg-card: var(--card-background);
-  --bg-secondary: #f0ece4;
-  --primary: #4a7c59;
-  --border: #c4c8bc;
-  --border-subtle: var(--border);
-  --border-color: var(--border);
-  --text-primary: #2e3230;
-  --text-secondary: #4a4e4a;
-  --text-muted: #74796e;
-  --text-on-accent: #ffffff;
-  --accent: #705c30;
-  --accent-primary: var(--primary);
-  --accent-secondary: #705c30;
-  --status-success: #4a7c59;
-  --status-error: #b83230;
-  --status-warning: #705c30;
-  --danger: #b83230;
-  --warning: #705c30;
-  --severity-critical: #b83230;
-  --severity-high: #b83230;
-  --severity-medium: #705c30;
-  --severity-low: #4a7c59;
-  --severity-info: #6b6358;
-  --card-shadow: 0 4px 20px rgba(46, 50, 48, 0.06);
-  --chart-bg: transparent;
-  --chart-grid: var(--border-subtle);
-  --chart-label: var(--text-secondary);
-  --chart-fill: var(--accent-primary);
-  --chart-fill-opacity: 0.35;
-  --glass-blur: none;
-  --glass-border: var(--border);
-  --glass-shadow: none;
-  --font-display: 'Literata', serif;
-  --font-body: 'Nunito Sans', sans-serif;
-}
-
-html.terra body {
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
   font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
 
-html.terra h1, html.terra h2, html.terra h3, html.terra h4 {
+/* Typography discipline: semibold sentence-case headings, no display
+   theatrics. Italic and 900-weight styling from the old system is
+   neutralized globally — the new voice is calm and precise. */
+h1, h2, h3, h4, .display {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: normal;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-style: normal;
 }
 
-html.terra .card,
-html.terra [class*='card'],
-html.terra [class*='widget'],
-html.terra [class*='panel'] {
+.italic {
+  font-style: normal !important;
+}
+
+.font-black {
+  font-weight: 700 !important;
+}
+
+.tracking-widest {
+  letter-spacing: 0.06em !important;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Numbers align column-true in KPIs and tables. */
+.tabular-nums,
+[class*='text-2xl'],
+[class*='text-3xl'],
+[class*='text-4xl'] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Every card-like surface in the app resolves to the same calm plate:
+   white, hairline border, soft 12px radius, one subtle shadow. */
+.card,
+[class*='card'],
+[class*='widget'],
+[class*='panel'] {
   background-color: var(--card-background) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-subtle) !important;
@@ -91,261 +130,95 @@ html.terra [class*='panel'] {
   border-radius: 12px;
 }
 
-html.terra .bg-white,
-html.terra .bg-gray-50,
-html.terra .bg-gray-100,
-html.terra .bg-gray-200 {
+.bg-white,
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-200 {
   background-color: var(--bg-card) !important;
 }
-html.terra .text-gray-900,
-html.terra .text-gray-800,
-html.terra .text-gray-700 {
+.text-gray-900,
+.text-gray-800,
+.text-gray-700 {
   color: var(--text-primary) !important;
 }
-html.terra .text-gray-600,
-html.terra .text-gray-500,
-html.terra .text-gray-400 {
+.text-gray-600,
+.text-gray-500,
+.text-gray-400 {
   color: var(--text-secondary) !important;
 }
-html.terra .border-gray-100,
-html.terra .border-gray-200,
-html.terra .border-gray-300 {
+.border-gray-100,
+.border-gray-200,
+.border-gray-300 {
   border-color: var(--border-subtle) !important;
-}
-
-/* Console plates are flat by default — no global forced rounding. */
-h1, h2, h3, .display {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: 0.01em;
-}
-
-/* Aegis — the platform default. Slate-white surfaces, deep-navy text,
-   electric-blue/indigo accents: the tech & corporate trust register for
-   SaaS/fintech/dev-tool buyers. Flat plates, no glass, no corner ticks —
-   trust reads as precision here, not theater. */
-html.aegis {
-  --background: #eef1f6;
-  --bg-page: #eef1f6;
-  --card-background: #ffffff;
-  --bg-primary: var(--background);
-  --bg-card: var(--card-background);
-  --bg-secondary: #f4f6fa;
-  --primary: #2563eb;
-  --border: #dde3ec;
-  --border-subtle: var(--border);
-  --border-strong: #c3ccd9;
-  --border-color: var(--border);
-  --text-primary: #0b1220;
-  --text-secondary: #44505f;
-  --text-muted: #6a7686;
-  --text-on-accent: #ffffff;
-  --accent: #2563eb;
-  --accent-primary: var(--primary);
-  --accent-secondary: #1d4ed8;
-  --status-success: #15a34a;
-  --status-error: #e11d48;
-  --status-warning: #e08600;
-  --danger: #e11d48;
-  --warning: #e08600;
-  --severity-critical: #e11d48;
-  --severity-high: #ea580c;
-  --severity-medium: #d97706;
-  --severity-low: #15a34a;
-  --severity-info: #64748b;
-  --card-shadow: 0 1px 2px rgba(11, 18, 32, 0.05), 0 1px 1px rgba(11, 18, 32, 0.04);
-  --chart-bg: transparent;
-  --chart-grid: var(--border-subtle);
-  --chart-label: var(--text-secondary);
-  --chart-fill: var(--accent-primary);
-  --chart-fill-opacity: 0.16;
-  --glass-blur: none;
-  --glass-border: var(--border);
-  --glass-shadow: none;
-  --font-display: 'Big Shoulders', 'IBM Plex Sans', sans-serif;
-  --font-body: 'IBM Plex Sans', 'Inter', sans-serif;
-}
-
-html.aegis body {
-  font-family: var(--font-body);
-}
-
-html.aegis h1, html.aegis h2, html.aegis h3, html.aegis h4 {
-  font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-/* Tabular numerics everywhere under Aegis — gauge readouts must align column-true. */
-html.aegis .tabular-nums,
-html.aegis [class*='text-2xl'],
-html.aegis [class*='text-3xl'],
-html.aegis [class*='text-4xl'] {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-}
-
-html.aegis .plate::before,
-html.aegis .plate::after {
-  display: none;
-}
-
-html.aegis .card,
-html.aegis [class*='card'],
-html.aegis [class*='widget'],
-html.aegis [class*='panel'] {
-  background-color: var(--card-background) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-subtle) !important;
-  box-shadow: var(--card-shadow) !important;
-  border-radius: 4px;
-}
-
-/* Force-tighten all cards and plates globally under the Aegis theme (terra keeps soft 12px). */
-html.aegis .plate,
-html.aegis .tele-card,
-html.aegis .card-root {
-  border-radius: 4px !important;
-  padding: 14px !important;
-}
-
-html.aegis .bg-white,
-html.aegis .bg-gray-50,
-html.aegis .bg-gray-100,
-html.aegis .bg-gray-200 {
-  background-color: var(--bg-card) !important;
-}
-html.aegis .text-gray-900,
-html.aegis .text-gray-800,
-html.aegis .text-gray-700 {
-  color: var(--text-primary) !important;
-}
-html.aegis .text-gray-600,
-html.aegis .text-gray-500,
-html.aegis .text-gray-400 {
-  color: var(--text-secondary) !important;
-}
-html.aegis .border-gray-100,
-html.aegis .border-gray-200,
-html.aegis .border-gray-300 {
-  border-color: var(--border-subtle) !important;
-}
-
-body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  transition: background 0.3s, color 0.3s;
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-body);
-}
-
-.mono {
-  font-family: var(--font-mono);
 }
 
 @layer components {
-  /* Flat console plate — the base unit of the new design system. No
-     rounding, no soft shadow; a 1px seam border and an L-shaped corner tick
-     stand in for the depth that drop-shadows used to fake. */
   .plate {
     position: relative;
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
+    box-shadow: var(--card-shadow);
   }
 
   .plate,
   [class*='card'] {
-    transition: box-shadow 0.2s ease, transform 0.15s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
-  .plate::before,
-  .plate::after {
-    content: '';
-    position: absolute;
-    width: 7px;
-    height: 7px;
-    pointer-events: none;
-    opacity: 0.6;
-  }
-
-  .plate::before {
-    top: -1px;
-    left: -1px;
-    border-top: 2px solid var(--accent-primary);
-    border-left: 2px solid var(--accent-primary);
-  }
-
-  .plate::after {
-    bottom: -1px;
-    right: -1px;
-    border-bottom: 2px solid var(--accent-primary);
-    border-right: 2px solid var(--accent-primary);
-  }
-
-  /* Terra's soft rounded plates read clean without sharp corner-bracket
-     ticks — those look like glitch artifacts against it. Matrix keeps them. */
-  html.terra .plate::before,
-  html.terra .plate::after {
-    display: none;
-  }
-
-  .plate-strike::before,
-  .plate-strike::after {
+  .plate-strike {
     border-color: var(--severity-critical);
-    opacity: 1;
   }
 
   .plate-header {
-    font-family: var(--font-display);
-    font-weight: 700;
+    font-family: var(--font-body);
+    font-weight: 600;
     font-size: 11px;
     letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-primary);
-  }
-
-  .plate-eyebrow {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--text-secondary);
   }
 
-  /* Legacy card classes — still used on pages not yet migrated to .plate.
-     Retoned to the flat console language so they don't clash visually;
-     full replacement happens as each page gets redesigned. */
+  .plate-eyebrow {
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
   .premium-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 0;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
     transition: border-color 0.2s ease;
   }
 
   .premium-card:hover {
-    border-color: var(--accent-primary);
+    border-color: var(--border-strong);
   }
 
   .glass-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 0;
+    border-radius: 12px;
   }
 
   .btn-premium {
     background: var(--accent-primary);
     color: var(--text-on-accent);
-    @apply px-6 py-2.5 font-bold tracking-widest uppercase transition-all duration-150;
-    font-family: var(--font-display);
-    font-size: 11px;
-    border-radius: 2px;
+    @apply px-4 py-2 font-semibold transition-all duration-150;
+    font-family: var(--font-body);
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+    border-radius: 8px;
   }
 
   .btn-premium:hover {
-    filter: brightness(1.12);
+    background: var(--accent-secondary);
   }
 
   .btn-premium:active {
@@ -428,15 +301,12 @@ a[href*="bolt.new"], div[class*="bolt"], [data-bolt], #bolt-watermark, .bolt-wat
   }
 }
 
-/* Telemetry Card Hover Effect */
+/* Card hover: a quiet lift, no scale distortion. */
 .tele-card {
-  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
-              box-shadow 0.22s ease,
-              border-color 0.2s ease;
-  transform-origin: top center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 .tele-card:hover {
-  transform: scaleY(1.06) translateY(-4px);
-  border-color: var(--color-border-secondary);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 20px rgba(28, 25, 23, 0.08);
 }

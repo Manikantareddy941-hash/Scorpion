@@ -24,7 +24,7 @@ const notifySlack = async (payload: { title: string; severity: string; source: s
 export interface Incident {
   title: string;
   severity: string;
-  source: 'falco' | 'ci_pipeline' | 'gitops';
+  source: 'falco' | 'ci_pipeline' | 'gitops' | 'soar';
   relatedScanId?: string;
   description: string;
   // Owning user, when derivable (e.g. correlated from a scan's repo owner).
