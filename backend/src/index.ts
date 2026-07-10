@@ -66,7 +66,6 @@ import falcoRuleRoutes from './routes/falcoRuleRoutes';
 import postureRoutes from './routes/postureRoutes';
 import netpolRoutes from './routes/netpolRoutes';
 import { registerTicketRoutes } from './registerRoutes';
-import { checkTool } from './utils/toolCheck';
 import crypto from 'crypto';
 import https from 'https';
 import fs from 'fs';

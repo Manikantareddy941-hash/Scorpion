@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { resolveToolCommand, validateTools } from '../../utils/toolCheck';
+import { validateTools } from '../../utils/toolCheck';
 import { logger } from '../logger';
 
 // Safety: 5 minute timeout for any individual tool scan

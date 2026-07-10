@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
-import { ID, Query } from 'node-appwrite';
+import { Query } from 'node-appwrite';
 import { logger } from './logger';
 
 export interface GateResult {

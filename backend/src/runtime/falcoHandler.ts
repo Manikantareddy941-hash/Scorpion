@@ -1,5 +1,4 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import axios from 'axios';
 import { logRuntimeThreat } from '../services/logEvents';
 import { runtimeThreats } from '../services/metrics';
 import { withSpan } from '../services/tracing';
