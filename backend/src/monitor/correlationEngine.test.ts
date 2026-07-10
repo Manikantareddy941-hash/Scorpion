@@ -77,3 +77,18 @@ test('an out-of-window partial does not swallow a later valid in-window pair', (
   const out = evaluate(events, [rule], t + 20 * 60_000);
   expect(out).toHaveLength(1);
 });
+
+test('a window-abort restarts from start+1, not i, so an alternate start is not discarded', () => {
+  const rule = catalogById('recon-to-exploit')!; // window 15m
+  const t = 1_000_000;
+  const events: SecurityEvent[] = [
+    // attempt 1: recon at t=0 will abort once exploit arrives 20min later (out of window)
+    ev({ type: 'recon', srcIp: 'A', timestamp: t }),
+    // valid alternate start: recon at t=5min — must not be discarded on abort
+    ev({ type: 'recon', srcIp: 'A', timestamp: t + 5 * 60_000 }),
+    // exploit at t=20min is 15min after the 2nd recon — in-window
+    ev({ type: 'exploit', srcIp: 'A', timestamp: t + 20 * 60_000 }),
+  ];
+  const out = evaluate(events, [rule], t + 21 * 60_000);
+  expect(out).toHaveLength(1);
+});

@@ -33,7 +33,11 @@ function matchGroup(sorted: SecurityEvent[], rule: CorrelationRule): Correlation
       const cond = rule.sequence[idx];
       if (!condMatches(e, cond, prior)) continue;
       if (firstTs >= 0 && e.timestamp - firstTs > rule.windowMs) {
-        consumedUpTo = i; // restart from this event, it may begin a fresh sequence
+        // restart right after this attempt's start (not at i): events strictly between
+        // start and i are valid alternate sequence starts and must not be skipped.
+        // i > start is guaranteed here (abort only fires after >= 1 match), so this
+        // is still forward progress.
+        consumedUpTo = start + 1;
         break;
       }
       if (firstTs < 0) firstTs = e.timestamp;
