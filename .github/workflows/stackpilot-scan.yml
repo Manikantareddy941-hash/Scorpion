@@ -54,6 +54,11 @@ jobs:
   sca:
     name: SCA + SBOM (Trivy)
     runs-on: ubuntu-latest
+    # Pull the vuln DB from the AWS ECR mirror instead of ghcr.io, which
+    # anonymous-rate-limits (429) on GitHub-hosted runners and fast-fails the job.
+    env:
+      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
+      TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db
     steps:
       - uses: actions/checkout@v4
       - name: Trivy filesystem scan (fail on CRITICAL)
@@ -146,12 +151,16 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: results/checkov.sarif
+          sarif_file: checkov.sarif
           category: checkov
 
   container:
     name: Container image (Trivy)
     runs-on: ubuntu-latest
+    # Same ghcr.io rate-limit mitigation as the sca job.
+    env:
+      TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
+      TRIVY_JAVA_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-java-db
     steps:
       - uses: actions/checkout@v4
       - name: Build web image (no push)

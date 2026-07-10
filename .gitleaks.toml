@@ -7,15 +7,25 @@ title = "Scorpion Gitleaks Config"
 useDefault = true
 
 [allowlist]
-description = "Example env files and docs with placeholder secrets"
+description = "Example env files, docs, third-party vendor artifacts, and placeholder secrets"
 paths = [
   '''\.env\.example$''',
   '''\.env\.local$''',
   '''k8s/overlays/dev/\.env\.local$''',
   '''README\.md$''',
   '''docs/.*''',
+  # Obsidian vault: obsidian-local-rest-api ships a self-signed cert in data.json
+  # and bundles the minified `forge` crypto lib in main.js. Not app secrets.
+  '''^\.obsidian/''',
+  # Stackpilot/ is a nested legacy project copy whose test fixtures
+  # (gitleaks-output.json, .env.test) hold deliberately fake sk_live_/re_ tokens.
+  '''^Stackpilot/''',
 ]
-# Common placeholder tokens so demo values don't trip the scan.
+# Placeholder/dummy tokens so demo values don't trip the scan.
 regexes = [
   '''(?i)(your[_-]?(api[_-]?key|token|secret)|example|placeholder|changeme|xxxx+|<[^>]+>)''',
+  # Dummy Slack token in remediate.ts (documentation example, not a real bot token).
+  '''xoxb-1234567890-abcdef''',
+  # False positive: metric field name in CanaryPanel.tsx, not a credential.
+  '''maxP95LatencyMs''',
 ]
