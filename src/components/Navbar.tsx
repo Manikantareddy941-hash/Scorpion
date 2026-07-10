@@ -51,6 +51,9 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
             setNotifications(withRead);
             setUnreadCount(withRead.filter(d => !d.read).length);
         }).catch(err => console.error(err));
+        // getReadIds only reads localStorage keyed by the same user; re-running
+        // solely on user change is intended, so it is deliberately not a dep.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
 
     const markAllAsRead = async () => {
