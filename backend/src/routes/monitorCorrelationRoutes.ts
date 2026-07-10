@@ -3,6 +3,7 @@ import { Models } from 'node-appwrite';
 import { verifyUser } from '../middleware/auth';
 import { resolveOwnershipScope } from '../services/tenancyService';
 import { correlationRepository } from '../repositories/correlationRepository';
+import { enqueueCorrelationTick } from '../queues/correlationQueue';
 import { CORRELATION_CATALOG, catalogById } from '../monitor/correlationCatalog';
 import { logger } from '../services/logger';
 import type { Severity } from '../monitor/securityEvent.types';
@@ -13,6 +14,9 @@ const router = Router();
 router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = req.user?.$id || '';
+    // ponytail: seeds this tenant's correlation loop on first view; self-perpetuates via
+    // startCorrelationWorker's re-enqueue, so no tenant registry is needed.
+    void enqueueCorrelationTick({ ownerUserId: userId }, 0);
     await resolveOwnershipScope(req, userId);
     res.json(await correlationRepository.listFired('owner', userId));
   } catch (err) { logger.error('[correlationRoutes] list failed', err); res.status(500).json({ error: 'Internal server error' }); }

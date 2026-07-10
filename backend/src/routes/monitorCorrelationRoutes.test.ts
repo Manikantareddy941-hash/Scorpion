@@ -3,6 +3,7 @@ jest.mock('../services/tenancyService', () => ({ resolveOwnershipScope: jest.fn(
 jest.mock('../repositories/correlationRepository', () => ({
   correlationRepository: { listFired: jest.fn().mockResolvedValue([]), listRuleStates: jest.fn().mockResolvedValue([]), upsertRuleState: jest.fn() },
 }));
+jest.mock('../queues/correlationQueue', () => ({ enqueueCorrelationTick: jest.fn() }));
 
 import express from 'express';
 import request from 'supertest';
