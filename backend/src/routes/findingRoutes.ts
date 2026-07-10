@@ -27,7 +27,7 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
         }
 
         const userId = req.user?.$id || '';
-        const existingFinding = await databases.getDocument(DB_ID, 'findings', id);
+        const existingFinding = await databases.getDocument(DB_ID, COLLECTIONS.FINDINGS, id);
         const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, existingFinding.repo_id);
         if (!(await canAccessResource(repo, userId))) {
             return res.status(403).json({ error: 'You do not have access to this finding' });
@@ -41,7 +41,7 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
 
         const updatedFinding = await databases.updateDocument(
             DB_ID,
-            'findings',
+            COLLECTIONS.FINDINGS,
             id,
             patch
         );
