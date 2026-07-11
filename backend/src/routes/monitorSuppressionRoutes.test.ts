@@ -1,4 +1,4 @@
-jest.mock('../middleware/auth', () => ({ verifyUser: (req: any, _res: any, next: any) => { req.user = { $id: 'u1' }; next(); } }));
+jest.mock('../middleware/auth', () => ({ verifyUser: (req: { user?: { $id: string } }, _res: unknown, next: () => void) => { req.user = { $id: 'u1' }; next(); } }));
 jest.mock('../repositories/suppressionRepository', () => ({
   suppressionRepository: {
     listForOwner: jest.fn().mockResolvedValue([]),

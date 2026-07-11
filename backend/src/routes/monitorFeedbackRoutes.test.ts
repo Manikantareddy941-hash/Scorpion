@@ -1,4 +1,4 @@
-jest.mock('../middleware/auth', () => ({ verifyUser: (req: any, _res: any, next: any) => { req.user = { $id: 'u1' }; next(); } }));
+jest.mock('../middleware/auth', () => ({ verifyUser: (req: { user?: { $id: string } }, _res: unknown, next: () => void) => { req.user = { $id: 'u1' }; next(); } }));
 jest.mock('../services/tenancyService', () => ({ resolveOwnershipScope: jest.fn().mockResolvedValue({ field: 'user_id', value: 'u1' }) }));
 jest.mock('../lib/appwrite', () => ({
   databases: { listDocuments: jest.fn() }, DB_ID: 'db',
