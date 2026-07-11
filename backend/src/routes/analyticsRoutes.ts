@@ -12,8 +12,10 @@ const router = Router();
 // GET /api/analytics/trends
 router.get('/trends', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-        const days = parseInt(req.query.days as string) || 30;
-        
+        // Clamp to a sane window: a negative value would query a future date
+        // range (empty), and an unbounded one an arbitrarily large scan.
+        const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 365);
+
         const dateLimit = new Date();
         dateLimit.setDate(dateLimit.getDate() - days);
 

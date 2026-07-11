@@ -80,14 +80,18 @@ export const deduplicateFindings = (rawFindings: any[]): NormalizedVulnerability
   const mergedResults: NormalizedVulnerability[] = [];
 
   // Helper to decide if two findings are "similar" enough to merge.
+  // The caller only pairs findings already within a ±3 line window.
   const areSimilar = (a: NormalizedVulnerability, b: NormalizedVulnerability): boolean => {
-    // Rule similarity – for secrets we relax to keyword match.
+    // Same rule = same finding reported by multiple scanners → merge.
+    if (a.ruleId !== 'unknown' && a.ruleId === b.ruleId) return true;
+    // Secrets: two scanners flagging the SAME secret land on the same line.
+    // Only collapse when the line matches exactly — a ±3 keyword match would
+    // fold two DIFFERENT nearby secrets into one and undercount real findings.
     const secretKeywords = ['secret', 'password', 'key', 'token'];
     const aIsSecret = secretKeywords.some((kw) => a.title.toLowerCase().includes(kw));
     const bIsSecret = secretKeywords.some((kw) => b.title.toLowerCase().includes(kw));
-    if (aIsSecret && bIsSecret) return true;
-    // Otherwise exact ruleId match.
-    return a.ruleId === b.ruleId;
+    if (aIsSecret && bIsSecret && a.line === b.line) return true;
+    return false;
   };
 
   // Process each file group.
