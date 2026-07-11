@@ -248,7 +248,10 @@ was introduced.
    "Why Only the `system` Tick" above) — per-owner ticks still run
    `evaluate()` against whatever real events exist in `security_events` for
    that owner (today: only the reset-password `auth_failure`), but will not
-   produce a completed correlation until more producers exist.
+   produce a completed correlation until more producers exist. APM spike
+   incidents are created under `user_id: 'system'`, and the incidents API
+   filters by the caller's `user_id`, so these incidents surface via Slack
+   notification only, not in the incidents UI.
 
 3. **Tasks-page resolutions do not feed MTTR / reopen-rate.** The frontend's
    `COLLECTIONS.FINDINGS` resolves via `.env`

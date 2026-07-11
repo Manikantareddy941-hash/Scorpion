@@ -1,4 +1,4 @@
-import type { SecurityEvent, CorrelationRule, Correlation } from './securityEvent.types';
+import type { SecurityEvent, CorrelationRule } from './securityEvent.types';
 
 test('SecurityEvent shape accepts a normalized event', () => {
   const e: SecurityEvent = {
