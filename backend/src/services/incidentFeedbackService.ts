@@ -44,7 +44,8 @@ export async function convertIncidentToIssue(
   let incident: IncidentDoc;
   try {
     incident = await databases.getDocument(DB_ID, COLLECTIONS.INCIDENTS, incidentId) as unknown as IncidentDoc;
-  } catch {
+  } catch (err) {
+    logger.error('[incidentFeedback] getDocument failed', err);
     return 'not_found';
   }
   if (!userId || incident.user_id !== userId) return 'forbidden';
