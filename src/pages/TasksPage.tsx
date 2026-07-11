@@ -68,7 +68,8 @@ export default function TasksPage() {
 
     const handleResolve = async (id: string) => {
         try {
-            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved' });
+            const resolvedAt = new Date().toISOString();
+            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved', resolvedAt });
             setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
             toast.success('Issue marked as resolved');
         } catch (err) {
@@ -88,8 +89,9 @@ export default function TasksPage() {
         const verbPast = status === 'resolved' ? 'acknowledged' : 'dismissed';
         const toastId = toast.loading(`${verb} ${selectedTasks.size} tasks...`);
         try {
+            const payload = status === 'resolved' ? { status, resolvedAt: new Date().toISOString() } : { status };
             await Promise.all(Array.from(selectedTasks).map(id =>
-                databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status })
+                databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, payload)
             ));
             setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status } : f));
             toast.success(`Bulk ${verbPast} ${selectedTasks.size} tasks`, { id: toastId });

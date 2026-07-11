@@ -50,7 +50,7 @@ export default function VerifyScan({ task, onClose, onSuccess }: Props) {
             ]);
             for (const v of vulnsRes.documents) {
               if (v.status !== 'resolved' && v.status !== 'fixed') {
-                await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, v.$id, { status: 'resolved' });
+                await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, v.$id, { status: 'resolved', resolvedAt: new Date().toISOString() });
               }
             }
             localStorage.setItem('issuesResolved', 'true');
