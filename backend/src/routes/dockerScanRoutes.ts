@@ -1,11 +1,14 @@
 import { Router, Response, Request } from 'express';
 import { Models } from 'node-appwrite';
-import { databases, DB_ID, Query, ID } from '../lib/appwrite';
+import { databases, DB_ID, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
-import { spawnSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { sendFindingAlert, FindingDocument } from '../utils/alertDispatcher';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
+
+const execFileAsync = promisify(execFile);
 
 interface AuthenticatedRequest extends Request {
     user?: Models.User<Models.Preferences>;
@@ -37,25 +40,34 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Authenticated
         return res.status(400).json({ error: 'Invalid image_name format' });
     }
 
-    // Check if trivy is available
-    const trivyCheck = spawnSync('trivy', ['--version']);
-    if (trivyCheck.status !== 0) {
+    // Check if trivy is available. Async so a slow/missing binary can't block the
+    // single-threaded event loop and stall every other in-flight request.
+    try {
+        await execFileAsync('trivy', ['--version']);
+    } catch {
         return res.status(503).json({ error: "Trivy not available" });
     }
 
     try {
         logger.info(`[DockerScan] Scanning image: ${image_name}...`);
-        const result = spawnSync('trivy', [
-            'image',
-            '--format', 'json',
-            image_name
-        ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
-
-        if (result.status !== 0) {
-            return res.status(500).json({ error: "Trivy scan failed", details: result.stderr });
+        // execFile (async) instead of spawnSync: an image scan can take tens of
+        // seconds; running it synchronously would freeze the whole backend for
+        // its duration. A non-zero exit rejects, so failures land in catch below.
+        let stdout: string;
+        try {
+            ({ stdout } = await execFileAsync('trivy', [
+                'image',
+                '--format', 'json',
+                image_name
+            ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }));
+        } catch (scanErr: unknown) {
+            const details = scanErr && typeof scanErr === 'object' && 'stderr' in scanErr
+                ? String((scanErr as { stderr?: unknown }).stderr)
+                : errorMessage(scanErr);
+            return res.status(500).json({ error: "Trivy scan failed", details });
         }
 
-        const output = JSON.parse(result.stdout || '{"Results": []}') as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
+        const output = JSON.parse(stdout || '{"Results": []}') as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };
         const vulnerabilities = (output.Results || []).flatMap((r) => r.Vulnerabilities || []);
 
         const stats = {

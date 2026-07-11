@@ -200,7 +200,12 @@ app.use(cors({
 // --- GitHub Webhook (MUST be before express.json() for raw body access) ---
 app.use('/api/github/webhook', createNodeMiddleware(githubWebhooks, { path: '/api/github/webhook' }));
 
-app.use(express.json());
+// Capture the raw body so HMAC-signed webhooks (GitHub) can verify against the
+// exact bytes GitHub signed, not a re-serialized copy. Re-stringifying the parsed
+// body changes whitespace/encoding and breaks signature verification.
+app.use(express.json({
+    verify: (req: Request & { rawBody?: Buffer }, _res, buf) => { req.rawBody = buf; }
+}));
 
 // --- Rate Limiting ---
 // Baseline per-IP ceiling across the whole API to blunt scraping / bot hammering.
