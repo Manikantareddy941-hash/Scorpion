@@ -46,13 +46,13 @@ export function buildThreatIssueFields(threat: Threat, projectId: string): Issue
   };
 }
 
-async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
+export async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
   if (!userId) return false;
   const ownerId = await planRepository.getProjectOwner(projectId);
   return ownerId === userId;
 }
 
-function severityToPriority(severity: string): Issue['priority'] {
+export function severityToPriority(severity: string): Issue['priority'] {
   const normalized = severity.toLowerCase();
   if (normalized === 'critical') return 'critical';
   if (normalized === 'high') return 'high';
