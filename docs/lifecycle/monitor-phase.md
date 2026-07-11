@@ -250,6 +250,19 @@ was introduced.
    that owner (today: only the reset-password `auth_failure`), but will not
    produce a completed correlation until more producers exist.
 
+3. **Tasks-page resolutions do not feed MTTR / reopen-rate.** The frontend's
+   `COLLECTIONS.FINDINGS` resolves via `.env`
+   (`VITE_APPWRITE_FINDINGS_COLLECTION_ID=findings`) to the separate
+   `findings` collection (docker-scan findings), while the feedback route
+   computes its metrics over `vulnerabilities` — the collection the main
+   scan pipeline populates. So the `resolvedAt` stamp on
+   `src/pages/TasksPage.tsx` lands in a collection the metrics never read;
+   only the `src/components/VerifyScan.tsx` auto-close path (which writes to
+   `COLLECTIONS.VULNERABILITIES`) currently feeds MTTR. This is a
+   pre-existing frontend collection-alias split, not introduced by this
+   phase. Follow-up: repoint the Tasks page's reads *and* writes to
+   `vulnerabilities` (or unify the two aliases) so manual resolutions count.
+
 ---
 
 ## Deliberately deferred
