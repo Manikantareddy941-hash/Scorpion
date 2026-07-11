@@ -107,11 +107,14 @@ export default function IncidentsPanel() {
         method: 'PATCH',
         body: JSON.stringify({ rootCause, escapedPhase, lessons }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to save post-mortem');
+      }
       toast.success('Post-mortem saved');
       await load();
-    } catch {
-      toast.error('Failed to save post-mortem');
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Failed to save post-mortem');
     } finally {
       setSaving(false);
     }
@@ -125,11 +128,14 @@ export default function IncidentsPanel() {
         method: 'POST',
         body: JSON.stringify({ projectId: selectedProjId }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to create Plan issue');
+      }
       toast.success('Plan issue created');
       await load();
-    } catch {
-      toast.error('Failed to create Plan issue');
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Failed to create Plan issue');
     } finally {
       setConverting(false);
     }
