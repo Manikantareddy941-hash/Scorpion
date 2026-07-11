@@ -18,6 +18,7 @@ import PosturePanel from '../components/PosturePanel';
 import NetPolPanel from '../components/NetPolPanel';
 import CorrelationPanel from '../components/CorrelationPanel';
 import FeedbackPanel from '../components/FeedbackPanel';
+import IncidentsPanel from '../components/IncidentsPanel';
 
 export default function Monitor() {
   const { t } = useTranslation();
@@ -394,6 +395,7 @@ export default function Monitor() {
         <NetPolPanel prefillNamespace={netpolPrefillNamespace} />
         <CorrelationPanel />
         <FeedbackPanel />
+        <IncidentsPanel />
       </div>
     </div>
   );
