@@ -59,6 +59,12 @@ describe('convertIncidentToIssue', () => {
     expect(await convertIncidentToIssue('p1', 'inc1', 'u1')).toBe('forbidden');
   });
 
+  test('not_found when the incident fetch fails', async () => {
+    (databases.getDocument as jest.Mock).mockRejectedValue(new Error('document not found'));
+    expect(await convertIncidentToIssue('p1', 'inc1', 'u1')).toBe('not_found');
+    expect(planRepository.createIssue).not.toHaveBeenCalled();
+  });
+
   test('not_resolved and no_postmortem guards', async () => {
     (databases.getDocument as jest.Mock).mockResolvedValue({ ...incident, status: 'open' });
     expect(await convertIncidentToIssue('p1', 'inc1', 'u1')).toBe('not_resolved');
