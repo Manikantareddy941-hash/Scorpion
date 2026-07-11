@@ -50,6 +50,9 @@ import nucleiRoutes from './routes/nucleiRoutes';
 import ffufRoutes from './routes/ffufRoutes';
 import scanRoutes from './routes/scanRoutes';
 import monitorRoutes from './routes/monitorRoutes';
+import monitorCorrelationRoutes from './routes/monitorCorrelationRoutes';
+import monitorFeedbackRoutes from './routes/monitorFeedbackRoutes';
+import monitorSuppressionRoutes from './routes/monitorSuppressionRoutes';
 import issuesRoutes from './routes/issuesRoutes';
 import buildRoutes from './routes/buildRoutes';
 import deployRoutes from './routes/deployRoutes';
@@ -78,6 +81,8 @@ import { initNucleiQueueWorker } from './queues/nucleiQueueWorker';
 import { initFfufQueueWorker } from './queues/ffufQueueWorker';
 import { initCanaryQueueWorker } from './queues/canaryQueueWorker';
 import { initSoarQueueWorker } from './queues/soarQueueWorker';
+import { startCorrelationWorker, stopCorrelationWorker } from './queues/correlationQueueWorker';
+import { enqueueCorrelationTick, correlationQueue } from './queues/correlationQueue';
 import { startDriftMonitor } from './workers/driftMonitor';
 import { startPostureScanner } from './workers/postureScanner';
 import { startFallbackReplayer, stopFallbackReplayer } from './workers/fallbackReplayer';
@@ -323,6 +328,9 @@ app.use('/api/scan/dast', dastRoutes);
 app.use('/api/scan', nucleiRoutes);
 app.use('/api/scan', ffufRoutes);
 app.use('/api/monitor', monitorRoutes);
+app.use('/api/monitor/correlations', monitorCorrelationRoutes);
+app.use('/api/monitor/feedback', monitorFeedbackRoutes);
+app.use('/api/monitor/suppressions', monitorSuppressionRoutes);
 app.use('/api/issues', authenticate, issuesRoutes);
 app.use('/api/builds', authenticate, buildRoutes);
 app.use('/api/deployments', authenticate, deployRoutes);
@@ -390,6 +398,13 @@ const nucleiQueueWorker = initNucleiQueueWorker();
 const ffufQueueWorker = initFfufQueueWorker();
 const canaryQueueWorker = initCanaryQueueWorker();
 const soarQueueWorker = initSoarQueueWorker();
+// stopCorrelationWorker() closes via its own module-level handle, so the return value here
+// isn't needed (unlike canary/soar, which store the worker to call .close() directly).
+startCorrelationWorker();
+// Seeds the single app-global 'system' tick — the only tick that processes status-spike
+// telemetry into apm incidents (see correlationQueueWorker's SYSTEM_OWNER gate). Per-owner
+// ticks are seeded lazily from monitorCorrelationRoutes' GET / handler.
+void enqueueCorrelationTick({ ownerUserId: 'system' }, 5000);
 initUptimeScheduler();
 // Continuous runtime drift monitor (undefined when no kube config is reachable).
 const driftMonitor = startDriftMonitor();
@@ -510,6 +525,8 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         await canaryQueue.close();
         await soarQueueWorker.close();
         await soarQueue.close();
+        await stopCorrelationWorker();
+        await correlationQueue.close();
 
         // 4. Close the Redis connection backing BullMQ.
         await redisConnection.quit();

@@ -168,4 +168,22 @@ export const soarRepository = {
       throw err;
     }
   },
+
+  /** capture_evidence rows for one incident; [] on error (read-only viewer). */
+  async listEvidenceForIncident(incidentId: string): Promise<Array<{ id: string; playbookName: string; createdAt: string; result?: string }>> {
+    try {
+      const res = await databases.listDocuments(DB_ID, ACTIONS, [
+        Query.equal('incidentId', incidentId),
+        Query.equal('actionType', 'capture_evidence'),
+        Query.limit(25),
+      ]);
+      return res.documents.map((d) => {
+        const w = d as unknown as ActionWire & Models.Document;
+        return { id: d.$id, playbookName: w.playbookName || '', createdAt: w.createdAt, result: w.result ?? undefined };
+      });
+    } catch (err) {
+      logger.error('[SoarRepository] listEvidenceForIncident failed:', toMessage(err));
+      return [];
+    }
+  },
 };

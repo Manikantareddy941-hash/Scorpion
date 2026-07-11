@@ -1,5 +1,5 @@
 import { falcoRuleRepository } from './falcoRuleRepository';
-import { databases, DB_ID, Query } from '../lib/appwrite';
+import { databases } from '../lib/appwrite';
 import { logger } from '../services/logger';
 
 jest.mock('../lib/appwrite');

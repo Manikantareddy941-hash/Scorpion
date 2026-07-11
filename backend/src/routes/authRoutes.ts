@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { sendOtpEmail } from '../services/emailService';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
+import { recordSecurityEvent } from '../monitor/securityEventSource';
 
 function errorMessage(err: unknown): string {
     return err instanceof Error ? err.message : 'Unknown error';
@@ -183,6 +184,11 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     } catch (error: unknown) {
         logger.error('[Auth] Error in reset-password:', error);
         if (error instanceof Error && error.name === 'JsonWebTokenError') {
+            void recordSecurityEvent({
+                type: 'auth_failure', actor: req.body?.email || 'unknown',
+                srcIp: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip,
+                ownerUserId: 'system', severity: 'medium', timestamp: Date.now(),
+            });
             return res.status(401).json({ error: 'Invalid or expired reset token' });
         }
         res.status(500).json({ error: errorMessage(error) || 'Failed to reset password' });

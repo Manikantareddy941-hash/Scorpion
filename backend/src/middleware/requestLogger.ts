@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../services/logger';
+import { statusTelemetry } from '../monitor/statusTelemetry';
 
 /**
  * Structured HTTP request logger (winston). Replaces morgan so request logs are
@@ -19,6 +20,8 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       responseTimeMs: Math.round(responseTimeMs * 100) / 100,
       ip: req.ip,
     });
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+    statusTelemetry.record(ip, res.statusCode);
   });
 
   next();
