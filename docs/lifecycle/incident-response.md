@@ -102,13 +102,14 @@ collection (all optional so existing rows remain valid):
 
 | Attribute | Type | Notes |
 |---|---|---|
-| `rootCause` | string | Post-mortem root cause |
-| `escapedPhase` | string | One of the 8 lifecycle phases (validated server-side) |
-| `lessons` | string, size 4096 | Newline-separated action items; rendered as a checklist on conversion |
-| `actionItemIssueId` | string, nullable | Link to the generated Plan issue; also the idempotency marker for convert |
+| `rootCause` | string, size 16385 | Post-mortem root cause. Size ≥16383 so MariaDB stores it as TEXT off-row — 2×4096 inline VARCHARs tripped `attribute_limit_exceeded` on the already-wide `incidents` row |
+| `escapedPhase` | string, size 16 | One of the 8 lifecycle phases (validated server-side) |
+| `lessons` | string, size 16385 | Newline-separated action items; rendered as a checklist on conversion. Same off-row TEXT sizing as `rootCause` |
+| `actionItemIssueId` | string, size 64, nullable | Link to the generated Plan issue; also the idempotency marker for convert |
 
-Test suites fully mock Appwrite, so tests pass without these attributes;
-production writes will fail until they exist.
+All four are optional (no defaults) so existing rows remain valid. Created and
+verified `available` on 2026-07-11. Test suites fully mock Appwrite, so tests
+pass without these attributes; production writes fail until they exist.
 
 ## Deliberately deferred
 
