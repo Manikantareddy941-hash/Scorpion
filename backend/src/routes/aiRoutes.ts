@@ -164,7 +164,9 @@ router.post('/chat', aiLimiter, async (req: Request, res: Response, next: NextFu
                 },
                 contents: messages,
                 generationConfig: {
-                    maxOutputTokens: 1000,
+                    // gemini-2.5-flash spends part of this budget on internal
+                    // thinking tokens; 1000 left visible answers truncated.
+                    maxOutputTokens: 4096,
                 },
             }),
         });
