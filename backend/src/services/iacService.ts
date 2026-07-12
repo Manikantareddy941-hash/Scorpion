@@ -7,6 +7,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { dockerRunnerService } from './dockerRunnerService';
 import { parseCheckov } from './scan/parsers';
+import { getProfileEnv } from './iacCredentials';
 import { logger } from './logger';
 
 const TOFU_IMAGE = process.env.IAC_TOFU_IMAGE || 'ghcr.io/opentofu/opentofu:1.8';
@@ -21,6 +22,7 @@ export type IacRunStatus = 'running' | 'blocked' | 'planned' | 'applying' | 'app
 export interface IacWorkspace {
     id: string;
     name: string;
+    credentialProfileId?: string | null;
     createdAt: string;
 }
 
@@ -76,11 +78,18 @@ export function summarizePlan(planJson: { resource_changes?: { address: string; 
     return summary;
 }
 
-// ponytail: cloud creds come from backend env for now (AWS first). Per-project
-// encrypted credential profiles are the phase-3 upgrade path.
+// Fallback when a workspace has no credential profile: pass through the
+// backend's own AWS env vars (the original phase-1 behavior).
 function cloudEnv(): string[] {
     const keys = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_DEFAULT_REGION', 'AWS_REGION'];
     return keys.filter(k => process.env[k]).map(k => `${k}=${process.env[k]}`);
+}
+
+/** Linked credential profile env (decrypted at launch only), else backend env fallback. */
+async function resolveEnv(workspaceId: string): Promise<string[]> {
+    const workspace = await getWorkspace(workspaceId);
+    if (workspace?.credentialProfileId) return getProfileEnv(workspace.credentialProfileId);
+    return cloudEnv();
 }
 
 async function runTofu(workspaceId: string, shellCmd: string, sink: (line: string) => void): Promise<number> {
@@ -89,7 +98,7 @@ async function runTofu(workspaceId: string, shellCmd: string, sink: (line: strin
         entrypoint: ['/bin/sh', '-c'],
         cmd: [shellCmd],
         workspacePath: wsDir(workspaceId),
-        env: cloudEnv(),
+        env: await resolveEnv(workspaceId),
         logger: { log: sink },
     });
     return exitCode;
@@ -121,8 +130,13 @@ async function runCheckovGate(wsId: string, force: boolean, sink: (line: string)
     return { passed, overridden: !passed && force, findings };
 }
 
-export async function createWorkspace(name: string, config: string): Promise<IacWorkspace> {
-    const workspace: IacWorkspace = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+export async function createWorkspace(name: string, config: string, credentialProfileId?: string | null): Promise<IacWorkspace> {
+    const workspace: IacWorkspace = {
+        id: crypto.randomUUID(),
+        name,
+        credentialProfileId: credentialProfileId ?? null,
+        createdAt: new Date().toISOString(),
+    };
     await fs.mkdir(path.join(wsDir(workspace.id), 'runs'), { recursive: true });
     await fs.writeFile(path.join(wsDir(workspace.id), 'workspace.json'), JSON.stringify(workspace, null, 2));
     await fs.writeFile(path.join(wsDir(workspace.id), 'main.tf'), config);
@@ -159,6 +173,14 @@ export async function getConfig(id: string): Promise<string> {
 
 export async function updateConfig(id: string, config: string): Promise<void> {
     await fs.writeFile(path.join(wsDir(id), 'main.tf'), config);
+}
+
+export async function setWorkspaceCredential(id: string, credentialProfileId: string | null): Promise<IacWorkspace> {
+    const workspace = await getWorkspace(id);
+    if (!workspace) throw new Error('WORKSPACE_NOT_FOUND');
+    const updated: IacWorkspace = { ...workspace, credentialProfileId };
+    await fs.writeFile(path.join(wsDir(id), 'workspace.json'), JSON.stringify(updated, null, 2));
+    return updated;
 }
 
 export async function getRun(wsId: string, runId: string): Promise<IacRun | null> {

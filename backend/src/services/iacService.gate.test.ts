@@ -8,10 +8,13 @@ jest.mock('./dockerRunnerService', () => ({ dockerRunnerService: { runInContaine
 
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'iac-gate-'));
 process.env.IAC_DATA_DIR = DATA_DIR;
+process.env.IAC_CRED_KEY = 'gate-test-key';
 
 // require (not import) so IAC_DATA_DIR above is set before the module reads it
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const iac = require('./iacService') as typeof import('./iacService');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const creds = require('./iacCredentials') as typeof import('./iacCredentials');
 
 const FAILED_CHECKOV = JSON.stringify({
     results: {
@@ -86,6 +89,22 @@ describe('checkov gate in startPlan', () => {
         expect(run.status).toBe('planned');
         expect(run.gate?.passed).toBe(true);
         expect(run.gate?.overridden).toBe(false);
+    });
+
+    it('injects the linked credential profile env into tofu containers', async () => {
+        mockContainers(CLEAN_CHECKOV);
+        const profile = await creds.createProfile('aws-prod', 'aws', { AWS_ACCESS_KEY_ID: 'AKIAFROMPROFILE' });
+        const ws = await iac.createWorkspace('with-creds', 'output "x" { value = 1 }', profile.id);
+
+        const started = await iac.startPlan(ws.id, false);
+        const run = await settledRun(ws.id, started.id);
+
+        expect(run.status).toBe('planned');
+        const tofuCall = runInContainer.mock.calls.find(c => c[0].cmd.join(' ').includes('tofu init'));
+        expect(tofuCall[0].env).toContain('AWS_ACCESS_KEY_ID=AKIAFROMPROFILE');
+        // the checkov gate container gets no cloud credentials
+        const checkovCall = runInContainer.mock.calls.find(c => c[0].cmd.join(' ').includes('checkov'));
+        expect(checkovCall[0].env ?? []).toHaveLength(0);
     });
 
     it('skips the gate entirely for destroy-plans', async () => {
