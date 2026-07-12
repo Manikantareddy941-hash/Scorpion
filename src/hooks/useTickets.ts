@@ -95,8 +95,10 @@ export function useTicket(id: string) {
       const activityData = activityRes.ok ? await activityRes.json() : [];
 
       setTicket(ticketData);
-      setComments(commentsData);
-      setActivity(activityData);
+      // Guard against a non-array success body (e.g. an error envelope) so the
+      // later .map() in the view can't throw during render.
+      setComments(Array.isArray(commentsData) ? commentsData : []);
+      setActivity(Array.isArray(activityData) ? activityData : []);
     } catch (err: any) {
       console.error('Error fetching ticket details:', err);
       setError(err.message || 'Failed to load ticket details.');

@@ -17,7 +17,11 @@ export default function Build() {
   const [selectedBranch, setSelectedBranch] = useState<string>('main');
   const [triggering, setTriggering] = useState(false);
 
-  const sseRef = useRef<EventSource | null>(null);
+  // AbortController for the live fetch-based SSE stream. We use fetch (not
+  // EventSource) so the session JWT rides in the Authorization header instead of
+  // the URL query string — a token in the URL leaks into access logs, proxies,
+  // and browser history.
+  const sseRef = useRef<AbortController | null>(null);
   const logsIntervalRef = useRef<any | null>(null);
   const sseCleanupRef = useRef<(() => void) | null>(null);
 
@@ -63,7 +67,7 @@ export default function Build() {
     return () => {
       clearInterval(interval);
       if (sseCleanupRef.current) sseCleanupRef.current();
-      if (sseRef.current) sseRef.current.close();
+      if (sseRef.current) sseRef.current.abort();
       if (logsIntervalRef.current) clearInterval(logsIntervalRef.current);
     };
   }, []);
@@ -124,7 +128,7 @@ export default function Build() {
       sseCleanupRef.current = null;
     }
     if (sseRef.current) {
-      sseRef.current.close();
+      sseRef.current.abort();
       sseRef.current = null;
     }
     if (logsIntervalRef.current) {
@@ -156,6 +160,47 @@ export default function Build() {
         }
       };
 
+      // Applies one parsed SSE payload to local state.
+      const handleEvent = (data: any) => {
+        setRuns(prev => prev.map(r => {
+          if (r.$id === runId) {
+            const updated = { ...r };
+            if (data.stage) {
+              updated[`${data.stage}Status`] = data.status;
+              updated.currentStage = data.stage;
+            }
+            if (data.status === 'success' || data.status === 'failed') {
+              fetchRuns();
+            }
+            return updated;
+          }
+          return r;
+        }));
+        fetchLogs(runId);
+      };
+
+      // Schedules a reconnect if the run is still active. Shared by the stream-end
+      // and error paths so a dropped connection resumes just like EventSource did.
+      const scheduleReconnect = () => {
+        if (!active) return;
+        reconnectTimeout = setTimeout(async () => {
+          try {
+            const token = await getJWT();
+            const res = await fetch(`/api/pipelines/run/${runId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && (data.status === 'running' || data.status === 'pending')) {
+                connect();
+              }
+            }
+          } catch (err) {
+            console.error('[SSE] Reconnect check failed:', err);
+          }
+        }, 3000);
+      };
+
       const connect = async () => {
         if (!active) return;
         try {
@@ -163,63 +208,58 @@ export default function Build() {
           if (!active) return;
 
           if (sseRef.current) {
-            sseRef.current.close();
+            sseRef.current.abort();
           }
 
-          const sse = new EventSource(`/api/pipelines/run/${runId}/stream?token=${token}`);
-          sseRef.current = sse;
+          // fetch-based SSE: the JWT goes in the Authorization header (EventSource
+          // can't set headers, which is why the old code leaked it via ?token=).
+          const controller = new AbortController();
+          sseRef.current = controller;
 
-          sse.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              // Dynamically update runs status locally for instantaneous response
-              setRuns(prev => prev.map(r => {
-                if (r.$id === runId) {
-                  const updated = { ...r };
-                  if (data.stage) {
-                    updated[`${data.stage}Status`] = data.status;
-                    updated.currentStage = data.stage;
-                  }
-                  if (data.status === 'success' || data.status === 'failed') {
-                    fetchRuns();
-                  }
-                  return updated;
-                }
-                return r;
-              }));
-              fetchLogs(runId);
-            } catch (e) {
-              // parse error
-            }
-          };
+          const res = await fetch(`/api/pipelines/run/${runId}/stream`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+            signal: controller.signal,
+          });
 
-          sse.onerror = () => {
-            console.warn('[SSE] Connection lost. Attempting reconnect in 3s...');
-            if (sseRef.current) {
-              sseRef.current.close();
-              sseRef.current = null;
-            }
-            if (!active) return;
+          if (!res.ok || !res.body) {
+            if (active) scheduleReconnect();
+            return;
+          }
 
-            reconnectTimeout = setTimeout(async () => {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          // Read the stream frame-by-frame. SSE frames are separated by a blank
+          // line; each frame's payload is the concatenation of its `data:` lines.
+          while (active) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split('\n\n');
+            buffer = frames.pop() ?? '';
+            for (const frame of frames) {
+              const dataLine = frame
+                .split('\n')
+                .filter(l => l.startsWith('data:'))
+                .map(l => l.slice(5).trim())
+                .join('\n');
+              if (!dataLine) continue; // handshake/keepalive comment
               try {
-                const token = await getJWT();
-                const res = await fetch(`/api/pipelines/run/${runId}`, {
-                  headers: { Authorization: `Bearer ${token}` }
-                });
-                if (res.ok) {
-                  const data = await res.json();
-                  if (data && (data.status === 'running' || data.status === 'pending')) {
-                    connect();
-                  }
-                }
-              } catch (err) {
-                console.error('[SSE] Reconnect check failed:', err);
+                handleEvent(JSON.parse(dataLine));
+              } catch {
+                // partial/non-JSON frame — skip
               }
-            }, 3000);
-          };
+            }
+          }
+
+          // Stream ended (server closed or run finished). Reconnect if still active.
+          if (active) scheduleReconnect();
         } catch (err) {
-          console.error('[SSE] Auth token retrieval failed:', err);
+          // AbortError is our own teardown — not a real failure.
+          if ((err as Error)?.name === 'AbortError') return;
+          console.warn('[SSE] Connection lost. Attempting reconnect in 3s...');
+          scheduleReconnect();
         }
       };
 

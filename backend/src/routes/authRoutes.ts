@@ -141,6 +141,16 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid OTP' });
         }
 
+        // Consume the OTP record now that it verified. Without this the same OTP
+        // stays valid until its 10-min expiry and could be replayed to mint
+        // multiple reset tokens. reset-password relies on the signed JWT, not this
+        // record, so deleting it here is safe.
+        try {
+            await databases.deleteDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, reset.$id);
+        } catch (delErr: unknown) {
+            logger.warn('[Auth] Failed to delete consumed reset record:', errorMessage(delErr));
+        }
+
         // Generate temporary reset token
         const resetToken = jwt.sign({ email }, getResetTokenSecret(), { expiresIn: '5m' });
 

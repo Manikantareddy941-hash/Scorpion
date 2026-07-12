@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale,
   ChevronLeft, ChevronRight, Layout, Clock, Map,
   TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug,
-  Zap, Package, Tag, Ticket, Bot, ShieldCheck
+  Zap, Package, Tag, Ticket, Bot, ShieldCheck, Boxes
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -92,7 +92,8 @@ export default function Sidebar({
     {
       title: 'DEPLOYMENTS',
       items: [
-        { icon: Rocket, label: 'DEPLOYMENTS', path: '/deployments' }
+        { icon: Rocket, label: 'DEPLOYMENTS', path: '/deployments' },
+        { icon: Boxes, label: 'INFRASTRUCTURE (IAC)', path: '/iac' }
       ]
     },
     {

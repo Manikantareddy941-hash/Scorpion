@@ -12,16 +12,20 @@ import {
 const router = Router();
 
 // Helper to validate GitHub Webhook signature
-const validateGitHubSignature = (req: Request): { isValid: boolean; error?: string } => {
+const validateGitHubSignature = (req: Request & { rawBody?: Buffer }): { isValid: boolean; error?: string } => {
     const signature = req.headers['x-hub-signature-256'] as string;
     const secret = process.env.GITHUB_WEBHOOK_SECRET;
 
     if (!secret) return { isValid: false, error: 'GITHUB_WEBHOOK_SECRET not configured' };
     if (!signature) return { isValid: false, error: 'Missing signature' };
 
+    // GitHub signs the exact request bytes. Verify against the captured raw body
+    // (set by express.json's verify hook) — re-serializing req.body via
+    // JSON.stringify produces different bytes and fails every legitimate delivery.
+    if (!req.rawBody) return { isValid: false, error: 'Raw body unavailable' };
+
     const hmac = crypto.createHmac('sha256', secret);
-    const bodyStr = JSON.stringify(req.body);
-    const digest = Buffer.from('sha256=' + hmac.update(bodyStr).digest('hex'), 'utf8');
+    const digest = Buffer.from('sha256=' + hmac.update(req.rawBody).digest('hex'), 'utf8');
     const checksum = Buffer.from(signature, 'utf8');
 
     if (checksum.length !== digest.length || !crypto.timingSafeEqual(digest, checksum)) {
