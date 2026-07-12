@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale,
   ChevronLeft, ChevronRight, Layout, Clock, Map,
   TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug,
-  Zap, Package, Tag, Ticket, Bot, ShieldCheck, Boxes
+  Zap, Package, Tag, Ticket, ShieldCheck, Boxes
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -268,20 +268,6 @@ export default function Sidebar({
               </div>
             </div>
           ))}
-        </div>
-
-        {/* AI Assistant CTA — opens the real AIChat overlay */}
-        <div className={`shrink-0 ${isCollapsed ? 'px-2' : 'px-3'} pb-4`}>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event('scorpion:open-chat'))}
-            className={`w-full flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ${isCollapsed ? 'h-10' : 'py-2.5'}`}
-            style={{ background: 'var(--accent-primary)', color: 'var(--text-on-accent)' }}
-            title="Open Echo AI"
-          >
-            <Bot size={18} />
-            {!isCollapsed && <span className="text-xs">AI Assistant</span>}
-          </button>
         </div>
 
       </aside>
