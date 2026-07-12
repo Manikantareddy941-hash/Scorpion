@@ -68,6 +68,7 @@ import soarRoutes from './routes/soarRoutes';
 import falcoRuleRoutes from './routes/falcoRuleRoutes';
 import postureRoutes from './routes/postureRoutes';
 import netpolRoutes from './routes/netpolRoutes';
+import iacRoutes from './routes/iacRoutes';
 import { registerTicketRoutes } from './registerRoutes';
 import crypto from 'crypto';
 import https from 'https';
@@ -327,6 +328,7 @@ app.use('/api/soar', authenticate, soarRoutes);
 app.use('/api/falco-rules', authenticate, falcoRuleRoutes);
 app.use('/api/posture', authenticate, postureRoutes);
 app.use('/api/netpol', authenticate, netpolRoutes);
+app.use('/api/iac', authenticate, iacRoutes);
 app.use('/api/scan', dockerScanRoutes);
 app.use('/api/scan/manual', scanRoutes); // Using /manual to avoid conflict with /scan/docker
 app.use('/api/scan/dast', dastRoutes);

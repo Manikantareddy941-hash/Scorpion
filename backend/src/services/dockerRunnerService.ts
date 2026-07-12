@@ -7,6 +7,8 @@ export interface RunnerOptions {
   cmd: string[];         // Tokenized execution arguments (e.g., ['npm', 'run', 'build'])
   workspacePath: string; // The absolute path on your host machine to compile code inside
   logger: { log: (message: string) => void }; // Hooks straight into Scorpion's SSE pipeline logger
+  env?: string[];        // KEY=value pairs injected into the container (e.g., cloud credentials) — never logged
+  entrypoint?: string[]; // Override the image entrypoint (e.g., ['/bin/sh', '-c'])
 }
 
 export class DockerRunnerService {
@@ -21,7 +23,7 @@ export class DockerRunnerService {
    * Spawns an isolated ephemeral container to execute tasks securely without polluting the host.
    */
   public async runInContainer(options: RunnerOptions): Promise<{ exitCode: number }> {
-    const { image, cmd, workspacePath, logger } = options;
+    const { image, cmd, workspacePath, logger, env, entrypoint } = options;
     let container: Docker.Container | null = null;
 
     try {
@@ -36,6 +38,8 @@ export class DockerRunnerService {
       container = await this.docker.createContainer({
         Image: image,
         Cmd: cmd,
+        ...(entrypoint ? { Entrypoint: entrypoint } : {}),
+        ...(env && env.length ? { Env: env } : {}),
         WorkingDir: '/workspace',
         HostConfig: {
           // Bind mount the current pipeline repository workspace directly into the container filesystem
