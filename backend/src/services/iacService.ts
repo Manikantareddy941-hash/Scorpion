@@ -6,15 +6,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { dockerRunnerService } from './dockerRunnerService';
+import { parseCheckov } from './scan/parsers';
 import { logger } from './logger';
 
 const TOFU_IMAGE = process.env.IAC_TOFU_IMAGE || 'ghcr.io/opentofu/opentofu:1.8';
+const CHECKOV_IMAGE = process.env.IAC_CHECKOV_IMAGE || 'bridgecrew/checkov:latest';
 // ponytail: filesystem store (workspace.json / runs/*.json / tfstate on disk).
 // Move to Appwrite collections when the UI needs cross-workspace queries.
 const DATA_DIR = process.env.IAC_DATA_DIR || path.join(process.cwd(), 'data', 'iac');
 const MAX_LOG_LINES = 2000;
 
-export type IacRunStatus = 'running' | 'planned' | 'applying' | 'applied' | 'failed';
+export type IacRunStatus = 'running' | 'blocked' | 'planned' | 'applying' | 'applied' | 'failed';
 
 export interface IacWorkspace {
     id: string;
@@ -30,11 +32,18 @@ export interface PlanSummary {
     changes: { address: string; actions: string[] }[];
 }
 
+export interface GateResult {
+    passed: boolean;
+    overridden: boolean;
+    findings: { message: string; severity: string; file_path?: string; line_number?: number }[];
+}
+
 export interface IacRun {
     id: string;
     workspaceId: string;
     destroy: boolean;
     status: IacRunStatus;
+    gate?: GateResult;
     summary?: PlanSummary;
     logs: string[];
     createdAt: string;
@@ -84,6 +93,32 @@ async function runTofu(workspaceId: string, shellCmd: string, sink: (line: strin
         logger: { log: sink },
     });
     return exitCode;
+}
+
+/**
+ * Security gate: scans the workspace config with Checkov before planning.
+ * Checkov exits non-zero when checks fail, so `|| true` keeps the container
+ * exit clean and the JSON report is the source of truth.
+ */
+async function runCheckovGate(wsId: string, force: boolean, sink: (line: string) => void): Promise<GateResult> {
+    sink('[IaC Gate] Running Checkov IaC security scan...');
+    await dockerRunnerService.runInContainer({
+        image: CHECKOV_IMAGE,
+        entrypoint: ['/bin/sh', '-c'],
+        cmd: ['checkov -d /workspace -o json --quiet > /workspace/checkov.json || true'],
+        workspacePath: wsDir(wsId),
+        logger: { log: sink },
+    });
+    const raw = await fs.readFile(path.join(wsDir(wsId), 'checkov.json'), 'utf8');
+    const findings = parseCheckov(raw).map(f => ({
+        message: f.message,
+        severity: f.severity,
+        file_path: f.file_path,
+        line_number: f.line_number,
+    }));
+    const passed = findings.length === 0;
+    sink(`[IaC Gate] ${passed ? 'PASSED — no failed checks' : `${findings.length} failed check(s)${force ? ' — OVERRIDDEN by force flag' : ''}`}`);
+    return { passed, overridden: !passed && force, findings };
 }
 
 export async function createWorkspace(name: string, config: string): Promise<IacWorkspace> {
@@ -157,7 +192,7 @@ function makeSink(run: IacRun): (line: string) => void {
 }
 
 /** Starts an async plan (or destroy-plan). Returns immediately; poll the run for status. */
-export async function startPlan(wsId: string, destroy: boolean): Promise<IacRun> {
+export async function startPlan(wsId: string, destroy: boolean, force = false): Promise<IacRun> {
     if (busyWorkspaces.has(wsId)) throw new Error('WORKSPACE_BUSY');
     busyWorkspaces.add(wsId);
 
@@ -175,6 +210,14 @@ export async function startPlan(wsId: string, destroy: boolean): Promise<IacRun>
     void (async () => {
         const sink = makeSink(run);
         try {
+            // Destroy-plans skip the gate: removing infrastructure introduces no misconfiguration.
+            if (!destroy) {
+                run.gate = await runCheckovGate(wsId, force, sink);
+                if (!run.gate.passed && !force) {
+                    run.status = 'blocked';
+                    return;
+                }
+            }
             const planFlags = `-input=false -no-color -out=tfplan${destroy ? ' -destroy' : ''}`;
             const cmd = `tofu init -input=false -no-color && tofu plan ${planFlags} && tofu show -json tfplan > plan.json`;
             const exitCode = await runTofu(wsId, cmd, sink);

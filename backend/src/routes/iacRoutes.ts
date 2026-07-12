@@ -98,12 +98,13 @@ router.put('/workspaces/:id/config', async (req, res) => {
     }
 });
 
-// POST /api/iac/workspaces/:id/plan — start a plan (body { destroy: true } for a destroy-plan)
+// POST /api/iac/workspaces/:id/plan — start a plan
+// body: { destroy?: true } for a destroy-plan, { force?: true } to override a failed security gate (audited on the run)
 router.post('/workspaces/:id/plan', async (req, res) => {
     if (!idSchema.safeParse(req.params.id).success) return res.status(400).json({ error: 'Invalid workspace id' });
     if (!(await getWorkspace(req.params.id))) return res.status(404).json({ error: 'Workspace not found' });
     try {
-        const run = await startPlan(req.params.id, req.body?.destroy === true);
+        const run = await startPlan(req.params.id, req.body?.destroy === true, req.body?.force === true);
         return res.status(202).json(run);
     } catch (err) {
         return handleServiceError(err, res);
