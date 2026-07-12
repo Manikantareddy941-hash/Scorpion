@@ -51,6 +51,7 @@ const TestResults = lazy(() => import('./pages/TestResults'));
 const DeepAnalysis = lazy(() => import('./pages/DeepAnalysis'));
 const ReleaseGate = lazy(() => import('./pages/ReleaseGate'));
 const Monitor = lazy(() => import('./pages/Monitor'));
+const IacConsole = lazy(() => import('./pages/IacConsole'));
 const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
@@ -214,6 +215,7 @@ function App() {
               <Route path="/pipelines" element={<ProtectedRoute><Build /></ProtectedRoute>} />
               <Route path="/deploy" element={<ProtectedRoute><Deploy /></ProtectedRoute>} />
               <Route path="/deployments" element={<ProtectedRoute><Deploy /></ProtectedRoute>} />
+              <Route path="/iac" element={<ProtectedRoute><IacConsole /></ProtectedRoute>} />
               <Route path="/tests" element={<ProtectedRoute><TestResults /></ProtectedRoute>} />
               <Route path="/analyze" element={<ProtectedRoute><DeepAnalysis /></ProtectedRoute>} />
               <Route path="/release" element={<ProtectedRoute><ReleaseGate /></ProtectedRoute>} />
