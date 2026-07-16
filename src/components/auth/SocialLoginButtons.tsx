@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { OAuthProvider } from 'appwrite';
 import { FcGoogle } from 'react-icons/fc';
 import { FaGithub, FaMicrosoft } from 'react-icons/fa';
@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext';
 // console with the org's actual IdP client ID/secret - clicking one before
 // that's done will just surface Appwrite's "provider not configured" error,
 // the same as it would for any unconfigured OAuth provider.
-const providers: { provider: OAuthProvider; icon: JSX.Element; aria: string }[] = [
+const providers: { provider: OAuthProvider; icon: ReactElement; aria: string }[] = [
   { provider: OAuthProvider.Google, icon: <FcGoogle size={28} />, aria: 'Sign in with Google' },
   { provider: OAuthProvider.Github, icon: <FaGithub size={26} color="#1f2937" />, aria: 'Sign in with GitHub' },
   { provider: OAuthProvider.Microsoft, icon: <FaMicrosoft size={22} color="#00A4EF" />, aria: 'Sign in with Microsoft (Azure AD)' },
