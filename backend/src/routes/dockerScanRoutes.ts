@@ -83,6 +83,9 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Authenticated
             }
 
             const finding = {
+                // Tenant stamp: docker findings live under a pseudo-repo, so
+                // user_id is the only ownership field readers can scope by.
+                user_id: req.user?.$id ?? null,
                 repo_id: 'docker',
                 repo_name: image_name,
                 type: 'docker',
