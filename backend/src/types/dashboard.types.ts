@@ -1,7 +1,7 @@
 import { Request } from 'express';
 import { Models } from 'node-appwrite';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string };
 }
 

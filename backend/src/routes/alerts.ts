@@ -5,7 +5,7 @@ import { canAccessResource } from '../services/tenancyService';
 import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
 import { Models } from 'node-appwrite';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

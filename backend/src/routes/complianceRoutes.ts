@@ -7,7 +7,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { logAuditEvent } from '../utils/auditLogger';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
 }
 

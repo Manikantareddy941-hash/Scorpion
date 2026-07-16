@@ -7,7 +7,7 @@ import { createPullRequest } from '../services/gitProviderService';
 import { canAccessResource } from '../services/tenancyService';
 import { aiLimiter } from '../middleware/rateLimiters';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

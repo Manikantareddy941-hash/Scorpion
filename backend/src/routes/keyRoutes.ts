@@ -3,7 +3,7 @@ import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import crypto from 'crypto';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

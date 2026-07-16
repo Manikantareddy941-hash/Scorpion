@@ -8,7 +8,7 @@ import { logger } from '../services/logger';
 const VALID_SCAN_MODES = ['spider', 'active', 'passive'] as const;
 type ScanMode = (typeof VALID_SCAN_MODES)[number];
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
 }
 

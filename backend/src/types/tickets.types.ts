@@ -2,7 +2,7 @@ import { Request } from 'express';
 import { z } from 'zod';
 import { TicketLinkType } from '../../../shared/types';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; userId: string; email?: string };
 }
 

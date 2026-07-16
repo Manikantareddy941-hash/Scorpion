@@ -6,7 +6,7 @@ import { buildPostmortemPatch } from '../services/incidentPostmortem';
 import { convertIncidentToIssue } from '../services/incidentFeedbackService';
 import { soarRepository } from '../repositories/soarRepository';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
 }
 

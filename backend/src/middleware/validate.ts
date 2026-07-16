@@ -23,7 +23,8 @@ export const validateQuery = (schema: ZodType) => (req: Request, res: Response, 
     if (!result.success) {
         return res.status(400).json({ error: 'Invalid query parameters', details: formatZodError(result.error) });
     }
-    req.query = result.data as typeof req.query;
+    // express 5 exposes req.query via a getter; redefine instead of assigning.
+    Object.defineProperty(req, 'query', { value: result.data, writable: true, configurable: true });
     next();
 };
 

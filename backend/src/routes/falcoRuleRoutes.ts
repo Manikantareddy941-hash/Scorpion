@@ -65,7 +65,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id', async (req: Request, res: Response) => {
+router.patch('/:id', async (req: Request<Record<string, string>>, res: Response) => {
   const parsed = ruleSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid rule update', details: parsed.error.flatten() });

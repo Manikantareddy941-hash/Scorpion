@@ -10,7 +10,7 @@ import { logger } from '../services/logger';
 
 const execFileAsync = promisify(execFile);
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

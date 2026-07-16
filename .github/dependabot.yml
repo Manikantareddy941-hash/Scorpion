@@ -35,3 +35,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Stay on even-numbered node LTS; odd majors (25, 27, ...) and
+      # not-yet-LTS evens are noise. Bump deliberately instead.
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]

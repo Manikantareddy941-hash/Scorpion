@@ -4,7 +4,7 @@
 // (Appwrite does NOT auto-index non-unique attributes — every Query.equal
 // against an un-indexed attribute is a full collection scan).
 // Run: npx ts-node backend/src/scripts/add_indexes.ts
-import { Client, Databases, IndexType, OrderBy } from 'node-appwrite';
+import { Client, Databases, DatabasesIndexType, OrderBy } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -21,7 +21,7 @@ const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'default';
 interface IndexSpec {
   collection: string;
   key: string;
-  type: IndexType;
+  type: DatabasesIndexType;
   attributes: string[];
   orders?: OrderBy[];
 }
@@ -31,34 +31,34 @@ interface IndexSpec {
 // composite indexes for the filter+sort pairs actually used in services
 // (e.g. "scans for a repo, newest first").
 const INDEXES: IndexSpec[] = [
-  { collection: 'scans', key: 'idx_repo_status', type: IndexType.Key, attributes: ['repo_id', 'status'] },
-  { collection: 'scans', key: 'idx_repo_started', type: IndexType.Key, attributes: ['repo_id', 'startedAt'], orders: [OrderBy.Asc, OrderBy.Desc] },
-  { collection: 'scans', key: 'idx_user_id', type: IndexType.Key, attributes: ['user_id'] },
+  { collection: 'scans', key: 'idx_repo_status', type: DatabasesIndexType.Key, attributes: ['repo_id', 'status'] },
+  { collection: 'scans', key: 'idx_repo_started', type: DatabasesIndexType.Key, attributes: ['repo_id', 'startedAt'], orders: [OrderBy.Asc, OrderBy.Desc] },
+  { collection: 'scans', key: 'idx_user_id', type: DatabasesIndexType.Key, attributes: ['user_id'] },
 
-  { collection: 'repositories', key: 'idx_user_id', type: IndexType.Key, attributes: ['user_id'] },
-  { collection: 'repositories', key: 'idx_status', type: IndexType.Key, attributes: ['status'] },
-  { collection: 'repositories', key: 'idx_updated_at', type: IndexType.Key, attributes: ['updated_at'], orders: [OrderBy.Desc] },
+  { collection: 'repositories', key: 'idx_user_id', type: DatabasesIndexType.Key, attributes: ['user_id'] },
+  { collection: 'repositories', key: 'idx_status', type: DatabasesIndexType.Key, attributes: ['status'] },
+  { collection: 'repositories', key: 'idx_updated_at', type: DatabasesIndexType.Key, attributes: ['updated_at'], orders: [OrderBy.Desc] },
 
-  { collection: 'vulnerabilities', key: 'idx_repo_id', type: IndexType.Key, attributes: ['repo_id'] },
-  { collection: 'vulnerabilities', key: 'idx_scan_id', type: IndexType.Key, attributes: ['scanId'] },
-  { collection: 'vulnerabilities', key: 'idx_severity', type: IndexType.Key, attributes: ['severity'] },
+  { collection: 'vulnerabilities', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
+  { collection: 'vulnerabilities', key: 'idx_scan_id', type: DatabasesIndexType.Key, attributes: ['scanId'] },
+  { collection: 'vulnerabilities', key: 'idx_severity', type: DatabasesIndexType.Key, attributes: ['severity'] },
 
-  { collection: 'team_members', key: 'idx_team_user', type: IndexType.Key, attributes: ['team_id', 'user_id'] },
-  { collection: 'project_access', key: 'idx_repo_team', type: IndexType.Key, attributes: ['repo_id', 'team_id'] },
+  { collection: 'team_members', key: 'idx_team_user', type: DatabasesIndexType.Key, attributes: ['team_id', 'user_id'] },
+  { collection: 'project_access', key: 'idx_repo_team', type: DatabasesIndexType.Key, attributes: ['repo_id', 'team_id'] },
 
-  { collection: 'notifications', key: 'idx_user_id', type: IndexType.Key, attributes: ['user_id'] },
-  { collection: 'notifications', key: 'idx_repo_id', type: IndexType.Key, attributes: ['repo_id'] },
+  { collection: 'notifications', key: 'idx_user_id', type: DatabasesIndexType.Key, attributes: ['user_id'] },
+  { collection: 'notifications', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
 
-  { collection: 'audit_logs', key: 'idx_actor_timestamp', type: IndexType.Key, attributes: ['actor', 'timestamp'], orders: [OrderBy.Asc, OrderBy.Desc] },
+  { collection: 'audit_logs', key: 'idx_actor_timestamp', type: DatabasesIndexType.Key, attributes: ['actor', 'timestamp'], orders: [OrderBy.Asc, OrderBy.Desc] },
 
-  { collection: 'build_pipelines', key: 'idx_repo_id', type: IndexType.Key, attributes: ['repoId'] },
-  { collection: 'deployments', key: 'idx_repo_id', type: IndexType.Key, attributes: ['repoId'] },
-  { collection: 'deployments', key: 'idx_build_id', type: IndexType.Key, attributes: ['buildId'] },
+  { collection: 'build_pipelines', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repoId'] },
+  { collection: 'deployments', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repoId'] },
+  { collection: 'deployments', key: 'idx_build_id', type: DatabasesIndexType.Key, attributes: ['buildId'] },
 
-  { collection: 'threats', key: 'idx_owner_status', type: IndexType.Key, attributes: ['ownerUserId', 'status'] },
-  { collection: 'project_policies', key: 'idx_repo_id', type: IndexType.Key, attributes: ['repo_id'] },
-  { collection: 'policy_evaluations', key: 'idx_repo_id', type: IndexType.Key, attributes: ['repo_id'] },
-  { collection: 'incidents', key: 'idx_user_status', type: IndexType.Key, attributes: ['user_id', 'status'] },
+  { collection: 'threats', key: 'idx_owner_status', type: DatabasesIndexType.Key, attributes: ['ownerUserId', 'status'] },
+  { collection: 'project_policies', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
+  { collection: 'policy_evaluations', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
+  { collection: 'incidents', key: 'idx_user_status', type: DatabasesIndexType.Key, attributes: ['user_id', 'status'] },
 ];
 
 async function run() {

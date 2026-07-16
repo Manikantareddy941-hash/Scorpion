@@ -8,7 +8,7 @@ import { Request } from 'express';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
 import { uploadLimiter } from '../middleware/rateLimiters';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

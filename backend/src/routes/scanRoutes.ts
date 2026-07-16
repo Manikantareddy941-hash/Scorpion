@@ -7,7 +7,7 @@ import { canAccessResource } from '../services/tenancyService';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

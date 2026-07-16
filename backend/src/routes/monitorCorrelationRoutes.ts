@@ -8,7 +8,7 @@ import { CORRELATION_CATALOG, catalogById } from '../monitor/correlationCatalog'
 import { logger } from '../services/logger';
 import type { Severity } from '../monitor/securityEvent.types';
 
-interface AuthedRequest extends Request { user?: Models.User<Models.Preferences>; }
+interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
 const router = Router();
 
 router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {

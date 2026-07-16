@@ -4,7 +4,7 @@ import { databases, DB_ID, COLLECTIONS, Query, users } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

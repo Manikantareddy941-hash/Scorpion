@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string; email?: string };
 }
 
