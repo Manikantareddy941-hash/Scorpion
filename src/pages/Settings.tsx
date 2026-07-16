@@ -5,8 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
     Save, Loader2, LogOut,
-    Terminal, Github, Camera, Upload, Activity, Crosshair, Leaf, Shield
+    Terminal, Camera, Upload, Activity, Crosshair, Leaf, Shield
 } from 'lucide-react';
+import { SiGithub } from 'react-icons/si';
 import { Theme } from '../contexts/ThemeContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Bot, Globe } from 'lucide-react';
@@ -430,12 +431,12 @@ export default function Settings() {
                         <div className="mb-12 pb-12 border-b border-[var(--border-subtle)]">
                             <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-[var(--bg-secondary)] rounded-2xl border border-[var(--border-subtle)] relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                    <Github className="w-16 h-16" />
+                                    <SiGithub className="w-16 h-16" />
                                 </div>
                                 <div className="flex items-center gap-5 z-10">
                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-colors
                                         ${isGithubConnected ? 'bg-[var(--status-success)]/10 border-[var(--status-success)]/30 text-[var(--status-success)]' : 'bg-white/5 border-white/10 text-white'}`}>
-                                        <Github size={24} />
+                                        <SiGithub size={24} />
                                     </div>
                                     <div>
                                         <h4 className="text-xs font-black text-[var(--text-primary)] uppercase italic tracking-widest">{t('settings.repo_access_heading', 'Repository Access Neural Link')}</h4>

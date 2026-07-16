@@ -4,8 +4,9 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import {
     CheckCircle2, Bug, Activity, Shield, Cpu, Globe,
     Filter, Clock, LayoutGrid, List, ChevronRight,
-    CheckCircle, XCircle, Loader2, RefreshCw, Sparkles, Github, X
+    CheckCircle, XCircle, Loader2, RefreshCw, Sparkles, X
 } from 'lucide-react';
+import { SiGithub } from 'react-icons/si';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
@@ -285,7 +286,7 @@ export default function TasksPage() {
                             onClick={() => handleGithubSync(finding.$id)}
                             className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-white/10 border border-transparent hover:border-white/20 transition-all cursor-pointer"
                         >
-                            <Github size={13} />
+                            <SiGithub size={13} />
                         </button>
                     </div>
                 </div>
@@ -331,7 +332,7 @@ export default function TasksPage() {
                         className="w-9 h-9 rounded-xl flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-white hover:text-white hover:bg-white/10 transition-all shrink-0 cursor-pointer"
                         onClick={() => handleGithubSync(finding.$id)}
                     >
-                        <Github size={15} />
+                        <SiGithub size={15} />
                     </button>
 
                     <div className="flex-1 min-w-0">
