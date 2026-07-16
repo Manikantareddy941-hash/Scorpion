@@ -72,6 +72,25 @@ nothing proved it end-to-end; per-route tests mock `canAccessResource` to true.
 reader exposed it yet, but any future "all my findings" query would have).
 Fixed by stamping `user_id` at creation (dockerScanRoutes).
 
-## SP3–SP7
+## SP3: EPSS/KEV enrichment — built
+
+**Problem:** prioritization was raw CVSS severity; buyers expect
+exploit-likelihood ranking (EPSS) and known-exploited flags (CISA KEV).
+
+**Approach:** enrich at ingestion (new/modified findings only), best-effort.
+- `enrichmentService.ts` — EPSS batch fetch (FIRST.org, 100/req, 8s timeout),
+  KEV catalog with 24h in-memory cache + stale-on-failure, and
+  `computeRiskScore`: severity base (50/35/20/10) + EPSS×40 + KEV +25, cap 100.
+  A KEV'd or high-EPSS medium deliberately outranks a plain high.
+- `scanService.ingestScanDeltas` — enriches before insert; if the collection
+  predates the migration, retries the write without enrichment fields so no
+  finding is ever dropped.
+- `scripts/migrate_enrichment.ts` — adds epss_score, epss_percentile, kev,
+  risk_score attributes (idempotent).
+
+Feed outages degrade to severity-only scoring, never block ingestion.
+Deferred: dashboard sort-by-risk_score UI, nightly re-score backfill.
+
+## SP4–SP7
 
 Designed per sub-project when reached; sections appended to this doc.
