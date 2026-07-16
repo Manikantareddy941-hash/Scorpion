@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Github, Upload, FolderOpen, Loader2, Cloud } from 'lucide-react';
+import { X, Upload, FolderOpen, Loader2, Cloud } from 'lucide-react';
+import { SiGithub } from 'react-icons/si';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import UVScanOverlay from './UVScanOverlay';
@@ -248,7 +249,7 @@ export default function NewScanModal({ onClose }: Props) {
             <button key={t_val} onClick={() => { setTab(t_val); setError(null); }}
               disabled={loading}
               style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${tab === t_val ? 'var(--accent-primary)' : 'var(--border-subtle)'}`, background: tab === t_val ? 'var(--accent-primary)0D' : 'transparent', color: tab === t_val ? 'var(--accent-primary)' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.8rem', letterSpacing: '0.1em', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              {t_val === 'github' ? <><Github size={16} /> {t('dashboard.modal.tab_github', 'GITHUB')}</> : 
+              {t_val === 'github' ? <><SiGithub size={16} /> {t('dashboard.modal.tab_github', 'GITHUB')}</> : 
                t_val === 'upload' ? <><Upload size={16} /> {t('dashboard.modal.tab_upload', 'LOCAL')}</> :
                <><Cloud size={16} /> {t('dashboard.modal.tab_cloud', 'CLOUD')}</>}
             </button>

@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { databases, DB_ID, ID, Query, COLLECTIONS, client } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-    Bell, Loader2, Save, Send, ShieldAlert, Slack, 
-    MessageSquare, AlertTriangle, AlertCircle, Info, 
+    Bell, Loader2, Save, Send, ShieldAlert,
+    MessageSquare, AlertTriangle, AlertCircle, Info,
     Activity, Zap, PhoneCall
 } from 'lucide-react';
+import { FaSlack } from 'react-icons/fa';
 import { RealtimeResponseEvent } from 'appwrite';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -397,7 +398,7 @@ export default function Alerts() {
                                 </div>
                             </div>
                             <IntegrationCard 
-                                icon={<Slack size={24} />} 
+                                icon={<FaSlack size={24} />} 
                                 color="text-[#E01E5A]" 
                                 title="Slack"
                                 value={slackWebhook} 

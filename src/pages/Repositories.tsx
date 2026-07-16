@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { databases, DB_ID, ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-    Github, Clock, Play, Trash2, Plus, ExternalLink, Loader2 
+    Clock, Play, Trash2, Plus, ExternalLink, Loader2
 } from 'lucide-react';
+import { SiGithub } from 'react-icons/si';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -143,7 +144,7 @@ export default function Repositories() {
                     </div>
                 ) : repos.length === 0 ? (
                     <div className="premium-card p-24 text-center">
-                        <Github className="w-16 h-16 text-[var(--text-secondary)] mx-auto mb-6 opacity-20" />
+                        <SiGithub className="w-16 h-16 text-[var(--text-secondary)] mx-auto mb-6 opacity-20" />
                         <h3 className="text-lg font-semibold text-[var(--text-primary)]">No repositories yet</h3>
                         <p className="text-[13px] text-[var(--text-secondary)] mt-2">Connect a repository to start scanning it for security issues.</p>
                     </div>
@@ -153,7 +154,7 @@ export default function Repositories() {
                             <div key={repo.$id} className="premium-card group hover:border-[var(--accent-primary)]/40 transition-all p-8">
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="w-12 h-12 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl flex items-center justify-center group-hover:border-[var(--accent-primary)]/40 transition-colors">
-                                        <Github size={24} className="text-[var(--text-primary)]" />
+                                        <SiGithub size={24} className="text-[var(--text-primary)]" />
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button 

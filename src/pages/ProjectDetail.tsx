@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import {
-    Github, Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2, X
+    Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2, X
 } from 'lucide-react';
+import { SiGithub } from 'react-icons/si';
 import toast from 'react-hot-toast';
 import FindingsTable from '../components/FindingsTable';
 import { ScanHistory } from '../components/ScanHistory';
@@ -158,7 +159,7 @@ export default function ProjectDetail() {
                             Run New Audit
                         </button>
                         <a href={repo?.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-black text-[var(--accent-primary)] hover:opacity-80 transition-all uppercase tracking-widest italic border-b border-transparent hover:border-[var(--accent-primary)] leading-none">
-                            <Github className="w-4 h-4" />
+                            <SiGithub className="w-4 h-4" />
                             Source Code
                         </a>
                     </div>
