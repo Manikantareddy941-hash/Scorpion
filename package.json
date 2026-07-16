@@ -20,7 +20,7 @@
         "@monaco-editor/react": "^4.7.0",
         "@react-three/drei": "^9.122.0",
         "@react-three/fiber": "^8.18.0",
-        "@react-three/postprocessing": "^2.19.1",
+        "@react-three/postprocessing": "^3.0.4",
         "appwrite": "^23.0.0",
         "axios": "^1.18.1",
         "d3": "^7.9.0",
