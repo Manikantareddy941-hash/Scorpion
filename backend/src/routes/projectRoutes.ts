@@ -9,7 +9,7 @@ import {
     getProjectScanHistory
 } from '../services/projectService';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

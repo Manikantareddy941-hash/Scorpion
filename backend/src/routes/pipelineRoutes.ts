@@ -6,7 +6,7 @@ import { registerSseClient, unregisterSseClient, PipelineLogger, triggerPipeline
 import { canAccessResource } from '../services/tenancyService';
 import { PipelineRunDocument } from '../types/pipeline.types';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; email?: string };
 }
 

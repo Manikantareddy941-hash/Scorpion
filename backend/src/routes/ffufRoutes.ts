@@ -5,7 +5,7 @@ import { enqueueFfufScan } from '../queues/ffufQueue';
 import { assertSafeScanTarget } from '../utils/ssrfGuard';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
 }
 

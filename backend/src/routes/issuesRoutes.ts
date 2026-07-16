@@ -3,7 +3,7 @@ import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query, Models } from 'node-appwrite';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
 }
 

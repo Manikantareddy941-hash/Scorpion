@@ -5,7 +5,7 @@ import { suppressionRepository } from '../repositories/suppressionRepository';
 import { logger } from '../services/logger';
 import type { SuppressionRule } from '../monitor/suppressionMatcher';
 
-interface AuthedRequest extends Request { user?: Models.User<Models.Preferences>; }
+interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
 const router = Router();
 const VALID = new Set(['ruleId', 'severity', 'repo', 'actor']);
 

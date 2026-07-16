@@ -3,7 +3,7 @@ import { Models } from 'node-appwrite';
 import { users, databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences> & { $id: string };
 }
 

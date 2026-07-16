@@ -4,7 +4,7 @@ import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import { assertRepoAccess, resolveOwnershipScope, TenantAccessError } from '../services/tenancyService';
 import { hasPermission } from '../middleware/iamMiddleware';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; email?: string };
 }
 

@@ -11,7 +11,7 @@ import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from '
 import { PassThrough } from 'stream';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

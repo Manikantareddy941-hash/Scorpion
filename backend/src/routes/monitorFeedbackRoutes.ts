@@ -6,7 +6,7 @@ import { resolveOwnershipScope } from '../services/tenancyService';
 import { mttr, reopenRate, escapeByPhase, FindingRecord } from '../monitor/feedbackMetrics';
 import { logger } from '../services/logger';
 
-interface AuthedRequest extends Request { user?: Models.User<Models.Preferences>; }
+interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
 const router = Router();
 
 router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {

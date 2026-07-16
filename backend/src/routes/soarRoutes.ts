@@ -5,7 +5,7 @@ import { enqueueSoarAction } from '../queues/soarQueue';
 import { requireRole } from '../middleware/requireRole';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; email?: string };
 }
 
@@ -58,7 +58,7 @@ router.post('/playbooks', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/playbooks/:id', async (req: Request, res: Response) => {
+router.patch('/playbooks/:id', async (req: Request<Record<string, string>>, res: Response) => {
   const parsed = playbookSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid playbook update', details: parsed.error.flatten() });

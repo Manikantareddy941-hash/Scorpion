@@ -6,7 +6,7 @@ import { validateBody } from '../middleware/validate';
 import { evaluatePolicy, isOpaAvailable } from '../services/opaService';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
 }
 

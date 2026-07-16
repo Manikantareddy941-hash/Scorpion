@@ -6,7 +6,7 @@ import { logAuditEvent } from '../utils/auditLogger';
 import { canAccessResource } from '../services/tenancyService';
 import { logger } from '../services/logger';
 
-interface AuthenticatedRequest extends Request {
+interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 

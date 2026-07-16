@@ -1,7 +1,7 @@
 import { Request } from 'express';
 import { z } from 'zod';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string };
 }
 

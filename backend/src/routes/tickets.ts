@@ -19,9 +19,9 @@ const router = Router();
 // Apply authentication middleware to all ticket endpoints
 router.use(verifyUser);
 
-const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) => {
+const asyncHandler = (fn: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<unknown>) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res, next).catch(next);
+    fn(req as AuthenticatedRequest, res, next).catch(next);
   };
 };
 
@@ -32,7 +32,7 @@ function actorEmail(req: AuthenticatedRequest): string {
 /**
  * GET /api/tickets - List & filter tickets
  */
-router.get('/', asyncHandler(async (req: Request, res: Response) => {
+router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { status, priority, type, assignee, search, page, limit, sortBy, sortOrder } = req.query;
 
   const filters: TicketFilters = {
@@ -54,21 +54,21 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 /**
  * GET /api/tickets/stats - Aggregated stats
  */
-router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
+router.get('/stats', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   res.json(await ticketsService.getStats());
 }));
 
 /**
  * GET /api/tickets/jira/config - Retrieve current JIRA configuration (redacted)
  */
-router.get('/jira/config', asyncHandler(async (req: Request, res: Response) => {
+router.get('/jira/config', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   res.json(ticketsService.getRedactedJiraConfig());
 }));
 
 /**
  * POST /api/tickets/jira/config - Save JIRA configuration
  */
-router.post('/jira/config', validateBody(jiraConfigSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/jira/config', validateBody(jiraConfigSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   ticketsService.saveJiraConfig(req.body);
   res.json({ message: 'Jira configuration updated successfully.' });
 }));
@@ -76,7 +76,7 @@ router.post('/jira/config', validateBody(jiraConfigSchema), asyncHandler(async (
 /**
  * GET /api/tickets/jira/test - Test connection to Jira
  */
-router.get('/jira/test', asyncHandler(async (req: Request, res: Response) => {
+router.get('/jira/test', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const result = await ticketsService.testJiraConnection();
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
@@ -85,7 +85,7 @@ router.get('/jira/test', asyncHandler(async (req: Request, res: Response) => {
 /**
  * GET /api/tickets/by-finding/:findingId - Get ticket by linked finding ID
  */
-router.get('/by-finding/:findingId', asyncHandler(async (req: Request, res: Response) => {
+router.get('/by-finding/:findingId', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const ticket = await ticketsService.getTicketByFinding(req.params.findingId);
   if (!ticket) return res.status(404).json({ error: 'Ticket not found for this finding' });
   res.json(ticket);
@@ -94,7 +94,7 @@ router.get('/by-finding/:findingId', asyncHandler(async (req: Request, res: Resp
 /**
  * GET /api/tickets/:id - Get a single ticket
  */
-router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const ticket = await ticketsService.getTicket(req.params.id);
   if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
   res.json(ticket);
@@ -139,7 +139,7 @@ router.patch('/:id', validateBody(updateTicketSchema), asyncHandler(async (req: 
 /**
  * DELETE /api/tickets/:id - Delete a ticket
  */
-router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.delete('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const success = await ticketsService.deleteTicket(req.params.id);
   if (!success) return res.status(404).json({ error: 'Ticket not found' });
   res.status(204).end();
@@ -167,7 +167,7 @@ router.delete('/:id/links/:targetId', asyncHandler(async (req: AuthenticatedRequ
 /**
  * GET /api/tickets/:id/comments - Retrieve comment thread
  */
-router.get('/:id/comments', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/comments', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   res.json(await ticketsService.getComments(req.params.id));
 }));
 
@@ -182,21 +182,21 @@ router.post('/:id/comments', validateBody(addCommentSchema), asyncHandler(async 
 /**
  * GET /api/tickets/:id/activity - Retrieve ticket activity audit logs
  */
-router.get('/:id/activity', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/activity', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   res.json(await ticketsService.getActivity(req.params.id));
 }));
 
 /**
  * POST /api/tickets/sync/bulk - Bulk sync all unsynced tickets to Jira
  */
-router.post('/sync/bulk', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sync/bulk', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   res.json(await ticketsService.bulkSyncToJira());
 }));
 
 /**
  * POST /api/tickets/:id/sync - Push local ticket changes to JIRA
  */
-router.post('/:id/sync', asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/sync', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const result = await ticketsService.syncTicketToJira(req.params.id);
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
@@ -205,7 +205,7 @@ router.post('/:id/sync', asyncHandler(async (req: Request, res: Response) => {
 /**
  * POST /api/tickets/sync/pull/:jiraKey - Pull ticket changes from JIRA
  */
-router.post('/sync/pull/:jiraKey', asyncHandler(async (req: Request, res: Response) => {
+router.post('/sync/pull/:jiraKey', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const result = await ticketsService.pullTicketFromJira(req.params.jiraKey);
   if (!result.ok) return res.status(400).json(result);
   res.json(result);
