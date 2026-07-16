@@ -16,6 +16,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # bullmq exact-pins ioredis; a newer top-level ioredis duplicates the
+      # dependency and breaks BullMQ connection types. Drop when bullmq unpins.
+      - dependency-name: ioredis
     groups:
       backend-minor-patch:
         update-types: [minor, patch]
