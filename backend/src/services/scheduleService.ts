@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { generateSecuritySummary } from './aiService';
 import { sendAiReportEmail } from './emailService';
@@ -16,7 +16,7 @@ const getRangeBoundary = (range: string) => {
     }
 };
 
-const activeReportJobs = new Map<string, cron.ScheduledTask>();
+const activeReportJobs = new Map<string, ScheduledTask>();
 
 export const initReportScheduler = () => {
     logger.info('[ReportScheduler] Initializing AI report scheduler...');
