@@ -19,7 +19,7 @@
         "@google/generative-ai": "^0.24.1",
         "@monaco-editor/react": "^4.7.0",
         "@react-three/drei": "^9.122.0",
-        "@react-three/fiber": "^8.18.0",
+        "@react-three/fiber": "^9.6.1",
         "@react-three/postprocessing": "^2.19.1",
         "appwrite": "^23.0.0",
         "axios": "^1.18.1",
