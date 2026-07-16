@@ -3,7 +3,7 @@ import {
     Key, ShieldCheck, Loader2, ShieldAlert, Lock
 } from 'lucide-react';
 import { 
-    SiGithub, SiSonarqube, SiTerraform, SiTrivy, 
+    SiGithub, SiSonarqubeserver, SiTerraform, SiTrivy,
     SiGithubactions, SiJest, SiDocker, SiKubernetes, 
     SiOwasp, SiFalco, SiElasticsearch 
 } from 'react-icons/si';
@@ -161,7 +161,7 @@ export default function JourneyMap() {
 
     const nodeConfigs: NodeConfig[] = [
         { id: 'repo', label: 'CONNECT REPO', icon: SiGithub, color: '#00d4ff', x: 120, y: 150, path: '/repos' },
-        { id: 'code', label: 'CODE SCAN / SAST', icon: SiSonarqube, color: '#7c3aed', x: 300, y: 150, scannerKey: 'semgrep', path: '/scan-results' },
+        { id: 'code', label: 'CODE SCAN / SAST', icon: SiSonarqubeserver, color: '#7c3aed', x: 300, y: 150, scannerKey: 'semgrep', path: '/scan-results' },
         { id: 'secret', label: 'SECRET DETECT', icon: Key, color: '#ef4444', x: 480, y: 150, scannerKey: 'gitleaks', path: '/scan-results' },
         { id: 'iac', label: 'IAC SCAN', icon: SiTerraform, color: '#6366f1', x: 660, y: 150, scannerKey: 'checkov', path: '/scan-results' },
         { id: 'dep', label: 'DEPENDENCY', icon: SiTrivy, color: '#f59e0b', x: 840, y: 150, scannerKey: 'trivy', path: '/scan-results' },
