@@ -604,7 +604,7 @@ export default function Dashboard({
     fetchDashboardData();
     const handleManualRefresh = () => fetchDashboardData(true);
     window.addEventListener('refresh-dashboard', handleManualRefresh);
-    let realtimeDebounce: NodeJS.Timeout;
+    let realtimeDebounce: ReturnType<typeof setTimeout>;
     const unsubscribe = client.subscribe(
       [`databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents`],
       (response) => {
