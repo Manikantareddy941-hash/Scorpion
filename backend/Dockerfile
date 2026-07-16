@@ -2,7 +2,7 @@
 # imports shared/types.ts via a relative path that reaches outside backend/.
 
 # Build Stage
-FROM node:18-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app/backend
 
@@ -16,7 +16,7 @@ COPY shared/ /app/shared/
 RUN npm run build
 
 # Production Stage
-FROM node:18-slim
+FROM node:24-slim
 
 WORKDIR /app/backend
 
