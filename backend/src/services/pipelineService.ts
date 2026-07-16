@@ -103,7 +103,7 @@ async function detectBuildTool(dir: string): Promise<string> {
 function getRuntimeImageForTool(tool: string): string {
   const normalized = tool.toLowerCase();
   if (normalized.includes('npm') || normalized.includes('node') || normalized.includes('vite')) {
-    return 'node:18-alpine';
+    return 'node:24-alpine';
   }
   if (normalized.includes('gradle')) {
     return 'gradle:8-jdk17';

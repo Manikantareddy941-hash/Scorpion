@@ -1,8 +1,8 @@
 // Docker runtime image mapping configuration
 export const RUNTIME_IMAGES = {
-  NODE: 'node:18-alpine',
+  NODE: 'node:24-alpine',
   GRADLE: 'gradle:8-jdk17',
-  PYTHON: 'python:3.10-alpine',
+  PYTHON: 'python:3.13-alpine',
   FALLBACK: 'alpine:latest'
 };
 

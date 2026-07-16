@@ -10,7 +10,7 @@ import { parseCheckov } from './scan/parsers';
 import { getProfileEnv } from './iacCredentials';
 import { logger } from './logger';
 
-const TOFU_IMAGE = process.env.IAC_TOFU_IMAGE || 'ghcr.io/opentofu/opentofu:1.8';
+const TOFU_IMAGE = process.env.IAC_TOFU_IMAGE || 'ghcr.io/opentofu/opentofu:1.12';
 const CHECKOV_IMAGE = process.env.IAC_CHECKOV_IMAGE || 'bridgecrew/checkov:latest';
 // ponytail: filesystem store (workspace.json / runs/*.json / tfstate on disk).
 // Move to Appwrite collections when the UI needs cross-workspace queries.
