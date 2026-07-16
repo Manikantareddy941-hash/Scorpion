@@ -25,7 +25,7 @@ jobs:
     name: Secrets (Gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history so gitleaks scans past commits
       - name: Gitleaks
@@ -40,7 +40,7 @@ jobs:
     container:
       image: semgrep/semgrep
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Semgrep scan
         # p/ci is Semgrep's curated CI ruleset (OWASP + security-audit + secrets).
         run: semgrep scan --config=p/ci --sarif --output=semgrep.sarif || true
@@ -55,7 +55,7 @@ jobs:
     name: SCA + SBOM (Trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Trivy filesystem scan (fail on CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -118,7 +118,7 @@ jobs:
           - id: backend
             path: backend/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -137,7 +137,7 @@ jobs:
     name: IaC (Checkov)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
@@ -158,7 +158,7 @@ jobs:
     name: Container image (Trivy)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build web image (no push)
         run: docker build -t scorpion-web:ci -f Dockerfile .
       - name: Trivy image scan (fail on CRITICAL)
