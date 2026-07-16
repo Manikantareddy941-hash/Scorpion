@@ -60,7 +60,7 @@
         "@types/react-dom": "^18.3.0",
         "@types/three": "^0.185.1",
         "@vitejs/plugin-basic-ssl": "^1.1.0",
-        "@vitejs/plugin-react": "^4.3.1",
+        "@vitejs/plugin-react": "^6.0.3",
         "autoprefixer": "^10.5.2",
         "concurrently": "^9.2.1",
         "dotenv": "^17.4.2",
