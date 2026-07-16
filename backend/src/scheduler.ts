@@ -1,10 +1,10 @@
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
 import { enqueueScan } from './queues/scanQueue';
 import { logger } from './services/logger';
 
 // Map to keep track of active cron jobs by repo ID
-const activeJobs = new Map<string, cron.ScheduledTask>();
+const activeJobs = new Map<string, ScheduledTask>();
 
 export const initScheduler = () => {
     logger.info('[Scheduler] Initializing dynamic scan scheduler...');
