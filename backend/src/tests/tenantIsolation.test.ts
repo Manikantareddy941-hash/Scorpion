@@ -32,6 +32,14 @@ function applyQueries(docs: Doc[], queries: FakeQuery[] = []): Doc[] {
   return out.slice(0, limit);
 }
 
+// Pin the storage facade to its legacy Appwrite path: this suite mocks Appwrite
+// directly, so under CI's DATABASE_URL the pg facade would bypass these mocks.
+// Postgres tenancy scoping is covered by the pg repository unit tests.
+jest.mock('../db/pool', () => ({
+  isPostgresEnabled: () => false,
+  getPool: jest.fn(),
+  closePool: jest.fn(),
+}));
 jest.mock('../lib/appwrite', () => ({
   DB_ID: 'test-db',
   // Any COLLECTIONS.X resolves to a stable per-key collection name.

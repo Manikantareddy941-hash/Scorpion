@@ -91,6 +91,21 @@ jobs:
     name: Backend CI
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: scorpion
+          POSTGRES_PASSWORD: scorpion
+          POSTGRES_DB: scorpion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scorpion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -124,6 +139,15 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      - name: Run DB Migrations
+        working-directory: backend
+        run: npm run migrate:up
+        env:
+          DATABASE_URL: postgres://scorpion:scorpion@localhost:5432/scorpion
+
       - name: Run Backend Tests
         working-directory: backend
         run: npm run test
+        env:
+          RUN_DB_IT: "1"
+          DATABASE_URL: postgres://scorpion:scorpion@localhost:5432/scorpion
