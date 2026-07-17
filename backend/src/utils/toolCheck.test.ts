@@ -18,6 +18,7 @@ const loadOnPlatform = (platform: string): ToolCheckModule => {
   Object.defineProperty(process, 'platform', { value: platform });
   let mod: ToolCheckModule;
   jest.isolateModules(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- isolateModules needs a runtime require to get a fresh module copy per faked platform
     mod = require('./toolCheck');
   });
   return mod!;
