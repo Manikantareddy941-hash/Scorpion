@@ -531,9 +531,13 @@ export default function Dashboard({
         try {
           const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
             Query.orderDesc('$createdAt'),
-            Query.limit(5),
+            Query.limit(50),
           ]);
-          vulnsDocuments = vulnsRes.documents;
+          // Client-side risk sort: older docs may lack the risk_score attribute,
+          // so a server-side orderDesc('risk_score') could 400 on unmigrated collections.
+          vulnsDocuments = [...vulnsRes.documents].sort(
+            (a: any, b: any) => (b.risk_score ?? 0) - (a.risk_score ?? 0),
+          );
         } catch (err) {
           console.warn('Failed to fetch vulnerabilities from Appwrite:', err);
         }
@@ -1045,6 +1049,26 @@ export default function Dashboard({
                               />
                               {sevLabel(sev)}
                             </span>
+                            {f.kev && (
+                              <span
+                                className="mt-0.5 inline-flex shrink-0 items-center rounded-full bg-[#ff5252] px-2 py-0.5 text-[10px] font-bold uppercase text-white"
+                                title="Listed in CISA Known Exploited Vulnerabilities catalog"
+                              >
+                                KEV
+                              </span>
+                            )}
+                            {typeof f.risk_score === 'number' && (
+                              <span
+                                className="mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+                                style={{
+                                  color: severityVar(sev as Severity),
+                                  background: `color-mix(in srgb, ${severityVar(sev as Severity)} 8%, transparent)`,
+                                }}
+                                title="Risk score 0-100: severity + EPSS exploit probability + KEV"
+                              >
+                                {f.risk_score}
+                              </span>
+                            )}
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[13px] font-medium">
                                 {f.title || f.message || 'Untitled finding'}
