@@ -20,6 +20,15 @@ interface Repository {
     $createdAt: string;
 }
 
+interface InstallationRepo {
+    installation_id: number;
+    account: string;
+    name: string;
+    full_name: string;
+    html_url: string;
+    private: boolean;
+}
+
 export default function Repositories() {
     const {} = useTranslation();
     const { user, getJWT } = useAuth();
@@ -29,6 +38,77 @@ export default function Repositories() {
     const [scanning, setScanning] = useState<string | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newRepo, setNewRepo] = useState({ name: '', url: '' });
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importRepos, setImportRepos] = useState<InstallationRepo[]>([]);
+    const [importLoading, setImportLoading] = useState(false);
+    const [importSelected, setImportSelected] = useState<Set<string>>(new Set());
+    const [connecting, setConnecting] = useState(false);
+
+    const connectedUrls = new Set(repos.map(r => r.url));
+
+    const handleOpenImport = async () => {
+        setShowImportModal(true);
+        setImportLoading(true);
+        try {
+            const token = await getJWT();
+            const res = await fetch('/api/repos/github/installations', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || 'Failed to list GitHub App repositories');
+            }
+            const data = await res.json();
+            setImportRepos(data.repos || []);
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to list GitHub App repositories');
+            setShowImportModal(false);
+        } finally {
+            setImportLoading(false);
+        }
+    };
+
+    const toggleImportSelection = (url: string) => {
+        setImportSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(url)) next.delete(url);
+            else next.add(url);
+            return next;
+        });
+    };
+
+    const handleBulkConnect = async () => {
+        if (importSelected.size === 0) return;
+        setConnecting(true);
+        try {
+            const token = await getJWT();
+            const res = await fetch('/api/repos/bulk-connect', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ urls: [...importSelected] })
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || 'Bulk connect failed');
+            }
+            const data = await res.json();
+            if (data.failed?.length > 0) {
+                toast.error(`Connected ${data.connected}, failed ${data.failed.length}`);
+            } else {
+                toast.success(`Connected ${data.connected} repositories`);
+            }
+            setShowImportModal(false);
+            setImportSelected(new Set());
+            fetchRepos();
+        } catch (err: any) {
+            toast.error(err.message || 'Bulk connect failed');
+        } finally {
+            setConnecting(false);
+        }
+    };
 
     useEffect(() => {
         fetchRepos();
@@ -127,13 +207,22 @@ export default function Repositories() {
                         <p className="text-[13px] text-[var(--text-secondary)] mt-1">Connect repositories and set how often they're scanned</p>
                     </div>
 
-                    <button 
-                        onClick={() => setShowAddModal(true)}
-                        className="btn-premium flex items-center gap-2"
-                    >
-                        <Plus size={18} />
-                        Add Repository
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleOpenImport}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold border border-[var(--border-subtle)] text-[var(--text-primary)] hover:border-[var(--accent-primary)]/40 transition-colors cursor-pointer"
+                        >
+                            <SiGithub size={16} />
+                            Import from GitHub
+                        </button>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="btn-premium flex items-center gap-2"
+                        >
+                            <Plus size={18} />
+                            Add Repository
+                        </button>
+                    </div>
                 </div>
 
                 {/* Repos Grid */}
@@ -280,6 +369,96 @@ export default function Repositories() {
                                 </button>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Import from GitHub Modal */}
+                {showImportModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !connecting && setShowImportModal(false)} />
+                        <div className="premium-card max-w-lg w-full p-8 relative z-10 animate-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
+                            <h2 className="text-[17px] font-semibold text-[var(--text-primary)] mb-1">Import from GitHub</h2>
+                            <p className="text-[13px] text-[var(--text-secondary)] mb-5">
+                                Every repository your GitHub App installation can see. Select and connect in bulk.
+                            </p>
+
+                            {importLoading ? (
+                                <div className="flex flex-col items-center justify-center py-16">
+                                    <Loader2 className="w-8 h-8 text-[var(--accent-primary)] animate-spin mb-3" />
+                                    <p className="text-[13px] text-[var(--text-secondary)]">Listing installation repositories…</p>
+                                </div>
+                            ) : importRepos.length === 0 ? (
+                                <p className="text-[13px] text-[var(--text-secondary)] py-10 text-center">
+                                    No repositories visible to the GitHub App. Install it on your organization first.
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-[12px] text-[var(--text-secondary)] tabular-nums">
+                                            {importSelected.size} of {importRepos.filter(r => !connectedUrls.has(r.html_url)).length} selectable
+                                        </span>
+                                        <button
+                                            onClick={() => {
+                                                const selectable = importRepos.filter(r => !connectedUrls.has(r.html_url)).map(r => r.html_url);
+                                                setImportSelected(prev => prev.size === selectable.length ? new Set() : new Set(selectable));
+                                            }}
+                                            className="text-[12px] font-medium text-[var(--accent-primary)] hover:opacity-80 cursor-pointer"
+                                        >
+                                            {importSelected.size === importRepos.filter(r => !connectedUrls.has(r.html_url)).length ? 'Clear all' : 'Select all'}
+                                        </button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto border border-[var(--border-subtle)] rounded-xl divide-y divide-[var(--border-subtle)] min-h-0">
+                                        {importRepos.map((repo) => {
+                                            const alreadyConnected = connectedUrls.has(repo.html_url);
+                                            return (
+                                                <label
+                                                    key={repo.html_url}
+                                                    className={`flex items-center gap-3 px-4 py-3 ${alreadyConnected ? 'opacity-50' : 'cursor-pointer hover:bg-[var(--bg-primary)]/40'} transition-colors`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        disabled={alreadyConnected}
+                                                        checked={alreadyConnected || importSelected.has(repo.html_url)}
+                                                        onChange={() => toggleImportSelection(repo.html_url)}
+                                                        className="accent-[var(--accent-primary)] cursor-pointer"
+                                                    />
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">{repo.full_name}</p>
+                                                        <p className="text-[11px] text-[var(--text-secondary)]">
+                                                            {repo.account}{repo.private ? ' · private' : ''}
+                                                        </p>
+                                                    </div>
+                                                    {alreadyConnected && (
+                                                        <span className="text-[10px] font-semibold uppercase text-[var(--status-success)] flex-shrink-0">Connected</span>
+                                                    )}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="flex gap-4 pt-5">
+                                        <button
+                                            type="button"
+                                            disabled={connecting}
+                                            onClick={() => setShowImportModal(false)}
+                                            className="flex-1 px-6 py-3 rounded-xl text-[13px] font-semibold border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-primary)] transition-all disabled:opacity-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={connecting || importSelected.size === 0}
+                                            onClick={handleBulkConnect}
+                                            className="flex-1 px-6 py-3 rounded-xl text-[13px] font-semibold bg-[var(--accent-primary)] text-white shadow-sm hover:bg-[var(--accent-secondary)] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                        >
+                                            {connecting && <Loader2 size={14} className="animate-spin" />}
+                                            {connecting ? 'Connecting…' : `Connect ${importSelected.size || ''}`.trim()}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
                 )}
 

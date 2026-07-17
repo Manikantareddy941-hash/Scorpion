@@ -23,7 +23,15 @@ export const triggerScanSchema = z.object({
   branch: z.string().trim().min(1).max(255).optional(),
 });
 
+export const bulkConnectSchema = z.object({
+  urls: z
+    .array(z.string().trim().url('each entry must be a valid URL'))
+    .min(1, 'urls must contain at least one repository')
+    .max(100, 'at most 100 repositories can be connected per request'),
+});
+
 export type AddRepoInput = z.infer<typeof addRepoSchema>;
+export type BulkConnectInput = z.infer<typeof bulkConnectSchema>;
 export type ExternalScanInput = z.infer<typeof externalScanSchema>;
 export type TriggerScanInput = z.infer<typeof triggerScanSchema>;
 

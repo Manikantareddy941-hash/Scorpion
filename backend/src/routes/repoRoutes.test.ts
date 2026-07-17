@@ -22,10 +22,16 @@ jest.mock('../services/ingestionService', () => ({
 jest.mock('../queues/scanQueue', () => ({
     enqueueScan: jest.fn(),
 }));
+// octokit packages are ESM-only and blow up jest's CJS parser - never load them in route tests
+jest.mock('../github/appInstallations', () => ({
+    listInstallationRepos: jest.fn(),
+}));
 
 import repoRoutes from './repoRoutes';
 import { databases } from '../lib/appwrite';
 import { cleanupWorkspace } from '../services/ingestionService';
+import { listInstallationRepos } from '../github/appInstallations';
+import { repoService } from '../services/repoService';
 
 const buildApp = () => {
     const app = express();
@@ -70,5 +76,57 @@ describe('repoRoutes DELETE /:id', () => {
 
         expect(res.statusCode).toBe(409);
         expect(databases.deleteDocument).not.toHaveBeenCalled();
+    });
+});
+
+describe('repoRoutes GET /github/installations', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('returns every repo visible to the GitHub App installation', async () => {
+        (listInstallationRepos as jest.Mock).mockResolvedValue([
+            { installation_id: 1, account: 'acme', name: 'api', full_name: 'acme/api', html_url: 'https://github.com/acme/api', private: true },
+        ]);
+
+        const res = await request(buildApp()).get('/api/repos/github/installations');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.repos).toHaveLength(1);
+        expect(res.body.repos[0].full_name).toBe('acme/api');
+    });
+
+    it('returns 503 when the GitHub App is not configured', async () => {
+        (listInstallationRepos as jest.Mock).mockRejectedValue(new Error('GitHub App not configured (GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY)'));
+
+        const res = await request(buildApp()).get('/api/repos/github/installations');
+
+        expect(res.statusCode).toBe(503);
+    });
+});
+
+describe('repoRoutes POST /bulk-connect', () => {
+    beforeEach(() => jest.clearAllMocks());
+    afterEach(() => jest.restoreAllMocks());
+
+    it('connects each url and reports the ones that failed', async () => {
+        const syncSpy = jest.spyOn(repoService, 'syncRepo')
+            .mockResolvedValueOnce({ $id: 'r1' } as never)
+            .mockRejectedValueOnce(new Error('clone failed'));
+
+        const res = await request(buildApp())
+            .post('/api/repos/bulk-connect')
+            .send({ urls: ['https://github.com/acme/api', 'https://github.com/acme/web'] });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.connected).toBe(1);
+        expect(res.body.failed).toEqual(['https://github.com/acme/web']);
+        expect(syncSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects an empty url list', async () => {
+        const res = await request(buildApp())
+            .post('/api/repos/bulk-connect')
+            .send({ urls: [] });
+
+        expect(res.statusCode).toBe(400);
     });
 });
