@@ -2,6 +2,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
+import { isPostgresEnabled } from '../db/pool';
+import { gateRulesPgRepository } from './pg/gateRulesPgRepository';
 
 export type GateSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type GateAction = 'block' | 'warn';
@@ -84,7 +86,7 @@ async function persistConfig(userId: string, config: GateConfig): Promise<void> 
  * failure we fall back to a local JSON store — the same resilience pattern used
  * by planRepository. Rules are persisted as a JSON string column.
  */
-export const gateRulesRepository = {
+const legacyGateRulesRepository = {
   async get(userId: string): Promise<GateConfig> {
     try {
       const list = await databases.listDocuments(DB_ID, COLLECTION, [
@@ -143,3 +145,7 @@ export const gateRulesRepository = {
     });
   },
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite/JSON otherwise. */
+export const gateRulesRepository: typeof legacyGateRulesRepository =
+  isPostgresEnabled() ? gateRulesPgRepository : legacyGateRulesRepository;
