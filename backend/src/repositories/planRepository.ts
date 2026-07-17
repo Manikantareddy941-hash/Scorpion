@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import {
-  PlanSchema, Project, Epic, Sprint, Issue, Comment, AutomationRule, Threat
+  PlanSchema, Project, Epic, Sprint, Issue, Comment, AutomationRule,
+  AutomationRun, SprintSnapshot, Worklog, Threat
 } from '../types/plan.types';
 
 const MOCK_DB_PATH = path.join(process.cwd(), 'scratch', 'plan_mock_db.json');
@@ -35,9 +36,12 @@ const defaultMockDb: PlanSchema = {
     { $id: 'comm-2', issueId: 'issue-2', author: 'Security Lead', body: 'This is blocking our release gate. Let\'s prioritize patch validation.', createdAt: new Date().toISOString() }
   ],
   automationRules: [
-    { $id: 'rule-1', projectId: 'proj-1', trigger: 'vuln_resolved', action: 'auto_create_task' },
-    { $id: 'rule-2', projectId: 'proj-1', trigger: 'sprint_ended', action: 'move_to_backlog' }
+    { $id: 'rule-1', projectId: 'proj-1', trigger: 'vuln_resolved', action: 'auto_create_task', enabled: true, runCount: 0, lastRunAt: null },
+    { $id: 'rule-2', projectId: 'proj-1', trigger: 'sprint_ended', action: 'move_to_backlog', enabled: true, runCount: 0, lastRunAt: null }
   ],
+  automationRuns: [],
+  sprintSnapshots: [],
+  worklogs: [],
   threats: []
 };
 
@@ -45,7 +49,16 @@ async function readMockDb(): Promise<PlanSchema> {
   try {
     await fs.mkdir(path.dirname(MOCK_DB_PATH), { recursive: true });
     const data = await fs.readFile(MOCK_DB_PATH, 'utf-8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // Backfill arrays added after a mock DB file was first written, so older
+    // files don't throw when the automation/snapshot/worklog code touches them.
+    return {
+      ...parsed,
+      automationRuns: parsed.automationRuns ?? [],
+      sprintSnapshots: parsed.sprintSnapshots ?? [],
+      worklogs: parsed.worklogs ?? [],
+      threats: parsed.threats ?? [],
+    };
   } catch {
     await fs.writeFile(MOCK_DB_PATH, JSON.stringify(defaultMockDb, null, 2), 'utf-8');
     return defaultMockDb;
@@ -361,6 +374,79 @@ export const planRepository = {
     );
   },
 
+  async getIssue(issueId: string): Promise<Issue | null> {
+    return handleQuery(
+      async () => {
+        const doc = await databases.getDocument(DB_ID, 'plan_issues', issueId);
+        return doc as unknown as Issue;
+      },
+      async () => {
+        const db = await readMockDb();
+        return db.issues.find(i => i.$id === issueId) || null;
+      }
+    );
+  },
+
+  async listIssuesBySprint(sprintId: string): Promise<Issue[]> {
+    return handleQuery(
+      async () => {
+        const docList = await databases.listDocuments(DB_ID, 'plan_issues', [Query.equal('sprintId', sprintId)]);
+        return docList.documents as unknown as Issue[];
+      },
+      async () => {
+        const db = await readMockDb();
+        return db.issues.filter(i => i.sprintId === sprintId);
+      }
+    );
+  },
+
+  async listWorklogs(issueId: string): Promise<Worklog[]> {
+    return handleQuery(
+      async () => {
+        const docList = await databases.listDocuments(DB_ID, 'plan_worklogs', [Query.equal('issueId', issueId)]);
+        return docList.documents as unknown as Worklog[];
+      },
+      async () => {
+        const db = await readMockDb();
+        return db.worklogs.filter(w => w.issueId === issueId);
+      }
+    );
+  },
+
+  /** Persists a worklog and increments the issue's timeLogged total (stored in hours to match the UI). */
+  async createWorklog(issueId: string, input: { author: string; minutes: number; comment?: string }): Promise<Worklog> {
+    const worklog: Worklog = {
+      $id: randomId('wl'),
+      issueId,
+      author: input.author,
+      minutes: input.minutes,
+      comment: input.comment || '',
+      createdAt: new Date().toISOString(),
+    };
+    return handleQuery(
+      async () => {
+        const created = await databases.createDocument(DB_ID, 'plan_worklogs', ID.unique(), {
+          issueId, author: worklog.author, minutes: worklog.minutes, comment: worklog.comment, createdAt: worklog.createdAt,
+        });
+        const issue = await databases.getDocument(DB_ID, 'plan_issues', issueId);
+        await databases.updateDocument(DB_ID, 'plan_issues', issueId, {
+          timeLogged: (Number(issue.timeLogged) || 0) + input.minutes / 60,
+        });
+        return created as unknown as Worklog;
+      },
+      async () => {
+        const db = await readMockDb();
+        db.worklogs.push(worklog);
+        const idx = db.issues.findIndex(i => i.$id === issueId);
+        if (idx !== -1) {
+          db.issues[idx] = { ...db.issues[idx], timeLogged: (Number(db.issues[idx].timeLogged) || 0) + input.minutes / 60 };
+        }
+        await writeMockDb(db);
+        return worklog;
+      }
+    );
+  },
+
   async listAutomationRules(projectId: string): Promise<AutomationRule[]> {
     return handleQuery(
       async () => {
@@ -394,6 +480,112 @@ export const planRepository = {
         db.automationRules.push(newRule);
         await writeMockDb(db);
         return newRule;
+      }
+    );
+  },
+
+  async deleteAutomationRule(ruleId: string): Promise<boolean> {
+    return handleQuery(
+      async () => {
+        await databases.deleteDocument(DB_ID, 'plan_automation_rules', ruleId);
+        return true;
+      },
+      async () => {
+        const db = await readMockDb();
+        const idx = db.automationRules.findIndex(r => r.$id === ruleId);
+        if (idx === -1) return false;
+        db.automationRules.splice(idx, 1);
+        await writeMockDb(db);
+        return true;
+      }
+    );
+  },
+
+  async listAutomationRuns(projectId: string): Promise<AutomationRun[]> {
+    return handleQuery(
+      async () => {
+        const docList = await databases.listDocuments(DB_ID, 'plan_automation_runs', [
+          Query.equal('projectId', projectId),
+          Query.orderDesc('createdAt'),
+          Query.limit(50),
+        ]);
+        return docList.documents as unknown as AutomationRun[];
+      },
+      async () => {
+        const db = await readMockDb();
+        return db.automationRuns
+          .filter(r => r.projectId === projectId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, 50);
+      }
+    );
+  },
+
+  /** Persists an execution record and bumps the rule's runCount/lastRunAt counters (best-effort). */
+  async createAutomationRun(run: Omit<AutomationRun, '$id'>): Promise<AutomationRun> {
+    const record: AutomationRun = { $id: randomId('run'), ...run };
+    return handleQuery(
+      async () => {
+        const doc = await databases.createDocument(DB_ID, 'plan_automation_runs', ID.unique(), {
+          projectId: run.projectId, ruleId: run.ruleId, trigger: run.trigger, action: run.action,
+          status: run.status, message: run.message, issueId: run.issueId || '', createdAt: run.createdAt,
+        });
+        await databases.getDocument(DB_ID, 'plan_automation_rules', run.ruleId)
+          .then(rule => databases.updateDocument(DB_ID, 'plan_automation_rules', run.ruleId, {
+            runCount: (Number(rule.runCount) || 0) + 1,
+            lastRunAt: run.createdAt,
+          }))
+          .catch(() => { /* counters are best-effort */ });
+        return doc as unknown as AutomationRun;
+      },
+      async () => {
+        const db = await readMockDb();
+        db.automationRuns.unshift(record);
+        db.automationRuns = db.automationRuns.slice(0, 200); // cap history
+        const idx = db.automationRules.findIndex(r => r.$id === run.ruleId);
+        if (idx !== -1) {
+          const rule = db.automationRules[idx];
+          db.automationRules[idx] = { ...rule, runCount: (rule.runCount || 0) + 1, lastRunAt: run.createdAt };
+        }
+        await writeMockDb(db);
+        return record;
+      }
+    );
+  },
+
+  async listSprintSnapshots(projectId: string): Promise<SprintSnapshot[]> {
+    return handleQuery(
+      async () => {
+        const docList = await databases.listDocuments(DB_ID, 'plan_sprint_snapshots', [
+          Query.equal('projectId', projectId),
+          Query.orderAsc('closedAt'),
+          Query.limit(100),
+        ]);
+        return docList.documents as unknown as SprintSnapshot[];
+      },
+      async () => {
+        const db = await readMockDb();
+        return db.sprintSnapshots
+          .filter(s => s.projectId === projectId)
+          .sort((a, b) => a.closedAt.localeCompare(b.closedAt));
+      }
+    );
+  },
+
+  async createSprintSnapshot(snapshot: Omit<SprintSnapshot, '$id'>): Promise<SprintSnapshot> {
+    const record: SprintSnapshot = { $id: randomId('snap'), ...snapshot };
+    return handleQuery(
+      async () => {
+        const doc = await databases.createDocument(DB_ID, 'plan_sprint_snapshots', ID.unique(), { ...snapshot });
+        return doc as unknown as SprintSnapshot;
+      },
+      async () => {
+        const db = await readMockDb();
+        // Replace any prior snapshot for this sprint (re-closing) to avoid dupes.
+        db.sprintSnapshots = db.sprintSnapshots.filter(s => s.sprintId !== snapshot.sprintId);
+        db.sprintSnapshots.push(record);
+        await writeMockDb(db);
+        return record;
       }
     );
   },

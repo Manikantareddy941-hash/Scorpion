@@ -68,6 +68,44 @@ export interface AutomationRule {
   trigger: string;
   conditions?: string;
   action: string;
+  enabled?: boolean;
+  runCount?: number;
+  lastRunAt?: string | null;
+}
+
+export interface AutomationRun {
+  $id: string;
+  projectId: string;
+  ruleId: string;
+  trigger: string;
+  action: string;
+  status: 'success' | 'error';
+  message: string;
+  issueId?: string;
+  createdAt: string;
+}
+
+export interface SprintSnapshot {
+  $id: string;
+  projectId: string;
+  sprintId: string;
+  sprintName: string;
+  committedPoints: number;
+  completedPoints: number;
+  committedIssues: number;
+  completedIssues: number;
+  startDate?: string;
+  endDate?: string;
+  closedAt: string;
+}
+
+export interface Worklog {
+  $id: string;
+  issueId: string;
+  author: string;
+  minutes: number;
+  comment?: string;
+  createdAt: string;
 }
 
 export interface Threat {
@@ -89,5 +127,8 @@ export interface PlanSchema {
   issues: Issue[];
   comments: Comment[];
   automationRules: AutomationRule[];
+  automationRuns: AutomationRun[];
+  sprintSnapshots: SprintSnapshot[];
+  worklogs: Worklog[];
   threats: Threat[];
 }

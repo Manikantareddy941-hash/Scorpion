@@ -62,6 +62,9 @@ const seedDb = (overrides: Partial<PlanSchema> = {}) => {
     ],
     comments: [{ $id: 'c1', issueId: 'i1', author: 'a', body: 'b', createdAt: '2026-01-04' }],
     automationRules: [{ $id: 'r1', projectId: 'p1', trigger: 'vuln_resolved', action: 'auto_create_task' }],
+    automationRuns: [],
+    sprintSnapshots: [],
+    worklogs: [],
     threats: [{ $id: 't1', projectId: 'p1', title: 'Spoof', strideCategory: 'Spoofing', severity: 'high', description: '', mitigation: '', status: 'identified' }],
     ...overrides,
   };
