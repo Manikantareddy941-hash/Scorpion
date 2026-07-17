@@ -388,6 +388,8 @@ router.post('/k8s-admission', async (req: Request, res: Response) => {
 export default router;
 
 // ponytail: one runnable self-check of the pure gate + fail-closed mapping.
+// Runs only via `node k8sAdmission.js`, never under jest — excluded from coverage.
+/* istanbul ignore next */
 if (require.main === module) {
   // unknown reachability: prod blocks, lower envs warn (allowed)
   assert.strictEqual(evaluatePreflight(DEFAULT_RULES, EMPTY_COUNTS, 'prod', 'unknown').status, 'blocked');
