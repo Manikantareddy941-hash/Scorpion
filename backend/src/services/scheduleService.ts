@@ -1,9 +1,20 @@
-import cron, { type ScheduledTask } from 'node-cron';
+import cron from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { reportQueue } from '../queues/reportQueue';
 import { generateSecuritySummary } from './aiService';
 import { sendAiReportEmail } from './emailService';
 import { logger } from './logger';
 import { marked } from 'marked';
+
+/**
+ * Scheduled AI reports via BullMQ job schedulers (Redis-backed) — with N
+ * backend replicas a schedule fires exactly once. The minute-tick reconciles
+ * DB config into schedulers idempotently; the report itself executes on the
+ * report queue worker (reportQueueWorker.ts).
+ */
+
+const SCHEDULER_PREFIX = 'report-';
+const AI_SUMMARY_TIMEOUT_MS = 15000;
 
 const getRangeBoundary = (range: string) => {
     const now = new Date();
@@ -16,102 +27,83 @@ const getRangeBoundary = (range: string) => {
     }
 };
 
-const activeReportJobs = new Map<string, ScheduledTask>();
+/**
+ * Executes one scheduled AI report. Re-reads the schedule document so config
+ * changes (emails, range, deactivation) between the scheduler firing and the
+ * worker picking the job up are honored.
+ */
+export const runScheduledReport = async (scheduleId: string): Promise<void> => {
+    const schedule = await databases.getDocument(DB_ID, COLLECTIONS.REPORTS_SCHEDULE, scheduleId);
+    if (!schedule.is_active) {
+        logger.info(`[ReportScheduler] Schedule ${scheduleId} deactivated, skipping.`);
+        return;
+    }
+
+    const targetEmails: string[] = schedule.emails || [];
+    const range: string = schedule.range || '7d';
+    const boundary = getRangeBoundary(range);
+
+    const findings = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+        Query.greaterThanEqual('$createdAt', boundary),
+        Query.limit(100)
+    ]);
+    const alerts = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [
+        Query.greaterThanEqual('$createdAt', boundary),
+        Query.limit(50)
+    ]);
+
+    const summaryPromise = generateSecuritySummary(findings.documents, alerts.documents);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('TIMEOUT')), AI_SUMMARY_TIMEOUT_MS)
+    );
+    const markdownSummary = (await Promise.race([summaryPromise, timeoutPromise])) as string;
+    const htmlSummary = await marked.parse(markdownSummary);
+
+    for (const email of targetEmails) {
+        await sendAiReportEmail(email, htmlSummary, range);
+        logger.info(`[ReportScheduler] Scheduled AI Report dispatched successfully to user ${email}`);
+    }
+};
+
+export const reconcileReportSchedules = async (): Promise<void> => {
+    const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPORTS_SCHEDULE, [
+        Query.equal('is_active', true),
+        Query.limit(100)
+    ]);
+
+    const active = new Map<string, string>(
+        response.documents.map(doc => [doc.$id, doc.cron_schedule || '0 8 * * 1'])
+    );
+
+    const existing = await reportQueue.getJobSchedulers();
+    for (const scheduler of existing) {
+        const id = scheduler.key;
+        if (!id || !id.startsWith(SCHEDULER_PREFIX)) continue;
+        if (!active.has(id.slice(SCHEDULER_PREFIX.length))) {
+            logger.info(`[ReportScheduler] Removing report schedule ${id}`);
+            await reportQueue.removeJobScheduler(id);
+        }
+    }
+
+    for (const [scheduleId, cronExpr] of active) {
+        if (!cron.validate(cronExpr)) {
+            logger.error(`[ReportScheduler] Invalid cron schedule for ${scheduleId}: ${cronExpr}`);
+            continue;
+        }
+        await reportQueue.upsertJobScheduler(
+            `${SCHEDULER_PREFIX}${scheduleId}`,
+            { pattern: cronExpr },
+            { name: 'ai-report', data: { scheduleId } }
+        );
+    }
+};
 
 export const initReportScheduler = () => {
-    logger.info('[ReportScheduler] Initializing AI report scheduler...');
-
-    // Sync schedules every minute
-    cron.schedule('* * * * *', async () => {
-        try {
-            const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPORTS_SCHEDULE, [
-                Query.equal('is_active', true),
-                Query.limit(100)
-            ]);
-
-            const currentActiveScheduleIds = new Set(response.documents.map(doc => doc.$id));
-
-            // Remove inactive jobs
-            for (const [scheduleId, job] of activeReportJobs.entries()) {
-                if (!currentActiveScheduleIds.has(scheduleId)) {
-                    logger.info(`[ReportScheduler] Stopping job for schedule: ${scheduleId}`);
-                    job.stop();
-                    activeReportJobs.delete(scheduleId);
-                }
-            }
-
-            // Add or update jobs
-            for (const schedule of response.documents) {
-                const scheduleId = schedule.$id;
-                const cronExpr = schedule.cron_schedule || '0 8 * * 1'; // Default: Monday 8 AM
-                const targetEmails: string[] = schedule.emails || [];
-                const range = schedule.range || '7d';
-
-                const jobKey = `${scheduleId}_${cronExpr}`;
-                
-                let existingJobFound = false;
-                for (const key of activeReportJobs.keys()) {
-                    if (key.startsWith(scheduleId + '_')) {
-                        if (key === jobKey) {
-                            existingJobFound = true;
-                        } else {
-                            logger.info(`[ReportScheduler] Schedule changed for ${scheduleId}, replacing old job.`);
-                            activeReportJobs.get(key)?.stop();
-                            activeReportJobs.delete(key);
-                        }
-                    }
-                }
-
-                if (!existingJobFound) {
-                    if (cron.validate(cronExpr)) {
-                        logger.info(`[ReportScheduler] Scheduling AI Report: ${scheduleId} with cron: ${cronExpr}`);
-                        const task = cron.schedule(cronExpr, async () => {
-                            logger.info(`[ReportScheduler] Executing AI Report for schedule: ${scheduleId}`);
-                            try {
-                                const boundary = getRangeBoundary(range);
-                                
-                                // Gather data
-                                const findings = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                                    Query.greaterThanEqual('$createdAt', boundary),
-                                    Query.limit(100)
-                                ]);
-
-                                const alerts = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [
-                                    Query.greaterThanEqual('$createdAt', boundary),
-                                    Query.limit(50)
-                                ]);
-
-                                // Generate summary via AI service
-                                const summaryPromise = generateSecuritySummary(findings.documents, alerts.documents);
-                                const timeoutPromise = new Promise((_, reject) => 
-                                    setTimeout(() => reject(new Error('TIMEOUT')), 15000)
-                                );
-                                
-                                const markdownSummary = await Promise.race([summaryPromise, timeoutPromise]) as string;
-                                
-                                // Convert to HTML
-                                const htmlSummary = await marked.parse(markdownSummary);
-
-                                // Dispatch emails
-                                for (const email of targetEmails) {
-                                    await sendAiReportEmail(email, htmlSummary, range);
-                                    logger.info(`[ReportScheduler] Scheduled AI Report dispatched successfully to user ${email}`);
-                                }
-
-                            } catch (error: any) {
-                                logger.error(`[ReportScheduler] Error generating report for schedule ${scheduleId}:`, error);
-                            }
-                        });
-                        activeReportJobs.set(jobKey, task);
-                    } else {
-                        logger.error(`[ReportScheduler] Invalid cron schedule for ${scheduleId}: ${cronExpr}`);
-                    }
-                }
-            }
-
-        } catch (error) {
+    logger.info('[ReportScheduler] Initializing report schedule reconciler...');
+    cron.schedule('* * * * *', () => {
+        reconcileReportSchedules().catch(error =>
             // Log safely, the collection might not exist during setup
-            logger.error('[ReportScheduler] Error syncing report schedules from database (ensure collection exists).', error);
-        }
+            logger.error('[ReportScheduler] Error reconciling report schedules (ensure collection exists):', error)
+        );
     });
 };

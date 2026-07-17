@@ -1,0 +1,25 @@
+// Postgres variant of the durable scan-audit store. Identical models to
+// schema.prisma; only the datasource provider differs. Generate with:
+//   npm run prisma:generate:pg
+// then run migrations against your Postgres DATABASE_URL:
+//   npx prisma migrate deploy --schema prisma/schema.postgres.prisma
+// The runtime driver adapter (prismaAdapter.ts) selects Postgres from the
+// DATABASE_URL scheme, so no application code changes.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// One durable row per scanned image digest. Upserted on ingest so re-scans
+/// of the same digest overwrite rather than duplicate.
+model ScanResult {
+  imageDigest        String   @id
+  reachabilityCounts Json
+  createdAt          DateTime @default(now())
+}

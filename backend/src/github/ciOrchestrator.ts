@@ -1,6 +1,7 @@
 import { createAppAuth } from '@octokit/auth-app';
 import { Octokit } from '@octokit/rest';
 import { setCommitStatus } from './statusService';
+import { formatPrComment, upsertPrComment } from './prCommentService';
 import { evaluatePolicyForRepo } from './policyEngine';
 import { runScanPipeline } from '../scanners/pipeline';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
@@ -64,11 +65,12 @@ export async function triggerCIScan(options: CIJobOptions) {
     );
 
     // 3. Evaluate against policy (baseline thresholds + per-repo policy + OPA/Rego)
-    const { passed, summary, criticalCount, highCount, denyReasons } = await evaluatePolicyForRepo(
+    const gateResult = await evaluatePolicyForRepo(
       scanResults,
       options.repo,
       'production'
     );
+    const { passed, summary, criticalCount, highCount, denyReasons } = gateResult;
 
     // 4. Set final commit status
     const failureDescription = denyReasons.length > 0
@@ -83,6 +85,26 @@ export async function triggerCIScan(options: CIJobOptions) {
       context: 'scorpion/security-gate',
       target_url: `${process.env.FRONTEND_URL}/scans/${options.sha}`
     });
+
+    // 4b. Post/refresh the sticky findings comment on the PR. Best-effort:
+    // a comment failure must never affect the gate decision or result storage.
+    if (process.env.SCORPION_PR_COMMENTS !== 'false') {
+      try {
+        const body = formatPrComment(
+          scanResults,
+          gateResult,
+          `${process.env.FRONTEND_URL}/scans/${options.sha}`
+        );
+        await upsertPrComment(octokit, {
+          owner: options.owner,
+          repo: options.repo,
+          prNumber: options.prNumber,
+          body
+        });
+      } catch (err) {
+        logger.error(`[PR Comment] Failed for ${options.repo}#${options.prNumber}:`, err);
+      }
+    }
 
     // 5. Store results in Appwrite
     await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {

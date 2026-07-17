@@ -9,6 +9,7 @@ import { dockerRunnerService } from './dockerRunnerService';
 import { parseCheckov } from './scan/parsers';
 import { getProfileEnv } from './iacCredentials';
 import { logger } from './logger';
+import { acquireLock, releaseLock } from '../utils/redisLock';
 
 const TOFU_IMAGE = process.env.IAC_TOFU_IMAGE || 'ghcr.io/opentofu/opentofu:1.12';
 const CHECKOV_IMAGE = process.env.IAC_CHECKOV_IMAGE || 'bridgecrew/checkov:latest';
@@ -52,9 +53,12 @@ export interface IacRun {
     updatedAt: string;
 }
 
-// ponytail: in-process per-workspace lock; per-instance is fine while the
-// backend is a single process. Move to a Redis lock if it ever scales out.
-const busyWorkspaces = new Set<string>();
+// Distributed per-workspace lease (Redis-backed, in-process fallback in dev)
+// so concurrent plans/applies stay exclusive across backend replicas.
+// ponytail: 30-min lease with no renewal — an apply that outlives it loses
+// exclusivity; add lease renewal if applies ever run that long.
+const IAC_LOCK_TTL_MS = 30 * 60 * 1000;
+const wsLockKey = (wsId: string) => `iac:ws-lock:${wsId}`;
 
 const wsDir = (id: string) => path.join(DATA_DIR, id);
 const runPath = (wsId: string, runId: string) => path.join(wsDir(wsId), 'runs', `${runId}.json`);
@@ -215,8 +219,8 @@ function makeSink(run: IacRun): (line: string) => void {
 
 /** Starts an async plan (or destroy-plan). Returns immediately; poll the run for status. */
 export async function startPlan(wsId: string, destroy: boolean, force = false): Promise<IacRun> {
-    if (busyWorkspaces.has(wsId)) throw new Error('WORKSPACE_BUSY');
-    busyWorkspaces.add(wsId);
+    const lock = await acquireLock(wsLockKey(wsId), IAC_LOCK_TTL_MS);
+    if (!lock) throw new Error('WORKSPACE_BUSY');
 
     const run: IacRun = {
         id: crypto.randomUUID(),
@@ -252,7 +256,7 @@ export async function startPlan(wsId: string, destroy: boolean, force = false): 
             sink(`[IaC] Plan failed: ${err instanceof Error ? err.message : String(err)}`);
             logger.error(`[IaC] Plan failed for workspace ${wsId}: ${err instanceof Error ? err.message : err}`);
         } finally {
-            busyWorkspaces.delete(wsId);
+            await releaseLock(lock);
             run.updatedAt = new Date().toISOString();
             await saveRun(run).catch(e => logger.error(`[IaC] Failed to persist run: ${e.message}`));
         }
@@ -266,8 +270,8 @@ export async function approveApply(wsId: string, runId: string): Promise<IacRun>
     const run = await getRun(wsId, runId);
     if (!run) throw new Error('RUN_NOT_FOUND');
     if (run.status !== 'planned') throw new Error('RUN_NOT_APPROVABLE');
-    if (busyWorkspaces.has(wsId)) throw new Error('WORKSPACE_BUSY');
-    busyWorkspaces.add(wsId);
+    const lock = await acquireLock(wsLockKey(wsId), IAC_LOCK_TTL_MS);
+    if (!lock) throw new Error('WORKSPACE_BUSY');
 
     run.status = 'applying';
     run.updatedAt = new Date().toISOString();
@@ -284,7 +288,7 @@ export async function approveApply(wsId: string, runId: string): Promise<IacRun>
             sink(`[IaC] Apply failed: ${err instanceof Error ? err.message : String(err)}`);
             logger.error(`[IaC] Apply failed for workspace ${wsId}: ${err instanceof Error ? err.message : err}`);
         } finally {
-            busyWorkspaces.delete(wsId);
+            await releaseLock(lock);
             run.updatedAt = new Date().toISOString();
             await saveRun(run).catch(e => logger.error(`[IaC] Failed to persist run: ${e.message}`));
         }

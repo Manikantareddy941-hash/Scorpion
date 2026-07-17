@@ -8,6 +8,7 @@ import { deduplicateFindings } from '../deduplication';
 import { evaluateScan } from './policyService';
 import { respondToLeakedKeys, GitleaksRawMatch } from './leakedKeyResponseService';
 import { vulnerabilitiesFound } from './metrics';
+import { enrichIssues } from './enrichmentService';
 import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
@@ -127,24 +128,47 @@ export const ingestVulnerabilitiesDelta = async (
             ` Resolved to Update: ${resolvedDocs.length}`
         );
 
+        // 4b. Threat-intel enrichment (EPSS + CISA KEV) on the new findings
+        // only. Best-effort: a feed outage degrades to severity-only scoring.
+        let issuesToInsert: IngestableIssue[] = newOrModifiedIssues;
+        try {
+            issuesToInsert = await enrichIssues(newOrModifiedIssues);
+        } catch (enrichErr) {
+            logger.warn('[Delta Ingestion] Enrichment failed, ingesting unenriched findings:', enrichErr instanceof Error ? enrichErr.message : enrichErr);
+        }
+
         // 5. Batch writes using parallel execution (using Promise.all on chunks to limit concurrent connections)
         const CHUNK_SIZE = 15;
 
         // A. Insert New/Modified findings
-        for (let i = 0; i < newOrModifiedIssues.length; i += CHUNK_SIZE) {
-            const chunk = newOrModifiedIssues.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < issuesToInsert.length; i += CHUNK_SIZE) {
+            const chunk = issuesToInsert.slice(i, i + CHUNK_SIZE);
             await Promise.all(chunk.map(async (issue) => {
+                const payload = {
+                    repo_id: repoId,
+                    scanId: scanId,
+                    ...issue,
+                    code: (issue.code || '').slice(0, 4999),
+                    detected_at: new Date().toISOString(),
+                    status: 'open'
+                };
                 try {
-                    await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
-                        repo_id: repoId,
-                        scanId: scanId,
-                        ...issue,
-                        code: (issue.code || '').slice(0, 4999),
-                        detected_at: new Date().toISOString(),
-                        status: 'open'
-                    });
+                    await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), payload);
                 } catch (saveErr) {
-                    logger.error(`[Delta Ingestion] Failed to create vulnerability document:`, saveErr instanceof Error ? saveErr.message : saveErr);
+                    // A collection that predates the enrichment migration rejects
+                    // the new attributes - retry once without them rather than
+                    // dropping the finding.
+                    const stripped = { ...payload } as Record<string, unknown>;
+                    delete stripped.epss_score;
+                    delete stripped.epss_percentile;
+                    delete stripped.kev;
+                    delete stripped.risk_score;
+                    try {
+                        await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), stripped);
+                        logger.warn('[Delta Ingestion] Stored finding without enrichment fields - run migrate_enrichment.ts to add them to the collection.');
+                    } catch {
+                        logger.error(`[Delta Ingestion] Failed to create vulnerability document:`, saveErr instanceof Error ? saveErr.message : saveErr);
+                    }
                 }
             }));
         }

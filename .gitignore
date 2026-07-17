@@ -62,3 +62,8 @@ project_tree.txt
 *.pfx
 password_resets.sql
 k8s/overlays/dev/
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

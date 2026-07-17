@@ -13,6 +13,7 @@ import { requestLogger } from './middleware/requestLogger';
 
 // Route Imports
 import authRoutes from './routes/authRoutes';
+import ssoRoutes from './routes/ssoRoutes';
 import projectRoutes from './routes/projectRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import healthRoutes from './routes/healthRoutes';
@@ -77,6 +78,8 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
+import { initReportQueueWorker } from './queues/reportQueueWorker';
+import { reportQueue } from './queues/reportQueue';
 import { initDastQueueWorker } from './queues/dastQueueWorker';
 import { initNucleiQueueWorker } from './queues/nucleiQueueWorker';
 import { initFfufQueueWorker } from './queues/ffufQueueWorker';
@@ -291,6 +294,7 @@ const authenticateApiKey = async (req: AuthenticatedRequest, res: Response, next
 
 // --- Routes ---
 app.use('/auth', authLimiter, authRoutes);
+app.use('/auth/sso', authLimiter, ssoRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/projects', authenticate, projectRoutes);
 app.use('/api/upload', authenticate, uploadRoutes);
@@ -405,6 +409,7 @@ const nucleiQueueWorker = initNucleiQueueWorker();
 const ffufQueueWorker = initFfufQueueWorker();
 const canaryQueueWorker = initCanaryQueueWorker();
 const soarQueueWorker = initSoarQueueWorker();
+const reportQueueWorker = initReportQueueWorker();
 // stopCorrelationWorker() closes via its own module-level handle, so the return value here
 // isn't needed (unlike canary/soar, which store the worker to call .close() directly).
 startCorrelationWorker();
@@ -532,6 +537,8 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         await canaryQueue.close();
         await soarQueueWorker.close();
         await soarQueue.close();
+        await reportQueueWorker.close();
+        await reportQueue.close();
         await stopCorrelationWorker();
         await correlationQueue.close();
 
