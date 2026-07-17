@@ -16,6 +16,7 @@ import authRoutes from './routes/authRoutes';
 import ssoRoutes from './routes/ssoRoutes';
 import projectRoutes from './routes/projectRoutes';
 import uploadRoutes from './routes/uploadRoutes';
+import { isPostgresEnabled, getPool, closePool } from './db/pool';
 import healthRoutes from './routes/healthRoutes';
 import repoRoutes from './routes/repoRoutes';
 import policyRoutes from './routes/policyRoutes';
@@ -454,6 +455,21 @@ const httpServer = app.listen(port, () => {
     logger.info(`[Backend] HTTP service running on http://localhost:${port}`);
 });
 
+// Storage driver check. Fail-fast rationale: a half-up SaaS silently writing to
+// the JSON fallback because DATABASE_URL is set but Postgres is unreachable is
+// worse than a loud crash the orchestrator will restart.
+if (isPostgresEnabled()) {
+    getPool()
+        .query('SELECT 1')
+        .then(() => logger.info('[db] Postgres connected — storage driver: postgres'))
+        .catch((err: unknown) => {
+            logger.error('[db] DATABASE_URL is set but Postgres is unreachable — refusing to start', err);
+            process.exit(1);
+        });
+} else {
+    logger.warn('[db] DATABASE_URL not set — running on legacy Appwrite/JSON storage');
+}
+
 // Optionally boot an HTTPS listener alongside HTTP for the K8s admission webhook,
 // which the kube-apiserver calls directly over TLS (no terminating proxy in
 // front). Enabled only when both TLS_CERT and TLS_KEY are set (paths to PEM
@@ -544,6 +560,9 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
 
         // 4. Close the Redis connection backing BullMQ.
         await redisConnection.quit();
+
+        // 5. Close the Postgres pool (no-op when running on legacy storage).
+        await closePool();
 
         // node-appwrite is a stateless HTTP client (no pooled socket to close);
         // there is nothing to release on the Appwrite side.

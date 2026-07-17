@@ -3,6 +3,15 @@ import express, { Request } from 'express';
 
 type MockAuthRequest = Request & { user?: { $id: string; email?: string } };
 
+// This suite asserts against the mocked Appwrite data layer, so pin the storage
+// facade to its legacy path — otherwise CI (which sets DATABASE_URL) would route
+// repoRepository to Postgres and bypass these mocks. The Postgres data path is
+// covered by src/repositories/pg/repoPgRepository.test.ts.
+jest.mock('../db/pool', () => ({
+    isPostgresEnabled: () => false,
+    getPool: jest.fn(),
+    closePool: jest.fn(),
+}));
 jest.mock('../lib/appwrite', () => ({
     databases: {
         listDocuments: jest.fn(),

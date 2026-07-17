@@ -1,7 +1,9 @@
 import { ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { isPostgresEnabled } from '../db/pool';
+import { repoPgRepository } from './pg/repoPgRepository';
 
-export const repoRepository = {
+const legacyRepoRepository = {
   async findByOwnershipAndUrl(field: string, value: string, url: string) {
     return databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
       Query.equal(field, value),
@@ -49,3 +51,11 @@ export const repoRepository = {
     return databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
   }
 };
+
+/**
+ * Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite
+ * otherwise. Typed as the pg impl — its return shapes ({ $id, ...fields },
+ * { total, documents }) are what every consumer already destructures; the
+ * legacy Appwrite SDK return types are structurally compatible for those uses.
+ */
+export const repoRepository = isPostgresEnabled() ? repoPgRepository : legacyRepoRepository;
