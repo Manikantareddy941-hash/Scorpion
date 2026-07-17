@@ -56,7 +56,7 @@ router.post('/projects/:projectId/sprints', async (req: AuthenticatedRequest, re
 });
 
 router.patch('/sprints/:sprintId', async (req: AuthenticatedRequest, res: Response) => {
-  const result = await planService.updateSprint(req.params.sprintId, req.body, req.user?.$id);
+  const result = await planService.updateSprint(req.params.sprintId, req.body, req.user?.$id, req.user?.email);
   sendAccessResult(res, result);
 });
 
@@ -79,7 +79,7 @@ router.post('/projects/:projectId/issues', async (req: AuthenticatedRequest, res
 });
 
 router.patch('/issues/:issueId', async (req: AuthenticatedRequest, res: Response) => {
-  const result = await planService.updateIssue(req.params.issueId, req.body, req.user?.$id);
+  const result = await planService.updateIssue(req.params.issueId, req.body, req.user?.$id, req.user?.email);
   sendAccessResult(res, result);
 });
 
@@ -117,6 +117,41 @@ router.post('/projects/:projectId/automation-rules', async (req: AuthenticatedRe
   const data = await planService.createAutomationRule(req.params.projectId, { trigger, conditions, action }, req.user?.$id);
   if (data === null) return res.status(403).json({ error: 'You do not have access to this project' });
   res.status(201).json(data);
+});
+
+router.delete('/projects/:projectId/automation-rules/:ruleId', async (req: AuthenticatedRequest, res: Response) => {
+  const result = await planService.deleteAutomationRule(req.params.projectId, req.params.ruleId, req.user?.$id);
+  sendAccessResult(res, result === 'forbidden' || result === 'not_found' ? result : { ok: true, data: { success: true } });
+});
+
+// Automation run history (proof the rules actually fire)
+router.get('/projects/:projectId/automation-runs', async (req: AuthenticatedRequest, res: Response) => {
+  const data = await planService.listAutomationRuns(req.params.projectId, req.user?.$id);
+  if (data === null) return res.status(403).json({ error: 'You do not have access to this project' });
+  res.json(data);
+});
+
+/* SPRINT SNAPSHOTS (real velocity history) */
+
+router.get('/projects/:projectId/sprint-snapshots', async (req: AuthenticatedRequest, res: Response) => {
+  const data = await planService.listSprintSnapshots(req.params.projectId, req.user?.$id);
+  if (data === null) return res.status(403).json({ error: 'You do not have access to this project' });
+  res.json(data);
+});
+
+/* WORKLOGS (time tracking) */
+
+router.get('/issues/:issueId/worklogs', async (req: AuthenticatedRequest, res: Response) => {
+  const result = await planService.listWorklogs(req.params.issueId, req.user?.$id);
+  sendAccessResult(res, result);
+});
+
+router.post('/issues/:issueId/worklogs', async (req: AuthenticatedRequest, res: Response) => {
+  const minutes = Number(req.body.minutes);
+  if (!minutes || minutes <= 0) return res.status(400).json({ error: 'minutes must be a positive number' });
+  const result = await planService.createWorklog(req.params.issueId, { minutes, comment: req.body.comment }, req.user?.email, req.user?.$id);
+  if (result === 'not_found' || result === 'forbidden') return sendAccessResult(res, result);
+  res.status(201).json(result.data);
 });
 
 /* VULNERABILITIES */

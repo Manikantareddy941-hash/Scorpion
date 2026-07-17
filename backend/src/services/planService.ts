@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto';
 import { planRepository } from '../repositories/planRepository';
-import { Issue, Threat } from '../types/plan.types';
+import { Issue, Sprint, Threat } from '../types/plan.types';
 import { generateStrideThreats } from './threatAiService';
+import { runAutomation, writeSprintSnapshot, rollUnfinishedToBacklog } from './planAutomationService';
 
 function randomId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
@@ -91,12 +92,33 @@ export const planService = {
     return planRepository.createSprint(projectId, input);
   },
 
-  async updateSprint(sprintId: string, updates: Record<string, unknown>, userId?: string): Promise<'not_found' | 'forbidden' | { ok: true; data: unknown }> {
+  async updateSprint(sprintId: string, updates: Record<string, unknown>, userId?: string, userEmail?: string): Promise<'not_found' | 'forbidden' | { ok: true; data: unknown }> {
     const sprintProjectId = await planRepository.getSprintProjectId(sprintId);
     if (!sprintProjectId) return 'not_found';
     if (!(await assertProjectAccess(sprintProjectId, userId))) return 'forbidden';
+
+    // Pre-read the sprint's issues before the update: the mock store rolls
+    // unfinished issues out of a completing sprint inside updateSprint, and the
+    // velocity snapshot needs the committed set as it stood at close.
+    const isCompleting = updates.status === 'completed';
+    let preCloseIssues: Issue[] = [];
+    if (isCompleting) {
+      try { preCloseIssues = (await planRepository.listIssuesBySprint(sprintId)) ?? []; } catch { /* snapshot is best-effort */ }
+    }
+
     const data = await planRepository.updateSprint(sprintId, updates);
     if (!data) return 'not_found';
+
+    // On sprint completion: snapshot velocity first, then fire automation rules,
+    // then guarantee unfinished issues roll to the backlog regardless of whether
+    // a move_to_backlog rule exists. All three are best-effort by design.
+    if (isCompleting) {
+      const sprint = data as Sprint;
+      await writeSprintSnapshot(sprintProjectId, sprint, preCloseIssues);
+      await runAutomation(sprintProjectId, 'sprint_ended', { sprint, userEmail });
+      await rollUnfinishedToBacklog(sprintId);
+    }
+
     return { ok: true, data };
   },
 
@@ -128,15 +150,31 @@ export const planService = {
       dueDate: input.dueDate || undefined,
       createdAt: new Date().toISOString()
     };
-    return planRepository.createIssue(newIssue);
+    const created = await planRepository.createIssue(newIssue);
+
+    // A newly created critical issue is the "Critical Issue Created" trigger.
+    if (created.priority === 'critical' || newIssue.priority === 'critical') {
+      await runAutomation(projectId, 'critical_vuln', { issue: { ...newIssue, ...created }, userEmail: input.assignee });
+    }
+    return created;
   },
 
-  async updateIssue(issueId: string, updates: Partial<Issue>, userId?: string): Promise<'not_found' | 'forbidden' | { ok: true; data: Issue }> {
+  async updateIssue(issueId: string, updates: Partial<Issue>, userId?: string, userEmail?: string): Promise<'not_found' | 'forbidden' | { ok: true; data: Issue }> {
     const issueProjectId = await planRepository.getIssueProjectId(issueId);
     if (!issueProjectId) return 'not_found';
     if (!(await assertProjectAccess(issueProjectId, userId))) return 'forbidden';
+
+    // Capture the prior status so the resolve trigger only fires on the actual
+    // transition into 'done' (not on every save of an already-done issue).
+    let priorStatus: Issue['status'] | undefined;
+    try { priorStatus = (await planRepository.getIssue(issueId))?.status; } catch { /* non-fatal */ }
+
     const data = await planRepository.updateIssue(issueId, updates);
     if (!data) return 'not_found';
+
+    if (updates.status === 'done' && priorStatus !== 'done') {
+      await runAutomation(issueProjectId, 'vuln_resolved', { issue: data, userEmail });
+    }
     return { ok: true, data };
   },
 
@@ -172,6 +210,42 @@ export const planService = {
   async createAutomationRule(projectId: string, input: { trigger: string; conditions?: string; action: string }, userId?: string) {
     if (!(await assertProjectAccess(projectId, userId))) return null;
     return planRepository.createAutomationRule(projectId, input);
+  },
+
+  async deleteAutomationRule(projectId: string, ruleId: string, userId?: string): Promise<'forbidden' | 'not_found' | { ok: true }> {
+    if (!(await assertProjectAccess(projectId, userId))) return 'forbidden';
+    const ok = await planRepository.deleteAutomationRule(ruleId);
+    if (!ok) return 'not_found';
+    return { ok: true };
+  },
+
+  async listAutomationRuns(projectId: string, userId?: string) {
+    if (!(await assertProjectAccess(projectId, userId))) return null;
+    return planRepository.listAutomationRuns(projectId);
+  },
+
+  async listSprintSnapshots(projectId: string, userId?: string) {
+    if (!(await assertProjectAccess(projectId, userId))) return null;
+    return planRepository.listSprintSnapshots(projectId);
+  },
+
+  async listWorklogs(issueId: string, userId?: string): Promise<'not_found' | 'forbidden' | { ok: true; data: unknown }> {
+    const issueProjectId = await planRepository.getIssueProjectId(issueId);
+    if (!issueProjectId) return 'not_found';
+    if (!(await assertProjectAccess(issueProjectId, userId))) return 'forbidden';
+    return { ok: true, data: await planRepository.listWorklogs(issueId) };
+  },
+
+  async createWorklog(issueId: string, input: { minutes: number; comment?: string }, authorEmail: string | undefined, userId?: string): Promise<'not_found' | 'forbidden' | { ok: true; data: unknown }> {
+    const issueProjectId = await planRepository.getIssueProjectId(issueId);
+    if (!issueProjectId) return 'not_found';
+    if (!(await assertProjectAccess(issueProjectId, userId))) return 'forbidden';
+    const data = await planRepository.createWorklog(issueId, {
+      author: authorEmail || 'dev@scorpion.local',
+      minutes: input.minutes,
+      comment: input.comment,
+    });
+    return { ok: true, data };
   },
 
   listVulnerabilities(userId?: string) {
