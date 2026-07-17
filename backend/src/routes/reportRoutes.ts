@@ -59,14 +59,20 @@ router.get('/ai-summary', verifyUser, async (req: AuthenticatedRequest, res: Res
             Query.limit(50)
         ]);
 
-        // 8-second timeout for Gemini
+        // 8-second timeout for Gemini. The timer must be cleared once the race
+        // settles - otherwise every request leaves a pending 8s handle behind.
         const summaryPromise = generateSecuritySummary(findings.documents, alerts.documents);
-        const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('TIMEOUT')), 8000)
-        );
+        let timeoutHandle: NodeJS.Timeout | undefined;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutHandle = setTimeout(() => reject(new Error('TIMEOUT')), 8000);
+        });
 
-        const summary = await Promise.race([summaryPromise, timeoutPromise]) as string;
-        res.status(200).json({ summary });
+        try {
+            const summary = await Promise.race([summaryPromise, timeoutPromise]) as string;
+            res.status(200).json({ summary });
+        } finally {
+            clearTimeout(timeoutHandle);
+        }
     } catch (err: unknown) {
         logger.error('[AI Summary Error]', errorMessage(err));
         const fallback = "### ⚠️ AI Analysis Engine temporarily unreachable\n\n*The security mesh analysis timed out or encountered a network bridge interruption.*\n\n**Action Required**:\n1. Please check your network connectivity.\n2. Verify the Gemini API key status in your environment configuration.\n3. Try refreshing the briefing in a few moments.\n\n*Manual telemetry indicates system health remains within normal operational parameters.*";

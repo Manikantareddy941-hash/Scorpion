@@ -38,8 +38,18 @@ jest.mock('./containerizedTrivyService', () => ({ containerizedTrivyService: { r
 jest.mock('./cosignService', () => ({ getImageDigest: jest.fn(), signImageDigest: jest.fn() }));
 
 import crypto from 'crypto';
-import { triggerPipelineRun } from './pipelineService';
+import { Response } from 'express';
+import {
+    triggerPipelineRun, runPipeline, registerSseClient, unregisterSseClient,
+    notifyStageChange, PipelineLogger,
+} from './pipelineService';
 import { databases } from '../lib/appwrite';
+import { checkReleaseGate } from '../routes/gateRoutes';
+import { triggerDeploy } from '../deploy/deployService';
+import { dockerRunnerService } from './dockerRunnerService';
+import { sshService } from './sshService';
+import { containerizedTrivyService } from './containerizedTrivyService';
+import { getImageDigest, signImageDigest } from './cosignService';
 
 // Mirrors the deterministic id derivation in triggerPipelineRun so tests don't
 // depend on ID.unique() for commits that go through the atomic dedupe path.
@@ -135,5 +145,231 @@ describe('triggerPipelineRun idempotency', () => {
         expect(mockDb.createDocument).toHaveBeenCalledWith(
             'test-db', 'pipeline_runs', 'generated-id', expect.objectContaining({ commitHash: 'MANUAL' })
         );
+    });
+});
+
+// --- runPipeline stage machine -------------------------------------------
+
+const db = databases as unknown as {
+    getDocument: jest.Mock;
+    createDocument: jest.Mock;
+    updateDocument: jest.Mock;
+    listDocuments: jest.Mock;
+};
+const fsMock = jest.requireMock('fs/promises') as { readdir: jest.Mock; appendFile: jest.Mock };
+const gate = checkReleaseGate as jest.Mock;
+const deployMock = triggerDeploy as jest.Mock;
+const runInContainer = dockerRunnerService.runInContainer as jest.Mock;
+const sshDeploy = sshService.executeDeployment as jest.Mock;
+const trivy = containerizedTrivyService.runTrivyScan as jest.Mock;
+
+const RUN_ID = 'run-stage-1';
+const stageRunDoc = (overrides: Record<string, unknown> = {}) => ({
+    $id: RUN_ID,
+    repoId: 'repo-1',
+    repoName: 'My Repo',
+    branch: 'main',
+    currentStage: 'trigger',
+    ...overrides,
+});
+
+/** Wires the happy path; individual tests override single mocks to fail a stage. */
+const armHappyPath = (repo: Record<string, unknown> = { url: 'https://github.com/a/b.git', name: 'b' }) => {
+    db.getDocument.mockImplementation(async (_d: string, col: string) => {
+        if (col === 'pipeline_runs') return stageRunDoc();
+        if (col === 'repositories') return repo;
+        throw new Error(`unexpected getDocument ${col}`);
+    });
+    db.updateDocument.mockResolvedValue({});
+    db.createDocument.mockResolvedValue({ $id: 'created' });
+    db.listDocuments.mockResolvedValue({ total: 0, documents: [] });
+    fsMock.readdir.mockResolvedValue(['package.json']);
+    runInContainer.mockResolvedValue({ exitCode: 0 });
+    trivy.mockResolvedValue(0);
+    gate.mockResolvedValue({ allowed: true, score: 95, blocker_count: 0, blockers: [] });
+    deployMock.mockResolvedValue({ status: 'success', deploymentId: 'dep-1' });
+};
+
+const envDocuments = {
+    total: 1,
+    documents: [{ $id: 'env-1', name: 'production', host: 'h', port: '22', username: 'u', privateKey: 'k', deployPath: '/srv' }],
+};
+
+const lastRunUpdate = () =>
+    db.updateDocument.mock.calls.filter((c: unknown[]) => c[1] === 'pipeline_runs').at(-1)?.[3] as Record<string, unknown>;
+
+describe('runPipeline stage machine', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        armHappyPath();
+    });
+
+    it('runs an npm repo through every stage to success', async () => {
+        await runPipeline(RUN_ID);
+
+        expect(runInContainer).toHaveBeenCalledTimes(2); // build + test
+        expect(gate).toHaveBeenCalledWith('repo-1');
+        expect(deployMock).toHaveBeenCalledWith(RUN_ID, 'dev', 'pipeline-runner');
+        expect(lastRunUpdate()).toMatchObject({ status: 'success', currentStage: 'completed' });
+    });
+
+    it('marks the run failed when the release gate blocks', async () => {
+        gate.mockResolvedValue({
+            allowed: false, score: 20, blocker_count: 1,
+            blockers: [{ severity: 'critical', title: 'RCE' }],
+        });
+
+        await runPipeline(RUN_ID);
+
+        expect(deployMock).not.toHaveBeenCalled();
+        expect(lastRunUpdate()).toMatchObject({ status: 'failed' });
+    });
+
+    it('fails the run when the build container exits non-zero', async () => {
+        runInContainer.mockResolvedValue({ exitCode: 1 });
+
+        await runPipeline(RUN_ID);
+
+        expect(lastRunUpdate()).toMatchObject({ status: 'failed' });
+    });
+
+    it('builds docker repos and stores the signed image digest', async () => {
+        fsMock.readdir.mockResolvedValue(['Dockerfile']);
+        (getImageDigest as jest.Mock).mockResolvedValue('sha256:abc');
+        (signImageDigest as jest.Mock).mockResolvedValue({ signature: 'sig-1' });
+
+        await runPipeline(RUN_ID);
+
+        const digestUpdate = db.updateDocument.mock.calls.find(
+            (c: unknown[]) => (c[3] as Record<string, unknown>)?.imageDigest
+        );
+        expect(digestUpdate?.[3]).toMatchObject({ imageDigest: 'sha256:abc', imageSignature: 'sig-1' });
+        expect(lastRunUpdate()).toMatchObject({ status: 'success' });
+    });
+
+    it('continues when image signing is not configured', async () => {
+        fsMock.readdir.mockResolvedValue(['Dockerfile']);
+        (getImageDigest as jest.Mock).mockResolvedValue('sha256:abc');
+        (signImageDigest as jest.Mock).mockResolvedValue(null);
+
+        await runPipeline(RUN_ID);
+
+        expect(lastRunUpdate()).toMatchObject({ status: 'success' });
+    });
+
+    it('survives a security-scan fault and still completes', async () => {
+        trivy.mockRejectedValue(new Error('trivy image pull failed'));
+
+        await runPipeline(RUN_ID);
+
+        expect(lastRunUpdate()).toMatchObject({ status: 'success' });
+    });
+
+    it('deploys over SSH when a target environment exists', async () => {
+        db.listDocuments.mockResolvedValue(envDocuments);
+        sshDeploy.mockResolvedValue({ success: true });
+
+        await runPipeline(RUN_ID);
+
+        expect(sshDeploy).toHaveBeenCalled();
+        expect(deployMock).not.toHaveBeenCalled();
+        expect(lastRunUpdate()).toMatchObject({ status: 'success' });
+    });
+
+    it('fails the run when the SSH deployment fails', async () => {
+        db.listDocuments.mockResolvedValue(envDocuments);
+        sshDeploy.mockResolvedValue({ success: false });
+
+        await runPipeline(RUN_ID);
+
+        expect(lastRunUpdate()).toMatchObject({ status: 'failed' });
+    });
+
+    it('sanitizes caller-supplied repo names before they reach the remote shell', async () => {
+        db.getDocument.mockImplementation(async (_d: string, col: string) => {
+            if (col === 'pipeline_runs') return stageRunDoc({ repoName: 'evil; rm -rf / #' });
+            return { url: 'https://github.com/a/b.git' };
+        });
+        db.listDocuments.mockResolvedValue(envDocuments);
+        sshDeploy.mockResolvedValue({ success: true });
+
+        await runPipeline(RUN_ID);
+
+        const commands: string[] = sshDeploy.mock.calls[0][0].commands;
+        for (const cmd of commands) {
+            expect(cmd).not.toMatch(/[;#]|rm -rf \//);
+        }
+    });
+
+    it('copies uploaded repos from local_path instead of cloning', async () => {
+        armHappyPath({ url: 'upload://zip', name: 'b', local_path: '/tmp/extract-1' });
+        await runPipeline(RUN_ID);
+        expect(lastRunUpdate()).toMatchObject({ status: 'success' });
+    });
+
+    it('fails an uploaded repo without a local_path', async () => {
+        armHappyPath({ url: 'upload://zip', name: 'b' });
+        await runPipeline(RUN_ID);
+        expect(lastRunUpdate()).toMatchObject({ status: 'failed' });
+    });
+
+    it('skips build and test containers for unknown build tools', async () => {
+        fsMock.readdir.mockResolvedValue(['README.md']);
+
+        await runPipeline(RUN_ID);
+
+        expect(runInContainer).not.toHaveBeenCalled();
+        expect(lastRunUpdate()).toMatchObject({ status: 'success' });
+    });
+
+    it('creates a minimal repo document when none exists', async () => {
+        db.getDocument.mockImplementation(async (_d: string, col: string) => {
+            if (col === 'pipeline_runs') return stageRunDoc({ cloneUrl: 'https://github.com/a/b.git' });
+            throw new Error('repo missing');
+        });
+        db.createDocument.mockResolvedValue({ url: 'https://github.com/a/b.git', name: 'b' });
+
+        await runPipeline(RUN_ID);
+
+        expect(db.createDocument).toHaveBeenCalledWith(
+            'test-db', 'repositories', 'repo-1', expect.objectContaining({ user_id: 'system' })
+        );
+    });
+});
+
+describe('SSE fanout', () => {
+    const fakeRes = () => ({ write: jest.fn() }) as unknown as Response;
+
+    it('notifies registered clients and drops unregistered ones', () => {
+        const a = fakeRes();
+        const b = fakeRes();
+        registerSseClient('sse-run', a);
+        registerSseClient('sse-run', b);
+
+        notifyStageChange('sse-run', { stage: 'build', status: 'running' });
+        expect(a.write as jest.Mock).toHaveBeenCalledWith(expect.stringContaining('"stage":"build"'));
+
+        unregisterSseClient('sse-run', a);
+        notifyStageChange('sse-run', { stage: 'test', status: 'running' });
+        expect(a.write as jest.Mock).toHaveBeenCalledTimes(1);
+        expect(b.write as jest.Mock).toHaveBeenCalledTimes(2);
+    });
+
+    it('swallows write failures from disconnected clients', () => {
+        const dead = { write: jest.fn(() => { throw new Error('EPIPE'); }) } as unknown as Response;
+        registerSseClient('sse-dead', dead);
+        expect(() => notifyStageChange('sse-dead', { stage: 'x' })).not.toThrow();
+    });
+
+    it('is a no-op for runs with no clients', () => {
+        expect(() => notifyStageChange('nobody-listening', { stage: 'x' })).not.toThrow();
+    });
+});
+
+describe('PipelineLogger', () => {
+    it('formats error entries with stack detail', async () => {
+        const pl = new PipelineLogger('err-run');
+        await pl.error('stage exploded', new Error('kaboom'));
+        expect(fsMock.appendFile.mock.calls.at(-1)?.[1]).toContain('kaboom');
     });
 });
