@@ -149,6 +149,24 @@ the concrete answer to a buyer's "can we run it on our own Postgres?".
 
 Deferred: migrating the Appwrite-backed collections themselves to Postgres.
 
-## SP7
+## SP7: Playwright E2E suite — built
 
-Designed when reached; section appended to this doc.
+**Scope:** smoke coverage of the unauthenticated surface — the "one refactor
+away from silent UI breakage" gap the audit named (frontend had 19 tests, no
+E2E). Authenticated flows need a live backend + Appwrite + Redis and are
+deferred to a CI environment that provisions them.
+
+- `playwright.config.ts` — chromium project, auto-starts `vite preview`
+  (HTTPS via basic-ssl, self-signed cert ignored), `npm run test:e2e`.
+- `e2e/auth.smoke.spec.ts` — 7 tests, all green against a real browser:
+  login page renders (heading + Vector ID field + Login button), empty-submit
+  stays on /login, four protected routes (/,  /settings, /reports, /repos)
+  redirect to /login, SSO entry point present iff VITE_SSO_ENABLED.
+
+Verified by execution: `npm run build && npx playwright test` → 7 passed.
+Deferred: authenticated journeys, visual regression, cross-browser.
+
+## Status
+
+SP1–SP7 all built, tested, committed on branch feat/pr-comments. Backend suite
+558 tests green; E2E 7 green.
