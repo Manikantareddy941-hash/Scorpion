@@ -4,7 +4,7 @@ import { repoService } from '../services/repoService';
 import { validateBody } from '../middleware/validate';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
 import { logger } from '../services/logger';
-import { AuthenticatedRequest, addRepoSchema, externalScanSchema, triggerScanSchema } from '../types/repo.types';
+import { AuthenticatedRequest, addRepoSchema, bulkConnectSchema, externalScanSchema, triggerScanSchema } from '../types/repo.types';
 import { getEffectivePolicy } from '../services/policyService';
 import { hasRequiredRole } from '../services/rbacService';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
@@ -54,6 +54,48 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
         res.json(await repoService.listRepos(req, userId));
     } catch (error: unknown) {
         if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
+        next(error);
+    }
+});
+
+// List every repo visible to the installed GitHub App (org-wide onboarding)
+router.get('/github/installations', async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+        // Lazy import: octokit is ESM-only and breaks jest's CJS parse of this
+        // module in every test that mounts repoRoutes. Loading it per-request
+        // keeps the route module octokit-free.
+        const { listInstallationRepos } = await import('../github/appInstallations');
+        res.json({ repos: await listInstallationRepos() });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error('[RepoRoutes] Failed to list GitHub App installation repos:', message);
+        const status = message.includes('not configured') ? 503 : 502;
+        res.status(status).json({ error: 'Failed to list GitHub App installation repositories' });
+    }
+});
+
+// Bulk-connect repositories discovered via the GitHub App installation
+router.post('/bulk-connect', validateBody(bulkConnectSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const { urls } = req.body as { urls: string[] };
+
+    try {
+        const userId = req.user!.$id;
+        const connected: string[] = [];
+        const failed: string[] = [];
+
+        for (const url of urls) {
+            try {
+                await repoService.syncRepo(req, userId, url);
+                connected.push(url);
+            } catch (error: unknown) {
+                if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
+                failed.push(url);
+                logger.warn(`[RepoRoutes] Bulk-connect failed for ${url}:`, error instanceof Error ? error.message : error);
+            }
+        }
+
+        res.json({ connected: connected.length, failed });
+    } catch (error: unknown) {
         next(error);
     }
 });

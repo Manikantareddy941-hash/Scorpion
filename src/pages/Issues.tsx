@@ -4,6 +4,7 @@ import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight, Ticket as TicketI
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTickets, createTicketFromFinding } from '../hooks/useTickets';
+import { SLA_HOURS, slaHoursLeft, daysOverdue } from '../lib/sla';
 import toast from 'react-hot-toast';
 
 
@@ -24,6 +25,23 @@ const SEVERITY_PRIORITY: Record<string, 'critical' | 'high' | 'medium' | 'low'> 
   CRITICAL: 'critical', HIGH: 'high', MEDIUM: 'medium', LOW: 'low', INFO: 'low'
 };
 
+// Mirrors backend computeRiskScore severity bases so unenriched (pre-migration)
+// findings still rank sensibly instead of sinking to 0.
+const RISK_FALLBACK: Record<string, number> = {
+  CRITICAL: 50, HIGH: 35, MEDIUM: 20, LOW: 10, INFO: 5
+};
+
+const riskOf = (i: any): number =>
+  typeof i.risk_score === 'number' ? i.risk_score : (RISK_FALLBACK[(i.severity || '').toUpperCase()] ?? 5);
+
+const riskColor = (score: number): string =>
+  score >= 75 ? '#ff5252' : score >= 50 ? '#ff8a00' : score >= 25 ? '#ffd740' : '#69f0ae';
+
+const daysOpen = (createdAtIso: string): number =>
+  Math.max(0, Math.floor((Date.now() - new Date(createdAtIso).getTime()) / 86_400_000));
+
+const isSlaBreached = (i: any): boolean => slaHoursLeft(i.$createdAt, i.severity || '') < 0;
+
 const buildIssueDescription = (issue: any): string =>
   `Issue detected by ${issue.tool || 'scanner'} in ${issue.file || 'workspace'}.\nMessage: ${issue.message}\n` +
   (issue.code ? `Code:\n${issue.code}` : '');
@@ -34,6 +52,7 @@ export default function Issues() {
   const [issues, setIssues] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState({ severity: '', type: '', tool: '' });
+  const [sortBy, setSortBy] = useState<'risk' | 'newest'>('risk');
   const [loading, setLoading] = useState(true);
   const [latestScan, setLatestScan] = useState<any>(null);
 
@@ -118,6 +137,23 @@ export default function Issues() {
     return acc;
   }, {});
 
+  // 5. Order groups and issues within each group by the active sort
+  const sortedGroups: [string, any[]][] = Object.entries(byGroup as Record<string, any[]>).map(
+    ([file, fileIssues]) => {
+      const sorted = [...fileIssues].sort((a, b) =>
+        sortBy === 'risk'
+          ? riskOf(b) - riskOf(a)
+          : new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
+      );
+      return [file, sorted] as [string, any[]];
+    }
+  );
+  sortedGroups.sort(([, a], [, b]) =>
+    sortBy === 'risk'
+      ? riskOf(b[0]) - riskOf(a[0])
+      : new Date(b[0].$createdAt).getTime() - new Date(a[0].$createdAt).getTime()
+  );
+
   const totalEffortMins = filteredIssues.reduce((acc, i) => {
     return acc + parseInt(i.effort ?? '5');
   }, 0);
@@ -129,6 +165,21 @@ export default function Issues() {
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-[var(--text-primary)]">Issues</h1>
           <p className="text-[13px] text-[var(--text-secondary)] mt-1">Every finding across your repositories, by severity and scanner</p>
+        </div>
+        <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg p-1" role="group" aria-label="Sort findings">
+          {([['risk', 'Risk'], ['newest', 'Newest']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setSortBy(key)}
+              aria-pressed={sortBy === key}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors cursor-pointer ${
+                sortBy === key
+                  ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -168,6 +219,14 @@ export default function Issues() {
             <p className="text-[12px] text-emerald-600 font-medium mt-1">
               ~{Math.floor(totalEffortMins / 60)}h {totalEffortMins % 60}m to fix
             </p>
+            {(() => {
+              const breached = filteredIssues.filter(isSlaBreached).length;
+              return breached > 0 ? (
+                <p className="text-[12px] text-[#ff5252] font-semibold" title="Findings open past their severity SLA window">
+                  {breached} past SLA
+                </p>
+              ) : null;
+            })()}
           </div>
         </div>
       </div>
@@ -238,7 +297,7 @@ export default function Issues() {
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {Object.entries(byGroup).map(([file, fileIssues]: any) => (
+              {sortedGroups.map(([file, fileIssues]: any) => (
                 <div key={file} className="premium-card overflow-hidden">
                   {/* File header */}
                   <button
@@ -251,7 +310,23 @@ export default function Issues() {
                       <span className="text-[11px] font-mono text-[var(--text-primary)]">{file}</span>
                       <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase">{fileIssues.length} issues</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
+                      {fileIssues.some((i: any) => i.kev) && (
+                        <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-[#ff5252] text-white"
+                          title="Contains findings in CISA Known Exploited Vulnerabilities catalog">
+                          KEV
+                        </span>
+                      )}
+                      {(() => {
+                        const maxRisk = Math.max(...fileIssues.map(riskOf));
+                        return (
+                          <span className="text-[9px] font-black px-2 py-0.5 rounded tabular-nums"
+                            style={{ background: `${riskColor(maxRisk)}15`, color: riskColor(maxRisk) }}
+                            title="Highest risk score in this file (severity + EPSS exploit probability + KEV)">
+                            RISK {maxRisk}
+                          </span>
+                        );
+                      })()}
                       {['CRITICAL','HIGH','MEDIUM','LOW'].map(s => {
                         const count = fileIssues.filter((i: any) => i.severity === s).length;
                         if (!count) return null;
@@ -328,14 +403,48 @@ function IssueRow({
                 style={{ background: `${SEVERITY_COLOR[issue.severity]}15`, color: SEVERITY_COLOR[issue.severity] }}>
                 {issue.severity}
               </span>
+              {issue.kev && (
+                <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase flex-shrink-0 bg-[#ff5252] text-white"
+                  title="Listed in CISA Known Exploited Vulnerabilities catalog — actively exploited in the wild">
+                  KEV
+                </span>
+              )}
             </div>
             <p className="text-[10px] text-[var(--text-secondary)] truncate">{issue.message}</p>
           </div>
+
+          {/* Risk score (severity + EPSS + KEV) */}
+          <span className="text-[10px] font-black tabular-nums px-2 py-0.5 rounded flex-shrink-0"
+            style={{ background: `${riskColor(riskOf(issue))}15`, color: riskColor(riskOf(issue)) }}
+            title="Risk score 0-100: severity base + EPSS exploit probability + KEV membership">
+            {riskOf(issue)}
+          </span>
+
+          {/* EPSS exploit probability */}
+          {typeof issue.epss_score === 'number' && (
+            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase flex-shrink-0 tabular-nums"
+              title={`EPSS: ${(issue.epss_score * 100).toFixed(1)}% probability of exploitation in the next 30 days${typeof issue.epss_percentile === 'number' ? ` (${Math.round(issue.epss_percentile * 100)}th percentile)` : ''}`}>
+              EPSS {(issue.epss_score * 100).toFixed(issue.epss_score < 0.1 ? 1 : 0)}%
+            </span>
+          )}
 
           {/* Line number */}
           {issue.line > 0 && (
             <span className="text-[10px] font-mono text-[var(--accent-primary)] flex-shrink-0">
               L{issue.line}{issue.endLine > issue.line ? `–${issue.endLine}` : ''}
+            </span>
+          )}
+
+          {/* Age + SLA status */}
+          {isSlaBreached(issue) ? (
+            <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase flex-shrink-0 bg-[#ff5252]/15 text-[#ff5252] tabular-nums"
+              title={`SLA breached: ${(issue.severity || 'medium').toLowerCase()} findings must be fixed within ${Math.round((SLA_HOURS[(issue.severity || '').toLowerCase()] ?? 168) / 24)}d — ${daysOverdue(issue.$createdAt, issue.severity || '')}d overdue`}>
+              SLA +{daysOverdue(issue.$createdAt, issue.severity || '')}d
+            </span>
+          ) : (
+            <span className="text-[9px] font-black text-[var(--text-secondary)] uppercase flex-shrink-0 tabular-nums"
+              title={`Open ${daysOpen(issue.$createdAt)} days — within the ${Math.round((SLA_HOURS[(issue.severity || '').toLowerCase()] ?? 168) / 24)}d SLA window for ${(issue.severity || 'medium').toLowerCase()}`}>
+              {daysOpen(issue.$createdAt)}d
             </span>
           )}
 
