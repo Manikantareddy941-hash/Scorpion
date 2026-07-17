@@ -17,6 +17,19 @@ services:
     volumes:
       - redis_data:/data
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: scorpion_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scorpion
+      POSTGRES_PASSWORD: scorpion
+      POSTGRES_DB: scorpion
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
   backend:
     build:
       context: .
@@ -30,6 +43,7 @@ services:
       REDIS_URL: redis://redis:6379
     depends_on:
       - redis
+      - postgres
     ports:
       - "3001:3001"
 
@@ -46,3 +60,4 @@ services:
 
 volumes:
   redis_data:
+  pgdata:
