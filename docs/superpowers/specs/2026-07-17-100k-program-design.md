@@ -131,6 +131,24 @@ the whole session stack stay untouched. Works with any spec-compliant IdP
 
 Deferred: SCIM provisioning, IdP group→role mapping, SAML.
 
-## SP6–SP7
+## SP6: Postgres option via Prisma — built
 
-Designed per sub-project when reached; sections appended to this doc.
+**Honest scope:** the primary datastore is Appwrite; Prisma backs only the
+durable scan-audit store (one model, `ScanResult`). Full Appwrite→Postgres
+migration is a separate multi-month project. This sub-project makes the
+existing Prisma layer run on Postgres as a first-class alternative to SQLite —
+the concrete answer to a buyer's "can we run it on our own Postgres?".
+
+- `prismaAdapter.ts` — `createAdapter(url)` picks the driver from the
+  DATABASE_URL scheme (file: → better-sqlite3, postgres:// → pg), throws on
+  unknown schemes. `prismaClient.ts` now delegates to it.
+- `prisma/schema.postgres.prisma` — Postgres provider variant (identical
+  model); `npm run prisma:generate:pg` regenerates the client for it.
+- Switching a deployment to Postgres = generate:pg + point DATABASE_URL at it;
+  no application code change.
+
+Deferred: migrating the Appwrite-backed collections themselves to Postgres.
+
+## SP7
+
+Designed when reached; section appended to this doc.

@@ -8,6 +8,10 @@ generator client {
   moduleFormat = "cjs"
 }
 
+// Default provider is SQLite (dev). For a Postgres deployment, generate the
+// client against prisma/schema.postgres.prisma instead (npm run prisma:generate:pg)
+// and point DATABASE_URL at postgres://… — the runtime adapter (prismaAdapter.ts)
+// follows the URL scheme automatically.
 datasource db {
   provider = "sqlite"
 }
