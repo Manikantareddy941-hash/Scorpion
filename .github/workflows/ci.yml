@@ -41,6 +41,52 @@ jobs:
       - name: Build Frontend
         run: npm run build
 
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Frontend
+        # Dummy Appwrite env: the authenticated journeys mock the network at
+        # the edge, but the SDK needs a syntactically valid endpoint to boot.
+        env:
+          VITE_APPWRITE_ENDPOINT: https://appwrite.e2e.invalid/v1
+          VITE_APPWRITE_PROJECT_ID: e2e
+          VITE_APPWRITE_DATABASE_ID: e2e
+          VITE_APPWRITE_REPOS_COLLECTION_ID: repositories
+          VITE_APPWRITE_VULNS_COLLECTION_ID: vulnerabilities
+          VITE_APPWRITE_TASKS_COLLECTION_ID: tasks
+        run: npm run build
+
+      - name: Run E2E Suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   backend:
     name: Backend CI
     runs-on: ubuntu-latest
