@@ -7,3 +7,4 @@ node_modules
 # Local SQLite dev database
 /dev.db
 /dev.db-journal
+coverage/
