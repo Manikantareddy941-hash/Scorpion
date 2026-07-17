@@ -1,81 +1,58 @@
-import cron, { type ScheduledTask } from 'node-cron';
+import cron from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
-import { enqueueScan } from './queues/scanQueue';
+import { scanQueue } from './queues/scanQueue';
 import { logger } from './services/logger';
 
-// Map to keep track of active cron jobs by repo ID
-const activeJobs = new Map<string, ScheduledTask>();
+/**
+ * Scheduled repo scans via BullMQ job schedulers (Redis-backed) instead of
+ * per-process node-cron tasks: with N backend replicas a schedule fires
+ * exactly once, not N times. The minute-tick here only *reconciles* DB config
+ * into schedulers — upserts and removals are idempotent, so every replica can
+ * safely run the reconcile loop.
+ */
+
+const SCHEDULER_PREFIX = 'repo-scan-';
+
+export const reconcileScanSchedules = async (): Promise<void> => {
+    const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.equal('cron_enabled', true),
+        Query.limit(100)
+    ]);
+
+    const active = new Map<string, string>(
+        response.documents.map(repo => [repo.$id, repo.cron_schedule || '0 0 * * *'])
+    );
+
+    // Drop schedulers whose repo disabled cron (or was deleted)
+    const existing = await scanQueue.getJobSchedulers();
+    for (const scheduler of existing) {
+        const id = scheduler.key;
+        if (!id || !id.startsWith(SCHEDULER_PREFIX)) continue;
+        if (!active.has(id.slice(SCHEDULER_PREFIX.length))) {
+            logger.info(`[Scheduler] Removing scan schedule ${id}`);
+            await scanQueue.removeJobScheduler(id);
+        }
+    }
+
+    // Upsert the rest — same id + new pattern updates in place
+    for (const [repoId, schedule] of active) {
+        if (!cron.validate(schedule)) {
+            logger.error(`[Scheduler] Invalid cron schedule for repo ${repoId}: ${schedule}`);
+            continue;
+        }
+        await scanQueue.upsertJobScheduler(
+            `${SCHEDULER_PREFIX}${repoId}`,
+            { pattern: schedule },
+            { name: 'scan', data: { repoId, options: {} } }
+        );
+    }
+};
 
 export const initScheduler = () => {
-    logger.info('[Scheduler] Initializing dynamic scan scheduler...');
-
-    // Run a manager task every minute to sync cron jobs from the database
-    cron.schedule('* * * * *', async () => {
-        try {
-            // Fetch all repositories that have cron_enabled = true
-            const response = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-                Query.equal('cron_enabled', true),
-                Query.limit(100) // Handle pagination if necessary for large numbers of repos
-            ]);
-
-            const currentActiveRepoIds = new Set(response.documents.map(repo => repo.$id));
-
-            // Stop and remove jobs for repos that are no longer active
-            for (const [repoId, job] of activeJobs.entries()) {
-                if (!currentActiveRepoIds.has(repoId)) {
-                    logger.info(`[Scheduler] Stopping and removing cron job for repo: ${repoId}`);
-                    job.stop();
-                    activeJobs.delete(repoId);
-                }
-            }
-
-            // Add or update jobs for active repos
-            for (const repo of response.documents) {
-                const repoId = repo.$id;
-                const schedule = repo.cron_schedule || '0 0 * * *'; // Default to daily at midnight if missing
-                
-                // If a job already exists, we might want to check if the schedule changed.
-                // For simplicity, if it exists, we assume it's running the correct schedule. 
-                // To be robust against schedule updates, we could store the schedule string in the map 
-                // but since node-cron doesn't expose the cron expression easily from the task,
-                // we'll manage a complex object if needed. For now, we'll recreate if we need to track schedule changes.
-                // Actually, let's just use the repoId + schedule as the key to detect changes.
-                const jobKey = `${repoId}_${schedule}`;
-                
-                let existingJobFound = false;
-                for (const key of activeJobs.keys()) {
-                    if (key.startsWith(repoId + '_')) {
-                        if (key === jobKey) {
-                            existingJobFound = true;
-                        } else {
-                            // Schedule changed, stop the old one
-                            logger.info(`[Scheduler] Schedule changed for repo: ${repoId}, stopping old job`);
-                            activeJobs.get(key)?.stop();
-                            activeJobs.delete(key);
-                        }
-                    }
-                }
-
-                if (!existingJobFound) {
-                    if (cron.validate(schedule)) {
-                        logger.info(`[Scheduler] Scheduling scan for repo: ${repoId} with cron: ${schedule}`);
-                        const task = cron.schedule(schedule, async () => {
-                            logger.info(`[Scheduler] Enqueuing scheduled scan for repo: ${repoId}`);
-                            try {
-                                await enqueueScan(repoId, {});
-                            } catch (error) {
-                                logger.error(`[Scheduler] Error enqueuing scan for repo ${repoId}:`, error);
-                            }
-                        });
-                        activeJobs.set(jobKey, task);
-                    } else {
-                        logger.error(`[Scheduler] Invalid cron schedule for repo ${repoId}: ${schedule}`);
-                    }
-                }
-            }
-
-        } catch (error) {
-            logger.error('[Scheduler] Error syncing cron jobs from database:', error);
-        }
+    logger.info('[Scheduler] Initializing scan schedule reconciler...');
+    cron.schedule('* * * * *', () => {
+        reconcileScanSchedules().catch(error =>
+            logger.error('[Scheduler] Error reconciling scan schedules:', error)
+        );
     });
 };

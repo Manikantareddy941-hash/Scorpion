@@ -77,6 +77,8 @@ import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
+import { initReportQueueWorker } from './queues/reportQueueWorker';
+import { reportQueue } from './queues/reportQueue';
 import { initDastQueueWorker } from './queues/dastQueueWorker';
 import { initNucleiQueueWorker } from './queues/nucleiQueueWorker';
 import { initFfufQueueWorker } from './queues/ffufQueueWorker';
@@ -405,6 +407,7 @@ const nucleiQueueWorker = initNucleiQueueWorker();
 const ffufQueueWorker = initFfufQueueWorker();
 const canaryQueueWorker = initCanaryQueueWorker();
 const soarQueueWorker = initSoarQueueWorker();
+const reportQueueWorker = initReportQueueWorker();
 // stopCorrelationWorker() closes via its own module-level handle, so the return value here
 // isn't needed (unlike canary/soar, which store the worker to call .close() directly).
 startCorrelationWorker();
@@ -532,6 +535,8 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         await canaryQueue.close();
         await soarQueueWorker.close();
         await soarQueue.close();
+        await reportQueueWorker.close();
+        await reportQueue.close();
         await stopCorrelationWorker();
         await correlationQueue.close();
 

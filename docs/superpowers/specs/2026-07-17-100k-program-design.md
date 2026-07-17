@@ -91,6 +91,27 @@ exploit-likelihood ranking (EPSS) and known-exploited flags (CISA KEV).
 Feed outages degrade to severity-only scoring, never block ingestion.
 Deferred: dashboard sort-by-risk_score UI, nightly re-score backfill.
 
-## SP4–SP7
+## SP4: Scale-out — built
+
+**Problem:** in-process node-cron schedulers fire once *per replica* (2 replicas
+= duplicate scans/reports); IaC workspace lock was in-process only.
+
+- Scan schedules: node-cron per-repo tasks → **BullMQ job schedulers** on the
+  existing scan queue (Redis-backed, exactly-once across replicas). The 1-min
+  reconcile tick remains but is idempotent (upsert/remove), safe on every
+  replica. Worker contract unchanged.
+- AI report schedules: same pattern; report execution extracted to
+  `runScheduledReport(scheduleId)` (re-reads config fresh, honors
+  deactivation), runs on new `report-dispatch` queue + worker.
+- IaC workspace lock: in-process Set → **Redis lease lock**
+  (`utils/redisLock.ts`, SET NX PX + Lua compare-and-del, 30-min lease,
+  in-process fallback when Redis unavailable in dev).
+
+**Deferred (documented constraint):** IaC workspace/run store and tfstate stay
+on the filesystem — run the backend with a single replica handling IaC, or
+mount `DATA_DIR` on a shared RWX volume. Migrating live tfstate to a remote
+backend is the correct long-term fix and its own project.
+
+## SP5–SP7
 
 Designed per sub-project when reached; sections appended to this doc.
