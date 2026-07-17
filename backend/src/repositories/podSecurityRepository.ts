@@ -3,6 +3,8 @@ import path from 'path';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import { PodSecurityConfig, DEFAULT_POD_SECURITY_CONFIG } from '../services/podSecurityService';
+import { isPostgresEnabled } from '../db/pool';
+import { podSecurityPgRepository } from './pg/podSecurityPgRepository';
 
 const COLLECTION = 'pod_security_rules';
 const MOCK_DB_PATH = path.join(process.cwd(), 'scratch', 'pod_security_mock_db.json');
@@ -57,7 +59,7 @@ async function persistConfig(userId: string, config: PodSecurityConfig): Promise
  * the source of truth; on failure we degrade to a local JSON buffer that the
  * fallbackReplayer flushes back — same resilience pattern as gateRulesRepository.
  */
-export const podSecurityRepository = {
+const legacyPodSecurityRepository = {
   async get(userId: string): Promise<PodSecurityConfig> {
     try {
       const list = await databases.listDocuments(DB_ID, COLLECTION, [
@@ -109,3 +111,7 @@ export const podSecurityRepository = {
     });
   },
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite/JSON otherwise. */
+export const podSecurityRepository: typeof legacyPodSecurityRepository =
+  isPostgresEnabled() ? podSecurityPgRepository : legacyPodSecurityRepository;
