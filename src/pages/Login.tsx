@@ -108,6 +108,17 @@ export default function Login() {
         {/* Social Buttons */}
         <SocialLoginButtons />
 
+        {/* Enterprise SSO — backend 503s when OIDC is not configured, so only
+            show the entry point when the deployment opts in via env flag */}
+        {import.meta.env.VITE_SSO_ENABLED === 'true' && (
+          <a
+            href="/auth/sso/login"
+            className="mt-4 w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border border-[var(--border-subtle)] text-[10px] font-black uppercase tracking-widest italic text-[var(--text-primary)] hover:border-[var(--accent-primary)] transition-all"
+          >
+            {t('auth.sso_login', 'Single Sign-On (SSO)')}
+          </a>
+        )}
+
         <p className="mt-10 text-center text-[10px] font-black uppercase tracking-widest italic text-[var(--text-secondary)]">
           {t('auth.new_operative', 'New operative?')}{' '}
           <a href="/signup" className="text-[var(--accent-primary)] hover:underline decoration-2 underline-offset-4 decoration-[var(--accent-primary)]/30 transition-all">

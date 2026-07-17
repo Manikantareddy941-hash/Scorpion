@@ -57,6 +57,7 @@
         "nodemailer": "^9.0.3",
         "octokit": "^5.0.5",
         "openai": "^6.47.0",
+        "openid-client": "^6.8.4",
         "pdfkit": "^0.19.1",
         "prom-client": "^15.1.3",
         "resend": "^6.17.2",

@@ -112,6 +112,25 @@ on the filesystem — run the backend with a single replica handling IaC, or
 mount `DATA_DIR` on a shared RWX volume. Migrating live tfstate to a remote
 backend is the correct long-term fix and its own project.
 
-## SP5–SP7
+## SP5: Enterprise auth (OIDC SSO) — built
+
+**Approach: Appwrite custom-token bridge.** Backend runs the standard OIDC
+code+PKCE flow (openid-client v6: discovery, state+nonce in httpOnly lax
+cookies), extracts the verified email claim, JIT-provisions the Appwrite user
+on first login, then mints an Appwrite custom token. The frontend exchanges it
+on the existing /auth/callback page via account.createSession — verifyUser and
+the whole session stack stay untouched. Works with any spec-compliant IdP
+(Okta, Auth0, Entra ID, Keycloak).
+
+- `services/oidcService.ts` + `routes/ssoRoutes.ts` (GET /auth/sso/login,
+  GET /auth/sso/callback), mounted behind the auth rate limiter
+- Config-gated: OIDC_ISSUER_URL / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET
+  (see .env.example); unset → 503. Frontend button behind VITE_SSO_ENABLED.
+- Rejected: passport (session middleware baggage), custom JWTs (would fork the
+  auth model), Appwrite built-in providers only (no generic-IdP guarantee).
+
+Deferred: SCIM provisioning, IdP group→role mapping, SAML.
+
+## SP6–SP7
 
 Designed per sub-project when reached; sections appended to this doc.

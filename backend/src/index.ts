@@ -13,6 +13,7 @@ import { requestLogger } from './middleware/requestLogger';
 
 // Route Imports
 import authRoutes from './routes/authRoutes';
+import ssoRoutes from './routes/ssoRoutes';
 import projectRoutes from './routes/projectRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import healthRoutes from './routes/healthRoutes';
@@ -293,6 +294,7 @@ const authenticateApiKey = async (req: AuthenticatedRequest, res: Response, next
 
 // --- Routes ---
 app.use('/auth', authLimiter, authRoutes);
+app.use('/auth/sso', authLimiter, ssoRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/projects', authenticate, projectRoutes);
 app.use('/api/upload', authenticate, uploadRoutes);
