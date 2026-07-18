@@ -260,6 +260,86 @@ describe('repoRoutes scan trigger and status', () => {
     });
 });
 
+describe('repoRoutes GET /scans/:scanId — response mapping', () => {
+    // The route test above stubs the service, so the mapping itself was never
+    // exercised. The scan detail pages read these fields off the response now
+    // that they no longer fetch the raw document.
+    beforeEach(() => jest.clearAllMocks());
+    afterEach(() => jest.restoreAllMocks());
+
+    const scanDoc = {
+        $id: 's1',
+        $createdAt: '2026-07-01T10:00:00.000Z',
+        repo_id: 'repo-1',
+        status: 'completed',
+        scan_type: 'full',
+        repoUrl: 'https://github.com/acme/api',
+        visibility: 'private',
+        scannerVersion: '1.0.0',
+        criticalCount: 3,
+        highCount: 2,
+        details: JSON.stringify({ security_score: 71, gate_status: 'failed' }),
+    };
+
+    it('carries the fields the detail pages render', async () => {
+        (databases.getDocument as jest.Mock)
+            .mockResolvedValueOnce(scanDoc)
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' });
+
+        const res = await request(buildApp()).get('/api/repos/scans/s1');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toMatchObject({
+            id: 's1',
+            repo_id: 'repo-1',
+            scan_type: 'full',
+            created_at: '2026-07-01T10:00:00.000Z',
+            repoUrl: 'https://github.com/acme/api',
+            visibility: 'private',
+            scannerVersion: '1.0.0',
+            critical: 3,
+            high: 2,
+        });
+    });
+
+    it('resolves counts from the details JSON when the top-level ones are absent', async () => {
+        // ScanResults used to parse this string in the browser; it relies on the
+        // backend doing it now.
+        (databases.getDocument as jest.Mock)
+            .mockResolvedValueOnce({
+                ...scanDoc,
+                criticalCount: 0,
+                highCount: 0,
+                details: JSON.stringify({ critical_count: 9, high_count: 4 }),
+            })
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' });
+
+        const res = await request(buildApp()).get('/api/repos/scans/s1');
+
+        expect(res.body.critical).toBe(9);
+        expect(res.body.high).toBe(4);
+    });
+
+    it('defaults the optional string fields rather than emitting undefined', async () => {
+        (databases.getDocument as jest.Mock)
+            .mockResolvedValueOnce({ $id: 's1', $createdAt: 'x', repo_id: 'repo-1', status: 'pending' })
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'user-1' });
+
+        const res = await request(buildApp()).get('/api/repos/scans/s1');
+
+        expect(res.body.repoUrl).toBe('');
+        expect(res.body.scan_type).toBe('full');
+    });
+
+    it('403s on a scan belonging to another tenant', async () => {
+        (databases.getDocument as jest.Mock)
+            .mockResolvedValueOnce(scanDoc)
+            .mockResolvedValueOnce({ $id: 'repo-1', user_id: 'someone-else' });
+
+        expect((await request(buildApp()).get('/api/repos/scans/s1')).statusCode).toBe(403);
+    });
+});
+
 describe('repoRoutes governance policy', () => {
     beforeEach(() => jest.clearAllMocks());
 

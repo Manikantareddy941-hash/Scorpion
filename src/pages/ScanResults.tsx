@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import {
   Shield,
@@ -12,9 +12,10 @@ import {
   Loader2,
   Globe,
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
-import { Query } from 'appwrite';
+import { DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Client } from 'appwrite';
+import { fetchScan, fetchScanFindings } from '../lib/scanApi';
+import { useAuth } from '../contexts/AuthContext';
 
 const client = new Client()
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
@@ -25,18 +26,21 @@ import DastScanModal from '../components/DastScanModal';
 import { useTranslation } from 'react-i18next';
 
 /* ─── Types ──────────────────────────────────────────── */
+/** Shape of GET /api/repos/scans/:scanId — not the raw scan document.
+ *  The backend already resolves counts from the document's `details` JSON,
+ *  which this page used to re-parse client-side. */
 interface Scan {
-  $id: string;
+  id: string;
+  repo_id: string;
   repoUrl: string;
   visibility: string;
   status: string;
-  criticalCount: number;
-  highCount: number;
-  mediumCount: number;
-  lowCount: number;
-  timestamp: string;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  started_at: string;
   scannerVersion: string;
-  repo_id: string;
 }
 
 export interface AppwriteFinding {
@@ -57,6 +61,7 @@ const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2
 /* ─── Component ──────────────────────────────────────── */
 export default function ScanResults() {
   const { t } = useTranslation();
+  const { getJWT } = useAuth();
   const { scanId: urlScanId } = useParams();
   const location = useLocation();
   const scanId = urlScanId || location.state?.scanId;
@@ -68,58 +73,61 @@ export default function ScanResults() {
   const [error, setError] = useState<string | null>(null);
   const [dastModalOpen, setDastModalOpen] = useState(false);
 
-  /* ── Fetch scan + findings ── */
+  /* ── Fetch scan + findings ──
+     Both go through the backend, which checks the caller can reach this scan's
+     repository. Previously both were direct Appwrite reads keyed on the scanId
+     in the URL, with no ownership check anywhere in the path. */
+  const load = useCallback(async () => {
+    if (!scanId) return;
+    try {
+      const [scanDoc, findingDocs] = await Promise.all([
+        fetchScan(getJWT, scanId),
+        fetchScanFindings(getJWT, scanId, { limit: 500 }),
+      ]);
+      setScan(scanDoc as Scan);
+      setFindings(
+        (findingDocs as AppwriteFinding[]).sort(
+          (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
+        ),
+      );
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message || t('scan_results.load_failed', 'Failed to load scan results.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [scanId, getJWT, t]);
+
   useEffect(() => {
     if (!scanId) {
       setLoading(false);
       return;
     }
 
-    const load = async () => {
-      try {
-        const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
-        setScan(scanDoc as unknown as Scan);
-
-        const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.equal('scanId', scanId),
-          Query.limit(500),
-        ]);
-        const sorted = (findingsRes.documents as unknown as AppwriteFinding[]).sort(
-          (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
-        );
-        setFindings(sorted);
-      } catch (err: any) {
-        setError(err?.message || t('scan_results.load_failed', 'Failed to load scan results.'));
-      } finally {
-        setLoading(false);
-      }
-    };
-
     load();
-  }, [scanId, t]);
+  }, [scanId, load]);
 
-  /* ── Realtime subscription for scan status ── */
+  /* ── Realtime subscription for scan status ──
+     Held in a ref so the subscription depends only on scanId. `load` changes
+     identity whenever i18n's `t` does, and depending on it directly would tear
+     down and re-open the websocket on those renders. */
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+
   useEffect(() => {
     if (!scanId) return;
 
     const channel = `databases.${DB_ID}.collections.${COLLECTIONS.SCANS}.documents.${scanId}`;
     const unsubscribe = client.subscribe(channel, (response: any) => {
-      if (response.events?.some((e: string) => e.includes('update')) && response.payload) {
-        setScan((prev) => ({ ...prev, ...response.payload }) as Scan);
-
-        if (response.payload.status === 'completed') {
-          databases
-            .listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-              Query.equal('scanId', scanId!),
-              Query.limit(500),
-            ])
-            .then((res) => {
-              const sorted = (res.documents as unknown as AppwriteFinding[]).sort(
-                (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
-              );
-              setFindings(sorted);
-            });
-        }
+      // The event is a signal that something changed, nothing more. The payload
+      // is a raw Appwrite document — a different shape from the API response
+      // this component renders, and unverified against the caller's access.
+      // Spreading it into state mixed the two shapes and would have shown
+      // counts under keys the render no longer reads. Refetch instead.
+      if (response.events?.some((e: string) => e.includes('update'))) {
+        loadRef.current();
       }
     });
 
@@ -176,27 +184,12 @@ export default function ScanResults() {
   const total = findings.length;
   const isRunning = scan.status === 'scanning' || scan.status === 'running';
 
-  // Extract counts from scan doc or details JSON
-  let crit = scan.criticalCount || 0;
-  let high = scan.highCount || 0;
-  let med = scan.mediumCount || 0;
-  let low = scan.lowCount || 0;
-
-  if (
-    (scan as any).details &&
-    typeof (scan as any).details === 'string' &&
-    crit + high + med + low === 0
-  ) {
-    try {
-      const d = JSON.parse((scan as any).details);
-      if (d.critical_count !== undefined) crit = Number(d.critical_count);
-      if (d.high_count !== undefined) high = Number(d.high_count);
-      if (d.medium_count !== undefined) med = Number(d.medium_count);
-      if (d.low_count !== undefined) low = Number(d.low_count);
-    } catch (e) {
-      console.error('Failed to parse scan details:', e);
-    }
-  }
+  // The backend already falls back to the details JSON when the top-level
+  // counts are absent, so this page no longer parses that string itself.
+  const crit = scan.critical || 0;
+  const high = scan.high || 0;
+  const med = scan.medium || 0;
+  const low = scan.low || 0;
 
   const stats = [
     { label: 'CRITICAL', value: crit, color: 'var(--severity-critical)', icon: Shield },
@@ -252,7 +245,7 @@ export default function ScanResults() {
 
             <SBOMExportButton
               repoId={scan.repo_id}
-              repoName={scan.repoUrl.split('/').pop() || 'repository'}
+              repoName={scan.repoUrl?.split('/').pop() || 'repository'}
             />
 
             <button
@@ -290,8 +283,8 @@ export default function ScanResults() {
             },
             {
               label: 'Scanned At',
-              value: scan.timestamp
-                ? new Date(scan.timestamp).toLocaleTimeString([], {
+              value: scan.started_at
+                ? new Date(scan.started_at).toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
                   })
