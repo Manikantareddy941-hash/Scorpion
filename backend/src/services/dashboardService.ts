@@ -14,6 +14,11 @@ const DUE_SOON_HOURS = 24;
 const HOUR_MS = 3600_000;
 
 const emptySla = (): SlaSummary => ({ breached: 0, dueSoon: 0, breachedCritical: 0, nextHours: null });
+
+/** How many recent findings to consider, and how many to surface from them.
+ *  Mirrors what the dashboard previously fetched directly from Appwrite. */
+const RECENT_FINDINGS_WINDOW = 50;
+const RECENT_FINDINGS_SHOWN = 5;
 import {
   DashboardMetrics,
   FindingDocument,
@@ -78,7 +83,8 @@ export const dashboardService = {
         remediated_today: 0,
         mttr_today_days: null,
         mttr_days: null,
-        sla: emptySla()
+        sla: emptySla(),
+        recent_findings: []
       };
     }
 
@@ -105,6 +111,15 @@ export const dashboardService = {
       mttr_today_days: null,
       mttr_days: null,
       sla: emptySla(),
+      // Newest first, then highest risk among those. risk_score is absent on
+      // documents written before it existed, so it is coalesced rather than
+      // sorted on in the query — a server-side orderDesc would 400 on an
+      // unmigrated collection.
+      recent_findings: [...findings]
+        .sort((a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime())
+        .slice(0, RECENT_FINDINGS_WINDOW)
+        .sort((a, b) => Number(b.risk_score ?? 0) - Number(a.risk_score ?? 0))
+        .slice(0, RECENT_FINDINGS_SHOWN),
       findings
     };
 

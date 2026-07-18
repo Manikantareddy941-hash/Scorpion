@@ -487,19 +487,17 @@ export default function Dashboard({
           setQualityGateScore(0);
         }
 
+        // Highest-risk recent findings, scoped to this user's repositories by
+        // the backend. Previously a direct Appwrite query with no tenant filter.
         let vulnsDocuments: any[] = [];
         try {
-          const vulnsRes = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-            Query.orderDesc('$createdAt'),
-            Query.limit(50),
-          ]);
-          // Client-side risk sort: older docs may lack the risk_score attribute,
-          // so a server-side orderDesc('risk_score') could 400 on unmigrated collections.
-          vulnsDocuments = [...vulnsRes.documents].sort(
-            (a: any, b: any) => (b.risk_score ?? 0) - (a.risk_score ?? 0),
-          );
+          const recentRes = await fetch('/api/dashboard/security', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!recentRes.ok) throw new Error(`dashboard stats failed: ${recentRes.status}`);
+          vulnsDocuments = (await recentRes.json())?.recent_findings ?? [];
         } catch (err) {
-          console.warn('Failed to fetch vulnerabilities from Appwrite:', err);
+          console.warn('Failed to fetch recent findings:', err);
         }
 
         if (
