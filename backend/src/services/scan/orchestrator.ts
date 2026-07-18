@@ -1,12 +1,11 @@
-import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { validateTools } from '../../utils/toolCheck';
 import { logger } from '../logger';
+import { getRunner } from '../runner';
 
 // Safety: 5 minute timeout for any individual tool scan
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
-const isWin = process.platform === 'win32';
 
 export interface ScanResult {
     tool: 'semgrep' | 'gitleaks' | 'trivy' | 'checkov' | 'bandit' | 'hadolint';
@@ -14,6 +13,13 @@ export interface ScanResult {
     stderr: string;
     error?: string;
     status?: number | null;
+    /**
+     * True when the scanner did not produce a usable verdict — it could not run
+     * in this runner mode, failed to start, or emitted nothing on a failure
+     * exit. Consumers MUST NOT treat this as a clean result: reporting "0
+     * findings" for a scanner that never ran is a security lie.
+     */
+    unavailable?: boolean;
 }
 
 // Dockerfile naming conventions: plain, dotted, and dir/Dockerfile.env variants.
@@ -28,62 +34,54 @@ function findDockerfile(targetPath: string): string | null {
 }
 
 /**
- * Internal helper to run a CLI tool using Docker
+ * Runs one scanner through the configured RunnerProvider (containers when a
+ * Docker daemon is present, host binaries otherwise).
+ *
+ * The workspace directory is derived from the arguments: every current scanner
+ * takes a filesystem path, and the runner needs it as the mount point / cwd.
  */
 const executeTool = async (toolId: string, userArgs: string[], toolName: ScanResult['tool']): Promise<ScanResult> => {
-    return new Promise((resolve) => {
-        const imageMap: Record<string, string> = {
-            semgrep: 'semgrep/semgrep:latest',
-            gitleaks: 'zricethezav/gitleaks:latest',
-            trivy: 'aquasec/trivy:latest',
-            checkov: 'bridgecrew/checkov:latest',
-            bandit: 'bandit:latest',
-            hadolint: 'hadolint/hadolint:latest'
-        };
-        const image = imageMap[toolName] ?? toolName;
+    const workspacePath = userArgs.find(arg => arg.startsWith('/') || /^[a-zA-Z]:/.test(arg)) ?? process.cwd();
+    const runner = await getRunner();
 
-        // The caller supplies the absolute path to the repository (targetPath). We mount it
-        // into the container at /src and rewrite any argument that points to the original path
-        // to use the container-internal path. This works because all current scanners accept a
-        // filesystem path argument (e.g., "semgrep scan … <path>", "trivy fs … <path>").
-        const mountPath = userArgs.find(arg => arg.startsWith('/') || /^[a-zA-Z]:/.test(arg)) ?? '';
-        const containerPath = '/src';
-        const rewrittenArgs = userArgs.map(arg => (arg === mountPath ? containerPath : arg));
+    // A scanner this runner mode cannot execute is reported as unavailable, not
+    // as a passing scan. Silently returning an empty result would tell the user
+    // their code is clean when nothing ever looked at it.
+    if (!runner.supports(toolName)) {
+        const reason = `${toolName} is not available in ${runner.mode} mode`;
+        logger.warn(`[Orchestrator] ${reason}`);
+        return { tool: toolName, stdout: '', stderr: reason, error: reason, status: null, unavailable: true };
+    }
 
-        // Build docker run command
-        const dockerArgs = [
-            'run', '--rm',
-            '-v', `${mountPath}:${containerPath}`,
-            '-w', containerPath,
-            image,
-            ...rewrittenArgs
-        ];
-
-        let stdout = '';
-        let stderr = '';
-        logger.info(`[Orchestrator] Executing Docker: docker ${dockerArgs.join(' ')}`);
-        const child = spawn('docker', dockerArgs, { timeout: SCAN_TIMEOUT_MS });
-
-        child.stdout?.on('data', (data) => { stdout += data.toString(); });
-        child.stderr?.on('data', (data) => { stderr += data.toString(); });
-
-        child.on('error', (err: any) => {
-            logger.error(`[Orchestrator] ${toolName} Docker execution error:`, err.message);
-            const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' :
-                toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
-            resolve({ tool: toolName, stdout: emptyOutput, stderr: err.message, status: null });
+    try {
+        const { stdout, stderr, exitCode } = await runner.run({
+            tool: toolId,
+            args: userArgs,
+            workspacePath,
+            timeoutMs: SCAN_TIMEOUT_MS,
         });
 
-        child.on('close', (code) => {
-            if (code !== 0 && !stdout) {
-                const emptyOutput = toolName === 'trivy' ? '{"Results":[]}' :
-                    toolName === 'checkov' ? '{"results":{"failed_checks":[]}}' : '[]';
-                resolve({ tool: toolName, stdout: emptyOutput, stderr: `Exit code ${code}`, status: code });
-            } else {
-                resolve({ tool: toolName, stdout, stderr, status: code });
-            }
-        });
-    });
+        // Most scanners exit non-zero precisely because they found something, so
+        // a non-zero code with output is a normal result. A non-zero code with
+        // no output at all means the tool did not produce a verdict.
+        if (exitCode !== 0 && !stdout) {
+            return {
+                tool: toolName,
+                stdout: '',
+                stderr: stderr || `Exit code ${exitCode}`,
+                error: `${toolName} produced no output (exit ${exitCode})`,
+                status: exitCode,
+                unavailable: true,
+            };
+        }
+
+        return { tool: toolName, stdout, stderr, status: exitCode };
+    } catch (err) {
+        // Failed to start at all (no daemon, missing binary, timeout).
+        const message = err instanceof Error ? err.message : String(err);
+        logger.error(`[Orchestrator] ${toolName} execution error:`, message);
+        return { tool: toolName, stdout: '', stderr: message, error: message, status: null, unavailable: true };
+    }
 };
 
 export { validateTools };
