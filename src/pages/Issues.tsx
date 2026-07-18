@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -71,15 +71,10 @@ export default function Issues() {
     });
   };
 
-  useEffect(() => {
-    fetchIssues();
-    fetchLatestScan();
-  }, []);
-
   // Both loads go through the backend, which scopes findings and scans to the
   // repositories this caller owns or shares via a team. The previous direct
   // Appwrite queries carried no tenant filter at all.
-  const fetchIssues = async () => {
+  const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
         const token = await getJWT();
@@ -95,9 +90,9 @@ export default function Issues() {
     } finally {
         setLoading(false);
     }
-  };
+  }, [getJWT]);
 
-  const fetchLatestScan = async () => {
+  const fetchLatestScan = useCallback(async () => {
     try {
         const token = await getJWT();
         const res = await fetch('/api/dashboard/security', {
@@ -108,7 +103,12 @@ export default function Issues() {
     } catch (err) {
         console.error('Failed to fetch latest scan:', err);
     }
-  };
+  }, [getJWT]);
+
+  useEffect(() => {
+    fetchIssues();
+    fetchLatestScan();
+  }, [fetchIssues, fetchLatestScan]);
 
   // 1. Map raw issues to synthetic types for metrics
   const mappedIssues = issues.map(i => {

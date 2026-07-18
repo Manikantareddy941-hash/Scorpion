@@ -151,6 +151,18 @@ async function mockAuthenticatedBackend(page: Page): Promise<void> {
   await page.route('**/api/repos/github/installations', (route) =>
     route.fulfill({ json: { repos: INSTALLATION_REPOS } }),
   );
+  // Findings now come from the tenant-scoped backend route rather than a
+  // direct Appwrite query. The catch-all above returns {}, which the page
+  // correctly reads as "no documents" — so the fixture has to be served here
+  // or the journeys see an empty issues list.
+  await page.route('**/api/issues*', (route) =>
+    route.fulfill({ json: { total: MOCK_VULNS.length, documents: MOCK_VULNS } }),
+  );
+  await page.route('**/api/dashboard/security*', (route) =>
+    route.fulfill({
+      json: { latest_scan: { $id: 'scan-e2e', gateStatus: 'passed', score: 92 }, recent_findings: [] },
+    }),
+  );
 }
 
 test.describe('authenticated journeys', () => {
