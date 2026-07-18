@@ -4,13 +4,18 @@ import {
   ArrowLeft, Activity, Sparkles, CheckCircle2,
   ChevronRight
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchScanFindings } from '../lib/scanApi';
+import { FindingsLoadError } from '../components/FindingsLoadError';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function QualityDetail() {
   const { scanId } = useParams();
+  const { getJWT } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  // A failed read must not render as the clean-result empty state.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [findings, setFindings] = useState<any[]>([]);
 
   useEffect(() => {
@@ -18,21 +23,18 @@ export default function QualityDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.equal('scan_result_id', scanId),
-          Query.equal('tool', 'semgrep'),
-          Query.equal('severity', ['low', 'info']),
-          Query.limit(200)
-        ]);
-        setFindings(res.documents);
+        setFindings(await fetchScanFindings(getJWT, scanId, {
+          tool: 'semgrep', severity: ['low', 'info'], limit: 200,
+        }));
       } catch (err) {
+        setLoadFailed(true);
         toast.error('Failed to load quality audit');
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [scanId]);
+  }, [scanId, getJWT]);
 
   const groupedFindings = useMemo(() => {
     const grouped = findings.reduce((acc: any, f: any) => {
@@ -66,7 +68,9 @@ export default function QualityDetail() {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {groupedFindings.length > 0 ? (
+        {loadFailed ? (
+          <FindingsLoadError />
+        ) : groupedFindings.length > 0 ? (
           <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>

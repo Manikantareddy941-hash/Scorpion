@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2,
   ArrowLeft, Activity, Lock, Search
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchScan, fetchScanFindings } from '../lib/scanApi';
+import { FindingsLoadError } from '../components/FindingsLoadError';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface Finding {
@@ -20,9 +22,12 @@ interface Finding {
 
 export default function SecretsDetail() {
   const { scanId } = useParams();
+  const { getJWT } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  // A failed read must not render as the clean-result empty state.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [, setScan] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,22 +38,15 @@ export default function SecretsDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        const [scanDoc, findingDocs] = await Promise.all([
+          fetchScan(getJWT, scanId),
+          fetchScanFindings(getJWT, scanId, { tool: 'gitleaks', limit: 100 }),
+        ]);
         setScan(scanDoc);
-
-        const findingsRes = await databases.listDocuments(
-          DB_ID, 
-          COLLECTIONS.VULNERABILITIES, 
-          [
-            Query.equal('scan_result_id', scanId),
-            Query.equal('tool', 'gitleaks'), 
-            Query.limit(100)
-          ]
-        );
-        
-        setFindings(findingsRes.documents as any);
+        setFindings(findingDocs as any);
       } catch (err: any) {
         console.error('[SecretsDetail] Error fetching data:', err);
+        setLoadFailed(true);
         toast.error('Failed to load secrets findings');
       } finally {
         setLoading(false);
@@ -56,7 +54,7 @@ export default function SecretsDetail() {
     };
 
     fetchData();
-  }, [scanId]);
+  }, [scanId, getJWT]);
 
   const filteredFindings = findings.filter(f => {
     const matchesSearch = f.message?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -108,7 +106,9 @@ export default function SecretsDetail() {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {filteredFindings.length > 0 ? (
+        {loadFailed ? (
+          <FindingsLoadError />
+        ) : filteredFindings.length > 0 ? (
           filteredFindings.map((finding) => (
             <div key={finding.$id} className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)] p-6">
               <div className="flex justify-between items-start mb-4">

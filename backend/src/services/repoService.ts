@@ -201,6 +201,9 @@ export const repoService = {
       data: {
         id: scan.$id,
         status: scan.status,
+        repo_id: scan.repo_id,
+        scan_type: scan.scan_type || 'full',
+        created_at: scan.$createdAt,
         // Top-level counts (set when scan completes)
         critical: scan.criticalCount || (details.critical_count as number) || 0,
         high: scan.highCount || (details.high_count as number) || 0,
