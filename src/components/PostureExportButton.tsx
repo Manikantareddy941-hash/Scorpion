@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Download, ChevronDown, Loader2, FileText, FileSpreadsheet } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
 import { slaHoursLeft, slaDeadline, daysOverdue } from '../lib/sla';
 import {
   exportPosturePdf, exportPostureCsv,
@@ -13,27 +13,36 @@ interface Props {
   getSnapshot: () => PostureSnapshot;
 }
 
-// Lazy-fetch overdue findings only when CSV is requested. Reuses the same Appwrite
-// query the dashboard SLA card derives from — no new backend endpoint. Returns null
-// on failure so the CSV degrades to a summary with a note.
-async function fetchSlaBreachRows(): Promise<SlaBreachRow[] | null> {
+// Lazy-fetch overdue findings only when CSV is requested. Returns null on
+// failure so the CSV degrades to a summary with a note.
+//
+// Both reads were direct Appwrite queries with no ownership filter: the CSV
+// this produces was built from every open finding and every repository in the
+// collection. An export is the worst place for that — it leaves the app as a
+// file, so a leak here outlives the session that caused it.
+async function fetchSlaBreachRows(token: string | null): Promise<SlaBreachRow[] | null> {
   try {
+    const authed = { headers: { Authorization: `Bearer ${token}` } };
     const [vulnRes, repoRes] = await Promise.all([
-      databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-        Query.equal('status', 'open'), Query.orderDesc('$createdAt'), Query.limit(200),
-      ]),
-      databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.limit(100)]),
+      fetch('/api/issues?status=open&limit=200', authed),
+      fetch('/api/repos', authed),
     ]);
+    if (!vulnRes.ok || !repoRes.ok) {
+      throw new Error(`export fetch failed: issues ${vulnRes.status}, repos ${repoRes.status}`);
+    }
+
+    const vulnDocs: any[] = (await vulnRes.json())?.documents ?? [];
+    const repoDocs = await repoRes.json();
 
     const repoName = new Map<string, string>(
-      repoRes.documents.map((r: any) => [
+      (Array.isArray(repoDocs) ? repoDocs : []).map((r: any) => [
         r.$id,
         r.name || r.url?.split('/').pop()?.replace('.git', '') || r.$id,
       ]),
     );
 
     const now = Date.now();
-    return vulnRes.documents
+    return vulnDocs
       .filter((d: any) => d.$createdAt && slaHoursLeft(d.$createdAt, d.severity, now) < 0)
       .map((d: any): SlaBreachRow => ({
         id: d.$id,
@@ -51,6 +60,7 @@ async function fetchSlaBreachRows(): Promise<SlaBreachRow[] | null> {
 }
 
 export default function PostureExportButton({ getSnapshot }: Props) {
+  const { getJWT } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
@@ -69,7 +79,7 @@ export default function PostureExportButton({ getSnapshot }: Props) {
     setShowMenu(false);
     setLoading(true);
     try {
-      const slaRows = await fetchSlaBreachRows();
+      const slaRows = await fetchSlaBreachRows(await getJWT());
       exportPostureCsv(getSnapshot(), slaRows);
       toast.success(slaRows === null ? 'CSV exported (summary — detail fetch failed)' : 'Posture CSV exported');
     } catch (err: any) {
