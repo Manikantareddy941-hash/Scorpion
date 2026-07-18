@@ -93,6 +93,9 @@ export default function Dashboard({
     queueCount: 0,
     prsCreatedToday: 0,
     avgDetectionToPrDays: null as number | null,
+    // Distinguishes "couldn't load" from "nothing found" — the counts below
+    // are only meaningful when this is false.
+    failed: false,
   });
   const [auditEntries, setAuditEntries] = useState<
     { action: string; resource: string; time: string }[]
@@ -188,9 +191,19 @@ export default function Dashboard({
             const secRes = await fetch('/api/dashboard/security', {
               headers: { Authorization: `Bearer ${token}` },
             });
-            if (secRes.ok) {
+            if (!secRes.ok) throw new Error(`dashboard stats failed: ${secRes.status}`);
+            {
               const secData = await secRes.json();
               const t = secData?.by_type || {};
+              // Same response also carries the remediation counters, which used
+              // to come from a direct browser query against the vulnerabilities
+              // collection — bypassing the tenant scoping this endpoint applies.
+              setRemediationStats({
+                queueCount: secData?.open_count ?? 0,
+                prsCreatedToday: secData?.remediated_today ?? 0,
+                avgDetectionToPrDays: secData?.mttr_today_days ?? null,
+                failed: false,
+              });
               setByType({
                 secret: Number(t.secret ?? 0),
                 dependency: Number(t.dependency ?? 0),
@@ -213,43 +226,10 @@ export default function Dashboard({
             }
           } catch (err) {
             console.warn('Failed to fetch security breakdown:', err);
-          }
-        };
-
-        const fetchRemediationStats = async () => {
-          try {
-            const startOfDay = new Date();
-            startOfDay.setHours(0, 0, 0, 0);
-            const [queueRes, remediatedTodayRes] = await Promise.all([
-              databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                Query.equal('status', 'open'),
-                Query.limit(1),
-              ]),
-              databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                Query.equal('resolution_status', 'remediated'),
-                Query.greaterThanEqual('$updatedAt', startOfDay.toISOString()),
-                Query.limit(50),
-              ]),
-            ]);
-            const detectionToPrDurationsMs = remediatedTodayRes.documents
-              .map((d: any) => new Date(d.$updatedAt).getTime() - new Date(d.$createdAt).getTime())
-              .filter((ms: number) => ms > 0);
-            const avgDetectionToPrDays =
-              detectionToPrDurationsMs.length > 0
-                ? Math.round(
-                    (detectionToPrDurationsMs.reduce((sum, ms) => sum + ms, 0) /
-                      detectionToPrDurationsMs.length /
-                      (1000 * 60 * 60 * 24)) *
-                      10,
-                  ) / 10
-                : null;
-            setRemediationStats({
-              queueCount: queueRes.total,
-              prsCreatedToday: remediatedTodayRes.total,
-              avgDetectionToPrDays,
-            });
-          } catch (err) {
-            console.warn('Failed to fetch remediation queue stats:', err);
+            // A failed load must not render as zero. On a security surface a
+            // silent 0 reads as "nothing to fix" — the same lie as a crashed
+            // scanner reporting no findings.
+            setRemediationStats((prev) => ({ ...prev, failed: true }));
           }
         };
 
@@ -329,7 +309,6 @@ export default function Dashboard({
         await Promise.allSettled([
           fetchGateSummary(),
           fetchSecurityBreakdown(),
-          fetchRemediationStats(),
           fetchSlaStats(),
           fetchAuditEntries(),
           fetchIntegrationStatus(),
@@ -1247,28 +1226,37 @@ export default function Dashboard({
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
               <section aria-label="Remediation" className={`${CARD} p-5`}>
                 <h2 className="text-base font-semibold tracking-tight">Remediation</h2>
-                <ul className="mt-3 space-y-2 text-[13px] text-[var(--text-secondary)]">
-                  <li className="flex justify-between">
-                    <span>Open in queue</span>
-                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
-                      {remediationStats.queueCount}
+                {remediationStats.failed ? (
+                  <p role="status" className="mt-3 text-[13px] text-[var(--text-secondary)]">
+                    Couldn&apos;t load remediation stats.{' '}
+                    <span className="text-[var(--text-primary)]">
+                      This is not a count of zero.
                     </span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Fixed today</span>
-                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
-                      {remediationStats.prsCreatedToday}
-                    </span>
-                  </li>
-                  <li className="flex justify-between">
-                    <span>Avg. detection to fix</span>
-                    <span className="font-semibold text-[var(--text-primary)] tabular-nums">
-                      {remediationStats.avgDetectionToPrDays !== null
-                        ? `${remediationStats.avgDetectionToPrDays} days`
-                        : '—'}
-                    </span>
-                  </li>
-                </ul>
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2 text-[13px] text-[var(--text-secondary)]">
+                    <li className="flex justify-between">
+                      <span>Open in queue</span>
+                      <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                        {remediationStats.queueCount}
+                      </span>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Fixed today</span>
+                      <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                        {remediationStats.prsCreatedToday}
+                      </span>
+                    </li>
+                    <li className="flex justify-between">
+                      <span>Avg. detection to fix</span>
+                      <span className="font-semibold text-[var(--text-primary)] tabular-nums">
+                        {remediationStats.avgDetectionToPrDays !== null
+                          ? `${remediationStats.avgDetectionToPrDays} days`
+                          : '—'}
+                      </span>
+                    </li>
+                  </ul>
+                )}
               </section>
 
               <section aria-label="Scan activity" className={`${CARD} p-5`}>

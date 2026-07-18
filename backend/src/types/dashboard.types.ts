@@ -75,6 +75,10 @@ export interface SecurityDashboardStats {
   /** Findings resolved since local midnight. Served here so the dashboard does
    *  not have to query the findings collection directly to compute it. */
   remediated_today: number;
+  /** Mean detection-to-resolution days for today's remediations only. Distinct
+   *  from mttr_days, which spans all resolved findings — the dashboard shows
+   *  today's figure and the two must not be conflated. */
+  mttr_today_days: number | null;
   mttr_days: number | null;
   findings?: unknown[];
 }
