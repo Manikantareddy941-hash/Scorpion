@@ -1,5 +1,3 @@
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-
 const API_BASE_URL = '';
 
 export const verifyService = {
@@ -12,12 +10,12 @@ export const verifyService = {
       },
       body: JSON.stringify({ visibility: 'public' })
     });
-    
+
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || 'Failed to trigger scan');
     }
-    
+
     return await response.json();
   },
 
@@ -27,34 +25,39 @@ export const verifyService = {
         'Authorization': `Bearer ${token}`
       }
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch scan status');
     }
-    
+
     return await response.json();
   },
 
-  async markVulnerabilityAsVerified(repoId: string) {
-    // Find matching vulnerabilities for this repo and mark as verified if fixed
-    const vulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-      Query.equal('repo_id', repoId),
-      Query.limit(100)
-    ]);
+  /**
+   * Whether the rescan cleared this specific finding.
+   *
+   * The scan pipeline already decides this: delta ingestion marks a finding
+   * 'resolved' when a later scan of the same repository no longer reports it.
+   * So verification is a read of one finding, not a write.
+   *
+   * This replaces a browser-side sweep that listed every vulnerability in the
+   * repository and set `verified: true` on any already-resolved one. That was
+   * wrong twice over. It reported success whenever *any* finding in the repo
+   * had ever been resolved — including one closed months earlier by an
+   * unrelated fix — so the button showed "Fix verified" while the fix under
+   * test was still broken. And `verified` was written by that sweep and read
+   * by nothing, so its only observable effect was the false success.
+   */
+  async isFindingResolved(findingId: string, token: string): Promise<boolean> {
+    const response = await fetch(`${API_BASE_URL}/api/findings/${findingId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
 
-    let foundAny = false;
-    for (const vuln of vulns.documents) {
-      // In a real scenario, we'd match the specific vulnerability ID from the task
-      // For this implementation, we assume if the scan is clean or doesn't show this vuln, it's verified.
-      // The scan engine itself updates the status to 'fixed' if it's gone.
-      // We just mark it as 'verified' true.
-      if (vuln.status === 'fixed' || vuln.status === 'resolved') {
-        await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, vuln.$id, {
-          verified: true
-        });
-        foundAny = true;
-      }
+    if (!response.ok) {
+      throw new Error('Failed to check finding status');
     }
-    return foundAny;
+
+    const { finding } = await response.json();
+    return finding?.status === 'resolved' || finding?.status === 'remediated';
   }
 };

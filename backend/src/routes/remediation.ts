@@ -131,6 +131,27 @@ router.post('/create-pr', aiLimiter, async (req: AuthenticatedRequest, res: Resp
       base: baseBranch,
     });
 
+    // Record the PR against the finding. The browser used to do this itself,
+    // straight to Appwrite, with no check that the finding belonged to the
+    // repository it had just been authorised for — so any finding id would do.
+    //
+    // `status` is deliberately left alone: an open PR is a proposed fix, not a
+    // confirmed one. It moves to 'resolved' only when a later scan stops
+    // reporting the finding, which is what the Verify Fix button checks.
+    const finding = await databases
+      .getDocument(DB_ID, COLLECTIONS.VULNERABILITIES, findingId)
+      .catch(() => null);
+    if (finding?.repo_id === ownedRepo.$id) {
+      await databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, findingId, {
+        pr_url: pr.html_url,
+        resolution_status: 'remediated',
+      }).catch((err: unknown) => {
+        // The PR exists either way; failing the request here would tell the
+        // caller the remediation failed when it did not.
+        logger.error('[SCORPION] Failed to record PR on finding:', errorMessage(err));
+      });
+    }
+
     return res.json({
       success: true,
       prUrl: pr.html_url,
