@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { databases, DB_ID, ID, COLLECTIONS, Query } from '../lib/appwrite';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-    Clock, Play, Trash2, Plus, ExternalLink, Loader2
+    Clock, Play, Trash2, Plus, ExternalLink, Loader2, AlertTriangle
 } from 'lucide-react';
 import { SiGithub } from 'react-icons/si';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +34,8 @@ export default function Repositories() {
     const navigate = useNavigate();
     const [repos, setRepos] = useState<Repository[]>([]);
     const [loading, setLoading] = useState(true);
+    // An empty repo list and a failed fetch look identical otherwise.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [scanning, setScanning] = useState<string | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [newRepo, setNewRepo] = useState({ name: '', url: '' });
@@ -110,51 +111,75 @@ export default function Repositories() {
         }
     };
 
-    useEffect(() => {
-        fetchRepos();
-    }, [user]);
-
-    const fetchRepos = async () => {
+    // Every operation on this page went straight to Appwrite from the browser,
+    // including delete. The backend owns tenancy on all four now.
+    const fetchRepos = useCallback(async () => {
         if (!user) return;
         setLoading(true);
+        setLoadFailed(false);
         try {
-            const res = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-                Query.equal('user_id', user.$id)
-            ]);
-            setRepos(res.documents as any);
+            const token = await getJWT();
+            const res = await fetch('/api/repos', { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) throw new Error(`repos fetch failed: ${res.status}`);
+            const body = await res.json();
+            // Anything other than an array means the response is not what this
+            // page expects; rendering it would throw inside .map at paint time.
+            if (!Array.isArray(body)) throw new Error('unexpected repos response shape');
+            setRepos(body);
         } catch (err) {
+            setLoadFailed(true);
             toast.error('Failed to fetch repositories');
         } finally {
             setLoading(false);
         }
-    };
+    }, [user, getJWT]);
+
+    useEffect(() => {
+        fetchRepos();
+    }, [fetchRepos]);
 
     const handleAddRepo = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, ID.unique(), {
-                ...newRepo,
-                user_id: user?.$id,
-                cron_enabled: false,
-                cron_schedule: '0 0 * * *'
+            // Ownership and the scheduling defaults are stamped server-side; the
+            // browser no longer decides which user_id a repository belongs to.
+            const token = await getJWT();
+            const res = await fetch('/api/repos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ url: newRepo.url }),
             });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body?.error || `Failed to add repository (${res.status})`);
+            }
             toast.success('Repository added successfully');
             setShowAddModal(false);
             setNewRepo({ name: '', url: '' });
             fetchRepos();
-        } catch (err) {
-            toast.error('Failed to add repository');
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to add repository');
         }
     };
 
     const handleDeleteRepo = async (id: string) => {
         if (!window.confirm('Are you sure you want to delete this repository?')) return;
         try {
-            await databases.deleteDocument(DB_ID, COLLECTIONS.REPOSITORIES, id);
+            const token = await getJWT();
+            const res = await fetch(`/api/repos/${encodeURIComponent(id)}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                // 409 means a scan is in flight — the backend refuses to delete
+                // a repository mid-scan, which the direct call never checked.
+                throw new Error(body?.error || `Failed to delete repository (${res.status})`);
+            }
             toast.success('Repository deleted');
             fetchRepos();
-        } catch (err) {
-            toast.error('Failed to delete repository');
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to delete repository');
         }
     };
 
@@ -186,14 +211,22 @@ export default function Repositories() {
 
     const handleUpdateCron = async (repo: Repository, newSchedule: string, newEnabled: boolean) => {
         try {
-            await databases.updateDocument(DB_ID, COLLECTIONS.REPOSITORIES, repo.$id, {
-                cron_schedule: newSchedule,
-                cron_enabled: newEnabled
+            const token = await getJWT();
+            const res = await fetch(`/api/repos/${encodeURIComponent(repo.$id)}/schedule`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ cron_enabled: newEnabled, cron_schedule: newSchedule }),
             });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body?.error || `Failed to update schedule (${res.status})`);
+            }
             setRepos(prev => prev.map(r => r.$id === repo.$id ? { ...r, cron_schedule: newSchedule, cron_enabled: newEnabled } : r));
             toast.success('Scan schedule updated');
-        } catch (err) {
-            toast.error('Failed to update schedule');
+        } catch (err: any) {
+            // Surface the reason — the backend rejects sub-hourly schedules, and
+            // a generic failure toast would leave that looking like a glitch.
+            toast.error(err.message || 'Failed to update schedule');
         }
     };
 
@@ -230,6 +263,21 @@ export default function Repositories() {
                     <div className="flex flex-col items-center justify-center py-24">
                         <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin mb-4" />
                         <p className="text-[13px] text-[var(--text-secondary)]">Loading repositories…</p>
+                    </div>
+                ) : loadFailed ? (
+                    /* "No repositories yet" would invite the user to re-add
+                       repositories they already have. */
+                    <div className="premium-card p-24 text-center border-[#ff8a00]/40">
+                        <AlertTriangle className="w-16 h-16 text-[#ff8a00] mx-auto mb-6" />
+                        <h3 className="text-lg font-semibold text-[var(--text-primary)]">Couldn't load repositories</h3>
+                        <p className="text-[13px] text-[var(--text-secondary)] mt-2">
+                            This is not an empty list — your repositories could not be read.
+                        </p>
+                        <button
+                            onClick={fetchRepos}
+                            className="mt-6 px-4 py-2 rounded-lg text-[13px] font-medium bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 hover:bg-[var(--accent-primary)] hover:text-white transition-all">
+                            Retry
+                        </button>
                     </div>
                 ) : repos.length === 0 ? (
                     <div className="premium-card p-24 text-center">

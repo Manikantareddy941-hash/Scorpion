@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import cron from 'node-cron';
 import { repoRepository } from '../repositories/repoRepository';
 import { enqueueScan } from '../queues/scanQueue';
 import { resolveOwnershipScope, resolveCreationOwnership, canAccessResource, assertRepoAccess } from './tenancyService';
@@ -37,9 +38,47 @@ export const repoService = {
       url,
       name,
       visibility: 'public',
+      // Scheduling defaults so every repo has them regardless of how it was
+      // added. The Repositories page used to stamp these itself when creating
+      // documents from the browser; bulk-connected repos never got them.
+      cron_enabled: false,
+      cron_schedule: '0 0 * * *',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
+  },
+
+  /**
+   * Enables/disables scheduled scanning for a repo and sets its cron pattern.
+   *
+   * The pattern reaches BullMQ's job scheduler, so an unvalidated one is a
+   * resource-exhaustion vector: `* * * * *` enqueues a full clone-and-scan
+   * every minute, forever. The browser used to write this field directly.
+   */
+  async setScanSchedule(
+    userId: string,
+    repoId: string,
+    input: { cron_enabled: boolean; cron_schedule?: string }
+  ): Promise<'not_found' | 'invalid_schedule' | 'too_frequent' | { ok: true; repo: unknown }> {
+    const repo = await repoRepository.getRepo(repoId).catch(() => null);
+    if (!repo || !(await canAccessResource(repo, userId))) return 'not_found';
+
+    const patch: Record<string, unknown> = {
+      cron_enabled: Boolean(input.cron_enabled),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.cron_schedule !== undefined) {
+      const schedule = String(input.cron_schedule).trim();
+      if (!cron.validate(schedule)) return 'invalid_schedule';
+      // Cap at once per hour. The minute field must be a single fixed value:
+      // '*', a step ('*/5') or a list ('0,30') all fire more than hourly.
+      const minuteField = schedule.split(/\s+/)[0];
+      if (!/^\d+$/.test(minuteField)) return 'too_frequent';
+      patch.cron_schedule = schedule;
+    }
+
+    return { ok: true, repo: await repoRepository.updateRepo(repoId, patch) };
   },
 
   /** Deletes a repository, cleaning up its on-disk workspace if it was a ZIP upload. */

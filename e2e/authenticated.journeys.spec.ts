@@ -158,6 +158,11 @@ async function mockAuthenticatedBackend(page: Page): Promise<void> {
   await page.route('**/api/issues*', (route) =>
     route.fulfill({ json: { total: MOCK_VULNS.length, documents: MOCK_VULNS } }),
   );
+  // The Repositories page reads its list from the backend now, not from
+  // Appwrite. The catch-all above answers {} which is not an array.
+  await page.route('**/api/repos', (route) =>
+    route.fulfill({ json: MOCK_REPOS }),
+  );
   await page.route('**/api/dashboard/security*', (route) =>
     route.fulfill({
       json: { latest_scan: { $id: 'scan-e2e', gateStatus: 'passed', score: 92 }, recent_findings: [] },

@@ -529,3 +529,95 @@ describe('repoRoutes GET /:id', () => {
         expect(databases.getDocument).not.toHaveBeenCalled();
     });
 });
+
+describe('repoRoutes PATCH /:id/schedule', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    const ownRepo = { $id: 'repo-1', user_id: 'user-1' };
+
+    it('enables a schedule the caller owns', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue(ownRepo);
+        (databases.updateDocument as jest.Mock).mockResolvedValue({ ...ownRepo, cron_enabled: true });
+
+        const res = await request(buildApp())
+            .patch('/api/repos/repo-1/schedule')
+            .send({ cron_enabled: true, cron_schedule: '0 3 * * *' });
+
+        expect(res.statusCode).toBe(200);
+        expect((databases.updateDocument as jest.Mock).mock.calls[0][3]).toMatchObject({
+            cron_enabled: true,
+            cron_schedule: '0 3 * * *',
+        });
+    });
+
+    it('rejects a schedule that would scan more than once an hour', async () => {
+        // '* * * * *' enqueues a full clone-and-scan every minute, forever.
+        // The browser could set exactly this before the write moved server-side.
+        (databases.getDocument as jest.Mock).mockResolvedValue(ownRepo);
+
+        const res = await request(buildApp())
+            .patch('/api/repos/repo-1/schedule')
+            .send({ cron_enabled: true, cron_schedule: '* * * * *' });
+
+        expect(res.statusCode).toBe(400);
+        expect(databases.updateDocument).not.toHaveBeenCalled();
+    });
+
+    it('rejects step and list minute fields too', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue(ownRepo);
+
+        for (const schedule of ['*/5 * * * *', '0,30 * * * *']) {
+            (databases.updateDocument as jest.Mock).mockClear();
+            const res = await request(buildApp())
+                .patch('/api/repos/repo-1/schedule')
+                .send({ cron_enabled: true, cron_schedule: schedule });
+            expect([schedule, res.statusCode]).toEqual([schedule, 400]);
+            expect(databases.updateDocument).not.toHaveBeenCalled();
+        }
+    });
+
+    it('rejects a malformed cron expression', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue(ownRepo);
+
+        const res = await request(buildApp())
+            .patch('/api/repos/repo-1/schedule')
+            .send({ cron_enabled: true, cron_schedule: 'every tuesday please' });
+
+        expect(res.statusCode).toBe(400);
+        expect(databases.updateDocument).not.toHaveBeenCalled();
+    });
+
+    it('404s on another tenant repository without writing', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'repo-1', user_id: 'someone-else' });
+
+        const res = await request(buildApp())
+            .patch('/api/repos/repo-1/schedule')
+            .send({ cron_enabled: true, cron_schedule: '0 3 * * *' });
+
+        expect(res.statusCode).toBe(404);
+        expect(databases.updateDocument).not.toHaveBeenCalled();
+    });
+
+    it('requires cron_enabled to be a boolean', async () => {
+        const res = await request(buildApp())
+            .patch('/api/repos/repo-1/schedule')
+            .send({ cron_schedule: '0 3 * * *' });
+
+        expect(res.statusCode).toBe(400);
+        expect(databases.getDocument).not.toHaveBeenCalled();
+    });
+
+    it('can disable without supplying a schedule', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue(ownRepo);
+        (databases.updateDocument as jest.Mock).mockResolvedValue({ ...ownRepo, cron_enabled: false });
+
+        const res = await request(buildApp())
+            .patch('/api/repos/repo-1/schedule')
+            .send({ cron_enabled: false });
+
+        expect(res.statusCode).toBe(200);
+        const patch = (databases.updateDocument as jest.Mock).mock.calls[0][3];
+        expect(patch.cron_enabled).toBe(false);
+        expect(patch).not.toHaveProperty('cron_schedule');
+    });
+});
