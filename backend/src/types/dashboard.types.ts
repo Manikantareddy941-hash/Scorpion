@@ -17,6 +17,9 @@ export type RepoDocument = Models.Document & {
 export type ScanDocument = Models.Document & {
   repo_id?: string;
   repoUrl?: string;
+  repoName?: string;
+  gateStatus?: string;
+  score?: number;
 };
 
 export type FindingDocument = Models.Document & {
@@ -100,6 +103,10 @@ export interface SecurityDashboardStats {
    *  and "remediation queue" panels. Deliberately small and purpose-built:
    *  `findings` below can carry thousands of documents. */
   recent_findings: FindingDocument[];
+  /** Most recent scan across the caller's repositories, for the quality-gate
+   *  header. Null when they have never run one — which is not the same as a
+   *  passing gate, so the client must not default it to "passed". */
+  latest_scan: ScanDocument | null;
   findings?: unknown[];
 }
 

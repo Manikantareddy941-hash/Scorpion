@@ -18,7 +18,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const userId = req.user?.$id;
     if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
-    const { scanId, severity, type, tool, file, limit = '100' } = req.query;
+    const { scanId, severity, type, tool, file, status, limit = '100' } = req.query;
 
     // Scope to repos the caller can access (owned directly, or shared via team) so
     // one tenant can never list another tenant's vulnerabilities through this route.
@@ -59,6 +59,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     if (type) filters.push(Query.equal('type', type as string));
     if (tool) filters.push(Query.equal('tool', tool as string));
     if (file) filters.push(Query.equal('file', file as string));
+    if (status) filters.push(Query.equal('status', status as string));
 
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, filters);
     res.json(result);

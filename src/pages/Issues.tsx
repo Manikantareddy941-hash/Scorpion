@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useCallback, useEffect, useState } from 'react';
 import { Shield, AlertCircle, Wind, ChevronDown, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,6 +53,9 @@ export default function Issues() {
   const [filter, setFilter] = useState({ severity: '', type: '', tool: '' });
   const [sortBy, setSortBy] = useState<'risk' | 'newest'>('risk');
   const [loading, setLoading] = useState(true);
+  // A failed load must not render as "0 issues" — an empty security list reads
+  // as "you are clean", which is the opposite of what a fetch error means.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [latestScan, setLatestScan] = useState<any>(null);
 
   const handleCreateTicketFromFinding = async (issue: any) => {
@@ -69,37 +71,44 @@ export default function Issues() {
     });
   };
 
-  useEffect(() => {
-    fetchIssues();
-    fetchLatestScan();
-  }, []);
-
-  const fetchIssues = async () => {
+  // Both loads go through the backend, which scopes findings and scans to the
+  // repositories this caller owns or shares via a team. The previous direct
+  // Appwrite queries carried no tenant filter at all.
+  const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
-        const filters = [Query.orderDesc('$createdAt'), Query.limit(500)];
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, filters);
-        setIssues(res.documents);
+        const token = await getJWT();
+        const res = await fetch('/api/issues?limit=500', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`issues fetch failed: ${res.status}`);
+        setIssues((await res.json())?.documents ?? []);
+        setLoadFailed(false);
     } catch (err) {
         console.error('Failed to fetch issues:', err);
+        setLoadFailed(true);
     } finally {
         setLoading(false);
     }
-  };
+  }, [getJWT]);
 
-  const fetchLatestScan = async () => {
+  const fetchLatestScan = useCallback(async () => {
     try {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-            Query.orderDesc('$createdAt'),
-            Query.limit(1)
-        ]);
-        if (res.documents.length > 0) {
-            setLatestScan(res.documents[0]);
-        }
+        const token = await getJWT();
+        const res = await fetch('/api/dashboard/security', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`dashboard fetch failed: ${res.status}`);
+        setLatestScan((await res.json())?.latest_scan ?? null);
     } catch (err) {
         console.error('Failed to fetch latest scan:', err);
     }
-  };
+  }, [getJWT]);
+
+  useEffect(() => {
+    fetchIssues();
+    fetchLatestScan();
+  }, [fetchIssues, fetchLatestScan]);
 
   // 1. Map raw issues to synthetic types for metrics
   const mappedIssues = issues.map(i => {
@@ -189,12 +198,26 @@ export default function Issues() {
         <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[12px] font-medium text-stone-500">Quality gate</span>
-            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-medium capitalize">
-              {(latestScan?.gateStatus || 'passed').toLowerCase()}
+            {/* No scan is not a passing gate. Defaulting to "passed / 100" told
+                every never-scanned tenant their code was clean. */}
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium capitalize border ${
+              !latestScan
+                ? 'bg-stone-50 text-stone-500 border-stone-200'
+                : (latestScan.gateStatus || '').toLowerCase() === 'failed'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            }`}>
+              {latestScan ? (latestScan.gateStatus || 'unknown').toLowerCase() : 'never scanned'}
             </span>
           </div>
           <div>
-            <p className="text-2xl font-semibold tabular-nums text-stone-800 tracking-tight">{latestScan?.score || '100'}<span className="text-sm font-medium text-stone-400">/100</span></p>
+            {latestScan ? (
+              <p className="text-2xl font-semibold tabular-nums text-stone-800 tracking-tight">
+                {latestScan.score ?? '—'}<span className="text-sm font-medium text-stone-400">/100</span>
+              </p>
+            ) : (
+              <p className="text-[13px] text-stone-500">Run a scan to get a score</p>
+            )}
           </div>
         </div>
 
@@ -215,18 +238,27 @@ export default function Issues() {
         <div className="bg-white p-4 rounded-xl border border-stone-200/60 flex flex-col justify-center shadow-sm">
           <span className="text-[12px] font-medium text-stone-500 mb-3">To remediate</span>
           <div className="flex flex-col gap-1">
-            <p className="text-2xl font-semibold tabular-nums text-stone-800 tracking-tight leading-none">{filteredIssues.length} <span className="text-sm font-medium text-stone-400">issues</span></p>
-            <p className="text-[12px] text-emerald-600 font-medium mt-1">
-              ~{Math.floor(totalEffortMins / 60)}h {totalEffortMins % 60}m to fix
-            </p>
-            {(() => {
-              const breached = filteredIssues.filter(isSlaBreached).length;
-              return breached > 0 ? (
-                <p className="text-[12px] text-[#ff5252] font-semibold" title="Findings open past their severity SLA window">
-                  {breached} past SLA
+            {loadFailed ? (
+              <>
+                <p className="text-2xl font-semibold text-stone-400 tracking-tight leading-none">—</p>
+                <p className="text-[12px] text-[#ff8a00] font-medium mt-1">Unavailable, not zero</p>
+              </>
+            ) : (
+              <>
+                <p className="text-2xl font-semibold tabular-nums text-stone-800 tracking-tight leading-none">{filteredIssues.length} <span className="text-sm font-medium text-stone-400">issues</span></p>
+                <p className="text-[12px] text-emerald-600 font-medium mt-1">
+                  ~{Math.floor(totalEffortMins / 60)}h {totalEffortMins % 60}m to fix
                 </p>
-              ) : null;
-            })()}
+                {(() => {
+                  const breached = filteredIssues.filter(isSlaBreached).length;
+                  return breached > 0 ? (
+                    <p className="text-[12px] text-[#ff5252] font-semibold" title="Findings open past their severity SLA window">
+                      {breached} past SLA
+                    </p>
+                  ) : null;
+                })()}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -248,7 +280,7 @@ export default function Issues() {
                     <Icon className="w-5 h-5 text-[var(--accent-primary)]" />
                     <span className="text-[13px] font-medium capitalize text-[var(--text-secondary)]">{t}</span>
                   </div>
-                  <p className="text-3xl font-semibold tabular-nums">{counts[t]}</p>
+                  <p className="text-3xl font-semibold tabular-nums">{loadFailed ? '—' : counts[t]}</p>
                 </button>
               );
             })}
@@ -294,6 +326,19 @@ export default function Issues() {
           {loading ? (
             <div className="text-center py-20 text-[var(--text-secondary)] animate-pulse text-sm uppercase tracking-widest">
               Loading issues...
+            </div>
+          ) : loadFailed ? (
+            <div className="premium-card p-8 text-center">
+              <AlertCircle className="w-6 h-6 text-[#ff8a00] mx-auto mb-3" />
+              <p className="text-[14px] font-medium text-[var(--text-primary)]">Couldn't load findings</p>
+              <p className="text-[12px] text-[var(--text-secondary)] mt-1">
+                This is not an empty list — your findings could not be read. Retry, and check back before treating this repository as clean.
+              </p>
+              <button
+                onClick={fetchIssues}
+                className="mt-4 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 hover:bg-[var(--accent-primary)] hover:text-white transition-all">
+                Retry
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
