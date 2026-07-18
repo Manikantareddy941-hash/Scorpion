@@ -79,7 +79,10 @@ router.post('/scan', ingestRateLimiter, requireCiApiKey, async (req: Request, re
     }
 
     const { imageDigest, results, imageSignature } = parsed.data;
-    await putScan(imageDigest, results, Date.now(), imageSignature);
+    // req.ciTenant is set by requireCiApiKey from the presented token, never
+    // from the request body — a body-supplied tenant would let one customer
+    // write into another's namespace.
+    await putScan(req.ciTenant ?? null, imageDigest, results, Date.now(), imageSignature);
     // Best-effort durable audit alongside the Redis hot store. Fire-and-forget:
     // an audit write failure must never fail an ingest the gate depends on.
     recordScanResult(imageDigest, summarizeSeverity(results)).catch((err) =>

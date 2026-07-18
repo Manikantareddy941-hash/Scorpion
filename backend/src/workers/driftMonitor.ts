@@ -242,7 +242,9 @@ export class DriftMonitor {
 
     // Provenance gap: a running image we have no scan record for. More specific
     // than the gate verdict (which fail-secure blocks unknowns in prod anyway).
-    const scanned = digest ? (await getScan(digest)) !== undefined : false;
+    // Tenant-less like buildService: the drift poller watches the cluster, not a
+    // tenant session. Reads the shared namespace.
+    const scanned = digest ? (await getScan(null, digest)) !== undefined : false;
     if (!scanned) {
       this.emit({ ...base, driftType: 'unscanned-image', reason: 'running image has no scan provenance' });
       return;
@@ -303,8 +305,8 @@ export function startDriftMonitor(): DriftMonitor | undefined {
 if (require.main === module) {
   void (async () => {
     const { putScan } = await import('../services/imageStore');
-    await putScan('sha256:crit', [{ pkgName: 'openssl', severity: 'critical' }]);
-    await putScan('sha256:clean', []);
+    await putScan(null, 'sha256:crit', [{ pkgName: 'openssl', severity: 'critical' }]);
+    await putScan(null, 'sha256:clean', []);
 
     const rules: GateRule[] = [{ id: 't', severity: 'critical', threshold: 0, action: 'block', enabled: true }];
 

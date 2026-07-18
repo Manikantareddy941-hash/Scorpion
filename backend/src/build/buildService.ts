@@ -170,7 +170,11 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
             finishedOn: new Date().toISOString(),
           });
           if (provenance) {
-            await putProvenance(digest, JSON.stringify(provenance));
+            // Tenant-less: the build pipeline carries no tenant identity yet, so
+            // provenance lands in the shared namespace. Safe today because
+            // provenance is signed and verified rather than trusted by key, but
+            // it must gain a tenant when builds become per-customer.
+            await putProvenance(null, digest, JSON.stringify(provenance));
             logs += `SLSA provenance attested for ${digest} (commit ${shaOut.trim()}).\n`;
           } else {
             logs += `Provenance attestation skipped (signing not configured).\n`;
