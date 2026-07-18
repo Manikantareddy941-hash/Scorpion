@@ -2,6 +2,7 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { getInsightsSummary } from '../services/scanService';
+import { resolveOwnershipScope } from '../services/tenancyService';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -119,6 +120,74 @@ router.get('/dashboard/trends', async (req: AuthenticatedRequest, res: Response,
         }, []);
 
         res.json(trends);
+    } catch (error: unknown) {
+        next(error);
+    }
+});
+
+/**
+ * Repository ids this caller can reach, or null when they can reach none.
+ *
+ * Returning null rather than an empty array keeps the difference explicit at
+ * the call sites below: an empty `Query.equal('repo_id', [])` is not a filter
+ * that matches nothing, so widening it by accident would return every row in
+ * the collection.
+ */
+async function accessibleRepoIds(req: AuthenticatedRequest, userId: string): Promise<string[] | null> {
+    const scope = await resolveOwnershipScope(req, userId);
+    const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+        Query.equal(scope.field, scope.value),
+    ]);
+    const ids = repos.documents.map(r => r.$id);
+    return ids.length > 0 ? ids : null;
+}
+
+// Commit stream for the Code Activity page, which read the commits collection
+// straight from the browser with no ownership filter — every commit logged by
+// every tenant's webhook, including the file paths flagged as sensitive.
+router.get('/commits', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoIds = await accessibleRepoIds(req, req.user!.$id);
+        if (!repoIds) return res.json({ total: 0, documents: [] });
+
+        const limit = Math.min(Number(req.query.limit) || 50, 200);
+        const results = await databases.listDocuments(DB_ID, COLLECTIONS.COMMITS, [
+            Query.equal('repo_id', repoIds),
+            Query.orderDesc('timestamp'),
+            Query.limit(limit),
+        ]);
+        res.json(results);
+    } catch (error: unknown) {
+        next(error);
+    }
+});
+
+// CI test runs for the Test Results page, previously read unfiltered too.
+router.get('/test-runs', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repoIds = await accessibleRepoIds(req, req.user!.$id);
+        if (!repoIds) return res.json({ total: 0, documents: [] });
+
+        const limit = Math.min(Number(req.query.limit) || 20, 100);
+        const results = await databases.listDocuments(DB_ID, COLLECTIONS.TEST_RUNS, [
+            Query.equal('repo_id', repoIds),
+            Query.orderDesc('$createdAt'),
+            Query.limit(limit),
+        ]);
+
+        // pass_rate is read by the UI but never written by the ingest path, so
+        // it always rendered 0%. Both inputs are stored, so derive it here
+        // rather than showing a rate that contradicts the counts beside it.
+        const documents = results.documents.map(doc => ({
+            ...doc,
+            pass_rate: doc.pass_rate ?? (
+                Number(doc.total_tests) > 0
+                    ? Math.round((Number(doc.passed_tests || 0) / Number(doc.total_tests)) * 100)
+                    : 0
+            ),
+        }));
+
+        res.json({ total: results.total, documents });
     } catch (error: unknown) {
         next(error);
     }

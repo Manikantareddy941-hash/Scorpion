@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   TestTube2, CheckCircle2, XCircle, RefreshCw,
   BarChart, TerminalSquare, TrendingUp, TrendingDown, Minus, Clock, ChevronDown, ChevronRight,
   Copy, Check, AlertTriangle, Activity
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -106,6 +106,7 @@ const Trend = ({ current, prev, suffix = '' }: { current: number; prev: number; 
 
 export default function TestResults() {
   const {} = useTranslation();
+  const { getJWT } = useAuth();
   const [metrics, setMetrics] = useState<RunMetrics>(EMPTY_METRICS);
   const [suites, setSuites] = useState<TestSuite[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -116,15 +117,20 @@ export default function TestResults() {
   const [suiteFilter, setSuiteFilter] = useState<SuiteFilter>('ALL');
   const [copied, setCopied] = useState<string | null>(null);
 
-  const fetchLivePipelineData = async () => {
+  const fetchLivePipelineData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await databases.listDocuments(DB_ID, COLLECTIONS.TEST_RUNS, [
-        Query.orderDesc('$createdAt'),
-        Query.limit(1)
-      ]);
-      if (response.documents.length > 0) {
-        const r = response.documents[0];
+      // Scoped to the caller's repositories server-side. The Appwrite query
+      // this replaces had no ownership filter, so "the latest test run" meant
+      // the latest one across every tenant.
+      const token = await getJWT();
+      const res = await fetch('/api/insights/test-runs?limit=1', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`test runs failed: ${res.status}`);
+      const documents: any[] = (await res.json())?.documents ?? [];
+      if (documents.length > 0) {
+        const r = documents[0];
         setMetrics({
           testExecutions: r.total_tests || 0,
           codeCoverage: r.coverage || 0,
@@ -158,9 +164,9 @@ export default function TestResults() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getJWT]);
 
-  useEffect(() => { fetchLivePipelineData(); }, []);
+  useEffect(() => { fetchLivePipelineData(); }, [fetchLivePipelineData]);
 
   const copyText = (text: string, key: string) => {
     navigator.clipboard.writeText(text);

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Activity, Box, Download, ChevronRight } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchScan } from '../lib/scanApi';
 import toast from 'react-hot-toast';
 
 interface SbomComponent {
@@ -29,7 +29,10 @@ export default function SbomDetail() {
       setLoading(true);
       setError(null);
       try {
-        const scan = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        // Resolving the scan through the backend means the repo id below comes
+        // from a scan this caller can actually reach, rather than from whatever
+        // scan id is in the URL.
+        const scan = await fetchScan(getJWT, scanId);
         const resolvedRepoId = scan.repo_id;
         setRepoId(resolvedRepoId);
 

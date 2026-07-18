@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Activity, Trash2, CheckCircle2 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchScanFindings } from '../lib/scanApi';
 import toast from 'react-hot-toast';
 
 export default function DeadCodeDetail() {
   const { scanId } = useParams();
   const navigate = useNavigate();
+  const { getJWT } = useAuth();
   const [loading, setLoading] = useState(true);
   const [findings, setFindings] = useState<any[]>([]);
 
@@ -15,12 +17,11 @@ export default function DeadCodeDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.equal('scanId', scanId),
-          Query.limit(100)
-        ]);
-        const docs = res.documents.filter((d: any) => d.message?.toLowerCase().includes('unused') || d.title?.toLowerCase().includes('dead'));
-        setFindings(docs);
+        // Scoped server-side to the caller's repositories. The Appwrite query
+        // this replaces was keyed on the scanId in the URL alone, so any scan
+        // id typed into the address bar returned that scan's findings.
+        const docs = await fetchScanFindings(getJWT, scanId);
+        setFindings(docs.filter((d: any) => d.message?.toLowerCase().includes('unused') || d.title?.toLowerCase().includes('dead')));
       } catch (err) {
         toast.error('Failed to load dead code analysis');
       } finally {
@@ -28,7 +29,7 @@ export default function DeadCodeDetail() {
       }
     };
     fetchData();
-  }, [scanId]);
+  }, [scanId, getJWT]);
 
   if (loading) return <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]"><Activity className="animate-spin text-[var(--accent-primary)]" /></div>;
 
