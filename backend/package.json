@@ -85,7 +85,7 @@
         "@types/jest": "^30.0.0",
         "@types/json2csv": "^5.0.7",
         "@types/jsonwebtoken": "^9.0.10",
-        "@types/marked": "^5.0.2",
+        "@types/marked": "^6.0.0",
         "@types/multer": "^2.2.0",
         "@types/node": "^20.19.33",
         "@types/node-cron": "^3.0.11",
