@@ -286,6 +286,32 @@ router.put('/:id/access', async (req: AuthenticatedRequest, res: Response, next:
     }
 });
 
+// Scheduled-scan settings for a repo.
+router.patch('/:id/schedule', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const { cron_enabled, cron_schedule } = req.body;
+        if (typeof cron_enabled !== 'boolean') {
+            return res.status(400).json({ error: 'cron_enabled must be a boolean' });
+        }
+
+        const result = await repoService.setScanSchedule(req.user!.$id, req.params.id, {
+            cron_enabled,
+            cron_schedule,
+        });
+
+        if (result === 'not_found') return res.status(404).json({ error: 'Repository not found' });
+        if (result === 'invalid_schedule') return res.status(400).json({ error: 'cron_schedule is not a valid cron expression' });
+        if (result === 'too_frequent') {
+            return res.status(400).json({ error: 'Scheduled scans may run at most once per hour' });
+        }
+
+        res.json(result.repo);
+    } catch (error: unknown) {
+        if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
+        next(error);
+    }
+});
+
 // Single repo. Declared LAST: '/:id' matches one segment, so it would otherwise
 // shadow '/external', '/scans', and every other literal single-segment route.
 router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
