@@ -2,6 +2,10 @@ import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import type { Playbook, SoarActionType } from '../soar/playbookMatcher';
+import { isPostgresEnabled } from '../db/pool';
+// soarPgRepository imports SoarActionRecord/SoarActionStatus back from this
+// module (type-only, so the value import here creates no runtime cycle).
+import { soarPgRepository } from './pg/soarPgRepository';
 
 const PLAYBOOKS = 'playbooks';
 const ACTIONS = 'soar_actions';
@@ -74,7 +78,7 @@ function actionFromDoc(doc: Models.Document): SoarActionRecord {
   };
 }
 
-export const soarRepository = {
+const legacySoarRepository = {
   /** Fail-secure: Appwrite down → no playbooks → no SOAR actions (existing
    *  incident path still runs). Never throws. */
   async listPlaybooks(): Promise<Playbook[]> {
@@ -187,3 +191,7 @@ export const soarRepository = {
     }
   },
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite otherwise. */
+export const soarRepository: typeof legacySoarRepository =
+  isPostgresEnabled() ? soarPgRepository : legacySoarRepository;
