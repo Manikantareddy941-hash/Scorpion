@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import { X, Send, Copy, Check, Plus, MessageSquare, Trash2, Pencil, Maximize2, Minimize2, History } from 'lucide-react';
 import echoIcon from '../assets/echo-ai.webp';
 import { useAuth } from '../contexts/AuthContext';
-import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 
 const ECHO_SYSTEM_PROMPT = [
   'You are Echo, the AI assistant for the Scorpion DevSecOps platform.',
@@ -111,37 +110,50 @@ const AIChat: React.FC<AIChatProps> = ({ open, setOpen }) => {
 
   useEffect(() => {
     if (!open || !user) return;
-    databases.listDocuments(DB_ID, COLLECTIONS.CHAT_SESSIONS, [
-      Query.equal('userId', user.$id),
-      Query.orderDesc('$updatedAt'),
-      Query.limit(30),
-    ]).then((res) => {
-      setSessions(res.documents.map((d: any) => ({
-        id: d.$id,
-        title: d.title || 'Untitled chat',
-        messages: normalizeStoredMessages(d.messages),
-      })));
-    }).catch((err) => console.warn('[Echo] failed to load chat history:', err?.message || err));
+    // Scoped by the backend rather than by a query the browser supplies.
+    getJWT()
+      .then((token) => fetch('/api/chat/sessions', {
+        headers: { Authorization: `Bearer ${token}` },
+      }))
+      .then((res) => {
+        if (!res.ok) throw new Error(`chat sessions failed: ${res.status}`);
+        return res.json();
+      })
+      .then((body) => {
+        setSessions((body?.documents ?? []).map((d: any) => ({
+          id: d.$id,
+          title: d.title || 'Untitled chat',
+          messages: normalizeStoredMessages(d.messages),
+        })));
+      })
+      .catch((err) => console.warn('[Echo] failed to load chat history:', err?.message || err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, user]);
 
   const persistSession = async (history: ChatMessage[], sessionId: string | null) => {
     if (!user) return sessionId;
-    const payload = {
-      sessionId: crypto.randomUUID(),
-      userId: user.$id,
-      title: titleFromMessage(history[0]?.text || 'Untitled chat'),
-      messages: JSON.stringify(history),
-      createdAt: new Date().toISOString(),
-    };
+    const title = titleFromMessage(history[0]?.text || 'Untitled chat');
+    const messages = JSON.stringify(history);
     try {
+      // userId is stamped from the session server-side. It used to be sent
+      // from here, which is what decided whose history a transcript joined.
+      const token = await getJWT();
+      const res = await fetch(
+        sessionId ? `/api/chat/sessions/${sessionId}` : '/api/chat/sessions',
+        {
+          method: sessionId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(sessionId ? { messages } : { title, messages }),
+        },
+      );
+      if (!res.ok) throw new Error(`save failed: ${res.status}`);
+
       if (sessionId) {
-        await databases.updateDocument(DB_ID, COLLECTIONS.CHAT_SESSIONS, sessionId, { messages: payload.messages });
         setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, messages: history } : s)));
         return sessionId;
       }
-      const doc = await databases.createDocument(DB_ID, COLLECTIONS.CHAT_SESSIONS, ID.unique(), payload);
-      setSessions((prev) => [{ id: doc.$id, title: payload.title, messages: history }, ...prev]);
+      const doc = await res.json();
+      setSessions((prev) => [{ id: doc.$id, title, messages: history }, ...prev]);
       return doc.$id;
     } catch (err) {
       console.warn('[Echo] failed to save chat session:', err instanceof Error ? err.message : err);
@@ -279,7 +291,11 @@ const AIChat: React.FC<AIChatProps> = ({ open, setOpen }) => {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     if (activeSessionId === sessionId) handleNewChat();
     try {
-      await databases.deleteDocument(DB_ID, COLLECTIONS.CHAT_SESSIONS, sessionId);
+      const token = await getJWT();
+      await fetch(`/api/chat/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
     } catch {}
   };
 

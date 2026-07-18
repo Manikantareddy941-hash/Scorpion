@@ -51,15 +51,20 @@ router.put('/preferences', async (req: AuthenticatedRequest, res: Response, next
                 Query.limit(1)
             ]);
 
+            // user_id is applied after the spread, not before it. Spreading a
+            // client-supplied object over the session's user id let the body
+            // set `user_id` itself and write a preference row against another
+            // account.
             if (existing.total > 0) {
                 await databases.updateDocument(DB_ID, COLLECTIONS.NOTIFICATION_PREFERENCES, existing.documents[0].$id, {
                     ...pref,
+                    user_id: userId,
                     updated_at: new Date().toISOString()
                 });
             } else {
                 await databases.createDocument(DB_ID, COLLECTIONS.NOTIFICATION_PREFERENCES, ID.unique(), {
-                    user_id: userId,
                     ...pref,
+                    user_id: userId,
                     updated_at: new Date().toISOString()
                 });
             }
