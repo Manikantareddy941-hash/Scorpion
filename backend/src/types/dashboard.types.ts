@@ -72,6 +72,9 @@ export interface SecurityDashboardStats {
   trend: TrendPoint[];
   open_count: number;
   resolved_count: number;
+  /** Findings resolved since local midnight. Served here so the dashboard does
+   *  not have to query the findings collection directly to compute it. */
+  remediated_today: number;
   mttr_days: number | null;
   findings?: unknown[];
 }
