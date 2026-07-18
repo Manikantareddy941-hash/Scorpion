@@ -1,4 +1,11 @@
-import { ticketsRepository } from '../repositories/ticketsRepository';
+import { ticketsRepository, type TenantScope } from '../repositories/ticketsRepository';
+
+/**
+ * Ownership is a separate argument rather than part of the validated body on
+ * purpose: taking it from the request would let a caller create a ticket owned
+ * by another user or team. It comes from the authenticated session only.
+ */
+export type TicketOwnership = { user_id: string; team_id: string | null };
 import { setJiraConfig, getJiraConfig, pushTicketToJira, pullFromJira, testConnection } from './jiraService';
 import { Ticket, TicketFilters, TicketLinkType } from '../../../shared/types';
 import { CreateTicketInput, FromFindingInput, JiraConfigInput, UpdateTicketInput } from '../types/tickets.types';
@@ -11,12 +18,12 @@ function severityToPriority(severity: number): Ticket['priority'] {
 }
 
 export const ticketsService = {
-  listTickets(filters: TicketFilters) {
-    return ticketsRepository.listTickets(filters);
+  listTickets(filters: TicketFilters, scope?: TenantScope) {
+    return ticketsRepository.listTickets(filters, scope);
   },
 
-  getStats() {
-    return ticketsRepository.getStats();
+  getStats(scope?: TenantScope) {
+    return ticketsRepository.getStats(scope);
   },
 
   getRedactedJiraConfig() {
@@ -48,7 +55,7 @@ export const ticketsService = {
     return ticketsRepository.getTicket(id);
   },
 
-  async createFromFinding(input: FromFindingInput, reporterEmail: string): Promise<{ conflict: true; ticket: Ticket } | { conflict: false; ticket: Ticket }> {
+  async createFromFinding(input: FromFindingInput, reporterEmail: string, ownership: TicketOwnership): Promise<{ conflict: true; ticket: Ticket } | { conflict: false; ticket: Ticket }> {
     const existingTicket = await ticketsRepository.findByLinkedFinding(input.findingId);
     if (existingTicket) {
       return { conflict: true, ticket: existingTicket };
@@ -66,13 +73,16 @@ export const ticketsService = {
       assignee: '',
       reporter: reporterEmail,
       tags: [],
-      linkedFindings: [input.findingId]
+      linkedFindings: [input.findingId],
+      // Same tenancy stamp as createTicket — an ownerless ticket is
+      // unreachable by everyone once the access guard runs.
+      ...ownership
     });
 
     return { conflict: false, ticket };
   },
 
-  async createTicket(input: CreateTicketInput, reporterEmail: string): Promise<{ conflict: true; ticket: Ticket } | { conflict: false; ticket: Ticket }> {
+  async createTicket(input: CreateTicketInput, reporterEmail: string, ownership: TicketOwnership): Promise<{ conflict: true; ticket: Ticket } | { conflict: false; ticket: Ticket }> {
     const linkedFindings = Array.isArray(input.linkedFindings) ? input.linkedFindings : [];
 
     for (const findingId of linkedFindings) {
@@ -96,7 +106,10 @@ export const ticketsService = {
       storyPoints: input.storyPoints !== undefined ? Number(input.storyPoints) : undefined,
       dueDate: input.dueDate,
       epicLink: input.epicLink,
-      sprintId: input.sprintId
+      sprintId: input.sprintId,
+      // Tenancy stamp from the route. Dropping these would leave the ticket
+      // ownerless, and the access guard denies ownerless tickets to everyone.
+      ...ownership
     });
 
     return { conflict: false, ticket };

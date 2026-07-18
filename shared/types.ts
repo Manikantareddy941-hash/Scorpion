@@ -24,6 +24,14 @@ export interface Ticket {
   jiraSyncedAt?: string;
   jiraSyncStatus?: 'synced' | 'error';
   links?: TicketLink[];
+  /**
+   * Tenancy, matching the model every other owned resource uses (see
+   * services/tenancyService): the creating user, plus the owning team when one
+   * is active. Optional because tickets created before tenancy was enforced
+   * carry neither — those are unreachable by design rather than world-readable.
+   */
+  user_id?: string;
+  team_id?: string | null;
 }
 
 export type TicketLinkType = 'blocks' | 'blocked_by' | 'relates_to';
