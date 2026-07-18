@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { account, databases, DB_ID, ID, Query, storage, COLLECTIONS } from '../lib/appwrite';
+import { account, ID, storage, COLLECTIONS } from '../lib/appwrite';
 import { OAuthProvider } from 'appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import {
     User, Mail, Bell, Key,
     Save, Loader2, LogOut,
-    Terminal, Camera, Upload, Activity, Crosshair, Leaf, Shield
+    Terminal, Camera, Upload, Activity, Crosshair, Leaf, Shield, AlertTriangle
 } from 'lucide-react';
 import { SiGithub } from 'react-icons/si';
 import { Theme } from '../contexts/ThemeContext';
@@ -29,6 +29,8 @@ export default function Settings() {
     const [isGithubConnected, setIsGithubConnected] = useState(false);
     const [, setPreferences] = useState({});
     const [loading, setLoading] = useState(true);
+    // Empty settings and unreadable settings are not the same thing.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [updating, setUpdating] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string | null>((user?.prefs as any)?.profilePic || null);
@@ -74,27 +76,37 @@ export default function Settings() {
     const fetchSettings = async (isCancelled: () => boolean = () => false) => {
         setLoading(true);
         try {
-            const [prefResponse, keysResponse, repoResponse] = await Promise.all([
-                databases.listDocuments(DB_ID, 'notification_preferences', [Query.equal('user_id', user?.$id || '')]),
-                databases.listDocuments(DB_ID, 'api_keys', [Query.equal('user_id', user?.$id || '')]),
-                databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', user?.$id || '')]),
+            // This page already wrote through the API but read straight from
+            // Appwrite — including api_keys and the notification webhooks. All
+            // three endpoints existed; only the reads had not been moved over.
+            const token = await getJWT();
+            const authed = { headers: { Authorization: `Bearer ${token}` } };
+            const [prefRes, keysRes, repoRes] = await Promise.all([
+                fetch('/api/notifications/preferences', authed),
+                fetch('/api/keys', authed),
+                fetch('/api/repos', authed),
             ]);
 
             if (isCancelled()) return;
+            if (!prefRes.ok || !keysRes.ok || !repoRes.ok) {
+                throw new Error('settings fetch failed');
+            }
 
-            if (prefResponse.total > 0) {
-                const prefs = prefResponse.documents;
+            const prefs: any[] = (await prefRes.json()) ?? [];
+            if (prefs.length > 0) {
                 setPrefEmail(prefs.some(p => p.channel === 'email' && p.enabled));
                 setPrefSlack(prefs.some(p => p.channel === 'slack' && p.enabled));
                 setPrefDiscord(prefs.some(p => p.channel === 'discord' && p.enabled));
                 setPrefSlackWebhook(prefs.find(p => p.channel === 'slack')?.target_value || '');
                 setPrefDiscordWebhook(prefs.find(p => p.channel === 'discord')?.target_value || '');
             }
-            setApiKeys(keysResponse.documents);
-            setRepositories(repoResponse.documents);
+            setApiKeys((await keysRes.json()) ?? []);
+            setRepositories((await repoRes.json()) ?? []);
+            setLoadFailed(false);
 
         } catch (error) {
             console.error('Error fetching settings:', error);
+            if (!isCancelled()) setLoadFailed(true);
         } finally {
             if (!isCancelled()) setLoading(false);
         }
@@ -235,12 +247,22 @@ export default function Settings() {
 
     const handleUpdateRepoCron = async (repoId: string, cronEnabled: boolean, cronSchedule: string) => {
         try {
-            await databases.updateDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {
-                cron_enabled: cronEnabled,
-                cron_schedule: cronSchedule
+            // Second unguarded cron writer — same scheduler, same '* * * * *'
+            // resource-exhaustion vector Repositories.tsx had. The endpoint
+            // validates the expression and caps it at hourly.
+            const token = await getJWT();
+            const res = await fetch(`/api/repos/${encodeURIComponent(repoId)}/schedule`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ cron_enabled: cronEnabled, cron_schedule: cronSchedule }),
             });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body?.error || `Failed to update schedule (${res.status})`);
+            }
             setRepositories(prev => prev.map(r => r.$id === repoId ? { ...r, cron_enabled: cronEnabled, cron_schedule: cronSchedule } : r));
-        } catch (err) {
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to update scan schedule');
             console.error('Error updating repo cron:', err);
         }
     };
@@ -263,6 +285,27 @@ export default function Settings() {
                         <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest italic mt-1 font-mono">{t('settings.subtitle', 'Configure system parameters & operator protocols')}</p>
                     </div>
                 </div>
+
+                {loadFailed && (
+                    /* Every toggle below defaults to off. Rendered after a failed
+                       read that looks like "notifications are disabled" rather
+                       than "we could not load your settings" — and saving from
+                       here would write those defaults back. */
+                    <div className="premium-card rounded-2xl p-6 mb-8 border-[#ff8a00]/40 flex items-center gap-4">
+                        <AlertTriangle className="w-6 h-6 text-[#ff8a00] flex-shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-[13px] font-semibold text-[var(--text-primary)]">Couldn't load your settings</p>
+                            <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">
+                                The values shown are defaults, not your saved configuration. Reload before changing anything.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => fetchSettings()}
+                            className="px-4 py-2 rounded-lg text-[12px] font-medium bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20 hover:bg-[var(--accent-primary)] hover:text-white transition-all">
+                            Retry
+                        </button>
+                    </div>
+                )}
 
                 <div className="space-y-12">
                     {/* Language Selection */}
