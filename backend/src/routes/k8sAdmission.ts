@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import * as assert from 'assert';
 import { logger } from '../services/logger';
 import { getScan, getSignature, type Tenant } from '../services/imageStore';
+import { isPostgresEnabled } from '../db/pool';
+import { ciTokenRepository } from '../repositories/pg/ciTokenRepository';
 import { verifyImageDigest } from '../services/cosignService';
 import { VulnerablePackage, ReachabilityResult } from '../services/reachabilityService';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
@@ -302,8 +304,28 @@ function admissionResponse(uid: string, allowed: boolean, message: string) {
   };
 }
 
-// POST /api/v1/webhook/k8s-admission
-router.post('/k8s-admission', async (req: Request, res: Response) => {
+/**
+ * Resolves the calling cluster's tenant from the token in the webhook URL.
+ *
+ * A ValidatingWebhookConfiguration exposes only `url`, `service` and
+ * `caBundle` — it cannot send custom headers — so the token has to ride the
+ * path. redactUrl() keeps it out of logs.
+ *
+ * Returns `undefined` for an invalid token, which the caller treats as a denied
+ * request rather than falling back to the shared namespace: silently reading
+ * another namespace on a bad credential is how a gate starts lying.
+ */
+async function resolveClusterTenant(token: string | undefined): Promise<Tenant | undefined> {
+  // No token: the legacy single-tenant deployment, reading the shared namespace.
+  if (!token) return null;
+  if (!isPostgresEnabled()) return null;
+  const identity = await ciTokenRepository.verify(token, 'admission');
+  if (!identity) return undefined;
+  return identity.team_id ?? identity.user_id;
+}
+
+// POST /api/v1/webhook/k8s-admission[/:token]
+router.post(['/k8s-admission', '/k8s-admission/:token'], async (req: Request, res: Response) => {
   const start = Date.now();
   const review = req.body as { request?: AdmissionRequest } | undefined;
   const admission = review?.request;
@@ -316,6 +338,18 @@ router.post('/k8s-admission', async (req: Request, res: Response) => {
   if (!admission || !uid) {
     logDecision({ decision: 'deny', reason: 'invalid AdmissionReview payload', uid, namespace, env, durationMs: Date.now() - start });
     return res.status(200).json(admissionResponse(uid, false, 'Invalid AdmissionReview payload'));
+  }
+
+  // Registering both paths on one handler widens the param type; only the
+  // single-segment form is ever matched.
+  const tokenParam = req.params.token;
+  const tenant = await resolveClusterTenant(Array.isArray(tokenParam) ? tokenParam[0] : tokenParam);
+  if (tenant === undefined) {
+    // Fail closed. The cluster's failurePolicy decides whether that blocks the
+    // deploy or opens it — that call belongs to the cluster admin, not here.
+    const reason = 'unrecognised or revoked admission token';
+    logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start });
+    return res.status(200).json(admissionResponse(uid, false, reason));
   }
 
   const images = extractImages(admission);
@@ -365,13 +399,13 @@ router.post('/k8s-admission', async (req: Request, res: Response) => {
   for (const image of images) {
     // Supply-chain gate first: an unsigned/tampered image is rejected before we
     // even weigh its vulnerabilities (opt-in via REQUIRE_IMAGE_SIGNATURE).
-    const sig = await checkImageSignature(image, env);
+    const sig = await checkImageSignature(image, env, tenant);
     if (sig.status === 'blocked') {
       logDecision({ decision: 'deny', reason: sig.reason, uid, namespace, env, image, durationMs: Date.now() - start });
       return res.status(200).json(admissionResponse(uid, false, `${image}: ${sig.reason}`));
     }
 
-    const { counts, reachability } = await resolveSignal(image);
+    const { counts, reachability } = await resolveSignal(image, tenant);
     const result = evaluatePreflight(rules, counts, env, reachability);
     if (result.status === 'blocked') {
       logDecision({ decision: 'deny', reason: result.reason, uid, namespace, env, image, durationMs: Date.now() - start });
