@@ -95,3 +95,35 @@ describe('keyRoutes POST /', () => {
         expect(res.statusCode).toBe(400);
     });
 });
+
+describe('keyRoutes GET / — key_hash never leaves the server', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('strips key_hash from the listing', async () => {
+        // The stored value is a SHA-256 of a key shown once at creation, so this
+        // is not the credential itself — but a hash in a response body is a hash
+        // in a browser cache, a proxy log and an error report. The client has no
+        // use for it.
+        (databases.listDocuments as jest.Mock).mockResolvedValue({
+            total: 1,
+            documents: [{ $id: 'k1', name: 'CI key', user_id: 'user-1', key_hash: 'deadbeef', created_at: 'x' }],
+        });
+
+        const res = await request(buildApp()).get('/api/keys');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body[0]).not.toHaveProperty('key_hash');
+        expect(JSON.stringify(res.body)).not.toContain('deadbeef');
+        // The fields the settings page actually renders survive.
+        expect(res.body[0]).toMatchObject({ $id: 'k1', name: 'CI key' });
+    });
+
+    it('scopes the listing to the calling user', async () => {
+        (databases.listDocuments as jest.Mock).mockResolvedValue({ total: 0, documents: [] });
+
+        await request(buildApp()).get('/api/keys');
+
+        expect((databases.listDocuments as jest.Mock).mock.calls[0][2])
+            .toContainEqual({ field: 'user_id', value: 'user-1' });
+    });
+});

@@ -16,7 +16,15 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
             Query.equal('user_id', req.user!.$id),
             Query.orderDesc('$createdAt')
         ]);
-        res.json(response.documents);
+        // key_hash never leaves the server. It is not the key itself — the raw
+        // value is shown once at creation and only its SHA-256 is stored — but
+        // the client has no use for it, and a hash in a response body is a hash
+        // in a browser cache, a proxy log and an error report.
+        res.json(response.documents.map((doc) => {
+            const redacted = { ...doc };
+            delete redacted.key_hash;
+            return redacted;
+        }));
     } catch (err) {
         next(err);
     }
