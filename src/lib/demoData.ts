@@ -125,35 +125,28 @@ export const MOCK_TEST_RUNS = [
     }
 ];
 
+/** Demo seeding only runs on a deployment that explicitly opts in. */
+export const isDemoModeEnabled = (): boolean =>
+    import.meta.env.VITE_DEMO_MODE === 'true';
+
+/**
+ * Writes the MOCK_* fixtures into Appwrite so a demo deployment has something
+ * to show.
+ *
+ * This used to run for every user on their first login, gated on nothing but a
+ * localStorage key — so real accounts had demo repositories, scans and findings
+ * written into them the first time they signed in. It is now behind
+ * VITE_DEMO_MODE and callers must check `isDemoModeEnabled()` first.
+ *
+ * A block that rewrote the severity counts of any existing scan whose id began
+ * with 'scan-' has been removed outright. It was there to keep demo numbers
+ * flattering, but 'scan-' is not a reliable marker of a fixture: it matched on
+ * an id prefix rather than on provenance, and silently edited security findings
+ * to lower numbers. Nothing should quietly reduce a severity count.
+ */
 export async function seedDemoData() {
     console.log('[Seed] Seeding realistic demo data...');
     try {
-        // Proactively scan for and update any historical scans with excessive counts (e.g. 44 high count) to prevent clamping to 0%
-        try {
-            const { Query } = await import('./appwrite');
-            const existingScans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-                Query.limit(100)
-            ]);
-            for (const scanDoc of existingScans.documents) {
-                if (!scanDoc.$id.startsWith('scan-')) continue; // Skip real/Appwrite-generated IDs to avoid mutating real production data
-                const crit = Number(scanDoc.criticalCount ?? 0);
-                const high = Number(scanDoc.highCount ?? 0);
-                if (crit >= 1 || high >= 20) {
-                    console.log(`[Seed] Found scan with excessive counts (${scanDoc.$id}), updating to demo-friendly numbers...`);
-                    await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanDoc.$id, {
-                        criticalCount: 0,
-                        highCount: 3,
-                        mediumCount: 8,
-                        lowCount: 12,
-                        vulnerabilities: 23,
-                        security_score: 82
-                    });
-                }
-            }
-        } catch (scanErr: any) {
-            console.log('[Seed] Could not filter/update existing scans:', scanErr.message);
-        }
-
         // We write to Appwrite collections if possible
         for (const repo of MOCK_REPOSITORIES) {
             try {

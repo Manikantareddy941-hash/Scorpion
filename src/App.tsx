@@ -92,8 +92,11 @@ function App() {
 
   useEffect(() => {
     if (user && !localStorage.getItem('scorpion_demo_seeded')) {
-      import('./lib/demoData').then(({ seedDemoData }) => {
-        seedDemoData();
+      import('./lib/demoData').then(({ seedDemoData, isDemoModeEnabled }) => {
+        // Only on a deployment that opts in. Without this gate every real
+        // account had demo repositories, scans and findings written into it on
+        // first login.
+        if (isDemoModeEnabled()) seedDemoData();
       });
     }
   }, [user]);
