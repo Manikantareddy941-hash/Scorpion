@@ -2,11 +2,13 @@ import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import type { Correlation, RuleState, Severity } from '../monitor/securityEvent.types';
+import { isPostgresEnabled } from '../db/pool';
+import { correlationPgRepository } from './pg/correlationPgRepository';
 
 const FIRED = 'correlations';
 const RULE_STATE = 'correlation_rule_states';
 
-export const correlationRepository = {
+const legacyCorrelationRepository = {
   async wasFired(owner: string, ruleId: string, key: string, bucket: number): Promise<boolean> {
     try {
       const res = await databases.listDocuments(DB_ID, FIRED, [
@@ -68,3 +70,7 @@ export const correlationRepository = {
     }
   },
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite otherwise. */
+export const correlationRepository: typeof legacyCorrelationRepository =
+  isPostgresEnabled() ? correlationPgRepository : legacyCorrelationRepository;

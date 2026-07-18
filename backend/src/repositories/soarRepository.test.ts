@@ -13,6 +13,9 @@ jest.mock('../lib/appwrite', () => ({
     limit: (n: number) => ({ limit: n }),
   },
 }));
+// Pin the storage facade to its legacy Appwrite path — this suite asserts on
+// databases.* calls; the Postgres path is covered by pg/soarPgRepository.test.ts.
+jest.mock('../db/pool', () => ({ isPostgresEnabled: () => false, getPool: jest.fn(), closePool: jest.fn() }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 
 import { soarRepository } from './soarRepository';
