@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { client, databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { client, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import {
   XCircle,
   ShieldCheck,
@@ -272,11 +272,11 @@ export default function Dashboard({
         const fetchIntegrationStatus = async () => {
           try {
             if (user) {
-              const integrationsRes = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [
-                Query.equal('userId', user.$id),
-                Query.limit(1),
-              ]);
-              const integration = integrationsRes.documents[0];
+              const res = await fetch('/api/alerts/integrations', {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (!res.ok) throw new Error(`integrations failed: ${res.status}`);
+              const integration = await res.json();
               setMeshStatus([
                 { channel: 'Slack', configured: !!integration?.slack_webhook },
                 { channel: 'Discord', configured: !!integration?.discord_webhook },
@@ -295,15 +295,20 @@ export default function Dashboard({
           fetchIntegrationStatus(),
         ]);
 
+        // Repositories, scoped to this caller by the backend. The direct
+        // Appwrite query this replaces carried no ownership filter at all — it
+        // asked for the 20 most recent repositories in the collection,
+        // whosever they were.
         let reposDocuments: any[] = [];
         try {
-          const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.orderDesc('$createdAt'),
-            Query.limit(20),
-          ]);
-          reposDocuments = reposRes.documents;
+          const reposRes = await fetch('/api/repos', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!reposRes.ok) throw new Error(`repos failed: ${reposRes.status}`);
+          const body = await reposRes.json();
+          reposDocuments = Array.isArray(body) ? body.slice(0, 20) : [];
         } catch (err) {
-          console.warn('Failed to fetch repositories from Appwrite:', err);
+          console.warn('Failed to fetch repositories:', err);
         }
 
         if (
@@ -314,25 +319,22 @@ export default function Dashboard({
           reposDocuments = MOCK_REPOSITORIES as any;
         }
 
-        const repoIds = reposDocuments.map((r) => r.$id);
-        const repoUrls = reposDocuments.map((r) => r.url).filter(Boolean);
-
-        if (repoIds.length === 0) {
+        // The scan queries below no longer take repo ids or urls — the backend
+        // resolves the caller's repositories itself.
+        if (reposDocuments.length === 0) {
           setLoading(false);
           return;
         }
 
         let scansDocuments: any[] = [];
         try {
-          const scansRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-            Query.or([Query.equal('repo_id', repoIds), Query.equal('repoUrl', repoUrls)]),
-            Query.equal('status', 'completed'),
-            Query.orderDesc('$createdAt'),
-            Query.limit(1),
-          ]);
-          scansDocuments = scansRes.documents;
+          const scansRes = await fetch('/api/repos/scans?status=completed&limit=1', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!scansRes.ok) throw new Error(`scans failed: ${scansRes.status}`);
+          scansDocuments = (await scansRes.json())?.documents ?? [];
         } catch (err) {
-          console.warn('Failed to fetch scans from Appwrite:', err);
+          console.warn('Failed to fetch scans:', err);
         }
 
         if (
@@ -347,14 +349,13 @@ export default function Dashboard({
 
         let activityDocuments: any[] = [];
         try {
-          const activityRes = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-            Query.or([Query.equal('repo_id', repoIds), Query.equal('repoUrl', repoUrls)]),
-            Query.orderDesc('$createdAt'),
-            Query.limit(90),
-          ]);
-          activityDocuments = activityRes.documents;
+          const activityRes = await fetch('/api/repos/scans?limit=90', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!activityRes.ok) throw new Error(`activity failed: ${activityRes.status}`);
+          activityDocuments = (await activityRes.json())?.documents ?? [];
         } catch (err) {
-          console.warn('Failed to fetch activity scans from Appwrite:', err);
+          console.warn('Failed to fetch activity scans:', err);
         }
 
         if (
@@ -512,40 +513,39 @@ export default function Dashboard({
         setRemediationQueue(vulnsDocuments.slice(0, 5));
 
         try {
-          const buildRes = await databases.listDocuments(DB_ID, COLLECTIONS.BUILD_PIPELINES, [
-            Query.orderDesc('$createdAt'),
-            Query.limit(1),
-          ]);
-          setLastBuildStatus(buildRes.documents.length > 0 ? buildRes.documents[0].status : 'N/A');
+          const buildRes = await fetch('/api/builds?limit=1', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!buildRes.ok) throw new Error(`builds failed: ${buildRes.status}`);
+          const builds = (await buildRes.json())?.documents ?? [];
+          setLastBuildStatus(builds.length > 0 ? builds[0].status : 'N/A');
         } catch (err) {
           console.warn('Failed to fetch builds:', err);
         }
 
+        // One request serves both deployment tiles. The two Appwrite queries
+        // this replaces differed only in their window, and the wider of them
+        // already covered the narrower.
         try {
+          const deployRes = await fetch('/api/deployments?limit=100', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!deployRes.ok) throw new Error(`deployments failed: ${deployRes.status}`);
+          const deployments: any[] = (await deployRes.json())?.documents ?? [];
+
           const startOfDay = new Date();
           startOfDay.setHours(0, 0, 0, 0);
-          const deployRes = await databases.listDocuments(DB_ID, COLLECTIONS.DEPLOYMENTS, [
-            Query.greaterThanEqual('$createdAt', startOfDay.toISOString()),
-            Query.limit(100),
-          ]);
-          setDeploymentsToday(deployRes.documents.length || 0);
-        } catch (err) {
-          console.warn('Failed to fetch deployments:', err);
-        }
-
-        try {
-          const envDeployRes = await databases.listDocuments(DB_ID, COLLECTIONS.DEPLOYMENTS, [
-            Query.orderDesc('$createdAt'),
-            Query.limit(30),
-          ]);
+          setDeploymentsToday(
+            deployments.filter((d) => new Date(d.$createdAt) >= startOfDay).length,
+          );
           setRecentDeployments(
-            envDeployRes.documents.map((d: any) => ({
+            deployments.slice(0, 30).map((d) => ({
               environment: d.environment,
               status: d.status,
             })),
           );
         } catch (err) {
-          console.warn('Failed to fetch deployment environment status:', err);
+          console.warn('Failed to fetch deployments:', err);
         }
 
         if (isAuto) toast.success('Data updated', { id: 'auto-refresh' });

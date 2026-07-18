@@ -1,35 +1,37 @@
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+/**
+ * NOTE: nothing in the app imports this module — `getMonitorData` included.
+ * It is left in place rather than removed, but treat it as unwired: the
+ * functions below are not exercised by any screen.
+ *
+ * Its four reads used to go straight to Appwrite with no ownership filter at
+ * all (every scan, every repository, every vulnerability in the collection).
+ * They now go through the tenant-scoped backend, so wiring any of this up
+ * later cannot reintroduce a cross-tenant read.
+ */
+
+type GetJWT = () => Promise<string | null>;
+
+async function authedJson(getJWT: GetJWT, url: string): Promise<any> {
+  const token = await getJWT();
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`${url} failed: ${res.status}`);
+  return res.json();
+}
 
 export const monitorService = {
-  // Legacy direct Appwrite calls (kept for reference or if needed)
-  async getRecentScans() {
-    const response = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-      Query.orderDesc('$createdAt'),
-      Query.limit(10)
-    ]);
-    return response.documents;
+  async getRecentScans(getJWT: GetJWT) {
+    const body = await authedJson(getJWT, '/api/repos/scans?limit=10');
+    return body?.documents ?? [];
   },
 
-  // New backend-driven monitor data
-  async getMonitorData(getJWT: () => Promise<string>) {
-    const token = await getJWT();
-    const apiBase = '';
-    const res = await fetch(`${apiBase}/api/monitor`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) throw new Error('Failed to fetch monitor data from backend');
-    return res.json();
+  async getMonitorData(getJWT: GetJWT) {
+    return authedJson(getJWT, '/api/monitor');
   },
 
-  async getVulnerabilityTrends(days: number = 7) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    
-    const response = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-      Query.greaterThan('$createdAt', startDate.toISOString()),
-      Query.limit(1000)
-    ]);
-    
+  async getVulnerabilityTrends(getJWT: GetJWT, days: number = 7) {
+    const body = await authedJson(getJWT, '/api/issues?limit=1000');
+    const documents: any[] = body?.documents ?? [];
+
     const grouped: { [key: string]: number } = {};
     for (let i = 0; i < days; i++) {
       const d = new Date();
@@ -37,8 +39,8 @@ export const monitorService = {
       grouped[d.toISOString().split('T')[0]] = 0;
     }
 
-    response.documents.forEach(doc => {
-      const day = doc.$createdAt.split('T')[0];
+    documents.forEach((doc) => {
+      const day = String(doc.$createdAt || '').split('T')[0];
       if (grouped[day] !== undefined) {
         grouped[day]++;
       }
@@ -49,44 +51,33 @@ export const monitorService = {
       .sort((a, b) => a.date.localeCompare(b.date));
   },
 
-  async getRepoHealth() {
-    const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES);
+  async getRepoHealth(getJWT: GetJWT) {
+    const repos = await authedJson(getJWT, '/api/repos');
     const staleThreshold = new Date();
     staleThreshold.setDate(staleThreshold.getDate() - 7);
 
-    const healthData = await Promise.all(repos.documents.map(async (repo) => {
-      const latestScan = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-        Query.equal('repo_id', repo.$id),
-        Query.orderDesc('$createdAt'),
-        Query.limit(1)
+    return Promise.all((Array.isArray(repos) ? repos : []).map(async (repo: any) => {
+      const [scanBody, vulnBody] = await Promise.all([
+        authedJson(getJWT, `/api/repos/scans?repoId=${encodeURIComponent(repo.$id)}&limit=1`),
+        authedJson(getJWT, `/api/issues?repoId=${encodeURIComponent(repo.$id)}&status=open&limit=1000`),
       ]);
 
-      const isStale = latestScan.total === 0 || new Date(latestScan.documents[0].$createdAt) < staleThreshold;
-      
-      const openVulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-        Query.equal('repo_id', repo.$id),
-        Query.equal('status', 'open'),
-        Query.limit(0)
-      ]);
+      const latestScan = scanBody?.documents?.[0] ?? null;
+      const openIssues = vulnBody?.total ?? 0;
 
       return {
         id: repo.$id,
         name: repo.name,
-        isStale,
-        lastScan: latestScan.documents[0]?.$createdAt || null,
-        openIssues: openVulns.total,
-        riskLevel: openVulns.total > 10 ? 'high' : openVulns.total > 0 ? 'medium' : 'low'
+        isStale: !latestScan || new Date(latestScan.$createdAt) < staleThreshold,
+        lastScan: latestScan?.$createdAt || null,
+        openIssues,
+        riskLevel: openIssues > 10 ? 'high' : openIssues > 0 ? 'medium' : 'low',
       };
     }));
-
-    return healthData;
   },
 
-  async getLatestFindings() {
-    const response = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-      Query.orderDesc('$createdAt'),
-      Query.limit(5)
-    ]);
-    return response.documents;
-  }
+  async getLatestFindings(getJWT: GetJWT) {
+    const body = await authedJson(getJWT, '/api/issues?limit=5');
+    return body?.documents ?? [];
+  },
 };
