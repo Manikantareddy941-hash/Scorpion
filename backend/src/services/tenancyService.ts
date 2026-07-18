@@ -73,7 +73,9 @@ export const resolveCreationOwnership = async (
  * of the owning team.
  */
 export const canAccessResource = async (
-    resource: { user_id?: string; team_id?: string } & Record<string, unknown>,
+    // team_id is nullable because resolveCreationOwnership stamps null when no
+    // team is active; the falsy check below treats null and undefined alike.
+    resource: { user_id?: string; team_id?: string | null } & Record<string, unknown>,
     userId?: string
 ): Promise<boolean> => {
     if (!userId) return false;

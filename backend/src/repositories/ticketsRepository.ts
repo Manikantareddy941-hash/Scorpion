@@ -4,7 +4,9 @@ import crypto from 'crypto';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import { isPostgresEnabled } from '../db/pool';
-import { ticketsPgRepository } from './pg/ticketsPgRepository';
+import { ticketsPgRepository, type TenantScope } from './pg/ticketsPgRepository';
+
+export type { TenantScope };
 
 // In-memory stores for comments and activity log (these remain local for now)
 const commentsMap = new Map<string, TicketComment[]>();
@@ -32,6 +34,8 @@ type TicketDocument = Models.Document & {
   jiraSyncedAt?: string;
   jiraSyncStatus?: 'synced' | 'error';
   slaDeadline?: string;
+  user_id?: string;
+  team_id?: string | null;
 };
 
 function mapDocumentToTicket(doc: TicketDocument): Ticket {
@@ -59,6 +63,8 @@ function mapDocumentToTicket(doc: TicketDocument): Ticket {
     jiraSyncedAt: doc.jiraSyncedAt,
     jiraSyncStatus: doc.jiraSyncStatus,
     slaDeadline: doc.slaDeadline,
+    user_id: doc.user_id,
+    team_id: doc.team_id,
     links: linksMap.get(doc.$id) || [],
   };
 }
@@ -81,6 +87,10 @@ async function createTicket(ticketData: Omit<Ticket, 'id' | 'createdAt' | 'updat
     dueDate: ticketData.dueDate || null,
     epicLink: ticketData.epicLink || null,
     sprintId: ticketData.sprintId || null,
+    // Tenancy stamp — without these the ticket is owned by nobody and the
+    // access guard denies everyone, which is the safe direction to fail.
+    user_id: ticketData.user_id ?? null,
+    team_id: ticketData.team_id ?? null,
   };
 
   // Compute slaDeadline if not provided
@@ -232,9 +242,13 @@ async function deleteTicket(id: string): Promise<boolean> {
   }
 }
 
-async function listTickets(filters: TicketFilters): Promise<PaginatedResponse<Ticket>> {
+async function listTickets(filters: TicketFilters, scope?: TenantScope): Promise<PaginatedResponse<Ticket>> {
   try {
     const queries: string[] = [];
+    // Scope first: an unscoped list would return every tenant's tickets.
+    if (scope) {
+      queries.push(Query.equal(scope.field, scope.value));
+    }
     if (filters.status) {
       queries.push(Query.equal('status', filters.status));
     }
@@ -365,7 +379,7 @@ async function getActivity(ticketId: string): Promise<TicketActivity[]> {
   return activityMap.get(ticketId) || [];
 }
 
-async function getStats() {
+async function getStats(scope?: TenantScope) {
   const emptyStats = {
     total: 0,
     open: 0,
@@ -379,7 +393,9 @@ async function getStats() {
   };
 
   try {
-    const response = await databases.listDocuments<TicketDocument>(DB_ID, 'tickets', [Query.limit(1000)]);
+    const statsQueries = [Query.limit(1000)];
+    if (scope) statsQueries.unshift(Query.equal(scope.field, scope.value));
+    const response = await databases.listDocuments<TicketDocument>(DB_ID, 'tickets', statsQueries);
     const tickets = response.documents.map(mapDocumentToTicket);
     const total = tickets.length;
     const open = tickets.filter(t => t.status !== 'done' && t.status !== 'closed').length;

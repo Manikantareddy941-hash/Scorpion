@@ -21,6 +21,9 @@ const SLA_HOURS: Record<string, number> = { critical: 24, high: 72, medium: 24 *
 
 type TicketRow = { id: string; data: Record<string, unknown>; created_at: Date; updated_at: Date };
 
+/** Ownership filter from tenancyService.resolveOwnershipScope. */
+export type TenantScope = { field: 'user_id' | 'team_id'; value: string };
+
 /** Fields owned by columns or derived — never stored inside the JSONB payload. */
 const NON_PAYLOAD_FIELDS = ['id', 'createdAt', 'updatedAt', 'links', 'isOverdue'] as const;
 
@@ -236,10 +239,13 @@ async function findByLinkedFinding(findingId: string): Promise<Ticket | undefine
   }
 }
 
-async function allTickets(): Promise<Ticket[]> {
-  const res = await getPool().query(
-    'SELECT id, data, created_at, updated_at FROM tickets LIMIT 1000'
-  );
+async function allTickets(scope?: TenantScope): Promise<Ticket[]> {
+  const res = scope
+    ? await getPool().query(
+        `SELECT id, data, created_at, updated_at FROM tickets WHERE data->>'${scope.field}' = $1 LIMIT 1000`,
+        [scope.value]
+      )
+    : await getPool().query('SELECT id, data, created_at, updated_at FROM tickets LIMIT 1000');
   const rows = res.rows as TicketRow[];
   const links = await linksForMany(rows.map(r => r.id));
   return rows.map(r => rowToTicket(r, links.get(r.id) ?? []));
@@ -254,12 +260,21 @@ async function getUnsyncedTickets(): Promise<Ticket[]> {
   }
 }
 
-async function listTickets(filters: TicketFilters): Promise<PaginatedResponse<Ticket>> {
+async function listTickets(filters: TicketFilters, scope?: TenantScope): Promise<PaginatedResponse<Ticket>> {
   const page = filters.page || 1;
   const limit = filters.limit || 10;
   try {
     const where: string[] = [];
     const values: unknown[] = [];
+
+    // Tenant scope is applied in SQL, not after fetching. Filtering in memory
+    // would still pull another tenant's rows into this process, and the LIMIT
+    // would then be spent on rows the caller may not see.
+    if (scope) {
+      values.push(scope.value);
+      where.push(`data->>'${scope.field}' = $${values.length}`);
+    }
+
     for (const [column, value] of [
       ['status', filters.status], ['priority', filters.priority],
       ['type', filters.type], ['assignee', filters.assignee],
@@ -348,7 +363,7 @@ async function getActivity(ticketId: string): Promise<TicketActivity[]> {
   }));
 }
 
-async function getStats() {
+async function getStats(scope?: TenantScope) {
   const emptyStats = {
     total: 0, open: 0, critical: 0, resolved: 0, overdue: 0,
     countsByStatus: { todo: 0, in_progress: 0, in_review: 0, done: 0, closed: 0 },
@@ -358,7 +373,7 @@ async function getStats() {
   };
 
   try {
-    const tickets = await allTickets();
+    const tickets = await allTickets(scope);
     const isOpen = (t: Ticket) => t.status !== 'done' && t.status !== 'closed';
     const countsByStatus = { ...emptyStats.countsByStatus };
     const countsByPriority = { ...emptyStats.countsByPriority };
