@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Activity, Package
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchScanFindings } from '../lib/scanApi';
+import { FindingsLoadError } from '../components/FindingsLoadError';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface Finding {
@@ -20,9 +22,12 @@ interface Finding {
 
 export default function ScaDetail() {
   const { scanId } = useParams();
+  const { getJWT } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
+  // A failed read must not render as the clean-result empty state.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [findings, setFindings] = useState<Finding[]>([]);
 
   useEffect(() => {
@@ -30,27 +35,19 @@ export default function ScaDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        const findingsRes = await databases.listDocuments(
-          DB_ID, 
-          COLLECTIONS.VULNERABILITIES, 
-          [
-            Query.equal('scan_result_id', scanId),
-            Query.equal('tool', 'trivy'),
-            Query.startsWith('message', '[VULN]'),
-            Query.limit(100)
-          ]
-        );
-        
-        setFindings(findingsRes.documents as any);
+        setFindings(await fetchScanFindings(getJWT, scanId, {
+          tool: 'trivy', messagePrefix: '[VULN]', limit: 100,
+        }) as any);
       } catch (err: any) {
         console.error('[ScaDetail] Error:', err);
+        setLoadFailed(true);
         toast.error('Failed to load SCA findings');
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [scanId]);
+  }, [scanId, getJWT]);
 
   if (loading) return <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]"><Activity className="animate-spin text-[var(--accent-primary)]" /></div>;
 
@@ -65,6 +62,8 @@ export default function ScaDetail() {
           </div>
         </div>
       </div>
+
+      {loadFailed && <FindingsLoadError />}
 
       <div className="grid grid-cols-1 gap-4">
         {findings.map((finding) => (

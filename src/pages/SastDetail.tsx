@@ -5,7 +5,9 @@ import {
   ArrowLeft, Clock, Activity, FileText, Code, 
   ExternalLink, Search, Terminal
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchScan, fetchScanFindings } from '../lib/scanApi';
+import { FindingsLoadError } from '../components/FindingsLoadError';
+import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
@@ -28,6 +30,7 @@ interface Finding {
 
 export default function SastDetail() {
   const { scanId } = useParams();
+  const { getJWT } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +41,7 @@ export default function SastDetail() {
   const isQuality = location.pathname.includes('/quality');
   
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [scan, setScan] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,24 +56,14 @@ export default function SastDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        // Fetch scan details
-        const scanDoc = await databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+        const [scanDoc, findingDocs] = await Promise.all([
+          fetchScan(getJWT, scanId),
+          fetchScanFindings(getJWT, scanId, { limit: 100 }),
+        ]);
         setScan(scanDoc);
 
-        // Fetch all findings for this scan (query by scan_result_id)
-        const queries = [
-          Query.equal('scan_result_id', scanId),
-          Query.limit(100)
-        ];
+        let docs = findingDocs as any;
 
-        const findingsRes = await databases.listDocuments(
-          DB_ID, 
-          COLLECTIONS.VULNERABILITIES, 
-          queries
-        );
-        
-        let docs = findingsRes.documents as any;
-        
         // Filter client-side based on route/mode
         if (isAntipatterns) {
           docs = docs.filter((f: any) => f.message?.toLowerCase().includes('bug') || f.message?.toLowerCase().includes('pattern'));
@@ -80,6 +74,7 @@ export default function SastDetail() {
         setFindings(docs);
       } catch (err: any) {
         console.error('[SastDetail] Error fetching data:', err);
+        setLoadFailed(true);
         toast.error('Failed to load scan findings');
       } finally {
         setLoading(false);
@@ -87,7 +82,7 @@ export default function SastDetail() {
     };
 
     fetchData();
-  }, [scanId, isAntipatterns, isQuality]);
+  }, [scanId, isAntipatterns, isQuality, getJWT]);
 
   // Graphical Representation Calculations
   const total = findings.length;
@@ -168,7 +163,7 @@ export default function SastDetail() {
             <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.2em] mt-1 flex items-center gap-2">
               <FileText size={10} /> Scan ID: <span className="text-[var(--text-primary)]">{scanId}</span>
               <span className="opacity-30">|</span>
-              <Clock size={10} /> {new Date(scan?.$createdAt).toLocaleString()}
+              <Clock size={10} /> {scan?.created_at ? new Date(scan.created_at).toLocaleString() : '—'}
             </p>
           </div>
         </div>
@@ -259,7 +254,9 @@ export default function SastDetail() {
 
       {/* Main Content */}
       <div className="grid grid-cols-1 gap-6">
-        {filteredFindings.length > 0 ? (
+        {loadFailed ? (
+          <FindingsLoadError />
+        ) : filteredFindings.length > 0 ? (
           filteredFindings.map((finding) => {
             const SeverityIcon = getSeverityIcon(finding.severity);
             const sevColor = getSeverityColor(finding.severity);

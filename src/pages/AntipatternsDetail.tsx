@@ -8,13 +8,18 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Cell 
 } from 'recharts';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchScanFindings } from '../lib/scanApi';
+import { FindingsLoadError } from '../components/FindingsLoadError';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export default function AntipatternsDetail() {
   const { scanId } = useParams();
+  const { getJWT } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  // A failed read must not render as the clean-result empty state.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [findings, setFindings] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'issues' | 'dismissed'>('issues');
 
@@ -23,20 +28,16 @@ export default function AntipatternsDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.equal('scan_result_id', scanId),
-          Query.equal('tool', 'semgrep'),
-          Query.limit(200)
-        ]);
-        setFindings(res.documents);
+        setFindings(await fetchScanFindings(getJWT, scanId, { tool: 'semgrep', limit: 200 }));
       } catch (err) {
+        setLoadFailed(true);
         toast.error('Failed to load antipatterns');
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [scanId]);
+  }, [scanId, getJWT]);
 
   const groupedFindings = useMemo(() => {
     const grouped = findings.reduce((acc: any, f: any) => {
@@ -109,6 +110,9 @@ export default function AntipatternsDetail() {
           <div className="text-[10px] font-black text-[var(--text-secondary)] uppercase tracking-widest">Total Unique Issues</div>
         </div>
       </div>
+
+      {/* A failed load would otherwise show an empty table and a count of 0. */}
+      {loadFailed && <div className="mb-6"><FindingsLoadError /></div>}
 
       {/* Tabs */}
       <div className="flex gap-8 border-b border-[var(--border-subtle)] mb-6">

@@ -18,7 +18,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const userId = req.user?.$id;
     if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
-    const { scanId, severity, type, tool, file, status, repoId, limit = '100' } = req.query;
+    const { scanId, severity, type, tool, file, status, repoId, messagePrefix, limit = '100' } = req.query;
 
     // Scope to repos the caller can access (owned directly, or shared via team) so
     // one tenant can never list another tenant's vulnerabilities through this route.
@@ -62,7 +62,15 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     ];
 
     if (scanId) filters.push(Query.equal('scanId', scanId as string));
-    if (severity) filters.push(Query.equal('severity', severity as string));
+    // Comma-separated severity matches any of the listed values, so a caller can
+    // ask for e.g. the low+info band in one request.
+    if (severity) {
+      const severities = (severity as string).split(',').map(s => s.trim()).filter(Boolean);
+      filters.push(Query.equal('severity', severities.length > 1 ? severities : severities[0]));
+    }
+    // Scanners encode a finding's class as a message prefix ('[VULN]', '[CONFIG]'),
+    // which is how the SCA and IaC views separate Trivy's two output kinds.
+    if (messagePrefix) filters.push(Query.startsWith('message', messagePrefix as string));
     if (type) filters.push(Query.equal('type', type as string));
     if (tool) filters.push(Query.equal('tool', tool as string));
     if (file) filters.push(Query.equal('file', file as string));

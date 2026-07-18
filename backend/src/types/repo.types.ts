@@ -38,6 +38,12 @@ export type TriggerScanInput = z.infer<typeof triggerScanSchema>;
 export interface ScanStatusResponse {
   id: string;
   status: string;
+  /** Which repository this scan belongs to — the detail pages use it to link
+   *  back, and previously read it off a document fetched straight from the
+   *  browser with no ownership check. */
+  repo_id: string;
+  scan_type: string;
+  created_at: string;
   critical: number;
   high: number;
   medium: number;
