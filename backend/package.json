@@ -39,7 +39,7 @@
         "@types/morgan": "^1.9.10",
         "@types/pdfkit": "^0.17.6",
         "adm-zip": "^0.6.0",
-        "archiver": "^7.0.1",
+        "archiver": "^8.0.0",
         "axios": "^1.18.1",
         "bcrypt": "^6.0.0",
         "better-sqlite3": "^12.11.1",
@@ -76,7 +76,7 @@
         "zod": "^4.4.3"
     },
     "devDependencies": {
-        "@types/archiver": "^7.0.0",
+        "@types/archiver": "^8.0.0",
         "@types/bcrypt": "^6.0.0",
         "@types/cors": "^2.8.19",
         "@types/dockerode": "^4.0.1",
