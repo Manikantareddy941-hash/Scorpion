@@ -1,6 +1,8 @@
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
+import { isPostgresEnabled } from '../db/pool';
+import { threatModelPgRepository } from './pg/threatModelPgRepository';
 
 export type ThreatModelDocument = Models.Document & {
   name: string;
@@ -13,7 +15,7 @@ export type ThreatModelDocument = Models.Document & {
   updatedAt: string;
 };
 
-export const threatModelRepository = {
+const legacyThreatModelRepository = {
   async ensureCollection(): Promise<void> {
     try {
       await databases.getCollection(DB_ID, COLLECTIONS.THREAT_MODELS);
@@ -70,3 +72,7 @@ export const threatModelRepository = {
     await databases.deleteDocument(DB_ID, COLLECTIONS.THREAT_MODELS, id);
   }
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite otherwise. */
+export const threatModelRepository: typeof legacyThreatModelRepository =
+  isPostgresEnabled() ? threatModelPgRepository : legacyThreatModelRepository;

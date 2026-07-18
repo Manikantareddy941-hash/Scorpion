@@ -2,6 +2,8 @@ import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import type { PostureFinding } from '../posture/postureChecks';
+import { isPostgresEnabled } from '../db/pool';
+import { posturePgRepository } from './pg/posturePgRepository';
 
 const COLLECTION = 'posture_snapshots';
 
@@ -34,7 +36,7 @@ function fromDoc(doc: Models.Document): NamespaceSnapshot | null {
   }
 }
 
-export const postureRepository = {
+const legacyPostureRepository = {
   // Mutations log with context then rethrow — silent fake success is data
   // loss; the scanner tick catches so the interval loop never crashes.
   async saveSnapshot(namespaces: { namespace: string; score: number; findings: PostureFinding[] }[]): Promise<void> {
@@ -75,3 +77,9 @@ export const postureRepository = {
     }
   },
 };
+
+// posturePgRepository imports NamespaceSnapshot from this module (type-only, so
+// the top-level value import above creates no runtime cycle).
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite otherwise. */
+export const postureRepository: typeof legacyPostureRepository =
+  isPostgresEnabled() ? posturePgRepository : legacyPostureRepository;
