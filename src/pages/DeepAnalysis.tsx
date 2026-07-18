@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   Activity, RefreshCw, Cpu
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query, ID, account } from '../lib/appwrite';
 import { setFindingStatuses } from '../lib/findingsApi';
 import { useAuth } from '../contexts/AuthContext';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -39,23 +38,23 @@ export default function DeepAnalysis() {
   const [successId, setSuccessId] = useState<string | null>(null);
   const [selectedTonyVuln, setSelectedTonyVuln] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      // Both reads were direct Appwrite queries with no ownership filter —
+      // 500 findings and 100 repositories drawn from the whole collection.
+      const token = await getJWT();
+      const authed = { headers: { Authorization: `Bearer ${token}` } };
       const [vulnsRes, reposRes] = await Promise.all([
-        databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.limit(500)
-        ]),
-        databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-          Query.limit(100)
-        ])
+        fetch('/api/issues?limit=500', authed),
+        fetch('/api/repos', authed),
       ]);
-      setVulns(vulnsRes.documents || []);
-      setRepos(reposRes.documents || []);
+      if (!vulnsRes.ok || !reposRes.ok) {
+        throw new Error(`load failed: issues ${vulnsRes.status}, repos ${reposRes.status}`);
+      }
+      const reposBody = await reposRes.json();
+      setVulns((await vulnsRes.json())?.documents ?? []);
+      setRepos(Array.isArray(reposBody) ? reposBody : []);
     } catch (err) {
       console.error("Failed to fetch data:", err);
       toast.error('Failed to load vulnerability data');
@@ -63,7 +62,11 @@ export default function DeepAnalysis() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getJWT]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const generateFallbackCVSS = (severity: string, id: string) => {
     const seed = id.charCodeAt(0) + id.charCodeAt(id.length - 1);
@@ -162,28 +165,31 @@ export default function DeepAnalysis() {
 
   const handleCreateTask = (v: any) =>
     runVulnMutation(v, 'task', `Initiating task dispatch for ${v.cveId || v.title}...`, `Successfully dispatched security task for ${v.cveId || v.title}`, async () => {
-      let userId = '';
-      try {
-        const currentUser = await account.get();
-        userId = currentUser.$id;
-      } catch {
-        throw new Error('Session expired. Please log in again.');
-      }
+      const token = await getJWT();
+      if (!token) throw new Error('Session expired. Please log in again.');
 
       const firstOcc = v.occurrences[0];
       const rawVuln = vulns.find(item => (item.$id || item.id) === firstOcc.id);
       const repoId = rawVuln ? rawVuln.repo_id : '';
       const repo = repos.find(r => r.$id === repoId);
 
-      await databases.createDocument(DB_ID, COLLECTIONS.TASKS, ID.unique(), {
-        title: `Remediate ${v.cveId || v.title}`,
-        description: `Vulnerability: ${v.title}\nCVE: ${v.cveId || 'N/A'}\nSeverity: ${v.severity}\nPackage: ${v.packageName}\nAffected File: ${v.filePaths.join(', ')}\nImpact: ${v.impact || 'N/A'}\nPlease perform remediation and verify version upgrades.`,
-        status: 'todo',
-        priority: v.severity.toLowerCase() === 'critical' || v.severity.toLowerCase() === 'high' ? 'high' : 'medium',
-        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        repo_url: repo ? repo.url : null,
-        user_id: userId
+      // user_id is stamped from the session by the endpoint.
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: `Remediate ${v.cveId || v.title}`,
+          description: `Vulnerability: ${v.title}\nCVE: ${v.cveId || 'N/A'}\nSeverity: ${v.severity}\nPackage: ${v.packageName}\nAffected File: ${v.filePaths.join(', ')}\nImpact: ${v.impact || 'N/A'}\nPlease perform remediation and verify version upgrades.`,
+          status: 'todo',
+          priority: v.severity.toLowerCase() === 'critical' || v.severity.toLowerCase() === 'high' ? 'high' : 'medium',
+          due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          repo_url: repo ? repo.url : null,
+        }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Failed to create task (${res.status})`);
+      }
     });
 
   const handleFalsePositive = (v: any) =>

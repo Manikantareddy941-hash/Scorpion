@@ -22,6 +22,44 @@ router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunct
     }
 });
 
+const NOTIFICATION_SEVERITIES = new Set(['info', 'low', 'medium', 'high', 'critical']);
+
+/**
+ * Records a notification for the calling user.
+ *
+ * The browser used to create these documents itself, which meant it supplied
+ * `userId` — so a caller could post a notification into someone else's tray.
+ * It is taken from the session here and the body's value is ignored.
+ */
+router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const { title, message, severity, relatedScanId, type } = req.body ?? {};
+
+        if (!title || !String(title).trim()) {
+            return res.status(400).json({ error: 'title is required' });
+        }
+        if (severity !== undefined && !NOTIFICATION_SEVERITIES.has(String(severity))) {
+            return res.status(400).json({
+                error: `severity must be one of: ${[...NOTIFICATION_SEVERITIES].join(', ')}`,
+            });
+        }
+
+        const doc = await databases.createDocument(DB_ID, COLLECTIONS.NOTIFICATIONS, ID.unique(), {
+            userId: req.user!.$id,
+            title: String(title).slice(0, 512),
+            message: String(message ?? '').slice(0, 4096),
+            severity: severity ? String(severity) : 'info',
+            isRead: false,
+            type: type ? String(type).slice(0, 64) : 'scan',
+            relatedScanId: relatedScanId ? String(relatedScanId) : '',
+            createdAt: new Date().toISOString(),
+        });
+        res.status(201).json(doc);
+    } catch (err) {
+        next(err);
+    }
+});
+
 // Get notification preferences
 router.get('/preferences', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

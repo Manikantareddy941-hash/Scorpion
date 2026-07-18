@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useScan } from '../contexts/ScanContext';
 import {
     ChevronDown,
@@ -14,7 +13,7 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
-    const { user, signOut } = useAuth();
+    const { user, signOut, getJWT } = useAuth();
     const { activeScan, updateScan } = useScan();
     const { t } = useTranslation();
     const navigate = useNavigate();
@@ -40,17 +39,25 @@ const Navbar: React.FC<NavbarProps> = ({ className = '' }) => {
 
     useEffect(() => {
         if (!user) return;
-        // Scope to the current user so one tenant never sees another's notifications.
-        databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [
-            Query.equal('userId', user.$id),
-            Query.orderDesc('$createdAt'),
-            Query.limit(10)
-        ]).then(res => {
-            const readIds = getReadIds();
-            const withRead = res.documents.map(d => ({ ...d, read: readIds.has(d.$id) }));
-            setNotifications(withRead);
-            setUnreadCount(withRead.filter(d => !d.read).length);
-        }).catch(err => console.error(err));
+        // Scoped to the caller by the backend rather than by a query the
+        // browser supplies. The filter here was correct, but a filter the
+        // client chooses is a filter the client can drop.
+        getJWT()
+            .then((token) => fetch('/api/notifications', {
+                headers: { Authorization: `Bearer ${token}` },
+            }))
+            .then((res) => {
+                if (!res.ok) throw new Error(`notifications failed: ${res.status}`);
+                return res.json();
+            })
+            .then((docs) => {
+                const readIds = getReadIds();
+                const withRead = (Array.isArray(docs) ? docs.slice(0, 10) : [])
+                    .map((d: any) => ({ ...d, read: readIds.has(d.$id) }));
+                setNotifications(withRead);
+                setUnreadCount(withRead.filter((d: any) => !d.read).length);
+            })
+            .catch(err => console.error(err));
         // getReadIds only reads localStorage keyed by the same user; re-running
         // solely on user change is intended, so it is deliberately not a dep.
         // eslint-disable-next-line react-hooks/exhaustive-deps
