@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { runScanPipeline } from '../scanners/pipeline';
 import { parseSemgrep, parseGitleaks, parseTrivy } from '../services/scan/parsers';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
@@ -12,6 +13,52 @@ function toIDESeverity(severity: string): IDEFinding['severity'] {
 }
 
 const router = Router();
+
+const LOOPBACK = new Set(['::1', '127.0.0.1', '::ffff:127.0.0.1']);
+
+function secretMatches(provided: unknown, expected: string): boolean {
+  if (typeof provided !== 'string') return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  // timingSafeEqual throws on length mismatch, so compare lengths first.
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Guards the IDE scan endpoint, which reads an arbitrary filesystem path off the
+ * request body and returns what it finds there.
+ *
+ * The previous gate checked `req.ip` and `req.hostname`. Both are derived from
+ * attacker-controlled headers: `req.hostname` is the Host header, and `req.ip`
+ * honours X-Forwarded-For because index.ts sets `trust proxy`. Either one alone
+ * turned this into unauthenticated local file disclosure. The TCP peer address
+ * cannot be forged, so that is what the loopback check now uses.
+ *
+ * Behind a reverse proxy every request arrives *from* loopback, so in production
+ * the peer check proves nothing and a shared secret is the only real control —
+ * hence production refuses to serve this route until IDE_SCAN_SECRET is set.
+ * Local development keeps working with no configuration.
+ */
+export function verifyIdeAccess(req: Request, res: Response, next: NextFunction) {
+  const secret = process.env.IDE_SCAN_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (isProduction || secret) {
+    if (!secret) {
+      logger.error('[IDE] IDE_SCAN_SECRET is not configured — refusing IDE scan requests in production');
+      return res.status(503).json({ error: 'IDE integration is not configured on this server' });
+    }
+    if (!secretMatches(req.headers['x-ide-secret'], secret)) {
+      return res.status(401).json({ error: 'Unauthorized IDE client' });
+    }
+    return next();
+  }
+
+  if (!LOOPBACK.has(req.socket.remoteAddress ?? '')) {
+    return res.status(403).json({ error: 'Access denied: IDE integration must be local.' });
+  }
+  next();
+}
 
 export interface IDEFinding {
   id: string;
@@ -44,14 +91,8 @@ const mapToIDEFinding = (vuln: NormalizedVulnerability): IDEFinding => {
   };
 };
 
-router.post('/scan', async (req: Request, res: Response) => {
+router.post('/scan', verifyIdeAccess, async (req: Request, res: Response) => {
   const { path: localPath, repoId, repoUrl } = req.body;
-
-  // Security Gate: Localhost only for filesystem access
-  const isLocal = req.ip === '::1' || req.ip === '127.0.0.1' || req.hostname === 'localhost';
-  if (!isLocal) {
-    return res.status(403).json({ error: 'Access denied: IDE integration must be local.' });
-  }
 
   if (!localPath) {
     return res.status(400).json({ error: 'Path is required' });
