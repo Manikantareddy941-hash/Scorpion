@@ -30,7 +30,7 @@ jobs:
       - name: Lint Frontend
         # Warning ceiling frozen at the current count (ratchet). Lower it as
         # react-hooks/exhaustive-deps warnings get cleared; a NEW warning fails CI.
-        run: npm run lint -- --max-warnings=27
+        run: npm run lint -- --max-warnings=25
 
       - name: Check TypeScript Types
         run: npm run typecheck

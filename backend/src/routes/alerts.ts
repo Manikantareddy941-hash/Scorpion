@@ -1,5 +1,5 @@
 import express, { Request } from 'express';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { AlertService } from '../services/alertService';
 import { canAccessResource } from '../services/tenancyService';
 import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
@@ -23,8 +23,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 router.post('/test', async (req, res) => {
     try {
-        const { webhookUrl, type } = req.body;
-        
+        // The Alerts page has always sent `url`, while this handler only read
+        // `webhookUrl` — so the Test button 400d on every click. Accept both
+        // rather than breaking any caller that does send webhookUrl.
+        const { type } = req.body;
+        const webhookUrl = req.body.webhookUrl ?? req.body.url;
+
         if (!webhookUrl) {
             return res.status(400).json({ error: 'Missing webhookUrl' });
         }
@@ -168,6 +172,115 @@ router.post('/batch-notify', async (req: AuthenticatedRequest, res) => {
         await Promise.allSettled(promises);
 
         res.status(200).json({ success: true, count: mappedFindings.length });
+    } catch (error: unknown) {
+        res.status(500).json({ error: errorMessage(error) });
+    }
+});
+
+/**
+ * Alert integration settings for the calling user.
+ *
+ * These documents hold Discord and Slack webhook URLs plus PagerDuty and
+ * Opsgenie keys — credentials, not preferences. Anyone holding a webhook URL
+ * can post into that channel. They were previously read and written straight
+ * from the browser, so Appwrite collection permissions were the only boundary.
+ *
+ * The owning user is always taken from the verified session. The client cannot
+ * name a userId or a document id, which is what stops one tenant overwriting
+ * another's integration by passing its id.
+ */
+const INTEGRATION_FIELDS = [
+    'discord_webhook', 'slack_webhook', 'pagerduty_key', 'opsgenie_key',
+] as const;
+
+type IntegrationDocument = Models.Document & {
+    discord_webhook?: string;
+    slack_webhook?: string;
+    pagerduty_key?: string;
+    opsgenie_key?: string;
+    isEnabled?: boolean;
+    activeSeverities?: string[];
+};
+
+async function findIntegrationForUser(userId: string): Promise<IntegrationDocument | null> {
+    const existing = await databases.listDocuments<IntegrationDocument>(
+        DB_ID,
+        COLLECTIONS.INTEGRATIONS,
+        [Query.equal('userId', userId), Query.limit(1)],
+    );
+    return existing.total > 0 ? existing.documents[0] : null;
+}
+
+router.get('/integrations', async (req: AuthenticatedRequest, res) => {
+    try {
+        const userId = req.user?.$id;
+        if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+        const doc = await findIntegrationForUser(userId);
+        if (!doc) {
+            // No integration yet is a normal state, not an error.
+            return res.json({ configured: false });
+        }
+
+        res.json({
+            configured: true,
+            discord_webhook: doc.discord_webhook || '',
+            slack_webhook: doc.slack_webhook || '',
+            pagerduty_key: doc.pagerduty_key || '',
+            opsgenie_key: doc.opsgenie_key || '',
+            isEnabled: doc.isEnabled ?? true,
+            activeSeverities: doc.activeSeverities || ['critical', 'high'],
+        });
+    } catch (error: unknown) {
+        res.status(500).json({ error: errorMessage(error) });
+    }
+});
+
+router.put('/integrations', async (req: AuthenticatedRequest, res) => {
+    try {
+        const userId = req.user?.$id;
+        if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+        const { isEnabled, activeSeverities } = req.body;
+
+        const settings: Record<string, unknown> = {};
+        for (const field of INTEGRATION_FIELDS) {
+            settings[field] = typeof req.body[field] === 'string' ? req.body[field].trim() : '';
+        }
+
+        // Validate before storing: the backend later POSTs to these URLs itself
+        // (batch-notify), so an unchecked value is an SSRF primitive that
+        // outlives the request that set it.
+        for (const field of ['discord_webhook', 'slack_webhook'] as const) {
+            const url = settings[field] as string;
+            if (!url) continue;
+            try {
+                await assertSafeWebhookUrl(url);
+            } catch (err: unknown) {
+                return res.status(400).json({ error: `${field}: ${errorMessage(err)}` });
+            }
+        }
+
+        if (activeSeverities !== undefined && !Array.isArray(activeSeverities)) {
+            return res.status(400).json({ error: 'activeSeverities must be an array' });
+        }
+
+        const data = {
+            ...settings,
+            userId,
+            isEnabled: isEnabled ?? true,
+            activeSeverities: activeSeverities ?? ['critical', 'high'],
+            integrationType: 'webhook',
+        };
+
+        // Look the document up by owner rather than accepting an id from the
+        // client — an id would let a caller target someone else's row.
+        const existing = await findIntegrationForUser(userId);
+        const saved = existing
+            ? await databases.updateDocument(DB_ID, COLLECTIONS.INTEGRATIONS, existing.$id, data)
+            : await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), data);
+
+        res.json({ success: true, configured: true, id: saved.$id });
     } catch (error: unknown) {
         res.status(500).json({ error: errorMessage(error) });
     }

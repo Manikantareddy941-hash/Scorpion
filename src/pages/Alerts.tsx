@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { databases, DB_ID, ID, Query, COLLECTIONS, client } from '../lib/appwrite';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { DB_ID, COLLECTIONS, client } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import { 
     Bell, Loader2, Save, Send, ShieldAlert,
@@ -32,7 +32,6 @@ export default function Alerts() {
     const [activeSeverities, setActiveSeverities] = useState<string[]>(['critical', 'high']);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState<string | null>(null);
-    const [docId, setDocId] = useState<string | null>(null);
 
     // Discord Specific Configurations
     const [discordUsername, setDiscordUsername] = useState('Scorpion Operator');
@@ -45,6 +44,8 @@ export default function Alerts() {
     // Feed State
     const [findings, setFindings] = useState<any[]>([]);
     const [feedLoading, setFeedLoading] = useState(false);
+    // A failed feed read must not look like a quiet security estate.
+    const [feedFailed, setFeedFailed] = useState(false);
 
     const handleSaveDiscordMesh = async () => {
         if (!discordWebhook) {
@@ -56,23 +57,7 @@ export default function Alerts() {
         try {
             // Only discord_webhook has a backing Appwrite attribute today — username,
             // avatar, and per-event toggles are UI-only until that schema grows.
-            const data = {
-                userId: user.$id,
-                discord_webhook: discordWebhook,
-                slack_webhook: slackWebhook,
-                pagerduty_key: pagerdutyKey,
-                opsgenie_key: opsgenieKey,
-                isEnabled,
-                activeSeverities,
-                integrationType: 'webhook'
-            };
-
-            if (docId) {
-                await databases.updateDocument(DB_ID, COLLECTIONS.INTEGRATIONS, docId, data);
-            } else {
-                const res = await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), data);
-                setDocId(res.$id);
-            }
+            await saveIntegrations();
             toast.success('Discord Mesh configuration committed successfully.');
         } catch (err: any) {
             console.error('Discord config save error:', err);
@@ -82,94 +67,120 @@ export default function Alerts() {
         }
     };
 
-    useEffect(() => {
-        if (!user) return;
-        fetchIntegrations();
-    }, [user]);
-
-    const fetchIntegrations = async () => {
+    // Webhook URLs and PagerDuty/Opsgenie keys are credentials. They were read
+    // and written straight from the browser, leaving Appwrite collection
+    // permissions as the only thing scoping them to their owner. The backend
+    // now derives the owner from the session on both sides.
+    const fetchIntegrations = useCallback(async () => {
         try {
-            const res = await databases.listDocuments(DB_ID, COLLECTIONS.INTEGRATIONS, [
-                Query.equal('userId', user!.$id)
-            ]);
-            if (res.total > 0) {
-                const doc = res.documents[0];
-                setDocId(doc.$id);
-                setDiscordWebhook(doc.discord_webhook || '');
-                setSlackWebhook(doc.slack_webhook || '');
-                setPagerdutyKey(doc.pagerduty_key || '');
-                setOpsgenieKey(doc.opsgenie_key || '');
-                setIsEnabled(doc.isEnabled ?? true);
-                setActiveSeverities(doc.activeSeverities || ['critical', 'high']);
-            }
+            const token = await getJWT();
+            const res = await fetch('/api/alerts/integrations', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`integrations fetch failed: ${res.status}`);
+            const doc = await res.json();
+            if (!doc?.configured) return;
+            setDiscordWebhook(doc.discord_webhook || '');
+            setSlackWebhook(doc.slack_webhook || '');
+            setPagerdutyKey(doc.pagerduty_key || '');
+            setOpsgenieKey(doc.opsgenie_key || '');
+            setIsEnabled(doc.isEnabled ?? true);
+            setActiveSeverities(doc.activeSeverities || ['critical', 'high']);
         } catch (e) {
             console.error('Error fetching integration', e);
+            toast.error('Could not load alert settings');
         }
-    };
+    }, [getJWT]);
 
-    useEffect(() => {
-        if (activeTab === 'feed') {
-            fetchFeed();
-            
-            const unsubscribe = client.subscribe(
-                `databases.${DB_ID}.collections.${COLLECTIONS.FINDINGS}.documents`,
-                (response: RealtimeResponseEvent<any>) => {
-                    if (response.events.some(e => e.includes('.create'))) {
-                        const newDoc = response.payload;
-                        if (activeSeverities.includes(newDoc.severity?.toLowerCase())) {
-                            setFindings(prev => [newDoc, ...prev].slice(0, 100));
-                        }
-                    }
-                }
-            );
-
-            return () => {
-                if (unsubscribe) unsubscribe();
-            };
-        }
-    }, [activeTab, activeSeverities]);
-
-    const fetchFeed = async () => {
-        setFeedLoading(true);
-        try {
-            if (activeSeverities.length === 0) {
-                setFindings([]);
-                return;
-            }
-            const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
-                Query.orderDesc('$createdAt'),
-                Query.limit(50)
-            ]);
-            const filtered = res.documents.filter(doc => activeSeverities.includes(doc.severity?.toLowerCase()));
-            setFindings(filtered);
-        } catch (e) {
-            console.error('Error fetching feed', e);
-        } finally {
-            setFeedLoading(false);
-        }
-    };
-
-    const handleSave = async () => {
-        if (!user) return;
-        setSaving(true);
-        try {
-            const data = {
-                userId: user.$id,
+    /** Upsert handled server-side, keyed on the session user — no document id
+     *  travels from the browser, so a caller cannot target another tenant's row. */
+    const saveIntegrations = async () => {
+        const token = await getJWT();
+        const res = await fetch('/api/alerts/integrations', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
                 discord_webhook: discordWebhook,
                 slack_webhook: slackWebhook,
                 pagerduty_key: pagerdutyKey,
                 opsgenie_key: opsgenieKey,
                 isEnabled,
                 activeSeverities,
-                integrationType: 'webhook' // Required by schema enum
-            };
+            }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body?.error || `Failed to save settings (${res.status})`);
+        }
+    };
 
-            if (docId) {
-                await databases.updateDocument(DB_ID, COLLECTIONS.INTEGRATIONS, docId, data);
-            } else {
-                const res = await databases.createDocument(DB_ID, COLLECTIONS.INTEGRATIONS, ID.unique(), data);
-                setDocId(res.$id);
+    useEffect(() => {
+        if (!user) return;
+        fetchIntegrations();
+    }, [user, fetchIntegrations]);
+
+    // Was an unfiltered read of the findings collection — every tenant's
+    // findings, newest 50, then narrowed by severity in the browser.
+    const fetchFeed = useCallback(async () => {
+        setFeedLoading(true);
+        setFeedFailed(false);
+        try {
+            if (activeSeverities.length === 0) {
+                setFindings([]);
+                return;
             }
+            const token = await getJWT();
+            const res = await fetch('/api/issues?limit=50', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`feed fetch failed: ${res.status}`);
+            const documents: any[] = (await res.json())?.documents ?? [];
+            setFindings(documents.filter(doc => activeSeverities.includes(doc.severity?.toLowerCase())));
+        } catch (e) {
+            console.error('Error fetching feed', e);
+            setFeedFailed(true);
+        } finally {
+            setFeedLoading(false);
+        }
+    }, [activeSeverities, getJWT]);
+
+    // Held in a ref so the subscription depends only on the active tab, not on
+    // fetchFeed's identity — which changes whenever the severity filter does.
+    const fetchFeedRef = useRef(fetchFeed);
+    useEffect(() => { fetchFeedRef.current = fetchFeed; }, [fetchFeed]);
+
+    useEffect(() => {
+        if (activeTab !== 'feed') return;
+        fetchFeed();
+
+        // This subscribed to the WHOLE findings collection — no document id, no
+        // filter — and rendered response.payload directly. Every finding created
+        // by any tenant streamed into this user's alert feed, live.
+        //
+        // The event is now only a signal that something was created somewhere;
+        // the payload is discarded and the caller's own scoped feed is refetched.
+        // Debounced because one scan creates findings in bulk.
+        let pending: ReturnType<typeof setTimeout> | null = null;
+        const unsubscribe = client.subscribe(
+            `databases.${DB_ID}.collections.${COLLECTIONS.FINDINGS}.documents`,
+            (response: RealtimeResponseEvent<unknown>) => {
+                if (!response.events.some(e => e.includes('.create'))) return;
+                if (pending) clearTimeout(pending);
+                pending = setTimeout(() => { fetchFeedRef.current(); }, 1000);
+            }
+        );
+
+        return () => {
+            if (pending) clearTimeout(pending);
+            if (unsubscribe) unsubscribe();
+        };
+    }, [activeTab, fetchFeed]);
+
+    const handleSave = async () => {
+        if (!user) return;
+        setSaving(true);
+        try {
+            await saveIntegrations();
             toast.success(t('alerts.save_success', 'Configuration committed to neural mesh.'));
         } catch (error: any) {
             console.error('Failed to commit integration', error);
@@ -448,6 +459,21 @@ export default function Alerts() {
                             {feedLoading ? (
                                 <div className="flex justify-center items-center h-64">
                                     <Loader2 className="w-12 h-12 text-[var(--accent-primary)] animate-spin" />
+                                </div>
+                            ) : feedFailed ? (
+                                /* An empty alert feed reads as "nothing is wrong". Say what
+                                   actually happened instead. */
+                                <div className="flex flex-col items-center justify-center h-64 text-center">
+                                    <AlertTriangle className="w-10 h-10 text-[#ff8a00] mb-4" />
+                                    <h4 className="text-sm font-black text-[var(--text-primary)] uppercase italic">Feed unavailable</h4>
+                                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase italic mt-2 max-w-sm">
+                                        This is not a quiet estate — the alert feed could not be loaded
+                                    </p>
+                                    <button
+                                        onClick={fetchFeed}
+                                        className="mt-6 px-5 py-2 rounded-xl border border-[var(--accent-primary)] text-[var(--accent-primary)] text-[10px] font-black uppercase tracking-widest hover:bg-[var(--accent-primary)] hover:text-black transition-all">
+                                        Retry
+                                    </button>
                                 </div>
                             ) : findings.map(f => (
                                 <div key={f.$id} className="p-6 bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-2xl flex items-center justify-between group hover:border-[var(--accent-primary)]/30 transition-all">
