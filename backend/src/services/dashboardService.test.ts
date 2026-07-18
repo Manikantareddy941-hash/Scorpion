@@ -160,3 +160,44 @@ describe('getSecurityDashboard — sla', () => {
     expect(sla).toEqual({ breached: 0, dueSoon: 0, breachedCritical: 0, nextHours: null });
   });
 });
+
+describe('getSecurityDashboard — recent_findings', () => {
+  it('surfaces the highest-risk of the recent findings', async () => {
+    withFindings([
+      finding({ $id: 'low', risk_score: 10 }),
+      finding({ $id: 'high', risk_score: 90 }),
+      finding({ $id: 'mid', risk_score: 50 }),
+    ]);
+    const { recent_findings } = await dashboardService.getSecurityDashboard('rf-a');
+    expect(recent_findings.map(f => f.$id)).toEqual(['high', 'mid', 'low']);
+  });
+
+  it('treats a missing risk_score as zero rather than dropping the finding', async () => {
+    // risk_score is absent on documents written before it existed; those must
+    // still appear, ranked last.
+    withFindings([finding({ $id: 'scored', risk_score: 5 }), finding({ $id: 'unscored' })]);
+    const { recent_findings } = await dashboardService.getSecurityDashboard('rf-b');
+    expect(recent_findings.map(f => f.$id)).toEqual(['scored', 'unscored']);
+  });
+
+  it('returns at most five', async () => {
+    withFindings(Array.from({ length: 12 }, (_, i) => finding({ $id: `f${i}`, risk_score: i })));
+    expect((await dashboardService.getSecurityDashboard('rf-c')).recent_findings).toHaveLength(5);
+  });
+
+  it('ranks by risk only within the recent window, not across all history', async () => {
+    // An old high-risk finding must not displace recent ones: the panel is
+    // "latest findings", ordered by risk among those.
+    const recent = Array.from({ length: 50 }, (_, i) =>
+      finding({ $id: `new${i}`, risk_score: 1, $createdAt: iso(daysAgo(1)) }));
+    withFindings([...recent, finding({ $id: 'ancient', risk_score: 99, $createdAt: iso(daysAgo(400)) })]);
+    const { recent_findings } = await dashboardService.getSecurityDashboard('rf-d');
+    expect(recent_findings.map(f => f.$id)).not.toContain('ancient');
+  });
+
+  it('is empty for a tenant with no repositories', async () => {
+    repo.getUserTeamIds.mockResolvedValue([]);
+    repo.listUserRepos.mockResolvedValue({ total: 0, documents: [] } as never);
+    expect((await dashboardService.getSecurityDashboard('rf-empty')).recent_findings).toEqual([]);
+  });
+});

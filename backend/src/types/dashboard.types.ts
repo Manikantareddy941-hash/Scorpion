@@ -20,6 +20,8 @@ export type ScanDocument = Models.Document & {
 };
 
 export type FindingDocument = Models.Document & {
+  /** Absent on documents written before risk scoring existed — always coalesce. */
+  risk_score?: number;
   repo_id?: string;
   scanId?: string;
   severity?: string;
@@ -94,6 +96,10 @@ export interface SecurityDashboardStats {
   /** SLA posture over the caller's open findings, computed server-side so the
    *  browser never has to pull every finding to work it out. */
   sla: SlaSummary;
+  /** Highest-risk of the most recent findings, for the dashboard's "latest"
+   *  and "remediation queue" panels. Deliberately small and purpose-built:
+   *  `findings` below can carry thousands of documents. */
+  recent_findings: FindingDocument[];
   findings?: unknown[];
 }
 
