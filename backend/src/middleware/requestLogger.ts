@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../services/logger';
 import { statusTelemetry } from '../monitor/statusTelemetry';
+import { redactUrl } from '../utils/redactUrl';
 
 /**
  * Structured HTTP request logger (winston). Replaces morgan so request logs are
@@ -8,15 +9,6 @@ import { statusTelemetry } from '../monitor/statusTelemetry';
  * rest of the app. Logs once per request on response finish so the final status
  * and total response time are known.
  */
-/**
- * Strips sensitive query params (JWTs passed in the URL for SSE/EventSource,
- * which can't set headers) before the URL hits logs/Loki. Access logs are a
- * common credential-leak vector, so never log a raw `token=` value.
- */
-function redactUrl(url: string): string {
-  return url.replace(/([?&](?:token|jwt|apiKey|api_key)=)[^&#]*/gi, '$1[REDACTED]');
-}
-
 export function requestLogger(req: Request, res: Response, next: NextFunction): void {
   const start = process.hrtime.bigint();
 

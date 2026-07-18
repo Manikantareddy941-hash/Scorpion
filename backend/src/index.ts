@@ -9,6 +9,7 @@ import { initScheduler } from './scheduler';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
 import { logger } from './services/logger';
+import { redactUrl } from './utils/redactUrl';
 import { requestLogger } from './middleware/requestLogger';
 
 // Route Imports
@@ -173,6 +174,8 @@ app.set('trust proxy', 1);
 if (process.env.NODE_ENV === 'production') {
     app.use((req: Request, res: Response, next: NextFunction) => {
         if (req.secure || req.headers['x-forwarded-proto'] === 'https') return next();
+        // Not redacted: this is the redirect target, not a log line. Rewriting
+        // it would send the caller to a nonexistent path.
         res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
     });
 }
@@ -223,7 +226,7 @@ const globalApiLimiter = rateLimit({
     legacyHeaders: false,
     message: 'Too many requests, please slow down.',
     handler: (req: Request, res: Response) => {
-        logger.warn(`[RateLimit] IP ${req.ip} exceeded global limit on ${req.method} ${req.originalUrl}`);
+        logger.warn(`[RateLimit] IP ${req.ip} exceeded global limit on ${req.method} ${redactUrl(req.originalUrl)}`);
         res.status(429).json({ error: 'Too many requests, please slow down.' });
     }
 });
@@ -233,7 +236,7 @@ const authLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
     handler: (req: Request, res: Response) => {
-        logger.warn(`[RateLimit] IP ${req.ip} exceeded auth limit on ${req.method} ${req.originalUrl}`);
+        logger.warn(`[RateLimit] IP ${req.ip} exceeded auth limit on ${req.method} ${redactUrl(req.originalUrl)}`);
         res.status(429).json({ error: 'Too many requests, please slow down.' });
     }
 });
@@ -246,7 +249,7 @@ interface AuthenticatedRequest extends Request<Record<string, string>> {
 const authenticate = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-        logger.warn(`[Auth] Missing authorization header for ${req.method} ${req.originalUrl} from ${req.ip}`);
+        logger.warn(`[Auth] Missing authorization header for ${req.method} ${redactUrl(req.originalUrl)} from ${req.ip}`);
         return res.status(401).json({ error: 'Missing authorization header' });
     }
 
@@ -260,14 +263,14 @@ const authenticate = async (req: AuthenticatedRequest, res: Response, next: Next
         const account = new AppwriteAccount(client);
         const user = await account.get();
         if (!user) {
-            logger.warn(`[Auth] Invalid token for ${req.method} ${req.originalUrl} from ${req.ip}`);
+            logger.warn(`[Auth] Invalid token for ${req.method} ${redactUrl(req.originalUrl)} from ${req.ip}`);
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
         req.user = user;
         next();
     } catch (err: any) {
         if (err?.code === 401) {
-            logger.warn(`[Auth] Rejected expired/invalid token for ${req.method} ${req.originalUrl} from ${req.ip}`);
+            logger.warn(`[Auth] Rejected expired/invalid token for ${req.method} ${redactUrl(req.originalUrl)} from ${req.ip}`);
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
         next(err);
