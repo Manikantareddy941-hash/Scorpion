@@ -3,6 +3,9 @@ jest.mock('../lib/appwrite', () => ({
   DB_ID: 'db', ID: { unique: () => 'id1' },
   Query: { equal: (f: string, v: unknown) => `${f}=${v}`, limit: (n: number) => `l${n}` },
 }));
+// Pin the storage facade to its legacy Appwrite path — this suite asserts on
+// databases.* calls; the Postgres path is covered by pg/suppressionPgRepository.test.ts.
+jest.mock('../db/pool', () => ({ isPostgresEnabled: () => false, getPool: jest.fn(), closePool: jest.fn() }));
 import { databases } from '../lib/appwrite';
 import { suppressionRepository } from './suppressionRepository';
 

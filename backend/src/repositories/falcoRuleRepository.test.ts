@@ -3,6 +3,9 @@ import { databases } from '../lib/appwrite';
 import { logger } from '../services/logger';
 
 jest.mock('../lib/appwrite');
+// Pin the storage facade to its legacy Appwrite path — this suite asserts on
+// databases.* calls; the Postgres path is covered by pg/falcoRulePgRepository.test.ts.
+jest.mock('../db/pool', () => ({ isPostgresEnabled: () => false, getPool: jest.fn(), closePool: jest.fn() }));
 jest.mock('../services/logger');
 
 describe('falcoRuleRepository', () => {

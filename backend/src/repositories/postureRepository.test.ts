@@ -13,6 +13,9 @@ jest.mock('../lib/appwrite', () => ({
   },
 }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+// Pin the storage facade to its legacy Appwrite path — this suite asserts on
+// databases.* calls; the Postgres path is covered by pg/posturePgRepository.test.ts.
+jest.mock('../db/pool', () => ({ isPostgresEnabled: () => false, getPool: jest.fn(), closePool: jest.fn() }));
 
 import { postureRepository } from './postureRepository';
 import { databases } from '../lib/appwrite';

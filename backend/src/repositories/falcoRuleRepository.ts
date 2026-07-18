@@ -3,6 +3,8 @@ import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import { FALCO_TEMPLATES } from '../runtime/falcoRuleCatalog';
 import type { ManagedFalcoRule } from '../runtime/falcoRuleCatalog';
+import { isPostgresEnabled } from '../db/pool';
+import { falcoRulePgRepository } from './pg/falcoRulePgRepository';
 
 const COLLECTION = 'falco_rules';
 
@@ -43,7 +45,7 @@ function fromDoc(doc: Models.Document): ManagedFalcoRule | null {
   }
 }
 
-export const falcoRuleRepository = {
+const legacyFalcoRuleRepository = {
   /** [] on failure — never suppress or reprioritize when config is unreadable. */
   async listRules(): Promise<ManagedFalcoRule[]> {
     try {
@@ -90,3 +92,7 @@ export const falcoRuleRepository = {
     }
   },
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite otherwise. */
+export const falcoRuleRepository: typeof legacyFalcoRuleRepository =
+  isPostgresEnabled() ? falcoRulePgRepository : legacyFalcoRuleRepository;

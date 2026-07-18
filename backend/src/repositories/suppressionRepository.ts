@@ -2,10 +2,12 @@ import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from '../services/logger';
 import type { SuppressionRule } from '../monitor/suppressionMatcher';
+import { isPostgresEnabled } from '../db/pool';
+import { suppressionPgRepository } from './pg/suppressionPgRepository';
 
 const COLLECTION = 'suppression_rules';
 
-export const suppressionRepository = {
+const legacySuppressionRepository = {
   async listForOwner(owner: string): Promise<SuppressionRule[]> {
     try {
       const res = await databases.listDocuments(DB_ID, COLLECTION, [Query.equal('owner', owner), Query.limit(100)]);
@@ -35,3 +37,7 @@ export const suppressionRepository = {
     return true;
   },
 };
+
+/** Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite otherwise. */
+export const suppressionRepository: typeof legacySuppressionRepository =
+  isPostgresEnabled() ? suppressionPgRepository : legacySuppressionRepository;
