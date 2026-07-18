@@ -84,7 +84,8 @@ export const dashboardService = {
         mttr_today_days: null,
         mttr_days: null,
         sla: emptySla(),
-        recent_findings: []
+        recent_findings: [],
+        latest_scan: null
       };
     }
 
@@ -120,6 +121,8 @@ export const dashboardService = {
         .slice(0, RECENT_FINDINGS_WINDOW)
         .sort((a, b) => Number(b.risk_score ?? 0) - Number(a.risk_score ?? 0))
         .slice(0, RECENT_FINDINGS_SHOWN),
+      // listScansForRepos already orders newest-first, so the head is the latest.
+      latest_scan: scansResponse.documents[0] ?? null,
       findings
     };
 

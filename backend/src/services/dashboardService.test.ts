@@ -201,3 +201,32 @@ describe('getSecurityDashboard — recent_findings', () => {
     expect((await dashboardService.getSecurityDashboard('rf-empty')).recent_findings).toEqual([]);
   });
 });
+
+describe('getSecurityDashboard — latest_scan', () => {
+  it('returns the head of the scan list, which the repository orders newest-first', async () => {
+    withFindings([]);
+    repo.listScansForRepos.mockResolvedValue({
+      total: 2,
+      documents: [
+        { $id: 's-new', gateStatus: 'failed', score: 61 },
+        { $id: 's-old', gateStatus: 'passed', score: 98 },
+      ],
+    } as never);
+    const { latest_scan } = await dashboardService.getSecurityDashboard('ls-a');
+    expect(latest_scan?.$id).toBe('s-new');
+    expect(latest_scan?.gateStatus).toBe('failed');
+  });
+
+  it('is null when the tenant has never scanned', async () => {
+    // Not the same as a passing gate: the client must render "no scan yet"
+    // rather than defaulting to passed/100.
+    withFindings([]);
+    expect((await dashboardService.getSecurityDashboard('ls-b')).latest_scan).toBeNull();
+  });
+
+  it('is null for a tenant with no repositories', async () => {
+    repo.getUserTeamIds.mockResolvedValue([]);
+    repo.listUserRepos.mockResolvedValue({ total: 0, documents: [] } as never);
+    expect((await dashboardService.getSecurityDashboard('ls-empty')).latest_scan).toBeNull();
+  });
+});
