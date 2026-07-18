@@ -206,7 +206,11 @@ describe('findings', () => {
     const res = await request(app)
       .patch('/api/findings/finding-a')
       .send({ status: 'resolved' });
-    expect(res.status).toBe(403);
+    // 404, not 403: a 403 distinguishes "exists but forbidden" from "no such
+    // finding", which lets a caller enumerate valid finding ids. The property
+    // that matters — the write does not land — is asserted below and is
+    // unchanged.
+    expect(res.status).toBe(404);
     expect(store['findings'][0].status).toBe('open');
   });
 });

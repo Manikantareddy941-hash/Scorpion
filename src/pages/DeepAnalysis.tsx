@@ -4,6 +4,8 @@ import {
   Activity, RefreshCw, Cpu
 } from 'lucide-react';
 import { databases, DB_ID, COLLECTIONS, Query, ID, account } from '../lib/appwrite';
+import { setFindingStatuses } from '../lib/findingsApi';
+import { useAuth } from '../contexts/AuthContext';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { Tooltip } from '../components/Tooltip';
 import TonyAgentModal from '../components/TonyAgentModal';
@@ -26,6 +28,7 @@ export interface VulnerabilityItem {
 
 export default function DeepAnalysis() {
   const {} = useTranslation();
+  const { getJWT } = useAuth();
   const [vulns, setVulns] = useState<any[]>([]);
   const [repos, setRepos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,11 +190,12 @@ export default function DeepAnalysis() {
     runVulnMutation(v, 'false_positive', `Marking ${v.cveId || v.title} as False Positive...`, `Marked ${v.cveId || v.title} as False Positive. Suppressing alerts.`, async () => {
       const actualDbOccurrences = dbOccurrencesOf(v);
       if (actualDbOccurrences.length > 0) {
-        await Promise.all(
-          actualDbOccurrences.map((occ: any) =>
-            databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, occ.id, { status: 'false_positive' })
-          )
+        // Was a direct browser write to the findings collection. The backend
+        // checks the finding's repository belongs to this caller first.
+        const { failed } = await setFindingStatuses(
+          getJWT, actualDbOccurrences.map((occ: any) => occ.id), 'false_positive',
         );
+        if (failed.length > 0) throw new Error(`${failed.length} of ${actualDbOccurrences.length} could not be updated`);
       }
     }, { removeAfterSuccess: true });
 
@@ -200,11 +204,10 @@ export default function DeepAnalysis() {
       const snoozeUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       const actualDbOccurrences = dbOccurrencesOf(v);
       if (actualDbOccurrences.length > 0) {
-        await Promise.all(
-          actualDbOccurrences.map((occ: any) =>
-            databases.updateDocument(DB_ID, COLLECTIONS.VULNERABILITIES, occ.id, { status: 'snoozed', snoozeUntil })
-          )
+        const { failed } = await setFindingStatuses(
+          getJWT, actualDbOccurrences.map((occ: any) => occ.id), 'snoozed', { snoozeUntil },
         );
+        if (failed.length > 0) throw new Error(`${failed.length} of ${actualDbOccurrences.length} could not be snoozed`);
       }
     }, { removeAfterSuccess: true });
 
