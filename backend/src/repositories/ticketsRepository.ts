@@ -3,6 +3,8 @@ import { Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse
 import crypto from 'crypto';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { logger } from '../services/logger';
+import { isPostgresEnabled } from '../db/pool';
+import { ticketsPgRepository } from './pg/ticketsPgRepository';
 
 // In-memory stores for comments and activity log (these remain local for now)
 const commentsMap = new Map<string, TicketComment[]>();
@@ -466,7 +468,7 @@ async function removeLink(fromId: string, toId: string, userEmail = 'System'): P
   return (await getTicket(fromId)) || null;
 }
 
-export const ticketsRepository = {
+const legacyTicketsRepository = {
   createTicket,
   getTicket,
   findByLinkedFinding,
@@ -482,3 +484,12 @@ export const ticketsRepository = {
   addLink,
   removeLink
 };
+
+/**
+ * Storage facade: Postgres when DATABASE_URL is configured, legacy Appwrite
+ * otherwise. Note the legacy path keeps comments, activity and links in
+ * process memory and loses them on restart; only the Postgres path persists
+ * them.
+ */
+export const ticketsRepository: typeof legacyTicketsRepository =
+  isPostgresEnabled() ? ticketsPgRepository : legacyTicketsRepository;
