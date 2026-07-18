@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { databases, DB_ID, COLLECTIONS, ID, account } from '../lib/appwrite';
 import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +11,7 @@ interface TaskModalProps {
 
 export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
   const { t } = useTranslation();
-  const {} = useAuth();
+  const { getJWT } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<string>('todo');
@@ -39,11 +38,8 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
     setLoading(true);
 
     try {
-      let userId = '';
-      try {
-        const currentUser = await account.get();
-        userId = currentUser.$id;
-      } catch (err) {
+      const token = await getJWT();
+      if (!token) {
         setError(t('common.error_session_expired', 'Session expired. Please log in again.'));
         setLoading(false);
         return;
@@ -57,14 +53,17 @@ export default function TaskModal({ task, onClose, onSave }: TaskModalProps) {
         due_date: dueDate || null,
         repo_url: repoUrl || null };
 
-      if (task) {
-        await databases.updateDocument(DB_ID, COLLECTIONS.TASKS, task.$id, {
-          ...taskData,
-          user_id: userId });
-      } else {
-        await databases.createDocument(DB_ID, COLLECTIONS.TASKS, ID.unique(), {
-          ...taskData,
-          user_id: userId });
+      // user_id is stamped from the session server-side. The browser used to
+      // choose it, along with an unvalidated status and priority — a typo there
+      // produced a task in a state nothing counts or displays.
+      const res = await fetch(task ? `/api/tasks/${task.$id}` : '/api/tasks', {
+        method: task ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(taskData),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Failed to save task (${res.status})`);
       }
 
       onSave();
