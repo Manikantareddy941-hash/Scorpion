@@ -106,3 +106,57 @@ describe('getSecurityDashboard — remediated_today', () => {
     expect(repo.listUserRepos).toHaveBeenCalledWith('user-cache-b', []);
   });
 });
+
+describe('getSecurityDashboard — sla', () => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000);
+
+  it('counts an open critical past its 24h window as breached', async () => {
+    withFindings([finding({ severity: 'critical', $createdAt: iso(hoursAgo(30)) })]);
+    const { sla } = await dashboardService.getSecurityDashboard('sla-a');
+    expect(sla.breached).toBe(1);
+    expect(sla.breachedCritical).toBe(1);
+  });
+
+  it('counts a high inside 24h of its 72h window as due soon', async () => {
+    withFindings([finding({ severity: 'high', $createdAt: iso(hoursAgo(60)) })]);
+    const { sla } = await dashboardService.getSecurityDashboard('sla-b');
+    expect(sla.dueSoon).toBe(1);
+    expect(sla.breached).toBe(0);
+  });
+
+  it('reports the soonest upcoming breach in nextHours', async () => {
+    withFindings([
+      finding({ $id: 'a', severity: 'high', $createdAt: iso(hoursAgo(60)) }),  // ~12h left
+      finding({ $id: 'b', severity: 'low', $createdAt: iso(hoursAgo(1)) }),    // ~719h left
+    ]);
+    const { sla } = await dashboardService.getSecurityDashboard('sla-c');
+    expect(sla.nextHours).toBeGreaterThan(11);
+    expect(sla.nextHours).toBeLessThan(13);
+  });
+
+  it('ignores resolved findings — an SLA only applies to open work', async () => {
+    withFindings([
+      finding({ status: 'resolved', severity: 'critical', $createdAt: iso(hoursAgo(500)) }),
+    ]);
+    expect((await dashboardService.getSecurityDashboard('sla-d')).sla.breached).toBe(0);
+  });
+
+  it('falls back to the medium window for an unknown severity', async () => {
+    // Matches the frontend's previous `?? 168` default, so the displayed
+    // numbers do not move as part of this migration.
+    withFindings([finding({ severity: 'bogus', $createdAt: iso(hoursAgo(200)) })]);
+    expect((await dashboardService.getSecurityDashboard('sla-e')).sla.breached).toBe(1);
+  });
+
+  it('leaves nextHours null when every open finding is already breached', async () => {
+    withFindings([finding({ severity: 'critical', $createdAt: iso(hoursAgo(99)) })]);
+    expect((await dashboardService.getSecurityDashboard('sla-f')).sla.nextHours).toBeNull();
+  });
+
+  it('reports an empty summary for a tenant with no repositories', async () => {
+    repo.getUserTeamIds.mockResolvedValue([]);
+    repo.listUserRepos.mockResolvedValue({ total: 0, documents: [] } as never);
+    const { sla } = await dashboardService.getSecurityDashboard('sla-empty');
+    expect(sla).toEqual({ breached: 0, dueSoon: 0, breachedCritical: 0, nextHours: null });
+  });
+});

@@ -63,6 +63,17 @@ export interface TrendPoint {
   count: number;
 }
 
+export interface SlaSummary {
+  /** Open findings already past their severity window. */
+  breached: number;
+  /** Not yet breached, but inside 24h of the deadline. */
+  dueSoon: number;
+  /** Subset of `breached` that are critical — the ones that need a name on them. */
+  breachedCritical: number;
+  /** Hours until the soonest upcoming breach; null when nothing is pending. */
+  nextHours: number | null;
+}
+
 export interface SecurityDashboardStats {
   total: number;
   by_severity: SeverityCounts;
@@ -80,6 +91,9 @@ export interface SecurityDashboardStats {
    *  today's figure and the two must not be conflated. */
   mttr_today_days: number | null;
   mttr_days: number | null;
+  /** SLA posture over the caller's open findings, computed server-side so the
+   *  browser never has to pull every finding to work it out. */
+  sla: SlaSummary;
   findings?: unknown[];
 }
 

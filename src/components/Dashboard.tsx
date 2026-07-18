@@ -109,6 +109,8 @@ export default function Dashboard({
     dueSoon: 0,
     breachedCritical: 0,
     nextHours: null as number | null,
+    // Zero breaches and "couldn't load" must not look the same on an SLA panel.
+    failed: false,
   });
   const [showGateRules, setShowGateRules] = useState(false);
   const [showNewScanModal, setShowNewScanModal] = useState(false);
@@ -204,6 +206,16 @@ export default function Dashboard({
                 avgDetectionToPrDays: secData?.mttr_today_days ?? null,
                 failed: false,
               });
+              // SLA posture is computed server-side over the caller's findings.
+              // It used to be derived in the browser from 200 documents pulled
+              // straight out of Appwrite, unscoped by tenant.
+              setSlaStats({
+                breached: secData?.sla?.breached ?? 0,
+                dueSoon: secData?.sla?.dueSoon ?? 0,
+                breachedCritical: secData?.sla?.breachedCritical ?? 0,
+                nextHours: secData?.sla?.nextHours ?? null,
+                failed: false,
+              });
               setByType({
                 secret: Number(t.secret ?? 0),
                 dependency: Number(t.dependency ?? 0),
@@ -230,37 +242,7 @@ export default function Dashboard({
             // silent 0 reads as "nothing to fix" — the same lie as a crashed
             // scanner reporting no findings.
             setRemediationStats((prev) => ({ ...prev, failed: true }));
-          }
-        };
-
-        // SLA breach/countdown — derived from each open finding's age vs its severity window.
-        const fetchSlaStats = async () => {
-          try {
-            const openVulns = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-              Query.equal('status', 'open'),
-              Query.orderDesc('$createdAt'),
-              Query.limit(200),
-            ]);
-            const now = Date.now();
-            let breached = 0,
-              dueSoon = 0,
-              breachedCritical = 0;
-            let nextHours: number | null = null;
-            openVulns.documents.forEach((d: any) => {
-              const sev = String(d.severity || '').toLowerCase();
-              const slaH = SLA_HOURS[sev] ?? 168;
-              const hoursLeft = (new Date(d.$createdAt).getTime() + slaH * 3600_000 - now) / 3600_000;
-              if (hoursLeft <= 0) {
-                breached++;
-                if (sev === 'critical') breachedCritical++;
-              } else {
-                if (hoursLeft <= 24) dueSoon++;
-                nextHours = nextHours === null ? hoursLeft : Math.min(nextHours, hoursLeft);
-              }
-            });
-            setSlaStats({ breached, dueSoon, breachedCritical, nextHours });
-          } catch (err) {
-            console.warn('Failed to compute SLA stats:', err);
+            setSlaStats((prev) => ({ ...prev, failed: true }));
           }
         };
 
@@ -309,7 +291,6 @@ export default function Dashboard({
         await Promise.allSettled([
           fetchGateSummary(),
           fetchSecurityBreakdown(),
-          fetchSlaStats(),
           fetchAuditEntries(),
           fetchIntegrationStatus(),
         ]);
@@ -964,17 +945,28 @@ export default function Dashboard({
 
               <div className={`${CARD} p-5`}>
                 <p className="text-[13px] font-medium text-[var(--text-secondary)]">SLA health</p>
-                <p
-                  className="mt-2 text-3xl font-semibold tracking-tight tabular-nums"
-                  style={{ color: slaStats.breached > 0 ? 'var(--status-error)' : 'var(--text-primary)' }}
-                >
-                  {slaStats.breached}
-                  <span className="text-[15px] font-medium text-[var(--text-muted)]"> breached</span>
-                </p>
-                <p className="mt-2 text-[12px] text-[var(--text-muted)]">
-                  {slaStats.dueSoon} due within 24h
-                  {slaStats.nextHours !== null && ` · next in ${Math.max(0, Math.round(slaStats.nextHours))}h`}
-                </p>
+                {slaStats.failed ? (
+                  <p role="status" className="mt-2 text-[13px] text-[var(--text-secondary)]">
+                    Couldn&apos;t load SLA health.{' '}
+                    <span className="text-[var(--text-primary)]">
+                      This is not zero breaches.
+                    </span>
+                  </p>
+                ) : (
+                  <>
+                    <p
+                      className="mt-2 text-3xl font-semibold tracking-tight tabular-nums"
+                      style={{ color: slaStats.breached > 0 ? 'var(--status-error)' : 'var(--text-primary)' }}
+                    >
+                      {slaStats.breached}
+                      <span className="text-[15px] font-medium text-[var(--text-muted)]"> breached</span>
+                    </p>
+                    <p className="mt-2 text-[12px] text-[var(--text-muted)]">
+                      {slaStats.dueSoon} due within 24h
+                      {slaStats.nextHours !== null && ` · next in ${Math.max(0, Math.round(slaStats.nextHours))}h`}
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className={`${CARD} p-5`}>
