@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege. Without this the workflow token defaults to write-all, which
+# these jobs never need: they check out, run tests, and upload an artifact.
+# Flagged by Checkov as CKV2_GHA_1.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend CI
