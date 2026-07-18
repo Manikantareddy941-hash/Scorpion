@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Activity, Copy, CheckCircle2 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchScanFindings } from '../lib/scanApi';
 import toast from 'react-hot-toast';
 
 export default function DuplicatesDetail() {
   const { scanId } = useParams();
   const navigate = useNavigate();
+  const { getJWT } = useAuth();
   const [loading, setLoading] = useState(true);
   const [findings, setFindings] = useState<any[]>([]);
 
@@ -15,13 +17,10 @@ export default function DuplicatesDetail() {
       if (!scanId) return;
       setLoading(true);
       try {
-        const res = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-          Query.equal('scanId', scanId),
-          Query.limit(100)
-        ]);
-        // Filter for duplicates/clones (mocked logic for now)
-        const docs = res.documents.filter((d: any) => d.message?.toLowerCase().includes('duplicate') || d.title?.toLowerCase().includes('duplicate'));
-        setFindings(docs);
+        // Scoped server-side to the caller's repositories. The Appwrite query
+        // this replaces was keyed on the scanId in the URL alone.
+        const docs = await fetchScanFindings(getJWT, scanId);
+        setFindings(docs.filter((d: any) => d.message?.toLowerCase().includes('duplicate') || d.title?.toLowerCase().includes('duplicate')));
       } catch (err) {
         toast.error('Failed to load duplicates audit');
       } finally {
@@ -29,7 +28,7 @@ export default function DuplicatesDetail() {
       }
     };
     fetchData();
-  }, [scanId]);
+  }, [scanId, getJWT]);
 
   if (loading) return <div className="flex-1 flex flex-col items-center justify-center min-h-[400px]"><Activity className="animate-spin text-[var(--accent-primary)]" /></div>;
 

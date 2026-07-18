@@ -8,7 +8,6 @@ import ConnectRepoModal from './ConnectRepoModal';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { useScan } from '../contexts/ScanContext';
-import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 
 interface Props {
   onClose: () => void;
@@ -209,16 +208,16 @@ export default function NewScanModal({ onClose }: Props) {
   const createNotification = async (title: string, message: string, severity: string, scanId?: string) => {
     if (!user?.$id) return;
     try {
-      await databases.createDocument(DB_ID, COLLECTIONS.NOTIFICATIONS, ID.unique(), {
-        userId: user?.$id || "",
-        title,
-        message,
-        severity,
-        isRead: false,
-        type: 'scan',
-        relatedScanId: scanId || '',
-        createdAt: new Date().toISOString()
+      // The endpoint stamps userId from the session. This used to be a direct
+      // Appwrite create with the browser supplying userId — the one field that
+      // decides whose notification tray a row lands in.
+      const token = await getJWT();
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title, message, severity, type: 'scan', relatedScanId: scanId || '' }),
       });
+      if (!res.ok) throw new Error(`notification failed: ${res.status}`);
     } catch (err) {
       console.error('Failed to create notification:', err);
     }

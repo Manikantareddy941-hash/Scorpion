@@ -1,33 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   GitCommit, Activity, ShieldAlert, GitBranch, RefreshCw, FileCode2, Clock, User
 } from 'lucide-react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function CodeActivity() {
   const {} = useTranslation();
+  const { getJWT } = useAuth();
   const [commits, setCommits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchCommits();
-  }, []);
-
-  const fetchCommits = async () => {
+  const fetchCommits = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await databases.listDocuments(DB_ID, COLLECTIONS.COMMITS, [
-        Query.orderDesc('timestamp'),
-        Query.limit(50)
-      ]);
-      setCommits(response.documents || []);
+      // Scoped to the caller's repositories server-side. The Appwrite query
+      // this replaces had no ownership filter, so the stream showed every
+      // commit logged by every tenant's webhook — including the file paths
+      // flagged as sensitive.
+      const token = await getJWT();
+      const res = await fetch('/api/insights/commits?limit=50', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`commits failed: ${res.status}`);
+      setCommits((await res.json())?.documents ?? []);
     } catch (err) {
       console.error("Failed to fetch commits:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [getJWT]);
+
+  useEffect(() => {
+    fetchCommits();
+  }, [fetchCommits]);
 
   const sensitiveCount = commits.filter(c => c.is_sensitive).length;
 
