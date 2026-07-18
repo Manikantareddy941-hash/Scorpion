@@ -18,6 +18,28 @@ import { logger } from './logger';
  * the durable cross-replica path.
  */
 const KEY_PREFIX = 'scan:';
+
+/**
+ * Tenant owning a cache entry. `null` means the legacy global namespace, used
+ * by single-tenant deployments that still authenticate with the shared
+ * CI_INGEST_API_KEY.
+ */
+export type Tenant = string | null;
+
+/**
+ * Namespaces every cache entry by tenant.
+ *
+ * Without this, entries were keyed by image digest alone and shared by all
+ * tenants. Since the admission webhook gates deploys on these entries, any
+ * party able to write one could declare an arbitrary digest clean and have
+ * another tenant's pod admitted — a gate bypass rather than a disclosure.
+ *
+ * The tenant is URI-encoded so an id containing ':' cannot forge a different
+ * tenant's namespace.
+ */
+function scopedKey(prefix: string, tenant: Tenant, digest: string): string {
+  return tenant ? `${prefix}${encodeURIComponent(tenant)}:${digest}` : prefix + digest;
+}
 const MAX_ENTRIES = 1000;
 const TTL_MS = 60 * 60 * 1000; // 1h — generous vs. CI build→admission gap.
 
@@ -35,18 +57,20 @@ const redisReady = (): boolean => redisConnection.status === 'ready';
 const toMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 export async function putScan(
+  tenant: Tenant,
   digest: string,
   packages: VulnerablePackage[],
   now: number = Date.now(),
   signature?: string
 ): Promise<void> {
+  const key = scopedKey('', tenant, digest);
   // Always mirror locally so a mid-flight Redis drop still serves what we just stored.
-  putLocal(digest, packages, now, signature);
+  putLocal(key, packages, now, signature);
   if (!redisReady()) return;
   try {
-    await redisConnection.set(KEY_PREFIX + digest, JSON.stringify(packages), 'PX', TTL_MS);
+    await redisConnection.set(KEY_PREFIX + key, JSON.stringify(packages), 'PX', TTL_MS);
     if (signature) {
-      await redisConnection.set(SIG_PREFIX + digest, signature, 'PX', TTL_MS);
+      await redisConnection.set(SIG_PREFIX + key, signature, 'PX', TTL_MS);
     }
   } catch (err) {
     logger.warn('[imageStore] redis put failed — kept local fallback', { digest, error: toMessage(err) });
@@ -59,16 +83,17 @@ export async function putScan(
  * Absence (undefined) means "no signature on record" — the caller decides
  * whether that blocks (it does, fail-secure, in prod when enforcement is on).
  */
-export async function getSignature(digest: string, now: number = Date.now()): Promise<string | undefined> {
+export async function getSignature(tenant: Tenant, digest: string, now: number = Date.now()): Promise<string | undefined> {
+  const key = scopedKey('', tenant, digest);
   if (redisReady()) {
     try {
-      const raw = await redisConnection.get(SIG_PREFIX + digest);
+      const raw = await redisConnection.get(SIG_PREFIX + key);
       if (raw !== null) return raw;
     } catch (err) {
       logger.warn('[imageStore] redis sig get failed — serving local fallback', { digest, error: toMessage(err) });
     }
   }
-  const entry = fallback.get(digest);
+  const entry = fallback.get(key);
   if (entry === undefined || entry.expiresAt <= now) return undefined;
   return entry.signature;
 }
@@ -82,47 +107,50 @@ export async function getSignature(digest: string, now: number = Date.now()): Pr
 const PROV_PREFIX = 'prov:';
 const provFallback = new Map<string, { value: string; expiresAt: number }>();
 
-export async function putProvenance(digest: string, provenanceJson: string, now: number = Date.now()): Promise<void> {
-  provFallback.delete(digest);
+export async function putProvenance(tenant: Tenant, digest: string, provenanceJson: string, now: number = Date.now()): Promise<void> {
+  const key = scopedKey('', tenant, digest);
+  provFallback.delete(key);
   while (provFallback.size >= MAX_ENTRIES) {
     const oldest = provFallback.keys().next().value;
     if (oldest === undefined) break;
     provFallback.delete(oldest);
   }
-  provFallback.set(digest, { value: provenanceJson, expiresAt: now + TTL_MS });
+  provFallback.set(key, { value: provenanceJson, expiresAt: now + TTL_MS });
   if (!redisReady()) return;
   try {
-    await redisConnection.set(PROV_PREFIX + digest, provenanceJson, 'PX', TTL_MS);
+    await redisConnection.set(PROV_PREFIX + key, provenanceJson, 'PX', TTL_MS);
   } catch (err) {
     logger.warn('[imageStore] redis provenance put failed — kept local fallback', { digest, error: toMessage(err) });
   }
 }
 
-export async function getProvenance(digest: string, now: number = Date.now()): Promise<string | undefined> {
+export async function getProvenance(tenant: Tenant, digest: string, now: number = Date.now()): Promise<string | undefined> {
+  const key = scopedKey('', tenant, digest);
   if (redisReady()) {
     try {
-      const raw = await redisConnection.get(PROV_PREFIX + digest);
+      const raw = await redisConnection.get(PROV_PREFIX + key);
       if (raw !== null) return raw;
     } catch (err) {
       logger.warn('[imageStore] redis provenance get failed — serving local fallback', { digest, error: toMessage(err) });
     }
   }
-  const entry = provFallback.get(digest);
+  const entry = provFallback.get(key);
   if (entry === undefined || entry.expiresAt <= now) return undefined;
   return entry.value;
 }
 
-export async function getScan(digest: string, now: number = Date.now()): Promise<VulnerablePackage[] | undefined> {
+export async function getScan(tenant: Tenant, digest: string, now: number = Date.now()): Promise<VulnerablePackage[] | undefined> {
+  const key = scopedKey('', tenant, digest);
   if (redisReady()) {
     try {
-      const raw = await redisConnection.get(KEY_PREFIX + digest);
+      const raw = await redisConnection.get(KEY_PREFIX + key);
       if (raw !== null) return JSON.parse(raw) as VulnerablePackage[];
       // Redis up but key absent: fall through to local in case a Redis write failed.
     } catch (err) {
       logger.warn('[imageStore] redis get failed — serving local fallback', { digest, error: toMessage(err) });
     }
   }
-  return getLocal(digest, now);
+  return getLocal(key, now);
 }
 
 // --- process-local bounded LRU + lazy-TTL fallback ---------------------------

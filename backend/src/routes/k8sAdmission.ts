@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import * as assert from 'assert';
 import { logger } from '../services/logger';
-import { getScan, getSignature } from '../services/imageStore';
+import { getScan, getSignature, type Tenant } from '../services/imageStore';
 import { verifyImageDigest } from '../services/cosignService';
 import { VulnerablePackage, ReachabilityResult } from '../services/reachabilityService';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
@@ -211,7 +211,7 @@ function aggregateReachability(pkgs: VulnerablePackage[]): Reachability | undefi
  * or never scanned) → reachability:'unknown', fail-secure: the env gate blocks
  * in prod, warns in lower envs.
  */
-export async function resolveSignal(image: string): Promise<Signal> {
+export async function resolveSignal(image: string, tenant: Tenant = null): Promise<Signal> {
   const digest = imageDigest(image);
   if (!digest) return UNKNOWN_SIGNAL;
 
@@ -226,7 +226,7 @@ export async function resolveSignal(image: string): Promise<Signal> {
   });
 
   try {
-    const pkgs = await Promise.race([getScan(digest), aborted]);
+    const pkgs = await Promise.race([getScan(tenant, digest), aborted]);
     if (pkgs === TIMED_OUT) {
       logger.warn('[k8s-admission] image lookup exceeded budget — fail-secure unknown', {
         image,
@@ -255,7 +255,8 @@ export async function resolveSignal(image: string): Promise<Signal> {
  */
 export async function checkImageSignature(
   image: string,
-  env: string
+  env: string,
+  tenant: Tenant = null
 ): Promise<{ status: 'ready' | 'blocked'; reason: string }> {
   if (process.env.REQUIRE_IMAGE_SIGNATURE !== 'true' || env !== 'prod') {
     return { status: 'ready', reason: 'signature enforcement off' };
@@ -264,7 +265,7 @@ export async function checkImageSignature(
   if (!digest) {
     return { status: 'blocked', reason: 'unsigned image — no digest to verify (use an @sha256 pinned ref)' };
   }
-  const signature = await getSignature(digest);
+  const signature = await getSignature(tenant, digest);
   if (!signature) {
     return { status: 'blocked', reason: 'unsigned image — no signature on record from the build pipeline' };
   }
