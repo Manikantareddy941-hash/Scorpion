@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { setFindingStatus, setFindingStatuses } from '../lib/findingsApi';
 import {
     CheckCircle2, Bug, Activity, Shield, Cpu, Globe,
     Filter, Clock, LayoutGrid, List, ChevronRight,
@@ -37,17 +37,20 @@ export default function TasksPage() {
     const [aiBlueprintContent, setAiBlueprintContent] = useState('');
     const [aiBlueprintLoading, setAiBlueprintLoading] = useState(false);
 
-    useEffect(() => { fetchFindings(); }, []);
-
-    const fetchFindings = async () => {
+    const fetchFindings = useCallback(async () => {
         setLoading(true);
         setHasError(false);
         try {
-            const res = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
-                Query.limit(100),
-                Query.orderDesc('$createdAt')
-            ]);
-            const mappedFindings = res.documents.map((doc: any) => ({
+            // Was an unscoped query over the whole findings collection — every
+            // tenant's findings, newest first. /api/issues resolves the repos
+            // this caller can reach before querying.
+            const token = await getJWT();
+            const res = await fetch('/api/issues?limit=100', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`findings fetch failed: ${res.status}`);
+            const documents: any[] = (await res.json())?.documents ?? [];
+            const mappedFindings = documents.map((doc: any) => ({
                 $id: doc.$id,
                 title: doc.title || doc.name || 'Untitled Finding',
                 repo_name: doc.repositoryName || doc.repo_name || 'Unknown Repository',
@@ -65,12 +68,15 @@ export default function TasksPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [getJWT]);
+
+    useEffect(() => { fetchFindings(); }, [fetchFindings]);
 
     const handleResolve = async (id: string) => {
         try {
-            const resolvedAt = new Date().toISOString();
-            await databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, { status: 'resolved', resolvedAt });
+            // resolvedAt is stamped server-side; the browser no longer writes
+            // to the findings collection directly.
+            await setFindingStatus(getJWT, id, 'resolved');
             setFindings(prev => prev.map(f => f.$id === id ? { ...f, status: 'resolved' } : f));
             toast.success('Issue marked as resolved');
         } catch (err) {
@@ -90,13 +96,25 @@ export default function TasksPage() {
         const verbPast = status === 'resolved' ? 'acknowledged' : 'dismissed';
         const toastId = toast.loading(`${verb} ${selectedTasks.size} tasks...`);
         try {
-            const payload = status === 'resolved' ? { status, resolvedAt: new Date().toISOString() } : { status };
-            await Promise.all(Array.from(selectedTasks).map(id =>
-                databases.updateDocument(DB_ID, COLLECTIONS.FINDINGS, id, payload)
+            const ids = Array.from(selectedTasks);
+            const { succeeded, failed } = await setFindingStatuses(getJWT, ids, status);
+
+            // Only mark the ones that actually landed. Previously a single
+            // rejection threw, and every row kept its old status on screen even
+            // where the write had succeeded.
+            const failedSet = new Set(failed);
+            setFindings(prev => prev.map(f =>
+                selectedTasks.has(f.$id) && !failedSet.has(f.$id) ? { ...f, status } : f
             ));
-            setFindings(prev => prev.map(f => selectedTasks.has(f.$id) ? { ...f, status } : f));
-            toast.success(`Bulk ${verbPast} ${selectedTasks.size} tasks`, { id: toastId });
-            setSelectedTasks(new Set());
+            setSelectedTasks(new Set(failed));
+
+            if (failed.length === 0) {
+                toast.success(`Bulk ${verbPast} ${succeeded} tasks`, { id: toastId });
+            } else if (succeeded === 0) {
+                toast.error(`Failed to ${status === 'resolved' ? 'acknowledge' : 'dismiss'} tasks`, { id: toastId });
+            } else {
+                toast.error(`${verbPast} ${succeeded}, but ${failed.length} failed — still selected`, { id: toastId });
+            }
         } catch (err) {
             toast.error(`Failed to ${status === 'resolved' ? 'acknowledge' : 'dismiss'} tasks`, { id: toastId });
         }
