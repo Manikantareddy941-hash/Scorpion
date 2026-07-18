@@ -1,12 +1,26 @@
 import { dashboardRepository } from '../repositories/dashboardRepository';
 import { canAccessResource } from './tenancyService';
 import { logger } from './logger';
+
+/**
+ * SLA window per severity, in hours. Mirrors src/lib/sla.ts on the frontend,
+ * which is where this used to be computed from findings pulled straight into
+ * the browser. Unknown severities fall back to the medium window, matching the
+ * previous `?? 168` behaviour.
+ */
+const SLA_HOURS: Record<string, number> = { critical: 24, high: 72, medium: 168, low: 720 };
+const DEFAULT_SLA_HOURS = 168;
+const DUE_SOON_HOURS = 24;
+const HOUR_MS = 3600_000;
+
+const emptySla = (): SlaSummary => ({ breached: 0, dueSoon: 0, breachedCritical: 0, nextHours: null });
 import {
   DashboardMetrics,
   FindingDocument,
   PostureBreakdown,
   SecurityDashboardStats,
   SeverityCounts,
+  SlaSummary,
   TypeCounts
 } from '../types/dashboard.types';
 
@@ -63,7 +77,8 @@ export const dashboardService = {
         resolved_count: 0,
         remediated_today: 0,
         mttr_today_days: null,
-        mttr_days: null
+        mttr_days: null,
+        sla: emptySla()
       };
     }
 
@@ -89,6 +104,7 @@ export const dashboardService = {
       remediated_today: 0,
       mttr_today_days: null,
       mttr_days: null,
+      sla: emptySla(),
       findings
     };
 
@@ -161,6 +177,21 @@ export const dashboardService = {
         }
       } else {
         stats.open_count++;
+
+        // SLA posture, previously computed in the browser over 200 findings
+        // fetched directly from Appwrite.
+        const severity = String(finding.severity ?? '').toLowerCase();
+        const windowHours = SLA_HOURS[severity] ?? DEFAULT_SLA_HOURS;
+        const hoursLeft =
+          (new Date(finding.$createdAt).getTime() + windowHours * HOUR_MS - Date.now()) / HOUR_MS;
+        if (hoursLeft <= 0) {
+          stats.sla.breached++;
+          if (severity === 'critical') stats.sla.breachedCritical++;
+        } else {
+          if (hoursLeft <= DUE_SOON_HOURS) stats.sla.dueSoon++;
+          stats.sla.nextHours =
+            stats.sla.nextHours === null ? hoursLeft : Math.min(stats.sla.nextHours, hoursLeft);
+        }
       }
     }
 
