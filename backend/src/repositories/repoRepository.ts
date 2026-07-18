@@ -49,6 +49,16 @@ const legacyRepoRepository = {
 
   async getScan(scanId: string) {
     return databases.getDocument(DB_ID, COLLECTIONS.SCANS, scanId);
+  },
+
+  async listScans(repoIds: string[], status: string | undefined, limit: number) {
+    const filters = [
+      Query.equal('repo_id', repoIds),
+      Query.orderDesc('$createdAt'),
+      Query.limit(limit)
+    ];
+    if (status) filters.push(Query.equal('status', status));
+    return databases.listDocuments(DB_ID, COLLECTIONS.SCANS, filters);
   }
 };
 

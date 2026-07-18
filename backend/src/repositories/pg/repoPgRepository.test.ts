@@ -48,4 +48,35 @@ describeDb('repoPgRepository', () => {
     const scan = await repoPgRepository.createScan({ repo_id: 'r1', status: 'pending' });
     expect((await repoPgRepository.getScan(scan.$id)).status).toBe('pending');
   });
+
+  it('listScans filters to the given repos, newest first', async () => {
+    await repoPgRepository.createScan({ repo_id: 'r1', status: 'completed' });
+    await repoPgRepository.createScan({ repo_id: 'r2', status: 'completed' });
+    await repoPgRepository.createScan({ repo_id: 'other-tenant', status: 'completed' });
+
+    const list = await repoPgRepository.listScans(['r1', 'r2'], undefined, 50);
+
+    expect(list.total).toBe(2);
+    expect(list.documents.map(d => d.repo_id).sort()).toEqual(['r1', 'r2']);
+  });
+
+  it('listScans applies the status filter', async () => {
+    await repoPgRepository.createScan({ repo_id: 'r1', status: 'completed' });
+    await repoPgRepository.createScan({ repo_id: 'r1', status: 'failed' });
+
+    const list = await repoPgRepository.listScans(['r1'], 'completed', 50);
+
+    expect(list.total).toBe(1);
+    expect(list.documents[0].status).toBe('completed');
+  });
+
+  it('listScans returns nothing for an empty repo list rather than every scan', async () => {
+    await repoPgRepository.createScan({ repo_id: 'r1', status: 'completed' });
+    expect((await repoPgRepository.listScans([], undefined, 50)).total).toBe(0);
+  });
+
+  it('listScans honours the limit', async () => {
+    for (let i = 0; i < 5; i++) await repoPgRepository.createScan({ repo_id: 'r1', status: 'completed' });
+    expect((await repoPgRepository.listScans(['r1'], undefined, 2)).total).toBe(2);
+  });
 });

@@ -151,6 +151,26 @@ router.post('/:id/scan', scanTriggerLimiter, validateBody(triggerScanSchema), as
 });
 
 // Poll scan status — returns all fields the frontend needs
+// List scans across every repo the caller can reach. `repoId` narrows to one.
+// Registered before '/:id' so the literal path is not swallowed by the param.
+router.get('/scans', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const { repoId, status } = req.query;
+        const limit = Math.min(Number(req.query.limit) || 50, 200);
+        const result = await repoService.listScans(req, req.user!.$id, {
+            repoId: repoId as string | undefined,
+            status: status as string | undefined,
+            limit,
+        });
+
+        if (result === 'not_found') return res.status(404).json({ error: 'Repository not found' });
+        res.json({ total: result.documents.length, documents: result.documents });
+    } catch (error: unknown) {
+        if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
+        next(error);
+    }
+});
+
 router.get('/scans/:scanId', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const { scanId } = req.params;
@@ -263,6 +283,19 @@ router.put('/:id/access', async (req: AuthenticatedRequest, res: Response, next:
         res.json({ message: action === 'revoke' ? 'Access revoked' : 'Access granted' });
     } catch (err) {
         next(err);
+    }
+});
+
+// Single repo. Declared LAST: '/:id' matches one segment, so it would otherwise
+// shadow '/external', '/scans', and every other literal single-segment route.
+router.get('/:id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const repo = await repoService.getRepoById(req.user!.$id, req.params.id);
+        if (repo === 'not_found') return res.status(404).json({ error: 'Repository not found' });
+        res.json(repo);
+    } catch (error: unknown) {
+        if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
+        next(error);
     }
 });
 

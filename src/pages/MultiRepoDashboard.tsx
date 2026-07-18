@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import SBOMExportButton from '../components/SBOMExportButton';
@@ -45,6 +44,9 @@ export default function MultiRepoDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
   const [rescanning, setRescanning] = useState<string | null>(null);
+  // A toast disappears; the summary bar does not. Without this, a failed load
+  // leaves "Critical: 0" on screen, which reads as a clean estate.
+  const [loadFailed, setLoadFailed] = useState(false);
   const { user, getJWT } = useAuth();
 
   // Fetch completed scans for the current user's repositories only.
@@ -52,27 +54,27 @@ export default function MultiRepoDashboard() {
     if (!user) return;
     setLoading(true);
     try {
-      const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-        Query.equal('user_id', user.$id),
-        Query.limit(200),
+      // Both calls are scoped server-side to the repositories this caller owns
+      // or shares via a team. The scan list previously relied on repo ids
+      // gathered by a direct Appwrite query to stand in for a tenant filter,
+      // which only held as long as that first query stayed scoped.
+      const token = await getJWT();
+      const authed = { headers: { Authorization: `Bearer ${token}` } };
+
+      const [reposRes, scansRes] = await Promise.all([
+        fetch('/api/repos', authed),
+        fetch('/api/repos/scans?status=completed&limit=200', authed),
       ]);
+      if (!reposRes.ok) throw new Error(`repos fetch failed: ${reposRes.status}`);
+      if (!scansRes.ok) throw new Error(`scans fetch failed: ${scansRes.status}`);
+
       const repoNameById: Record<string, string> = {};
-      reposRes.documents.forEach((r: any) => { repoNameById[r.$id] = r.name; });
-      const repoIds = reposRes.documents.map((r: any) => r.$id);
+      ((await reposRes.json()) ?? []).forEach((r: any) => { repoNameById[r.$id] = r.name; });
 
-      if (repoIds.length === 0) {
-        setScans([]);
-        return;
-      }
-
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-        Query.equal('repo_id', repoIds),
-        Query.equal('status', 'completed'),
-        Query.orderDesc('$createdAt'),
-        Query.limit(200),
-      ]);
-      const docs = res.documents.map((d: any) => mapScan(d, repoNameById[d.repo_id]));
+      const scanDocs: any[] = (await scansRes.json())?.documents ?? [];
+      const docs = scanDocs.map((d: any) => mapScan(d, repoNameById[d.repo_id]));
       setScans(docs);
+      setLoadFailed(false);
       if (docs.length && !selectedRepoId) {
         // default to the repo with the worst score
         const worst = docs.reduce((a, b) => (a.security_score < b.security_score ? a : b));
@@ -80,6 +82,7 @@ export default function MultiRepoDashboard() {
       }
     } catch (e) {
       console.error('Failed to fetch scans', e);
+      setLoadFailed(true);
       toast.error('Failed to load repository scans');
     } finally {
       setLoading(false);
@@ -156,13 +159,27 @@ export default function MultiRepoDashboard() {
       ) : (
         <>
           {/* Summary Bar */}
-          <div className="premium-card p-6 mb-8 flex flex-wrap gap-6 items-center justify-between">
-            <div className="text-sm font-black uppercase">Avg Score: {avgScore}</div>
-            <div className="text-sm font-black uppercase">Critical: {summary.totalCritical}</div>
-            <div className="text-sm font-black uppercase">High: {summary.totalHigh}</div>
-            <div className="text-sm font-black uppercase">Medium: {summary.totalMedium}</div>
-            <div className="text-sm font-black uppercase">Low: {summary.totalLow}</div>
-          </div>
+          {loadFailed ? (
+            <div className="premium-card p-6 mb-8 flex flex-wrap gap-4 items-center justify-between border-[#ff8a00]">
+              <div className="text-sm font-black uppercase text-[#ff8a00]">Scan data unavailable</div>
+              <div className="text-xs text-[var(--text-secondary)] normal-case font-medium">
+                These are not zero findings — the scan list could not be loaded.
+              </div>
+              <button
+                onClick={fetchScans}
+                className="text-xs font-black uppercase px-3 py-1.5 rounded-md border border-[var(--accent-primary)] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-white transition-colors">
+                Retry
+              </button>
+            </div>
+          ) : (
+            <div className="premium-card p-6 mb-8 flex flex-wrap gap-6 items-center justify-between">
+              <div className="text-sm font-black uppercase">Avg Score: {avgScore}</div>
+              <div className="text-sm font-black uppercase">Critical: {summary.totalCritical}</div>
+              <div className="text-sm font-black uppercase">High: {summary.totalHigh}</div>
+              <div className="text-sm font-black uppercase">Medium: {summary.totalMedium}</div>
+              <div className="text-sm font-black uppercase">Low: {summary.totalLow}</div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Repo List */}
