@@ -7,13 +7,14 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 
 interface VerifyFixButtonProps {
-  taskId: string;
+  /** The finding this fix was meant to close — what verification checks. */
+  findingId: string;
   repoId: string;
   repoUrl: string;
   onVerified: () => void;
 }
 
-export default function VerifyFixButton({ taskId, repoId, onVerified }: VerifyFixButtonProps) {
+export default function VerifyFixButton({ findingId, repoId, onVerified }: VerifyFixButtonProps) {
   const { t } = useTranslation();
   const { getJWT } = useAuth();
   const [isVerifying, setIsVerifying] = useState(false);
@@ -52,17 +53,17 @@ export default function VerifyFixButton({ taskId, repoId, onVerified }: VerifyFi
 
       if (!completed) throw new Error("Verification timed out");
 
-      // 3. Mark as verified
-      const verified = await verifyService.markVulnerabilityAsVerified(repoId);
-      
+      // 3. Did the rescan clear this finding?
+      const verified = await verifyService.isFindingResolved(findingId, token);
+
       if (verified) {
         setStatus('success');
-        
+
         // Log audit event
         await auditService.log(
-          'VULNERABILITY_VERIFIED', 
-          'Repository', 
-          `Fix verified for task ${taskId} in repository ${repoId}`,
+          'VULNERABILITY_VERIFIED',
+          'Repository',
+          `Fix verified for finding ${findingId} in repository ${repoId}`,
           repoId
         );
 

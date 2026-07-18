@@ -179,3 +179,40 @@ describe('access control', () => {
     expect(updateDocument).not.toHaveBeenCalled();
   });
 });
+
+describe('GET /api/findings/:id', () => {
+  it('returns the finding with its repository', async () => {
+    getDocument
+      .mockResolvedValueOnce({ $id: 'f1', status: 'open', repo_id: 'r1' })
+      .mockResolvedValueOnce({ $id: 'r1', url: 'https://github.com/acme/api' });
+
+    const res = await request(app).get('/api/findings/f1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.finding.$id).toBe('f1');
+    expect(res.body.repo.$id).toBe('r1');
+    // The repo is reached via the finding's own repo_id. The panel used to hop
+    // through `scan_result_id`, which nothing writes.
+    expect(getDocument.mock.calls[1][2]).toBe('r1');
+  });
+
+  it('404s, not 403s, on another tenant finding', async () => {
+    (canAccessResource as jest.Mock).mockResolvedValueOnce(false);
+    getDocument
+      .mockResolvedValueOnce({ $id: 'f1', status: 'open', repo_id: 'r1' })
+      .mockResolvedValueOnce({ $id: 'r1', user_id: 'someone-else' });
+
+    const res = await request(app).get('/api/findings/f1');
+
+    expect(res.status).toBe(404);
+    expect(res.body).not.toHaveProperty('finding');
+  });
+
+  it('404s when the finding has no repository to authorise against', async () => {
+    getDocument.mockResolvedValueOnce({ $id: 'f1', status: 'open' });
+
+    const res = await request(app).get('/api/findings/f1');
+
+    expect(res.status).toBe(404);
+  });
+});

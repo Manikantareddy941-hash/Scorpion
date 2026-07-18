@@ -17,7 +17,7 @@ function codeOwner(repo: any): string | null {
 }
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { databases, functions, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { functions } from '../lib/appwrite';
 import VerifyFixButton from './VerifyFixButton';
 
 interface RemediationPanelProps {
@@ -88,39 +88,29 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
         setLoading(true);
         setError('');
         try {
-            // 1. Fetch Finding Details
-            const findingDoc = await databases.getDocument(
-                DB_ID,
-                COLLECTIONS.VULNERABILITIES,
-                documentId
-            );
+            const token = await getJWT();
+            const apiBase = '';
 
-            if (!findingDoc) {
+            // 1. Finding + its repository, in one tenant-scoped call.
+            //
+            // This used to be three direct Appwrite reads, and reached the repo
+            // by way of `findingDoc.scan_result_id` — a field nothing writes.
+            // That lookup threw on every open, so the panel always rendered its
+            // error state and never reached the AI remediation call below.
+            const findingRes = await fetch(`${apiBase}/api/findings/${documentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!findingRes.ok) {
                 setError(t('remediation.vuln_not_found', 'Vulnerability footprint not found in central registry.'));
                 return;
             }
 
+            const { finding: findingDoc, repo: repository } = await findingRes.json();
             setFinding(findingDoc);
+            setRepo(repository);
 
-            // 2. Fetch Repo Details via Scan
-            const scanDoc = await databases.getDocument(
-                DB_ID,
-                COLLECTIONS.SCANS,
-                findingDoc.scan_result_id
-            );
-            
-            if (scanDoc && scanDoc.repo_id) {
-                const repository = await databases.getDocument(
-                    DB_ID,
-                    COLLECTIONS.REPOSITORIES,
-                    scanDoc.repo_id
-                );
-                setRepo(repository);
-            }
-
-            // 3. Get AI Analysis / Fixed Version
-            const token = await getJWT();
-            const apiBase = '';
+            // 2. Get AI Analysis / Fixed Version
 
             try {
                 const response = await fetch(`${apiBase}/api/vulns/${documentId}/remediate`, {
@@ -245,15 +235,10 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || t('remediation.fail_pr', 'Failed to create PR'));
 
+            // The endpoint records pr_url and resolution_status against the
+            // finding itself, where the repository ownership it already
+            // checked can be applied to the finding too.
             setPrState({ status: 'success', prUrl: data.prUrl });
-
-            // Store PR URL in Appwrite
-            await databases.updateDocument(
-                DB_ID,
-                COLLECTIONS.VULNERABILITIES,
-                finding.$id,
-                { pr_url: data.prUrl, resolution_status: 'remediated' }
-            );
 
         } catch (err: any) {
             setPrState({ status: 'error', error: err.message });
@@ -416,7 +401,7 @@ export default function RemediationPanel({ documentId, onClose }: RemediationPan
                                         </a>
                                         {repo?.$id && (
                                             <VerifyFixButton
-                                                taskId={documentId}
+                                                findingId={documentId}
                                                 repoId={repo.$id}
                                                 repoUrl={repo.repo_url || repo.name || ''}
                                                 onVerified={fetchFix}

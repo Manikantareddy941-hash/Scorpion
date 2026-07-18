@@ -26,6 +26,58 @@ const ALLOWED_STATUSES = new Set([
     'open', 'resolved', 'remediated', 'dismissed', 'false_positive', 'snoozed',
 ]);
 
+/**
+ * Loads a finding together with the repository it belongs to, or null if this
+ * caller cannot reach it.
+ *
+ * A missing finding, a finding with no repository, and someone else's finding
+ * are deliberately indistinguishable: callers turn all three into a 404. A 403
+ * would confirm the id exists, which makes these routes an enumeration oracle.
+ */
+interface FindingDocument extends Models.Document {
+    status?: string;
+    repo_id?: string;
+    reopenCount?: number;
+    title?: string;
+}
+
+async function loadAccessibleFinding(
+    id: string,
+    userId: string,
+): Promise<{ finding: FindingDocument; repo: Models.Document } | null> {
+    const finding = await databases
+        .getDocument<FindingDocument>(DB_ID, COLLECTIONS.FINDINGS, id)
+        .catch(() => null);
+    if (!finding) return null;
+
+    const repo = finding.repo_id
+        ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, finding.repo_id).catch(() => null)
+        : null;
+    if (!repo || !(await canAccessResource(repo, userId))) return null;
+
+    return { finding, repo };
+}
+
+/**
+ * A single finding plus its repository.
+ *
+ * The remediation panel used to assemble this in the browser, and reached the
+ * repository by way of `finding.scan_result_id` — a field nothing in the system
+ * writes. That lookup threw on every open, so the panel never got past it to
+ * request an AI remediation. Findings carry `repo_id` directly, so the scan hop
+ * was never needed.
+ */
+router.get('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const loaded = await loadAccessibleFinding(req.params.id, req.user?.$id || '');
+        if (!loaded) return res.status(404).json({ error: 'Finding not found' });
+        res.json(loaded);
+    } catch (err: unknown) {
+        logger.error('[Finding API Error]', errorMessage(err));
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Update finding status (e.g., mark as resolved)
 router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -42,22 +94,11 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
         }
 
         const userId = req.user?.$id || '';
-        // 404 rather than 403 for a finding this caller cannot reach: a 403
-        // confirms the id exists, which makes this route an enumeration oracle.
-        // A missing finding, a finding with no repository, and someone else's
-        // finding are deliberately indistinguishable from outside.
-        const existingFinding = await databases
-            .getDocument(DB_ID, COLLECTIONS.FINDINGS, id)
-            .catch(() => null);
-        if (!existingFinding) {
+        const loaded = await loadAccessibleFinding(id, userId);
+        if (!loaded) {
             return res.status(404).json({ error: 'Finding not found' });
         }
-        const repo = existingFinding.repo_id
-            ? await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, existingFinding.repo_id).catch(() => null)
-            : null;
-        if (!repo || !(await canAccessResource(repo, userId))) {
-            return res.status(404).json({ error: 'Finding not found' });
-        }
+        const existingFinding = loaded.finding;
 
         const wasResolved = existingFinding.status === 'resolved';
         const nowReopened = status !== 'resolved';
