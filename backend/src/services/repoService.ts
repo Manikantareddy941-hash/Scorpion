@@ -105,12 +105,16 @@ export const repoService = {
 
   /** Creates a scan record and fires off the (queued) scan; does not await the scan itself. */
   async triggerScan(userId: string, repoId: string, options: TriggerScanInput): Promise<'scan_in_progress' | 'not_found' | 'forbidden' | { scanId: string }> {
-    const activeScans = await repoRepository.findActiveScan(repoId);
-    if (activeScans.total > 0) return 'scan_in_progress';
-
+    // Authorize before probing scan state. Checking findActiveScan first let a
+    // caller distinguish 'scan_in_progress' from 'forbidden' on a repo they do
+    // not own, which leaks both the repo's existence and whether it is being
+    // scanned right now.
     const repo = await repoRepository.getRepo(repoId);
     if (!repo || !repo.url) return 'not_found';
     if (!(await canAccessResource(repo, userId))) return 'forbidden';
+
+    const activeScans = await repoRepository.findActiveScan(repoId);
+    if (activeScans.total > 0) return 'scan_in_progress';
 
     const scanStartedAt = new Date().toISOString();
     const scan = await repoRepository.createScan({
