@@ -62,6 +62,7 @@ export const dashboardService = {
         open_count: 0,
         resolved_count: 0,
         remediated_today: 0,
+        mttr_today_days: null,
         mttr_days: null
       };
     }
@@ -86,6 +87,7 @@ export const dashboardService = {
       open_count: 0,
       resolved_count: 0,
       remediated_today: 0,
+      mttr_today_days: null,
       mttr_days: null,
       findings
     };
@@ -99,6 +101,7 @@ export const dashboardService = {
     const repoCounts: Record<string, { total: number; critical: number; high: number }> = {};
     const trendCounts: Record<string, number> = {};
     const resolutionDurationsMs: number[] = [];
+    const todayResolutionDurationsMs: number[] = [];
 
     // Map scanId to repoId for fallback
     const scanToRepo: Record<string, string> = {};
@@ -152,16 +155,22 @@ export const dashboardService = {
         const created = new Date(finding.$createdAt).getTime();
         const resolved = new Date(finding.$updatedAt).getTime();
         if (resolved > created) resolutionDurationsMs.push(resolved - created);
-        if (resolved >= startOfDayMs) stats.remediated_today++;
+        if (resolved >= startOfDayMs) {
+          stats.remediated_today++;
+          if (resolved > created) todayResolutionDurationsMs.push(resolved - created);
+        }
       } else {
         stats.open_count++;
       }
     }
 
-    if (resolutionDurationsMs.length > 0) {
-      const avgMs = resolutionDurationsMs.reduce((sum, ms) => sum + ms, 0) / resolutionDurationsMs.length;
-      stats.mttr_days = Math.round((avgMs / (1000 * 60 * 60 * 24)) * 10) / 10;
-    }
+    const meanDays = (durations: number[]): number | null => {
+      if (durations.length === 0) return null;
+      const avgMs = durations.reduce((sum, ms) => sum + ms, 0) / durations.length;
+      return Math.round((avgMs / (1000 * 60 * 60 * 24)) * 10) / 10;
+    };
+    stats.mttr_days = meanDays(resolutionDurationsMs);
+    stats.mttr_today_days = meanDays(todayResolutionDurationsMs);
 
     stats.by_repo = Object.entries(repoCounts).map(([id, counts]) => ({
       repo_id: id,
