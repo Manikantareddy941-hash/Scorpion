@@ -61,6 +61,7 @@ export const dashboardService = {
         trend: [],
         open_count: 0,
         resolved_count: 0,
+        remediated_today: 0,
         mttr_days: null
       };
     }
@@ -84,9 +85,16 @@ export const dashboardService = {
       trend: [],
       open_count: 0,
       resolved_count: 0,
+      remediated_today: 0,
       mttr_days: null,
       findings
     };
+
+    // Local midnight: "today" means the viewer's day, matching what the
+    // dashboard label claims.
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const startOfDayMs = startOfDay.getTime();
 
     const repoCounts: Record<string, { total: number; critical: number; high: number }> = {};
     const trendCounts: Record<string, number> = {};
@@ -144,6 +152,7 @@ export const dashboardService = {
         const created = new Date(finding.$createdAt).getTime();
         const resolved = new Date(finding.$updatedAt).getTime();
         if (resolved > created) resolutionDurationsMs.push(resolved - created);
+        if (resolved >= startOfDayMs) stats.remediated_today++;
       } else {
         stats.open_count++;
       }
