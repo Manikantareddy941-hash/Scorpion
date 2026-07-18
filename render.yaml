@@ -1,0 +1,78 @@
+# Render blueprint for a $0-tier Scorpion deployment.
+#
+# Postgres and Redis are deliberately NOT declared here. Render's own free
+# Postgres expires after 30 days, which would take the database with it; Neon
+# and Upstash have free tiers that do not. Point DATABASE_URL and REDIS_URL at
+# those and this blueprint stays free indefinitely.
+#
+# Every secret below is `sync: false`, meaning Render prompts for it rather than
+# reading it from this file. Nothing secret belongs in version control.
+services:
+  - type: web
+    name: scorpion-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    # The build context is the repo root: backend/src imports shared/types.ts
+    # via a relative path that reaches outside backend/.
+    dockerContext: .
+    healthCheckPath: /api/health
+    # Migrations run before traffic shifts to the new instance, so the schema is
+    # never behind the code that expects it.
+    preDeployCommand: npm run migrate:up
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # No Docker daemon on a hosted container — scanners run as host processes.
+      - key: RUNNER_MODE
+        value: binary
+      - key: PORT
+        value: 3001
+
+      # --- Data stores (external free tiers) ---
+      - key: DATABASE_URL      # Neon: postgres://...  (must be postgres:// — a
+        sync: false            # file: URL routes repositories to the wrong driver)
+      - key: REDIS_URL         # Upstash
+        sync: false
+
+      # --- Auth (Appwrite remains the identity provider) ---
+      - key: APPWRITE_ENDPOINT
+        sync: false
+      - key: APPWRITE_PROJECT_ID
+        sync: false
+      - key: APPWRITE_API_KEY
+        sync: false
+      - key: APPWRITE_DATABASE_ID
+        sync: false
+
+      # --- Ingress security ---
+      # Browser origins allowed to call the API. Leaving this unset in
+      # production is how a CORS policy accidentally becomes "everyone".
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      # Required by ideRoutes in production; without it that route returns 503
+      # rather than trusting a proxy-forwarded address.
+      - key: IDE_SCAN_SECRET
+        generateValue: true
+
+      # --- Inbound webhook secrets (each endpoint fails closed without its own) ---
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: GITLAB_WEBHOOK_SECRET
+        sync: false
+      - key: FALCO_SECRET
+        generateValue: true
+      - key: SCORPION_WEBHOOK_SECRET
+        generateValue: true
+      - key: CI_INGEST_API_KEY
+        generateValue: true
+
+      # --- Optional integrations (leave unset to disable) ---
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
