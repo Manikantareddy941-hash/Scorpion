@@ -46,9 +46,12 @@ export default function Reports() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const { databases, DB_ID, COLLECTIONS } = await import('../lib/appwrite');
-      const res = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES);
-      const mappedRepos = res.documents.map((doc: any) => ({
+      // Was an unfiltered read of the repositories collection.
+      const token = await getJWT();
+      const res = await fetch('/api/repos', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`repos failed: ${res.status}`);
+      const documents = await res.json();
+      const mappedRepos = (Array.isArray(documents) ? documents : []).map((doc: any) => ({
         repo_id: doc.$id,
         repo_name: doc.name || doc.url?.split('/').pop()?.replace('.git', '') || 'Unknown Repo',
         count: doc.vulnerabilityCount || 0,
@@ -67,12 +70,16 @@ export default function Reports() {
 
   const fetchRecentReports = async () => {
     try {
-      const { databases, DB_ID, COLLECTIONS, Query } = await import('../lib/appwrite');
-      const res = await databases.listDocuments(DB_ID, (COLLECTIONS as any).REPORTS, [
-        Query.limit(5),
-        Query.orderDesc('$createdAt'),
-      ]);
-      setRecentReports(res.documents);
+      // `(COLLECTIONS as any).REPORTS` did not exist on the COLLECTIONS map,
+      // so this passed `undefined` as the collection id and threw every time —
+      // the cast is what kept the type checker quiet. This panel has never
+      // shown anything. The query also had no owner filter.
+      const token = await getJWT();
+      const res = await fetch('/api/reports/history?limit=5', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`report history failed: ${res.status}`);
+      setRecentReports((await res.json())?.documents ?? []);
     } catch (err) {
       console.error('Failed to fetch recent reports:', err);
     }
@@ -139,18 +146,25 @@ export default function Reports() {
       a.click();
       window.URL.revokeObjectURL(url);
 
-      // Record in Appwrite
-      const { databases, DB_ID, COLLECTIONS, ID } = await import('../lib/appwrite');
+      // Record the export. userId is stamped from the session; the browser
+      // used to supply it alongside a collection id that resolved to undefined.
       if (user?.$id) {
-        await databases.createDocument(DB_ID, (COLLECTIONS as any).REPORTS, ID.unique(), {
-          userId: user.$id,
-          title: `Security Audit: ${repoName}`,
-          type: format,
-          repositoryId: selectedRepo,
-          status: 'completed',
-          createdAt: new Date().toISOString(),
-          data: JSON.stringify({ range: { from: dateFrom, to: dateTo } }),
+        const token = await getJWT();
+        const recordRes = await fetch('/api/reports/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            title: `Security Audit: ${repoName}`,
+            type: format,
+            repositoryId: selectedRepo,
+            data: JSON.stringify({ range: { from: dateFrom, to: dateTo } }),
+          }),
         });
+        // The file has already downloaded at this point, so a failure to record
+        // it must not be reported as a failed export.
+        if (!recordRes.ok) {
+          console.warn('Report downloaded but not recorded in history:', recordRes.status);
+        }
         fetchRecentReports();
       }
 

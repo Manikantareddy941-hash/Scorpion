@@ -1,6 +1,6 @@
 import { Router, Response, Request, NextFunction } from 'express';
 import { Models } from 'node-appwrite';
-import { databases, DB_ID, Query } from '../lib/appwrite';
+import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logAuditEvent } from '../utils/auditLogger';
 import PDFDocument from 'pdfkit';
@@ -203,6 +203,59 @@ router.get('/posture', verifyUser, async (req: AuthenticatedRequest, res: Respon
     } catch (err: unknown) {
         logger.error('[Posture Report Error]', err);
         res.status(500).json({ error: 'Failed to generate posture report' });
+    }
+});
+
+/**
+ * Report history for the calling user.
+ *
+ * The Reports page kept this list itself, reading and writing
+ * `(COLLECTIONS as any).REPORTS` — a key that does not exist on the frontend
+ * COLLECTIONS map, so every call passed `undefined` as the collection id and
+ * threw. The cast is what hid it from the type checker; the panel has never
+ * shown anything. The list query also carried no owner filter, so had the id
+ * resolved it would have listed every tenant's reports.
+ */
+router.get('/history', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const result = await databases.listDocuments(DB_ID, COLLECTIONS.REPORTS, [
+            Query.equal('userId', req.user!.$id),
+            Query.orderDesc('$createdAt'),
+            Query.limit(Math.min(Number(req.query.limit) || 5, 50)),
+        ]);
+        res.json(result);
+    } catch (err) {
+        next(err);
+    }
+});
+
+router.post('/history', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+        const { title, type, repositoryId, data } = req.body ?? {};
+        if (!title) return res.status(400).json({ error: 'title is required' });
+
+        // The repository the report covers must be one this caller can reach.
+        if (repositoryId) {
+            const repo = await databases
+                .getDocument(DB_ID, COLLECTIONS.REPOSITORIES, String(repositoryId))
+                .catch(() => null);
+            if (!repo || !(await canAccessResource(repo, req.user!.$id))) {
+                return res.status(404).json({ error: 'Repository not found' });
+            }
+        }
+
+        const doc = await databases.createDocument(DB_ID, COLLECTIONS.REPORTS, ID.unique(), {
+            userId: req.user!.$id,
+            title: String(title).slice(0, 512),
+            type: String(type || 'pdf').slice(0, 32),
+            repositoryId: repositoryId ? String(repositoryId) : '',
+            status: 'completed',
+            createdAt: new Date().toISOString(),
+            data: typeof data === 'string' ? data.slice(0, 65536) : JSON.stringify(data ?? {}),
+        });
+        res.status(201).json(doc);
+    } catch (err) {
+        next(err);
     }
 });
 

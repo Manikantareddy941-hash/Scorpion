@@ -27,7 +27,9 @@ const ALLOWLIST: Record<string, string> = {
   'policyRoutes.ts':
     "Self-scoped: list filters userId, mutations check existing.userId === caller before writing",
   'ideRoutes.ts':
-    'Localhost-only IDE integration (req.ip gate); scan runs on a local path, not tenant data'
+    'Localhost-only IDE integration (req.ip gate); scan runs on a local path, not tenant data',
+  'chatRoutes.ts':
+    "Self-scoped: CHAT_SESSIONS stores the owner as `userId` (camelCase, so the user_id marker misses it); the list filters it and every mutation checks doc.userId === caller before writing"
 };
 
 test('every DB-touching route file scopes by tenant or is allowlisted with a reason', () => {
