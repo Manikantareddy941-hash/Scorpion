@@ -44,6 +44,9 @@ export interface ScanStatusResponse {
   repo_id: string;
   scan_type: string;
   created_at: string;
+  repoUrl: string;
+  visibility: string;
+  scannerVersion: string;
   critical: number;
   high: number;
   medium: number;
