@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { useAuth } from '../contexts/AuthContext';
 import {
     Shield, ArrowLeft, Terminal, RefreshCw, Play, Trash2, X
@@ -37,6 +36,8 @@ export default function ProjectDetail() {
     const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
     const [scans, setScans] = useState<Scan[]>([]);
     const [loading, setLoading] = useState(true);
+    // "0 Findings" and "couldn't load" must not look the same on a security page.
+    const [loadFailed, setLoadFailed] = useState(false);
     const [triggering, setTriggering] = useState(false);
     const [activeTab, setActiveTab] = useState<'findings' | 'governance' | 'access'>('findings');
     const [policy, setPolicy] = useState<any>(null);
@@ -54,41 +55,40 @@ export default function ProjectDetail() {
     const fetchData = async () => {
         if (!id) return;
         try {
-            // Fetch repo details
-            const repoData = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, id);
-            setRepo(repoData);
-
-            // Fetch scans
-            const scansData = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
-                Query.equal('repo_id', id),
-                Query.orderDesc('$createdAt'),
-                Query.limit(20)
-            ]);
-            setScans(scansData.documents as any[]);
-
-            // Fetch vulnerabilities
-            const vulnerabilitiesData = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
-                Query.equal('repo_id', id),
-                Query.orderDesc('$createdAt'),
-                Query.limit(100)
-            ]);
-            setVulnerabilities(vulnerabilitiesData.documents as any[]);
-
             const token = await getJWT();
+            const authed = { headers: { 'Authorization': `Bearer ${token}` } };
+
+            // Repo, scans and findings all come from the backend, which checks
+            // this caller can reach the repository before returning anything.
+            // These were direct Appwrite queries keyed on the :id in the URL —
+            // any id in the address bar returned that repo's findings.
+            const [repoRes, scansRes, findingsRes] = await Promise.all([
+                fetch(`/api/repos/${id}`, authed),
+                fetch(`/api/repos/scans?repoId=${encodeURIComponent(id)}&limit=20`, authed),
+                fetch(`/api/issues?repoId=${encodeURIComponent(id)}&limit=100`, authed),
+            ]);
+
+            if (!repoRes.ok) throw new Error(`repo fetch failed: ${repoRes.status}`);
+            setRepo(await repoRes.json());
+
+            if (!scansRes.ok) throw new Error(`scans fetch failed: ${scansRes.status}`);
+            setScans((await scansRes.json())?.documents ?? []);
+
+            if (!findingsRes.ok) throw new Error(`findings fetch failed: ${findingsRes.status}`);
+            setVulnerabilities((await findingsRes.json())?.documents ?? []);
+            setLoadFailed(false);
+
             // Fetch Policy
-            const policyRes = await fetch(`/api/repos/${id}/policy`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const policyRes = await fetch(`/api/repos/${id}/policy`, authed);
             if (policyRes.ok) setPolicy(await policyRes.json());
 
             // Fetch Access
-            const accessRes = await fetch(`/api/repos/${id}/access`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const accessRes = await fetch(`/api/repos/${id}/access`, authed);
             if (accessRes.ok) setProjectAccess(await accessRes.json());
 
         } catch (err: any) {
             console.error('Error fetching project data:', err);
+            setLoadFailed(true);
         } finally {
             setLoading(false);
         }
@@ -178,7 +178,9 @@ export default function ProjectDetail() {
                             <p className="text-[var(--text-secondary)] font-mono text-[10px] mb-8 tracking-tight uppercase italic">{repo?.url}</p>
                             <div className="flex flex-wrap gap-4">
                                 <Badge label={`Risk Score: ${repo?.risk_score || 0}%`} severity={(repo?.risk_score || 0) > 60 ? 'high' : 'low'} />
-                                <Badge label={`${vulnerabilities.length} Findings`} severity="info" />
+                                <Badge
+                                    label={loadFailed ? 'Findings unavailable' : `${vulnerabilities.length} Findings`}
+                                    severity={loadFailed ? 'high' : 'info'} />
                                 <Badge label={`Status: Online`} severity="success" />
                             </div>
                         </div>

@@ -88,4 +88,20 @@ export const repoPgRepository = {
     if (result.rowCount === 0) throw new Error('document not found');
     return toDoc(result.rows[0]);
   },
+
+  async listScans(repoIds: string[], status: string | undefined, limit: number): Promise<ListResult> {
+    // An empty repoIds means the caller can reach no repositories. `= ANY('{}')`
+    // already yields nothing, but returning early keeps that explicit — a bug
+    // that widened this to "all scans" would be a cross-tenant leak.
+    if (repoIds.length === 0) return { total: 0, documents: [] };
+    const result = await getPool().query(
+      `SELECT id, data, created_at FROM app_scans
+        WHERE data->>'repo_id' = ANY($1)
+          AND ($2::text IS NULL OR data->>'status' = $2)
+        ORDER BY created_at DESC
+        LIMIT $3`,
+      [repoIds, status ?? null, limit]
+    );
+    return { total: result.rowCount ?? 0, documents: result.rows.map(toDoc) };
+  },
 };

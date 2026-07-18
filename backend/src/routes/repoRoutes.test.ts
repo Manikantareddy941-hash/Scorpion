@@ -26,6 +26,7 @@ jest.mock('../lib/appwrite', () => ({
     Query: {
         equal: (field: string, value: unknown) => ({ equal: [field, value] }),
         limit: (n: number) => ({ limit: n }),
+        orderDesc: (field: string) => ({ orderDesc: field }),
     },
 }));
 jest.mock('../services/ingestionService', () => ({
@@ -332,5 +333,119 @@ describe('repoRoutes team access', () => {
         (databases.listDocuments as jest.Mock).mockResolvedValue({ total: 1, documents: [{ $id: 'row-1' }] });
         expect((await request(buildApp()).put('/api/repos/r1/access').send({ team_id: 't1', action: 'revoke' })).statusCode).toBe(200);
         expect(databases.deleteDocument).toHaveBeenCalledWith('test-db', expect.anything(), 'row-1');
+    });
+});
+
+describe('repoRoutes GET /scans', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    const accessibleRepos = { total: 2, documents: [{ $id: 'repo-1' }, { $id: 'repo-2' }] };
+
+    it('lists scans only for repositories the caller can reach', async () => {
+        (databases.listDocuments as jest.Mock)
+            .mockResolvedValueOnce(accessibleRepos)
+            .mockResolvedValueOnce({ total: 1, documents: [{ $id: 'scan-1', repo_id: 'repo-1' }] });
+
+        const res = await request(buildApp()).get('/api/repos/scans');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.documents).toHaveLength(1);
+        // The scan query must be constrained to the accessible ids, not run unfiltered.
+        const scanQuery = (databases.listDocuments as jest.Mock).mock.calls[1][2];
+        expect(scanQuery).toContainEqual({ equal: ['repo_id', ['repo-1', 'repo-2']] });
+    });
+
+    it('404s on a repoId the caller cannot reach, without querying scans', async () => {
+        // 404 not 403: a 403 would confirm the repository exists.
+        (databases.listDocuments as jest.Mock).mockResolvedValueOnce(accessibleRepos);
+
+        const res = await request(buildApp()).get('/api/repos/scans?repoId=someone-elses-repo');
+
+        expect(res.statusCode).toBe(404);
+        expect(databases.listDocuments).toHaveBeenCalledTimes(1);
+    });
+
+    it('narrows to a single repoId when the caller can reach it', async () => {
+        (databases.listDocuments as jest.Mock)
+            .mockResolvedValueOnce(accessibleRepos)
+            .mockResolvedValueOnce({ total: 0, documents: [] });
+
+        const res = await request(buildApp()).get('/api/repos/scans?repoId=repo-2');
+
+        expect(res.statusCode).toBe(200);
+        const scanQuery = (databases.listDocuments as jest.Mock).mock.calls[1][2];
+        expect(scanQuery).toContainEqual({ equal: ['repo_id', ['repo-2']] });
+    });
+
+    it('passes a status filter through', async () => {
+        (databases.listDocuments as jest.Mock)
+            .mockResolvedValueOnce(accessibleRepos)
+            .mockResolvedValueOnce({ total: 0, documents: [] });
+
+        await request(buildApp()).get('/api/repos/scans?status=completed');
+
+        const scanQuery = (databases.listDocuments as jest.Mock).mock.calls[1][2];
+        expect(scanQuery).toContainEqual({ equal: ['status', 'completed'] });
+    });
+
+    it('returns an empty list rather than every scan when the caller has no repos', async () => {
+        (databases.listDocuments as jest.Mock).mockResolvedValueOnce({ total: 0, documents: [] });
+
+        const res = await request(buildApp()).get('/api/repos/scans');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.documents).toEqual([]);
+        expect(databases.listDocuments).toHaveBeenCalledTimes(1);
+    });
+
+    it('caps limit so one caller cannot ask for an unbounded page', async () => {
+        (databases.listDocuments as jest.Mock)
+            .mockResolvedValueOnce(accessibleRepos)
+            .mockResolvedValueOnce({ total: 0, documents: [] });
+
+        await request(buildApp()).get('/api/repos/scans?limit=99999');
+
+        const scanQuery = (databases.listDocuments as jest.Mock).mock.calls[1][2];
+        expect(scanQuery).toContainEqual({ limit: 200 });
+    });
+});
+
+describe('repoRoutes GET /:id', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('returns the repository when the caller owns it', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'repo-1', user_id: 'user-1', name: 'api' });
+
+        const res = await request(buildApp()).get('/api/repos/repo-1');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.name).toBe('api');
+    });
+
+    it('404s rather than 403s on another tenant repository', async () => {
+        // A 403 here would confirm the id exists — an enumeration oracle.
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'repo-1', user_id: 'someone-else' });
+
+        const res = await request(buildApp()).get('/api/repos/repo-1');
+
+        expect(res.statusCode).toBe(404);
+    });
+
+    it('404s when the repository does not exist', async () => {
+        (databases.getDocument as jest.Mock).mockRejectedValue(new Error('document not found'));
+
+        expect((await request(buildApp()).get('/api/repos/nope')).statusCode).toBe(404);
+    });
+
+    it('does not shadow the literal /scans route', async () => {
+        // '/:id' is declared last for exactly this reason; if it were declared
+        // first, GET /scans would be read as a repo lookup for id "scans".
+        (databases.listDocuments as jest.Mock).mockResolvedValueOnce({ total: 0, documents: [] });
+
+        const res = await request(buildApp()).get('/api/repos/scans');
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty('documents');
+        expect(databases.getDocument).not.toHaveBeenCalled();
     });
 });

@@ -18,7 +18,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const userId = req.user?.$id;
     if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
-    const { scanId, severity, type, tool, file, status, limit = '100' } = req.query;
+    const { scanId, severity, type, tool, file, status, repoId, limit = '100' } = req.query;
 
     // Scope to repos the caller can access (owned directly, or shared via team) so
     // one tenant can never list another tenant's vulnerabilities through this route.
@@ -48,10 +48,17 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       return res.json({ total: 0, documents: [] });
     }
 
+    // repoId narrows within the accessible set — it is intersected, never
+    // substituted, so it cannot be used to reach another tenant's repository.
+    if (repoId && !accessibleRepoIds.includes(repoId as string)) {
+      return res.json({ total: 0, documents: [] });
+    }
+    const scopedRepoIds = repoId ? [repoId as string] : accessibleRepoIds;
+
     const filters: string[] = [
       Query.limit(Number(limit)),
       Query.orderDesc('$createdAt'),
-      Query.equal('repo_id', accessibleRepoIds),
+      Query.equal('repo_id', scopedRepoIds),
     ];
 
     if (scanId) filters.push(Query.equal('scanId', scanId as string));

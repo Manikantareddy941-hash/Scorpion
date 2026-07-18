@@ -148,6 +148,42 @@ export const repoService = {
     return { scanId };
   },
 
+  /**
+   * A single repository, if this caller can reach it. Returns 'not_found' for
+   * an inaccessible repo as well as a missing one: a 403 would confirm the id
+   * exists, which turns this route into an id oracle.
+   */
+  async getRepoById(userId: string, repoId: string) {
+    const repo = await repoRepository.getRepo(repoId).catch(() => null);
+    if (!repo || !(await canAccessResource(repo, userId))) return 'not_found' as const;
+    return repo;
+  },
+
+  /**
+   * Scans across every repository this caller can reach, newest first.
+   * `repoId` narrows to one repo and is checked against that same set, so it
+   * can only ever subtract from the scope — never widen it.
+   */
+  async listScans(
+    req: Request,
+    userId: string,
+    options: { repoId?: string; status?: string; limit: number }
+  ): Promise<'not_found' | { ok: true; documents: unknown[] }> {
+    const scope = await resolveOwnershipScope(req, userId);
+    const accessible = await repoRepository.listByScope(scope.field, scope.value);
+    const accessibleIds = accessible.documents.map(r => r.$id);
+
+    let repoIds = accessibleIds;
+    if (options.repoId) {
+      if (!accessibleIds.includes(options.repoId)) return 'not_found';
+      repoIds = [options.repoId];
+    }
+    if (repoIds.length === 0) return { ok: true, documents: [] };
+
+    const scans = await repoRepository.listScans(repoIds, options.status, options.limit);
+    return { ok: true, documents: scans.documents };
+  },
+
   async getScanStatus(userId: string, scanId: string): Promise<'not_found' | 'forbidden' | { ok: true; data: ScanStatusResponse }> {
     const scan = await repoRepository.getScan(scanId);
     if (!scan) return 'not_found';
