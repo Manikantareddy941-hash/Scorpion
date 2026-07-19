@@ -176,6 +176,37 @@ async function seal(collectionId) {
     return;
   }
 
+  if (argv.includes('--verify')) {
+    // Full pagination, not a sample. Sampling the first 100 documents of these
+    // collections has given a misleading picture twice: the orphaned rows are
+    // not evenly distributed.
+    const owners = await loadOwners();
+    for (const t of TARGETS) {
+      const col = await db.getCollection(DB, t);
+      let total = 0, withPerms = 0, resolvable = 0, resolvableWithPerms = 0;
+      for await (const doc of allDocs(t)) {
+        total++;
+        const hasPerms = (doc.$permissions || []).length > 0;
+        const owned = Boolean(doc.repo_id && owners.get(doc.repo_id));
+        if (hasPerms) withPerms++;
+        if (owned) resolvable++;
+        if (owned && hasPerms) resolvableWithPerms++;
+      }
+      const sealed = col.documentSecurity && (col.$permissions || []).length === 0;
+      console.log(`${t}: total=${total} documentSecurity=${col.documentSecurity} collectionPerms=${JSON.stringify(col.$permissions)}`);
+      console.log(`   owner-resolvable=${resolvable}  of which carry permissions=${resolvableWithPerms}`);
+      console.log(`   any permissions=${withPerms}  orphaned(no permissions, invisible to browser)=${total - withPerms}`);
+      console.log(`   ${sealed ? 'SEALED' : 'not sealed'} — ${
+        sealed && resolvableWithPerms === resolvable && resolvable > 0
+          ? 'OK: every owner-resolvable document is readable by its owner'
+          : sealed && resolvableWithPerms < resolvable
+            ? 'PROBLEM: sealed but some owned documents carry no permissions'
+            : 'collection grants still apply'
+      }\n`);
+    }
+    return;
+  }
+
   console.log('DRY RUN — nothing will be changed.\n');
   for (const t of TARGETS) await run(t, false);
   console.log('\nBackfill:  node src/scripts/backfill_document_permissions.cjs --backfill <id>');
