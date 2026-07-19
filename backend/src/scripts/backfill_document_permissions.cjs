@@ -91,11 +91,62 @@ async function run(collectionId, write) {
   }
 
   console.log(`${collectionId}: owner-resolvable=${owned}  orphaned=${orphaned}  no repo_id=${noRepo}`);
-  if (write) console.log(`   permissions written=${written}  failed=${failed}`);
-  return { owned, orphaned, noRepo };
+  if (write) {
+    console.log(`   permissions written=${written}  failed=${failed}`);
+    // Loud and last, so a failed run cannot be mistaken for a successful one
+    // by someone reading only the tail of the output.
+    if (failed > 0) {
+      console.log(`\n*** ${failed} WRITES FAILED — DO NOT SEAL ${collectionId} ***`);
+      console.log('Sealing now would leave those documents unreadable by anyone.');
+      process.exitCode = 1;
+    }
+  }
+  return { owned, orphaned, noRepo, failed };
+}
+
+/**
+ * Refuses to seal a collection whose documents carry no permissions.
+ *
+ * Sealing sets documentSecurity=true and clears the collection grants, so from
+ * that moment only per-document permissions grant read. If the backfill did not
+ * land, that combination means nobody can read anything.
+ *
+ * This guard exists because the first run did exactly that: every backfill
+ * write failed validation, the failures scrolled past, and --seal applied
+ * anyway - turning a partial failure into a total blackout.
+ */
+async function assertBackfilled(collectionId) {
+  const owners = await loadOwners();
+  let sampled = 0, withPerms = 0, resolvable = 0;
+
+  for await (const doc of allDocs(collectionId)) {
+    sampled++;
+    if ((doc.$permissions || []).length > 0) withPerms++;
+    if (doc.repo_id && owners.get(doc.repo_id)) resolvable++;
+  }
+
+  console.log(`precheck: ${sampled} documents, ${withPerms} carry permissions, ${resolvable} are owner-resolvable`);
+
+  if (resolvable === 0) {
+    console.log('no owner-resolvable documents — sealing hides only orphans, proceeding');
+    return;
+  }
+  if (withPerms === 0) {
+    throw new Error(
+      `REFUSING TO SEAL: ${resolvable} documents are owner-resolvable but none carry permissions. ` +
+      `Run --backfill ${collectionId} first and confirm it reports failed=0.`,
+    );
+  }
+  if (withPerms < resolvable) {
+    throw new Error(
+      `REFUSING TO SEAL: only ${withPerms} of ${resolvable} owner-resolvable documents carry permissions. ` +
+      `Re-run --backfill ${collectionId} and confirm failed=0 before sealing.`,
+    );
+  }
 }
 
 async function seal(collectionId) {
+  await assertBackfilled(collectionId);
   const before = await db.getCollection(DB, collectionId);
   console.log(`${collectionId} BEFORE: perms=${JSON.stringify(before.$permissions)} documentSecurity=${before.documentSecurity}`);
   console.log(`ROLLBACK: restore perms ${JSON.stringify(before.$permissions)}, documentSecurity=${before.documentSecurity}\n`);
