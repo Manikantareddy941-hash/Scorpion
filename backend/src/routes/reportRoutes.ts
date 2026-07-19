@@ -246,8 +246,12 @@ router.post('/history', verifyUser, async (req: AuthenticatedRequest, res: Respo
 
         const doc = await databases.createDocument(DB_ID, COLLECTIONS.REPORTS, ID.unique(), {
             userId: req.user!.$id,
-            title: String(title).slice(0, 512),
-            type: String(type || 'pdf').slice(0, 32),
+            // Lengths match the collection's actual attribute sizes, not the
+            // ones this route was written against: `title` is a String(255)
+            // there, so slicing at 512 let a long repository name through to a
+            // write Appwrite then rejected.
+            title: String(title).slice(0, 255),
+            type: String(type || 'pdf').slice(0, 50),
             repositoryId: repositoryId ? String(repositoryId) : '',
             status: 'completed',
             createdAt: new Date().toISOString(),
