@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express';
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, Query, COLLECTIONS, ID } from '../lib/appwrite';
+import { Permission, Role } from 'node-appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueScan } from '../queues/scanQueue';
 import { canAccessResource } from '../services/tenancyService';
@@ -42,6 +43,7 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Authenticate
         if (!repo.url) return res.status(400).json({ error: 'Repository URL missing' });
 
         const startedAt = new Date().toISOString();
+        const ownerUserId = req.user!.$id;
         const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
             repo_id,
             status: 'pending',
@@ -56,7 +58,10 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Authenticate
             mediumCount: 0,
             lowCount: 0,
             details: JSON.stringify({ started_at: startedAt, target: repo.url })
-        });
+        // Document-level read for the owner so the browser session can receive
+        // realtime events for this scan (documentSecurity: true on the collection
+        // means realtime only delivers to sessions that can read the document).
+        }, [Permission.read(Role.user(ownerUserId))]);
         const scanId = scan.$id;
 
         // Trigger scan in background via the scan queue

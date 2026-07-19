@@ -41,10 +41,15 @@ const MARKER = `e2e-ingest-${Date.now()}`;
   const before = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [Query.limit(1)]);
   console.log(`vulnerabilities before: ${before.total}`);
 
+  // Shaped like real normalizer output, not a minimal stub: `tool` and
+  // `message` are required columns and every scanner emits them, so a test
+  // payload without them fails for a reason production never hits. It also
+  // uses the normalizer's `file`/`line` names rather than the collection's
+  // `file_path`/`line_number`, which is the mapping this is meant to prove.
   const issues = [
-    { filePath: 'package.json', title: `${MARKER} lodash prototype pollution`, severity: 'HIGH', cveId: 'CVE-2019-10744', code: '"lodash": "4.17.4"' },
-    { filePath: 'package.json', title: `${MARKER} adm-zip path traversal`, severity: 'CRITICAL', cveId: 'CVE-2018-1002204', code: '"adm-zip": "0.4.7"' },
-    { filePath: 'app.js', title: `${MARKER} synthetic sast finding`, severity: 'MEDIUM', code: 'eval(userInput)' },
+    { tool: 'trivy', type: 'security', file: 'package.json', line: 21, title: `${MARKER} lodash prototype pollution`, message: 'Prototype pollution in lodash < 4.17.12', severity: 'HIGH', cveId: 'CVE-2019-10744', code: '"lodash": "4.17.4"', reachability: 'reachable', fixAvailable: true },
+    { tool: 'trivy', type: 'security', file: 'package.json', line: 8, title: `${MARKER} adm-zip path traversal`, message: 'Arbitrary file write via ../ in entry names', severity: 'CRITICAL', cveId: 'CVE-2018-1002204', code: '"adm-zip": "0.4.7"', reachability: 'unreachable', fixAvailable: true },
+    { tool: 'semgrep', type: 'security', file: 'app.js', line: 42, title: `${MARKER} synthetic sast finding`, message: 'eval() on user-controlled input', severity: 'MEDIUM', code: 'eval(userInput)' },
   ];
 
   console.log(`\ningesting ${issues.length} findings...`);
@@ -58,7 +63,10 @@ const MARKER = `e2e-ingest-${Date.now()}`;
 
   console.log(`\nfindings persisted under scanId=${MARKER}: ${landed.total} of ${issues.length}`);
   for (const d of landed.documents) {
-    console.log(`  [${d.severity}] ${d.title ?? d.message} | status=${d.status} | perms=${JSON.stringify(d.$permissions)}`);
+    console.log(`  [${d.tool}/${d.severity}] ${d.title ?? d.message} | status=${d.status}`);
+    // The mapping is the point of this test: the input used file/line, so
+    // anything stored under those names means toStoredFinding did not run.
+    console.log(`     file_path=${d.file_path} line_number=${d.line_number} (input used file/line)`);
   }
 
   const verdict = landed.total === issues.length;

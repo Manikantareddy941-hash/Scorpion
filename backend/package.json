@@ -14,6 +14,8 @@
         "migrate:up": "node-pg-migrate up -m migrations",
         "migrate:down": "node-pg-migrate down -m migrations",
         "setup:teams": "ts-node src/scripts/setup-teams.ts",
+        "migrate:reports": "ts-node src/scripts/migrate_reports_collection.ts",
+        "migrate:permissions": "ts-node src/scripts/migrate_permissions_audit.ts",
         "migrate:repo-tenancy": "ts-node src/scripts/migrate_repo_tenancy.ts",
         "setup-tools": "bash setup-tools.sh",
         "postinstall": "bash setup-tools.sh"

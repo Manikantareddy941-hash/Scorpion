@@ -1,4 +1,4 @@
-import { Models } from 'node-appwrite';
+import { Models, Permission, Role } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
 import { orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
@@ -43,6 +43,72 @@ const countSuppressions = (scanPath: string): number => {
         }
     }, 0);
 };
+
+/**
+ * Attributes the `vulnerabilities` collection actually has.
+ *
+ * Appwrite rejects an entire createDocument call if the payload carries a key
+ * the collection does not define, so anything not listed here must be dropped
+ * rather than passed through. Spreading a scanner's own shape into the payload
+ * is what broke ingestion: normalizeFindings emits `file`, `line`,
+ * `reachability` and `fixAvailable`, none of which are columns, so every write
+ * was rejected with "Unknown attribute" and no finding was stored between
+ * 2026-05-14 and this fix.
+ */
+const STORED_FINDING_ATTRIBUTES = new Set([
+    'repo_id', 'scan_result_id', 'tool', 'severity', 'message', 'file_path',
+    'line_number', 'status', 'resolution_status', 'fingerprint', 'scanId',
+    'package', 'version', 'fixVersion', 'pr_url', 'detected_at', 'cvss_score',
+    'verified', 'type', 'endLine', 'code', 'effort', 'category', 'ruleId',
+    'runId', 'source', 'title', 'reopenCount', 'resolvedAt', 'epss_score',
+    'epss_percentile', 'kev', 'risk_score',
+]);
+
+/**
+ * Column name for each of the shapes that reach this function.
+ *
+ * The normalizer (scanners/normalizer.ts) uses `file`/`line`; IngestableIssue
+ * uses `filePath`/`cveId`; the collection uses `file_path`/`line_number`/
+ * `cve_id`. Three vocabularies for the same three values.
+ */
+const FINDING_FIELD_ALIASES: Record<string, string> = {
+    file: 'file_path',
+    filePath: 'file_path',
+    line: 'line_number',
+    lineNumber: 'line_number',
+    cveId: 'cve_id',
+    scanResultId: 'scan_result_id',
+};
+
+/**
+ * Translates a scanner finding into the collection's own vocabulary and drops
+ * anything it has no column for. `reachability` and `fixAvailable` are dropped
+ * deliberately: gateService reads them from the in-memory finding before
+ * storage, never back out of the database.
+ */
+export function toStoredFinding(
+    issue: object,
+    repoId: string,
+    scanId: string,
+): Record<string, unknown> {
+    const stored: Record<string, unknown> = {
+        repo_id: repoId,
+        scanId,
+        detected_at: new Date().toISOString(),
+        status: 'open',
+    };
+
+    for (const [key, value] of Object.entries(issue)) {
+        if (value === undefined) continue;
+        const column = FINDING_FIELD_ALIASES[key] ?? key;
+        if (!STORED_FINDING_ATTRIBUTES.has(column)) continue;
+        stored[column] = value;
+    }
+
+    // Appwrite's `code` column is capped; oversize input fails the whole write.
+    stored.code = String((issue as { code?: unknown }).code ?? '').slice(0, 4999);
+    return stored;
+}
 
 export const ingestVulnerabilitiesDelta = async (
     repoId: string,
@@ -144,14 +210,7 @@ export const ingestVulnerabilitiesDelta = async (
         for (let i = 0; i < issuesToInsert.length; i += CHUNK_SIZE) {
             const chunk = issuesToInsert.slice(i, i + CHUNK_SIZE);
             await Promise.all(chunk.map(async (issue) => {
-                const payload = {
-                    repo_id: repoId,
-                    scanId: scanId,
-                    ...issue,
-                    code: (issue.code || '').slice(0, 4999),
-                    detected_at: new Date().toISOString(),
-                    status: 'open'
-                };
+                const payload = toStoredFinding(issue, repoId, scanId);
                 try {
                     await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), payload);
                 } catch (saveErr) {
@@ -166,8 +225,18 @@ export const ingestVulnerabilitiesDelta = async (
                     try {
                         await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), stripped);
                         logger.warn('[Delta Ingestion] Stored finding without enrichment fields - run migrate_enrichment.ts to add them to the collection.');
-                    } catch {
-                        logger.error(`[Delta Ingestion] Failed to create vulnerability document:`, saveErr instanceof Error ? saveErr.message : saveErr);
+                    } catch (retryErr) {
+                        // Interpolated, not passed as a second argument: the
+                        // logger drops extra args, so this line printed a bare
+                        // "Failed to create vulnerability document:" with the
+                        // reason discarded. Ingestion was broken for two months
+                        // and the log said nothing about why.
+                        const first = saveErr instanceof Error ? saveErr.message : String(saveErr);
+                        const second = retryErr instanceof Error ? retryErr.message : String(retryErr);
+                        logger.error(
+                            `[Delta Ingestion] Failed to create vulnerability document. ` +
+                            `first attempt: ${first} | retry without enrichment fields: ${second}`,
+                        );
                     }
                 }
             }));
@@ -258,6 +327,12 @@ export const triggerScan = async (
                 return { scanId: null, error: 'A scan is already in progress for this repository' };
             }
 
+            // Stamp document-level read for the repo owner so their browser
+            // session receives realtime updates (documentSecurity: true on scans
+            // means realtime only delivers to sessions that can read the document).
+            const ownerDocPerms = repo.user_id
+                ? [Permission.read(Role.user(String(repo.user_id)))]
+                : [];
             const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
                 repo_id: repoId,
                 status: 'pending',
@@ -277,7 +352,7 @@ export const triggerScan = async (
                     branch: options.branch || 'main',
                     depth: options.scanDepth || 'standard'
                 })
-            });
+            }, ownerDocPerms);
             scanId = scan.$id;
         }
 

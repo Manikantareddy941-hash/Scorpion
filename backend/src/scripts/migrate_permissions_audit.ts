@@ -91,10 +91,15 @@ async function run(): Promise<void> {
 
   // 1. Fetch every collection in the database
   console.log(`\nFetching collections from database "${DB_ID}"...`);
-  let collections: { $id: string; name: string; permissions: string[]; documentSecurity: boolean }[] = [];
+  // Appwrite returns permissions as `$permissions`, not `permissions`. This
+  // script read the wrong key, so every collection reported `undefined` and the
+  // audit looked clean while 15 collections granted blanket access to any
+  // authenticated user — one of them to `any`, unauthenticated. The cast to a
+  // hand-written shape is what let the wrong name compile.
+  let collections: { $id: string; name: string; $permissions: string[]; documentSecurity: boolean }[] = [];
   try {
     const response = await databases.listCollections(DB_ID);
-    collections = response.collections as typeof collections;
+    collections = response.collections;
     console.log(`  Found ${collections.length} collection(s).`);
   } catch (err: any) {
     console.error(`[FATAL] Could not list collections: ${err.message}`);
@@ -116,7 +121,7 @@ async function run(): Promise<void> {
     const targetPerms: string[] = [];
     const targetDocSec = needsDocSecurity;
 
-    const currentPermsStr = JSON.stringify(col.permissions?.slice().sort() ?? []);
+    const currentPermsStr = JSON.stringify(col.$permissions?.slice().sort() ?? []);
     const targetPermsStr  = JSON.stringify(targetPerms);
 
     const alreadyOk =

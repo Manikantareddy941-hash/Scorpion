@@ -22,7 +22,7 @@ async function checkCollections() {
         for (const col of response.collections) {
             console.log(`- Collection: ${col.$id} (${col.name})`);
             console.log(`  Document Security: ${col.documentSecurity}`);
-            console.log(`  Permissions: ${JSON.stringify(col.permissions)}`);
+            console.log(`  Permissions: ${JSON.stringify(col.$permissions)}`);
         }
     } catch (error) {
         console.error('Error listing collections:', error);
