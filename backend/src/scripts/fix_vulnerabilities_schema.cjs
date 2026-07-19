@@ -40,10 +40,28 @@ const DB = process.env.APPWRITE_DATABASE_ID;
 const COLLECTION = 'vulnerabilities';
 
 // key -> size, taken from the live collection. Only `required` changes.
+//
+// Every key here is marked required on the collection and written by nothing at
+// creation time, verified by grepping the source rather than assumed:
+//
+//   runId              no writer anywhere
+//   source             no writer anywhere
+//   title              no writer anywhere (the ingest writes `message`)
+//   scan_result_id     no writer anywhere - and the field the scan detail pages
+//                      used to READ, which is why they showed no findings
+//   fingerprint        no writer anywhere; the delta computes a hash but keeps
+//                      it in memory rather than storing it
+//   resolution_status  only ever set later, by the remediation PR route
+//
+// A required attribute nothing populates makes createDocument reject every
+// insert, which is why no finding has been stored since 2026-05-14.
 const RELAX = [
   { key: 'runId', size: 255 },
   { key: 'source', size: 50 },
   { key: 'title', size: 255 },
+  { key: 'scan_result_id', size: 255 },
+  { key: 'fingerprint', size: 255 },
+  { key: 'resolution_status', size: 50 },
 ];
 
 (async () => {
