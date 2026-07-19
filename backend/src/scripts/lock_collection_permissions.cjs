@@ -33,7 +33,14 @@ const DB = process.env.APPWRITE_DATABASE_ID;
 
 // Browser realtime subscriptions need read on these; they are deliberately
 // excluded from lockdown until per-document permissions are backfilled.
-const REALTIME = new Set(['scans', 'vulnerabilities', 'findings']);
+//
+// `findings` is NOT in this set despite Alerts.tsx subscribing to it. The
+// backend's COLLECTIONS.FINDINGS maps to the `vulnerabilities` collection
+// (backend/src/lib/appwrite.ts), so nothing ever writes the Appwrite `findings`
+// collection - that subscription has never fired. Its 350 documents are legacy
+// and carry no repo_id, so they cannot be owner-resolved either. It locks like
+// any other collection.
+const REALTIME = new Set(['scans', 'vulnerabilities']);
 
 const isBroad = (p) => /\("users"\)|\("any"\)/.test(p);
 
