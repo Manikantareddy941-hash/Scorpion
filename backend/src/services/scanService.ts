@@ -78,6 +78,8 @@ const FINDING_FIELD_ALIASES: Record<string, string> = {
     lineNumber: 'line_number',
     cveId: 'cve_id',
     scanResultId: 'scan_result_id',
+    // deduplication.ts renames tool -> scanner on its way through.
+    scanner: 'tool',
 };
 
 /**
@@ -123,8 +125,14 @@ export const ingestVulnerabilitiesDelta = async (
     // ponytail: scopes by tool, not by tenant — one user's 'dast' scan still
     // reconciles another user's same-tool 'dast' findings. Fix the shared
     // global 'dast' repo_id (per-user/per-target id) if DAST goes multi-tenant.
-    toolScope?: string[]
-) => {
+    toolScope?: string[],
+    // Document-level permissions stamped on every created finding. The
+    // vulnerabilities collection is sealed (documentSecurity=true, no
+    // collection grants), so a finding created without these is invisible to
+    // every browser session — /api/issues still works via the server key, but
+    // realtime never delivers and direct reads return nothing.
+    ownerDocPerms: string[] = []
+): Promise<{ uniqueIncoming: IngestableIssue[] }> => {
     try {
         logger.info(`[Delta Ingestion] Starting delta ingestion for repo: ${repoId}, scan: ${scanId}`);
 
@@ -212,7 +220,7 @@ export const ingestVulnerabilitiesDelta = async (
             await Promise.all(chunk.map(async (issue) => {
                 const payload = toStoredFinding(issue, repoId, scanId);
                 try {
-                    await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), payload);
+                    await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), payload, ownerDocPerms);
                 } catch (saveErr) {
                     // A collection that predates the enrichment migration rejects
                     // the new attributes - retry once without them rather than
@@ -223,7 +231,7 @@ export const ingestVulnerabilitiesDelta = async (
                     delete stripped.kev;
                     delete stripped.risk_score;
                     try {
-                        await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), stripped);
+                        await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), stripped, ownerDocPerms);
                         logger.warn('[Delta Ingestion] Stored finding without enrichment fields - run migrate_enrichment.ts to add them to the collection.');
                     } catch (retryErr) {
                         // Interpolated, not passed as a second argument: the
@@ -258,6 +266,12 @@ export const ingestVulnerabilitiesDelta = async (
             }));
         }
 
+        // The hash-dedup above collapses same file+cve+severity duplicates, so
+        // this — not the raw incoming batch — is what actually represents the
+        // repository's current findings. Callers count severities from it;
+        // counting the raw batch made the scan record disagree with the stored
+        // findings (228 vs 171 on the first verified run).
+        return { uniqueIncoming: [...incomingHashMap.values()] };
     } catch (err) {
         logger.error(`[Delta Ingestion Error] Failed to compute or ingest scan deltas:`, err instanceof Error ? err.message : err);
         
@@ -265,18 +279,19 @@ export const ingestVulnerabilitiesDelta = async (
         logger.info(`[Delta Ingestion] Falling back to standard bulk creation...`);
         for (const issue of issues) {
             try {
-                await databases.createDocument(DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(), {
-                    repo_id: repoId,
-                    scanId: scanId,
-                    ...issue,
-                    code: (issue.code || '').slice(0, 4999),
-                    detected_at: new Date().toISOString(),
-                    status: 'open'
-                });
+                // Through the same field mapping as the main path. This used to
+                // spread the raw issue, which is the exact unknown-attribute
+                // rejection the main path fixed - a fallback that fails the
+                // same way is not a fallback.
+                await databases.createDocument(
+                    DB_ID, COLLECTIONS.VULNERABILITIES, ID.unique(),
+                    toStoredFinding(issue, repoId, scanId), ownerDocPerms,
+                );
             } catch (fallbackErr) {
                 logger.error(`[Delta Ingestion Fallback] Save failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
             }
         }
+        return { uniqueIncoming: issues };
     }
 };
 
@@ -485,13 +500,27 @@ const dedupedIssues = deduplicateFindings(issues);
 
         dedupedIssues.forEach(i => vulnerabilitiesFound.inc({ severity: i.severity, tool: i.scanner }));
 
-        // 9️⃣ Count by severity, deduplicated (overlapping scanner findings collapsed above)
-        const criticalCount = dedupedIssues.filter(i => i.severity === 'CRITICAL').length;
-        const highCount     = dedupedIssues.filter(i => i.severity === 'HIGH').length;
-        const mediumCount   = dedupedIssues.filter(i => i.severity === 'MEDIUM').length;
-        const lowCount      = dedupedIssues.filter(i => i.severity === 'LOW').length;
-        const infoCount     = dedupedIssues.filter(i => i.severity === 'INFO').length;
-        const totalVulns    = dedupedIssues.length;
+        // Store first. The per-document read grant mirrors the scan document
+        // above - the collection is sealed, so a finding without one is
+        // invisible to the owner's browser and realtime never delivers it.
+        const findingDocPerms = repo.user_id
+            ? [Permission.read(Role.user(String(repo.user_id)))]
+            : [];
+        const { uniqueIncoming } = await ingestVulnerabilitiesDelta(
+            repoId, scanId!, dedupedIssues, undefined, findingDocPerms,
+        );
+
+        // Count by severity from what ingestion actually kept. The delta
+        // collapses same file+cve+severity duplicates, so counting the raw
+        // deduped batch overstated the scan record against the stored findings
+        // (228 vs 171 on the first verified run) - the dashboard tiles would
+        // disagree with the issues list.
+        const criticalCount = uniqueIncoming.filter(i => i.severity === 'CRITICAL').length;
+        const highCount     = uniqueIncoming.filter(i => i.severity === 'HIGH').length;
+        const mediumCount   = uniqueIncoming.filter(i => i.severity === 'MEDIUM').length;
+        const lowCount      = uniqueIncoming.filter(i => i.severity === 'LOW').length;
+        const infoCount     = uniqueIncoming.filter(i => i.severity === 'INFO').length;
+        const totalVulns    = uniqueIncoming.length;
 
         // Semantic Mappings for Dashboard
         const banditCount = dedupedIssues.filter(i => i.scanner === 'bandit').length;
@@ -501,10 +530,7 @@ const dedupedIssues = deduplicateFindings(issues);
         const score    = computeSecurityScore(criticalCount, highCount, mediumCount, lowCount);
         const riskScore = 100 - score;
 
-        // 🔟 Store vulnerabilities (Normalized) via Delta Ingestion (Delta Scans)
-        await ingestVulnerabilitiesDelta(repoId, scanId!, dedupedIssues);
-
-        logger.info(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: dedupedIssues.length }));
+        logger.info(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: totalVulns }));
 
         // 1️⃣1️⃣ Evaluate policy gate BEFORE writing completed details
         let gateStatus: 'passed' | 'failed' = score >= 50 ? 'passed' : 'failed';

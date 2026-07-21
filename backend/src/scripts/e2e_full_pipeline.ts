@@ -24,6 +24,10 @@ import { triggerScan } from '../services/scanService';
 const TARGET_REPO = 'https://github.com/snyk-labs/nodejs-goof';
 const keep = process.argv.includes('--keep');
 
+// --cleanup <repoId>: delete a kept throwaway repo, its scans and findings.
+const cleanupIdx = process.argv.indexOf('--cleanup');
+const cleanupTarget = cleanupIdx > -1 ? process.argv[cleanupIdx + 1] : null;
+
 async function cleanup(repoId: string, scanIds: string[]) {
   let findings = 0;
   const res = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
@@ -41,6 +45,21 @@ async function cleanup(repoId: string, scanIds: string[]) {
 }
 
 (async () => {
+  if (cleanupTarget) {
+    // Guard: only delete a repo this script created, never a real one.
+    const repo = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, cleanupTarget).catch(() => null);
+    if (!repo) { console.log(`repository ${cleanupTarget} not found — nothing to clean`); return; }
+    if (!String(repo.name ?? '').includes('e2e verification')) {
+      console.error(`REFUSING: ${cleanupTarget} (${repo.name}) is not an e2e verification repo.`);
+      process.exit(1);
+    }
+    const scans = await databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+      Query.equal('repo_id', cleanupTarget), Query.limit(100),
+    ]);
+    await cleanup(cleanupTarget, scans.documents.map((s) => s.$id));
+    return;
+  }
+
   // Owner is taken from an existing repository so the record is reachable by a
   // real account if --keep is used to inspect the UI.
   const existing = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.limit(1)]);

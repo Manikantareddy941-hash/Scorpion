@@ -55,9 +55,21 @@ const generateHash = (filePath: string, line: number, severity: string, ruleId: 
  *      • Re‑compute a hash based on the canonical location.
  */
 export const deduplicateFindings = (rawFindings: any[]): NormalizedVulnerability[] => {
-  // Step 1 – map raw findings to a minimal normalised shape.
+  // Step 1 – map raw findings to a normalised shape.
+  //
+  // The original fields are spread through rather than discarded. This used to
+  // build a minimal object, which silently dropped `tool` and `message` — both
+  // required columns downstream — so every persisted finding was rejected with
+  // "Missing required attribute". Dedup's canonical fields are layered on top
+  // and win; everything else survives for the ingest to store.
+  //
+  // `f.file` is included in the filePath fallbacks: it is the name the scanner
+  // normalizer actually emits. Without it every finding normalised to
+  // filePath '' — which also broke Step 2, collapsing all findings into one
+  // group keyed '' and merging by ruleId ACROSS files instead of within one.
   const normalised: NormalizedVulnerability[] = rawFindings.map((f) => ({
-    filePath: f.filePath || f.file_path || '',
+    ...f,
+    filePath: f.filePath || f.file_path || f.file || '',
     line: Number(f.line || f.startLine || f.start_line || 0),
     severity: (f.severity || f.level || 'INFO').toString().toUpperCase(),
     scanner: f.scanner || f.tool || 'unknown',

@@ -4,6 +4,7 @@ jest.mock('../lib/appwrite', () => ({
 jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 
 import { toStoredFinding } from './scanService';
+import { deduplicateFindings } from '../deduplication';
 
 /**
  * Regression cover for the defect that stopped every finding being stored
@@ -87,6 +88,33 @@ describe('toStoredFinding', () => {
     // cve_id is not a column on this collection, so it must be dropped rather
     // than passed through and rejected.
     expect(stored).not.toHaveProperty('cveId');
+  });
+
+  it('survives the deduplication pass in front of it', () => {
+    // The real triggerScan path is normalizer -> deduplicateFindings ->
+    // toStoredFinding. The deduplicator used to rebuild each finding as a
+    // minimal object, discarding `tool` and `message` (both required columns)
+    // and reading filePath from names the normalizer never emits — so every
+    // finding reached persistence missing required attributes, and its empty
+    // filePath collapsed all findings into one dedup group, merging by ruleId
+    // ACROSS files. The first full-pipeline run failed on exactly this.
+    const second = { ...normalizerOutput, file: 'routes/index.js', line: 7, ruleId: 'CVE-2017-16042', title: 'growl RCE', message: 'command injection in growl' };
+    const deduped = deduplicateFindings([normalizerOutput, second]);
+
+    // Different files, different rules: nothing may merge.
+    expect(deduped).toHaveLength(2);
+
+    for (const d of deduped) {
+      const stored = toStoredFinding(d, 'repo-1', 'scan-1');
+      expect(stored.tool).toBe('trivy');
+      expect(typeof stored.message).toBe('string');
+      expect(String(stored.message).length).toBeGreaterThan(0);
+      expect(String(stored.file_path).length).toBeGreaterThan(0);
+      // Dedup bookkeeping must not leak into the payload.
+      expect(stored).not.toHaveProperty('hash');
+      expect(stored).not.toHaveProperty('sources');
+      expect(stored).not.toHaveProperty('scanner');
+    }
   });
 
   it('stamps the wrapper fields and caps code length', () => {
