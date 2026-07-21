@@ -101,8 +101,8 @@ async function run(): Promise<void> {
     const response = await databases.listCollections(DB_ID);
     collections = response.collections;
     console.log(`  Found ${collections.length} collection(s).`);
-  } catch (err: any) {
-    console.error(`[FATAL] Could not list collections: ${err.message}`);
+  } catch (err) {
+    console.error(`[FATAL] Could not list collections: ${err instanceof Error ? err.message : err}`);
     process.exit(1);
   }
 
@@ -148,8 +148,8 @@ async function run(): Promise<void> {
       );
       console.log(`  [OK]   ${col.$id.padEnd(32)} (${col.name}) — ${label}`);
       patched++;
-    } catch (err: any) {
-      console.error(`  [ERR]  ${col.$id} — ${err.message}`);
+    } catch (err) {
+      console.error(`  [ERR]  ${col.$id} — ${err instanceof Error ? err.message : err}`);
       errored++;
     }
 

@@ -50,7 +50,8 @@ async function ensureString(
   try {
     await databases.createStringAttribute(DB_ID, colId, key, size, required);
     console.log(`  [OK]   attribute "${key}" created`);
-  } catch (err: any) {
+  } catch (raw) {
+    const err = raw as { code?: number; type?: string; message?: string };
     if (err.code === 409 || err.type?.includes('already_exists')) {
       console.log(`  [SKIP] attribute "${key}" already exists`);
     } else {
@@ -67,7 +68,8 @@ async function ensureIndex(
   try {
     await databases.createIndex(DB_ID, colId, key, DatabasesIndexType.Key, attributes);
     console.log(`  [OK]   index "${key}" created`);
-  } catch (err: any) {
+  } catch (raw) {
+    const err = raw as { code?: number; type?: string; message?: string };
     if (err.code === 409 || err.type?.includes('already_exists')) {
       console.log(`  [SKIP] index "${key}" already exists`);
     } else {
@@ -95,7 +97,8 @@ async function run(): Promise<void> {
       false,   // documentSecurity — not needed; backend API key owns all access
     );
     console.log(`  [OK]   collection "${COLLECTION_ID}" created`);
-  } catch (err: any) {
+  } catch (raw) {
+    const err = raw as { code?: number; type?: string; message?: string };
     if (err.code === 409 || err.type?.includes('already_exists')) {
       console.log(`  [SKIP] collection "${COLLECTION_ID}" already exists`);
     } else {
