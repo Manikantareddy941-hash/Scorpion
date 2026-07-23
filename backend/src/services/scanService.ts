@@ -5,7 +5,7 @@ import { orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
 import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit, normalizeHadolint } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
-import { evaluateScan } from './policyService';
+import { evaluatePolicyResult } from './policyService';
 import { respondToLeakedKeys, GitleaksRawMatch } from './leakedKeyResponseService';
 import { vulnerabilitiesFound } from './metrics';
 import { enrichIssues } from './enrichmentService';
@@ -23,6 +23,22 @@ import { HadolintRawOutput, IngestableIssue, RepoWithScanStats, ScanRawResults, 
 const computeSecurityScore = (critical: number, high: number, medium: number, low: number): number => {
     const penalty = (critical * 10) + (high * 4) + (medium * 1) + (low * 0.25);
     return Math.max(0, Math.round(100 - penalty));
+};
+
+/**
+ * Document-level read grants for a repo's scans and findings.
+ *
+ * A team-owned repo (team_id set) must grant read to the team, not just the
+ * creating user — otherwise the vulnerabilities and scans collections, both
+ * sealed with documentSecurity, hide a team repo's results from every member
+ * except whoever triggered the scan. user_id is still granted so the owner sees
+ * their own repos whether or not a team is involved.
+ */
+const ownerReadPerms = (repo: Models.DefaultDocument): string[] => {
+    const perms: string[] = [];
+    if (repo.user_id) perms.push(Permission.read(Role.user(String(repo.user_id))));
+    if (repo.team_id) perms.push(Permission.read(Role.team(String(repo.team_id))));
+    return perms;
 };
 
 /**
@@ -342,12 +358,11 @@ export const triggerScan = async (
                 return { scanId: null, error: 'A scan is already in progress for this repository' };
             }
 
-            // Stamp document-level read for the repo owner so their browser
-            // session receives realtime updates (documentSecurity: true on scans
-            // means realtime only delivers to sessions that can read the document).
-            const ownerDocPerms = repo.user_id
-                ? [Permission.read(Role.user(String(repo.user_id)))]
-                : [];
+            // Stamp document-level read for the repo owner (and team, if any) so
+            // their browser session receives realtime updates (documentSecurity:
+            // true on scans means realtime only delivers to sessions that can
+            // read the document).
+            const ownerDocPerms = ownerReadPerms(repo);
             const scan = await databases.createDocument(DB_ID, COLLECTIONS.SCANS, ID.unique(), {
                 repo_id: repoId,
                 status: 'pending',
@@ -503,9 +518,7 @@ const dedupedIssues = deduplicateFindings(issues);
         // Store first. The per-document read grant mirrors the scan document
         // above - the collection is sealed, so a finding without one is
         // invisible to the owner's browser and realtime never delivers it.
-        const findingDocPerms = repo.user_id
-            ? [Permission.read(Role.user(String(repo.user_id)))]
-            : [];
+        const findingDocPerms = ownerReadPerms(repo);
         const { uniqueIncoming } = await ingestVulnerabilitiesDelta(
             repoId, scanId!, dedupedIssues, undefined, findingDocPerms,
         );
@@ -532,10 +545,16 @@ const dedupedIssues = deduplicateFindings(issues);
 
         logger.info(JSON.stringify({ scanId, repoId, stage: 'save', status: 'success', saved_count: totalVulns }));
 
-        // 1️⃣1️⃣ Evaluate policy gate BEFORE writing completed details
+        // 1️⃣1️⃣ Evaluate policy gate against the counts just computed. Passing
+        // them in avoids re-reading the scan document, which is still 'running'
+        // with unwritten details at this point — evaluateScan would throw.
         let gateStatus: 'passed' | 'failed' = score >= 50 ? 'passed' : 'failed';
         try {
-            const policyResult = await evaluateScan(scanId!);
+            const policyResult = await evaluatePolicyResult(scanId!, repoId, {
+                critical: criticalCount,
+                high: highCount,
+                securityScore: score,
+            });
             if (policyResult?.result) {
                 gateStatus = (policyResult.result === 'PASS' || policyResult.result === 'WARN') ? 'passed' : 'failed';
             }

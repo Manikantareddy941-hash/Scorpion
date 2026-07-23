@@ -903,7 +903,10 @@ export default function Dashboard({
             {/* KPIs */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className={`${CARD} p-5`}>
-                <p className="text-[13px] font-medium text-[var(--text-secondary)]">Risk score</p>
+                {/* This value is computeSecurityScore: 100 is healthy, 0 is
+                    worst. Labelled "Risk score" it read backwards — 22
+                    criticals scored 0, which a viewer reads as "no risk". */}
+                <p className="text-[13px] font-medium text-[var(--text-secondary)]">Security score</p>
                 <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
                   {vulnStats.score}
                   <span className="text-[15px] font-medium text-[var(--text-muted)]"> /100</span>

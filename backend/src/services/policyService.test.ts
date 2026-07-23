@@ -23,7 +23,7 @@ jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error
 
 import {
   getDynamicPolicy, isFalcoRuleBlocked, getEffectivePolicy, evaluateScan,
-  evaluateIAM, DEFAULT_POLICY, DEFAULT_IAM_POLICY, ADMIN_IAM_POLICY,
+  evaluatePolicyResult, evaluateIAM, DEFAULT_POLICY, DEFAULT_IAM_POLICY, ADMIN_IAM_POLICY,
 } from './policyService';
 import { databases } from '../lib/appwrite';
 import { notifyPolicyFailure } from './notificationService';
@@ -139,6 +139,32 @@ describe('evaluateScan', () => {
   it('PASSes when every threshold is met', async () => {
     armScan({ critical_count: 0, high_count: 1, security_score: 95 });
     expect((await evaluateScan('scan-1')).result).toBe('PASS');
+  });
+});
+
+describe('evaluatePolicyResult', () => {
+  // The path triggerScan actually uses. evaluateScan re-reads the scan document
+  // and requires status 'completed'; at gate time the doc is still 'running'
+  // with unwritten details, so that route threw on every scan. This one takes
+  // the counts directly, so it must NOT read the scan document at all.
+  beforeEach(() => {
+    db.listDocuments.mockResolvedValue({ total: 0, documents: [] } as never); // balanced default policy
+    db.createDocument.mockResolvedValue({} as never);
+    db.getDocument.mockReset();
+  });
+
+  it('evaluates the passed counts without reading the scan document', async () => {
+    const evaluation = await evaluatePolicyResult('scan-1', 'repo-1', { critical: 2, high: 0, securityScore: 90 });
+
+    expect(evaluation.result).toBe('FAIL');
+    expect(evaluation.reason).toContain('Critical');
+    expect(db.getDocument).not.toHaveBeenCalled();
+    expect(db.createDocument).toHaveBeenCalledWith('test-db', 'policy_evaluations', 'unique-id', expect.objectContaining({ result: 'FAIL' }));
+  });
+
+  it('PASSes clean counts', async () => {
+    const evaluation = await evaluatePolicyResult('scan-1', 'repo-1', { critical: 0, high: 1, securityScore: 95 });
+    expect(evaluation.result).toBe('PASS');
   });
 });
 
