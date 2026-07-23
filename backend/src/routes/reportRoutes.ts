@@ -48,7 +48,10 @@ router.get('/ai-summary', verifyUser, async (req: AuthenticatedRequest, res: Res
         const ownedRepos = await databases.listDocuments(DB_ID, 'repositories', [Query.equal(scope.field, scope.value)]);
         const repoIds = ownedRepos.documents.map((r) => r.$id);
 
-        const findings = repoIds.length > 0 ? await databases.listDocuments(DB_ID, 'findings', [
+        // COLLECTIONS.FINDINGS is 'vulnerabilities' — where scans write. The
+        // literal 'findings' is a legacy collection nothing populates, so
+        // reports built from it were empty or stale.
+        const findings = repoIds.length > 0 ? await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
             Query.equal('repo_id', repoIds),
             Query.greaterThanEqual('$createdAt', boundary),
             Query.limit(100)
@@ -116,7 +119,7 @@ const handleExport = async (req: AuthenticatedRequest, res: Response) => {
             const fields = ['title', 'severity', 'type', 'file_path', 'cve_id', 'status', '$createdAt'];
             const parser = new Parser({ fields });
             
-            const findingsResponse = await databases.listDocuments(DB_ID, 'findings', [...queries, Query.limit(5000)]);
+            const findingsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [...queries, Query.limit(5000)]);
             const csv = parser.parse(findingsResponse.documents);
             
             const stream = new PassThrough();
@@ -127,7 +130,7 @@ const handleExport = async (req: AuthenticatedRequest, res: Response) => {
         }
 
         if (format === 'pdf') {
-            const findingsResponse = await databases.listDocuments(DB_ID, 'findings', [...queries, Query.limit(5000)]);
+            const findingsResponse = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [...queries, Query.limit(5000)]);
             const findings = findingsResponse.documents;
             
             const doc = new PDFDocument({ margin: 50 });
