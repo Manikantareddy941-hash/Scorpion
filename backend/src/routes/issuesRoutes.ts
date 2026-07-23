@@ -73,7 +73,9 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     if (messagePrefix) filters.push(Query.startsWith('message', messagePrefix as string));
     if (type) filters.push(Query.equal('type', type as string));
     if (tool) filters.push(Query.equal('tool', tool as string));
-    if (file) filters.push(Query.equal('file', file as string));
+    // The column is `file_path`. This queried `file`, which the collection does
+    // not define, so filtering by file matched nothing at all.
+    if (file) filters.push(Query.equal('file_path', file as string));
     if (status) filters.push(Query.equal('status', status as string));
 
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, filters);

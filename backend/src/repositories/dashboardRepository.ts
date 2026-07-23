@@ -34,7 +34,13 @@ export const dashboardRepository = {
   },
 
   async listFindingsForReposOrScans(repoIds: string[], scanIds: string[]): Promise<Models.DocumentList<FindingDocument>> {
-    return databases.listDocuments(DB_ID, 'findings', [
+    // COLLECTIONS.FINDINGS resolves to 'vulnerabilities' — the collection the
+    // scan pipeline actually writes to. This method (and listOpenFindingsForRepos
+    // below) hardcoded the literal 'findings', a legacy 350-doc collection whose
+    // documents carry no repo_id, so the security dashboard's by_type, by_repo
+    // and SLA widgets read stale data while the headline counts (sourced from
+    // scans) showed the real numbers. That is the 171-here / 18-there split.
+    return databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
       Query.or([
         Query.equal('repo_id', repoIds),
         Query.equal('scanId', scanIds)
@@ -44,7 +50,7 @@ export const dashboardRepository = {
   },
 
   async listOpenFindingsForRepos(repoIds: string[]): Promise<Models.DocumentList<FindingDocument>> {
-    return databases.listDocuments(DB_ID, 'findings', [
+    return databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
       Query.equal('repo_id', repoIds),
       Query.equal('status', 'open'),
       Query.limit(5000)

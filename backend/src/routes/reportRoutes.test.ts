@@ -13,6 +13,10 @@ jest.mock('../middleware/auth', () => ({
 jest.mock('../lib/appwrite', () => ({
     databases: { listDocuments: jest.fn() },
     DB_ID: 'test-db',
+    // FINDINGS resolves to 'vulnerabilities' in the real module. The mock
+    // omitted COLLECTIONS entirely, so the routes reading COLLECTIONS.FINDINGS
+    // crashed on undefined the moment the literal 'findings' was corrected.
+    COLLECTIONS: { FINDINGS: 'vulnerabilities' },
     Query: {
         equal: (field: string, value: unknown) => ({ equal: [field, value] }),
         greaterThanEqual: (field: string, value: unknown) => ({ gte: [field, value] }),
@@ -114,7 +118,7 @@ describe('GET /api/reports/ai-summary', () => {
         (resolveOwnershipScope as jest.Mock).mockResolvedValue({ field: 'user_id', value: 'user-1' });
         (databases.listDocuments as jest.Mock).mockImplementation(async (_d: string, col: string) => {
             if (col === 'repositories') return { documents: [{ $id: 'repo-1' }] };
-            if (col === 'findings') return { documents: [{ title: 'RCE', severity: 'high' }] };
+            if (col === 'vulnerabilities') return { documents: [{ title: 'RCE', severity: 'high' }] };
             if (col === 'alerts') return { documents: [] };
             return { documents: [] };
         });
@@ -163,7 +167,7 @@ describe('report export', () => {
         (resolveOwnershipScope as jest.Mock).mockResolvedValue({ field: 'user_id', value: 'user-1' });
         (databases.listDocuments as jest.Mock).mockImplementation(async (_d: string, col: string) => {
             if (col === 'repositories') return { documents: [{ $id: 'repo-1' }] };
-            if (col === 'findings') return { documents: [{ title: 'RCE', severity: 'high', type: 'sast', file_path: 'a.ts', cve_id: 'CVE-1', status: 'open', $createdAt: '2026-01-01' }] };
+            if (col === 'vulnerabilities') return { documents: [{ title: 'RCE', severity: 'high', type: 'sast', file_path: 'a.ts', cve_id: 'CVE-1', status: 'open', $createdAt: '2026-01-01' }] };
             return { documents: [] };
         });
     };

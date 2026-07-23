@@ -34,6 +34,25 @@ function resolveFullPath(workDir: string, relativeFile: string): string {
   return fs.existsSync(relativeFile) ? relativeFile : path.join(workDir, relativeFile);
 }
 
+/**
+ * The path a finding is stored and displayed with: relative to the scanned
+ * repository, forward-slashed.
+ *
+ * Semgrep (and any scanner handed an absolute target, which the temp clone dir
+ * always is) emits absolute paths like
+ * `C:\...\tmp\repo_<id>\docker-compose.yml`. Stored verbatim, findings showed
+ * that machine- and scan-specific path in the UI, and the same file scanned
+ * twice produced two different `file` values. Stripping the workDir prefix
+ * yields the stable `docker-compose.yml` a user expects. No-op for scanners
+ * that already emit repo-relative paths.
+ */
+function toRepoRelative(workDir: string, filePath: string): string {
+  if (!filePath) return filePath;
+  const norm = filePath.replace(/\\/g, '/');
+  const root = workDir.replace(/\\/g, '/').replace(/\/+$/, '');
+  return norm.startsWith(root + '/') ? norm.slice(root.length + 1) : norm;
+}
+
 export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): NormalizedIssue[] {
   return (raw.results ?? []).map(r => {
     const relativeFile = r.path ?? '';
@@ -47,7 +66,7 @@ export function normalizeSemgrep(raw: SemgrepRawOutput, workDir: string): Normal
       severity: mapSemgrepSeverity(r.extra?.severity),
       title: r.check_id?.split('.').pop() ?? 'Issue',
       message: r.extra?.message ?? '',
-      file: relativeFile,
+      file: toRepoRelative(workDir, relativeFile),
       line,
       endLine,
       code: extractCodeSnippet(fullPath, line, endLine),
@@ -80,7 +99,7 @@ export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): Normalized
         severity: 'CRITICAL',
         title: `Copyleft license: ${license.Name}`,
         message: `${license.PkgName ?? 'Dependency'} is licensed under ${license.Name}, a copyleft license that can require disclosing proprietary source code.`,
-        file: result.Target ?? '',
+        file: toRepoRelative(workDir, result.Target ?? ''),
         line: 0,
         endLine: 0,
         code: `${license.PkgName ?? 'unknown'} → ${license.Name}`,
@@ -96,7 +115,7 @@ export function normalizeTrivy(raw: TrivyRawOutput, workDir: string): Normalized
         severity: vuln.Severity as NormalizedIssue['severity'],
         title: vuln.VulnerabilityID ?? '',
         message: vuln.Description ?? vuln.Title ?? '',
-        file: result.Target ?? '',
+        file: toRepoRelative(workDir, result.Target ?? ''),
         line: 0,
         endLine: 0,
         code: `${vuln.PkgName}@${vuln.InstalledVersion} → fix: ${vuln.FixedVersion ?? 'no fix available'}`,
@@ -132,7 +151,7 @@ export function normalizeGitleaks(raw: GitleaksRawMatch[], workDir: string): Nor
       severity: 'CRITICAL',
       title: r.RuleID ?? 'Secret detected',
       message: `${r.Description ?? 'Hardcoded secret'} found in ${r.File}`,
-      file: relativeFile,
+      file: toRepoRelative(workDir, relativeFile),
       line: r.StartLine ?? 0,
       endLine: r.EndLine ?? r.StartLine ?? 0,
       code: r.Match ? r.Match.replace(/./g, '*').slice(0, 20) + '...' : extractCodeSnippet(fullPath, r.StartLine || 0, r.EndLine || r.StartLine || 0),
@@ -198,7 +217,7 @@ export function normalizeCheckov(raw: CheckovRawOutput | CheckovRawOutput[], wor
         severity: mapCheckovSeverity(c.severity ?? c.check_severity),
         title: c.check_id ?? 'Misconfiguration',
         message: c.check_name ?? '',
-        file: relativeFile,
+        file: toRepoRelative(workDir, relativeFile),
         line,
         endLine,
         code: extractCodeSnippet(fullPath, line, endLine),
@@ -234,7 +253,7 @@ export function normalizeBandit(raw: BanditRawOutput, workDir: string): Normaliz
       severity: mapBanditSeverity(r.issue_severity),
       title: r.test_id ?? 'Bandit Issue',
       message: r.issue_text ?? '',
-      file: relativeFile,
+      file: toRepoRelative(workDir, relativeFile),
       line,
       endLine: line,
       code: extractCodeSnippet(fullPath, line, line),
@@ -266,7 +285,7 @@ export function normalizeHadolint(raw: HadolintRawOutput, workDir: string): Norm
       severity: mapHadolintSeverity(h.level),
       title: h.code ?? 'Dockerfile issue',
       message: h.message ?? '',
-      file: relativeFile,
+      file: toRepoRelative(workDir, relativeFile),
       line,
       endLine: line,
       code: extractCodeSnippet(fullPath, line, line),

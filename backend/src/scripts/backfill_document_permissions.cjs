@@ -1,0 +1,214 @@
+/**
+ * Per-document permission backfill for the realtime collections.
+ *
+ * The browser's realtime subscriptions only receive an event for a document the
+ * session can read. So `scans` and `vulnerabilities` cannot simply have their
+ * collection grants cleared the way the other 12 did - each document needs a
+ * read permission naming its owner first, or live scan progress goes dead.
+ *
+ * Ownership is resolved through the document's repo_id -> repository, using the
+ * repository's team_id when it has one and its user_id otherwise. That mirrors
+ * how the API scopes these same rows (resolveOwnershipScope in tenancyService).
+ *
+ * Documents whose repo_id points at a repository that no longer exists get no
+ * permission and stay invisible to the browser. They are already invisible
+ * through the API, which filters by the caller's accessible repo ids - so this
+ * removes a direct-access path to orphaned rows rather than hiding live data.
+ * Nothing is deleted here.
+ *
+ * Order matters. While documentSecurity is false the per-document permissions
+ * written by --backfill are ignored, so the backfill is a no-op in behaviour
+ * until --seal flips documentSecurity on and clears the collection grants in
+ * the same update. Backfill first, verify, then seal.
+ *
+ * Usage:
+ *   node src/scripts/backfill_document_permissions.cjs                    # dry run
+ *   node src/scripts/backfill_document_permissions.cjs --backfill <id>    # write per-doc perms
+ *   node src/scripts/backfill_document_permissions.cjs --seal <id>        # documentSecurity on + clear grants
+ */
+const sdk = require('node-appwrite');
+require('dotenv').config({ path: '.env' });
+
+const client = new sdk.Client()
+  .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://sgp.cloud.appwrite.io/v1')
+  .setProject(process.env.APPWRITE_PROJECT_ID)
+  .setKey(process.env.APPWRITE_API_KEY);
+
+const db = new sdk.Databases(client);
+const DB = process.env.APPWRITE_DATABASE_ID;
+
+const TARGETS = ['scans', 'vulnerabilities'];
+
+async function loadOwners() {
+  const owners = new Map();
+  let cursor = null;
+  for (;;) {
+    const q = [sdk.Query.limit(100)];
+    if (cursor) q.push(sdk.Query.cursorAfter(cursor));
+    const res = await db.listDocuments(DB, 'repositories', q);
+    for (const r of res.documents) {
+      owners.set(r.$id, r.team_id ? { type: 'team', id: r.team_id } : r.user_id ? { type: 'user', id: r.user_id } : null);
+    }
+    if (res.documents.length < 100) break;
+    cursor = res.documents[res.documents.length - 1].$id;
+  }
+  return owners;
+}
+
+async function* allDocs(collectionId) {
+  let cursor = null;
+  for (;;) {
+    const q = [sdk.Query.limit(100)];
+    if (cursor) q.push(sdk.Query.cursorAfter(cursor));
+    const res = await db.listDocuments(DB, collectionId, q);
+    for (const d of res.documents) yield d;
+    if (res.documents.length < 100) break;
+    cursor = res.documents[res.documents.length - 1].$id;
+  }
+}
+
+const permsFor = (owner) => [
+  owner.type === 'team' ? sdk.Permission.read(sdk.Role.team(owner.id)) : sdk.Permission.read(sdk.Role.user(owner.id)),
+];
+
+async function run(collectionId, write) {
+  const owners = await loadOwners();
+  let owned = 0, orphaned = 0, noRepo = 0, written = 0, failed = 0;
+
+  for await (const doc of allDocs(collectionId)) {
+    if (!doc.repo_id) { noRepo++; continue; }
+    const owner = owners.get(doc.repo_id);
+    if (!owner) { orphaned++; continue; }
+    owned++;
+    if (!write) continue;
+    try {
+      await db.updateDocument(DB, collectionId, doc.$id, undefined, permsFor(owner));
+      written++;
+    } catch (e) {
+      failed++;
+      if (failed <= 3) console.log(`   write failed ${doc.$id}: ${e.message}`);
+    }
+  }
+
+  console.log(`${collectionId}: owner-resolvable=${owned}  orphaned=${orphaned}  no repo_id=${noRepo}`);
+  if (write) {
+    console.log(`   permissions written=${written}  failed=${failed}`);
+    // Loud and last, so a failed run cannot be mistaken for a successful one
+    // by someone reading only the tail of the output.
+    if (failed > 0) {
+      console.log(`\n*** ${failed} WRITES FAILED — DO NOT SEAL ${collectionId} ***`);
+      console.log('Sealing now would leave those documents unreadable by anyone.');
+      process.exitCode = 1;
+    }
+  }
+  return { owned, orphaned, noRepo, failed };
+}
+
+/**
+ * Refuses to seal a collection whose documents carry no permissions.
+ *
+ * Sealing sets documentSecurity=true and clears the collection grants, so from
+ * that moment only per-document permissions grant read. If the backfill did not
+ * land, that combination means nobody can read anything.
+ *
+ * This guard exists because the first run did exactly that: every backfill
+ * write failed validation, the failures scrolled past, and --seal applied
+ * anyway - turning a partial failure into a total blackout.
+ */
+async function assertBackfilled(collectionId) {
+  const owners = await loadOwners();
+  let sampled = 0, withPerms = 0, resolvable = 0;
+
+  for await (const doc of allDocs(collectionId)) {
+    sampled++;
+    if ((doc.$permissions || []).length > 0) withPerms++;
+    if (doc.repo_id && owners.get(doc.repo_id)) resolvable++;
+  }
+
+  console.log(`precheck: ${sampled} documents, ${withPerms} carry permissions, ${resolvable} are owner-resolvable`);
+
+  if (resolvable === 0) {
+    console.log('no owner-resolvable documents — sealing hides only orphans, proceeding');
+    return;
+  }
+  if (withPerms === 0) {
+    throw new Error(
+      `REFUSING TO SEAL: ${resolvable} documents are owner-resolvable but none carry permissions. ` +
+      `Run --backfill ${collectionId} first and confirm it reports failed=0.`,
+    );
+  }
+  if (withPerms < resolvable) {
+    throw new Error(
+      `REFUSING TO SEAL: only ${withPerms} of ${resolvable} owner-resolvable documents carry permissions. ` +
+      `Re-run --backfill ${collectionId} and confirm failed=0 before sealing.`,
+    );
+  }
+}
+
+async function seal(collectionId) {
+  await assertBackfilled(collectionId);
+  const before = await db.getCollection(DB, collectionId);
+  console.log(`${collectionId} BEFORE: perms=${JSON.stringify(before.$permissions)} documentSecurity=${before.documentSecurity}`);
+  console.log(`ROLLBACK: restore perms ${JSON.stringify(before.$permissions)}, documentSecurity=${before.documentSecurity}\n`);
+
+  await db.updateCollection(DB, collectionId, before.name, [], true, before.enabled);
+
+  const after = await db.getCollection(DB, collectionId);
+  console.log(`${collectionId} AFTER:  perms=${JSON.stringify(after.$permissions)} documentSecurity=${after.documentSecurity}`);
+}
+
+(async () => {
+  const argv = process.argv;
+  const pick = (flag) => { const i = argv.indexOf(flag); return i > -1 ? argv[i + 1] : null; };
+  const backfill = pick('--backfill');
+  const toSeal = pick('--seal');
+
+  if (backfill) {
+    if (!TARGETS.includes(backfill)) { console.error(`--backfill expects one of: ${TARGETS.join(', ')}`); process.exit(1); }
+    await run(backfill, true);
+    console.log('\nPer-document permissions are ignored until --seal sets documentSecurity=true.');
+    return;
+  }
+
+  if (toSeal) {
+    if (!TARGETS.includes(toSeal)) { console.error(`--seal expects one of: ${TARGETS.join(', ')}`); process.exit(1); }
+    await seal(toSeal);
+    return;
+  }
+
+  if (argv.includes('--verify')) {
+    // Full pagination, not a sample. Sampling the first 100 documents of these
+    // collections has given a misleading picture twice: the orphaned rows are
+    // not evenly distributed.
+    const owners = await loadOwners();
+    for (const t of TARGETS) {
+      const col = await db.getCollection(DB, t);
+      let total = 0, withPerms = 0, resolvable = 0, resolvableWithPerms = 0;
+      for await (const doc of allDocs(t)) {
+        total++;
+        const hasPerms = (doc.$permissions || []).length > 0;
+        const owned = Boolean(doc.repo_id && owners.get(doc.repo_id));
+        if (hasPerms) withPerms++;
+        if (owned) resolvable++;
+        if (owned && hasPerms) resolvableWithPerms++;
+      }
+      const sealed = col.documentSecurity && (col.$permissions || []).length === 0;
+      console.log(`${t}: total=${total} documentSecurity=${col.documentSecurity} collectionPerms=${JSON.stringify(col.$permissions)}`);
+      console.log(`   owner-resolvable=${resolvable}  of which carry permissions=${resolvableWithPerms}`);
+      console.log(`   any permissions=${withPerms}  orphaned(no permissions, invisible to browser)=${total - withPerms}`);
+      console.log(`   ${sealed ? 'SEALED' : 'not sealed'} — ${
+        sealed && resolvableWithPerms === resolvable && resolvable > 0
+          ? 'OK: every owner-resolvable document is readable by its owner'
+          : sealed && resolvableWithPerms < resolvable
+            ? 'PROBLEM: sealed but some owned documents carry no permissions'
+            : 'collection grants still apply'
+      }\n`);
+    }
+    return;
+  }
+
+  console.log('DRY RUN — nothing will be changed.\n');
+  for (const t of TARGETS) await run(t, false);
+  console.log('\nBackfill:  node src/scripts/backfill_document_permissions.cjs --backfill <id>');
+  console.log('Then seal: node src/scripts/backfill_document_permissions.cjs --seal <id>');
+})().catch((e) => { console.error('failed:', e.message); process.exit(1); });

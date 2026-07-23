@@ -1,3 +1,4 @@
+import { Permission, Role } from 'node-appwrite';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { ingestVulnerabilitiesDelta } from '../services/scanService';
@@ -66,7 +67,14 @@ export async function runDastWorker<TPayload extends DastWorkerPayload>(
         const findings = await run();
         logger.info(`[${label}] Found ${findings.length} findings.`);
 
-        await ingestVulnerabilitiesDelta('dast', scanId, findings, [tool]);
+        // Grant document read to the user who triggered the scan. The
+        // vulnerabilities collection is sealed, so without this a DAST finding
+        // is invisible to its owner's browser and realtime never delivers it —
+        // the same gap fixed for repo scans. Does not address the shared 'dast'
+        // repo_id (see the delta's ponytail note); it only makes the finding
+        // reachable by the person who ran it.
+        const ownerDocPerms = userId ? [Permission.read(Role.user(userId))] : [];
+        await ingestVulnerabilitiesDelta('dast', scanId, findings, [tool], ownerDocPerms);
 
         await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scanId, {
             status: 'completed',

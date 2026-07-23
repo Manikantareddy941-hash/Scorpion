@@ -125,13 +125,36 @@ export const evaluateScan = async (scanId: string): Promise<PolicyEvaluation> =>
         throw new Error('Scan result not available for evaluation');
     }
 
-    const repoId = scan.repo_id;
+    const detailsRaw = typeof scan.details === 'string' ? JSON.parse(scan.details) : scan.details;
+    return evaluatePolicyResult(scanId, scan.repo_id, {
+        critical: detailsRaw.critical_count || 0,
+        high: detailsRaw.high_count || 0,
+        securityScore: detailsRaw.security_score || 0,
+    });
+};
+
+/**
+ * Evaluates already-known counts against the repo's policy, persists the
+ * evaluation and notifies on failure.
+ *
+ * evaluateScan re-reads the scan document and requires status 'completed'.
+ * triggerScan calls the gate at finalization time, when the document is still
+ * 'running' and its details are unwritten — so evaluateScan threw
+ * "Scan result not available for evaluation" on every scan, the gate silently
+ * fell back to a score heuristic, and no policy_evaluations row was ever
+ * written. triggerScan now calls this directly with the counts it just
+ * computed in memory, so the gate reflects the real findings.
+ */
+export const evaluatePolicyResult = async (
+    scanId: string,
+    repoId: string,
+    counts: { critical: number; high: number; securityScore: number },
+): Promise<PolicyEvaluation> => {
     const policy = await getEffectivePolicy(repoId);
 
-    const detailsRaw = typeof scan.details === 'string' ? JSON.parse(scan.details) : scan.details;
-    const criticalFound = detailsRaw.critical_count || 0;
-    const highFound = detailsRaw.high_count || 0;
-    const securityScore = detailsRaw.security_score || 0;
+    const criticalFound = counts.critical;
+    const highFound = counts.high;
+    const securityScore = counts.securityScore;
 
     const details = {
         critical: { found: criticalFound, allowed: policy.max_critical },
