@@ -1,5 +1,5 @@
 jest.mock('../repositories/planRepository', () => ({
-  planRepository: { getProjectOwner: jest.fn() },
+  planRepository: { getProjectOwner: jest.fn(), listVulnerabilitiesForUser: jest.fn() },
 }));
 jest.mock('../repositories/securityRequirementsRepository', () => ({
   securityRequirementsRepository: {
@@ -18,6 +18,7 @@ import { ticketsService } from './ticketsService';
 import { pushTicketToJira } from './jiraService';
 
 const owner = planRepository.getProjectOwner as jest.Mock;
+const listVulns = planRepository.listVulnerabilitiesForUser as jest.Mock;
 const mockRepo = repo as unknown as Record<string, jest.Mock>;
 const ticketsCreate = ticketsService.createTicket as jest.Mock;
 const jiraPush = pushTicketToJira as jest.Mock;
@@ -76,6 +77,35 @@ describe('securityRequirementsService tenant isolation', () => {
     mockRepo.upsertProfile.mockImplementation(async (p) => p);
     await svc.saveProfile('p1', { appType: 'api', stack: ['node'], dataTypes: ['card'], deployment: 'cloud', authModel: 'session', frameworks: ['PCI DSS'] }, 'user-1');
     expect(mockRepo.upsertProfile).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }));
+  });
+});
+
+describe('securityRequirementsService.getCorrelation', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('denies when the caller does not own the project', async () => {
+    owner.mockResolvedValue('someone-else');
+    const res = await svc.getCorrelation('p1', 'user-1');
+    expect(res).toBe('denied');
+    expect(mockRepo.listRequirements).not.toHaveBeenCalled();
+  });
+
+  it('flags a Secure Coding requirement as violated from a live injection finding', async () => {
+    owner.mockResolvedValue('user-1');
+    mockRepo.listRequirements.mockResolvedValue([
+      { code: 'REQ-PCI-6.5.1-SQLI', category: 'Secure Coding', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
+    ]);
+    listVulns.mockResolvedValue([
+      { tool: 'semgrep', category: 'py.sql-injection', ruleId: 'py.sql-injection', message: 'SQL injection', status: 'open' },
+    ]);
+
+    const res = await svc.getCorrelation('p1', 'user-1');
+
+    expect(res).not.toBe('denied');
+    if (res === 'denied') return;
+    expect(res.data[0].status).toBe('violated');
+    expect(res.data[0].matchedFindings).toHaveLength(1);
+    expect(listVulns).toHaveBeenCalledWith('user-1');
   });
 });
 

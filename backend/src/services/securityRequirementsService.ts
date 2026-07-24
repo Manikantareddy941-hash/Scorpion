@@ -3,6 +3,7 @@ import { securityRequirementsRepository as repo } from '../repositories/security
 import { generate as engineGenerate, reconcile } from './securityRequirementsEngine';
 import { ticketsService, TicketOwnership } from './ticketsService';
 import { pushTicketToJira } from './jiraService';
+import { correlate, CorrelatableFinding, CorrelatedRequirement } from './correlationEngine';
 import { LifecycleStatus, ProjectProfile, StoredRequirement } from '../types/securityRequirements.types';
 
 // Requirement severity uses the same vocabulary as ticket priority, but the
@@ -38,6 +39,23 @@ function ticketDescription(r: StoredRequirement): string {
 // transport layer can answer 404 for both — no enumeration oracle.
 type Access<T> = 'denied' | { ok: true; data: T };
 
+// A stored finding doc (vulnerabilities collection) reduced to the fields the
+// correlation engine reads. Persisted findings are third-party-shaped, so read
+// defensively and fall back to `scanner` (deduplication renames tool->scanner).
+function toCorrelatable(doc: unknown): CorrelatableFinding {
+  const f = (doc ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+  return {
+    tool: str(f.tool) ?? str(f.scanner),
+    category: str(f.category),
+    ruleId: str(f.ruleId),
+    title: str(f.title),
+    message: str(f.message),
+    severity: str(f.severity),
+    status: str(f.status),
+  };
+}
+
 // Profile shape accepted from the transport layer (projectId is stamped here,
 // never taken from the body).
 type ProfileInput = Omit<ProjectProfile, 'projectId' | 'updatedAt'>;
@@ -72,6 +90,22 @@ export const securityRequirementsService = {
   async list(projectId: string, userId?: string): Promise<Access<StoredRequirement[]>> {
     if (!(await owns(projectId, userId))) return 'denied';
     return { ok: true, data: await repo.listRequirements(projectId) };
+  },
+
+  /**
+   * Correlate the project's requirements against live scanner findings — the
+   * return leg of the requirement->Jira loop. Findings only ever flag a
+   * requirement VIOLATED; satisfied comes solely from human attestation.
+   *
+   * ponytail: findings are scoped to the owner's repos (all of them), not to a
+   * specific project — no project->repo link exists yet. Upgrade path: filter by
+   * the project's repo set once that mapping lands.
+   */
+  async getCorrelation(projectId: string, userId?: string): Promise<Access<CorrelatedRequirement[]>> {
+    if (!(await owns(projectId, userId))) return 'denied';
+    const requirements = await repo.listRequirements(projectId);
+    const findings = await planRepository.listVulnerabilitiesForUser(userId);
+    return { ok: true, data: correlate(requirements, findings.map(toCorrelatable)) };
   },
 
   async setLifecycle(
