@@ -83,10 +83,25 @@ export function generate(profile: ProjectProfile): GeneratedRequirement[]
 ```
 
 Pure function, no I/O. Iterates the rule library, runs each `when(profile)`,
-flattens the `emit` of matching rules, de-duplicates by `code` (two rules may
-emit the same baseline requirement), returns a stable-ordered list. Because it
-is pure and deterministic, the same profile always yields the same set — the
-basis for the unit tests.
+flattens the `emit` of matching rules, then **de-duplicates by `code` with
+multi-framework merging**, and returns a stable-ordered list. Because it is pure
+and deterministic, the same profile always yields the same set — the basis for
+the unit tests.
+
+**Multi-framework merging (audit-critical).** A single control belongs to one
+rule, so each rule emits its own `framework` + `controlId` (singular). But the
+same baseline requirement (e.g. `REQ-AUTH-MFA`) is legitimately emitted by
+multiple rules — a PCI rule and a SOC 2 rule. On a `code` collision the engine
+must **merge, never overwrite**: the surviving `GeneratedRequirement` carries
+`frameworks: string[]` and `controlIds: string[]` (deduped, stable-ordered),
+plus the union of `sourceRuleId`s. Overwriting would drop a framework's
+metadata, so an auditor reviewing SOC 2 would miss that the requirement was
+already satisfied under a PCI tag. `severity` on collision takes the highest;
+`status` takes the strongest (`required` beats `recommended`).
+
+The rule's `emit` therefore uses singular `framework`/`controlId`; the merged
+`GeneratedRequirement` (and the stored row) uses the plural `frameworks`/
+`controlIds` arrays.
 
 ### 3. Reconciliation — part of the engine service
 
@@ -131,13 +146,14 @@ delta ingestion, but scoped to one project's requirements and non-destructive.
 | title | string 512 | required |
 | description | string 16384 | off-row TEXT |
 | category | string 64 | |
-| framework | string 32 | required |
-| controlId | string 64 | e.g. PCI 6.5.1 |
-| severity | string 16 | low \| medium \| high \| critical |
-| status | string 16 | required \| recommended (rule default) |
+| frameworks | string[] | required; merged across rules that emit this code |
+| controlIds | string[] | e.g. ['PCI 6.5.1', 'CC6.1']; merged, parallel to frameworks |
+| severity | string 16 | low \| medium \| high \| critical (highest on merge) |
+| status | string 16 | required \| recommended (strongest on merge) |
 | lifecycleStatus | string 16 | open \| satisfied \| waived \| obsolete |
 | justification | string 4096 | for satisfied/waived (audit) |
-| sourceRuleId | string 64 | traceability |
+| updatedBy | string 64 | user id/email that set the current lifecycleStatus (audit identity) |
+| sourceRuleId | string[] | traceability; union of rules that produced this code |
 | createdAt | string 64 | required |
 
 Indexes: `projectId_idx` on both; `projectId_idx` + a `code` lookup path on
@@ -151,6 +167,9 @@ building indexes.
 Follows `planRepository`: Appwrite primary with a JSON fallback, tenant-scoped
 by the owning project (`plan_projects.user_id`). Methods: `getProfile`,
 `upsertProfile`, `listRequirements`, `bulkApplyReconcile`, `updateRequirement`.
+`updateRequirement(reqId, { lifecycleStatus, justification, updatedBy })`
+persists the audit identity alongside the status change — `updatedBy` is never
+taken from the request body, only from the authenticated session.
 
 > Note the standing `handleQuery` silent-fallback caveat: the fallback must not
 > mask a real Appwrite error in production. Requirements persistence is proven
@@ -166,7 +185,9 @@ tenant-checked via project ownership, 404-not-403 for inaccessible projects.
   reconcile + persist; returns the current requirement set.
 - `GET  /api/plan/projects/:projectId/requirements` — list.
 - `PATCH /api/plan/requirements/:reqId` — set `lifecycleStatus`
-  (satisfied/waived) + `justification`; writes an audit event.
+  (satisfied/waived) + `justification`. The route extracts the actor's identity
+  from the auth middleware (`req.user`) and passes it as `updatedBy` to the
+  repository — the client cannot spoof it via the body. Writes an audit event.
 
 ### 7. Frontend — per-project Requirements page
 
@@ -208,27 +229,36 @@ profile form ──PUT──> upsertProfile ──> plan_project_profiles
    *exact* generated requirement codes. Deterministic ⇒ exact assertions.
    - e.g. `{ dataTypes: ['card'], frameworks: ['PCI'] }` ⇒ includes
      `REQ-PCI-6.5.1-SQLI`, `REQ-PCI-3.4-ENCRYPT-AT-REST`; excludes HIPAA reqs.
-2. **Rule-library integrity test:** every emitted requirement has a non-empty
+2. **Multi-framework merge test:** a profile whose frameworks include both PCI
+   and SOC 2, where both emit `REQ-AUTH-MFA`, yields a single requirement with
+   `frameworks: ['PCI DSS', 'SOC 2']` and both control ids — never one
+   overwriting the other; severity is the highest and status the strongest of
+   the two.
+3. **Rule-library integrity test:** every emitted requirement has a non-empty
    `code`, a known `framework`, a valid `severity` and `status`, a `controlId`,
    and a unique `code` per `(rule, code)`; no two rules disagree on a code's
-   framework.
-3. **Reconciliation test:** regenerate after marking a requirement `satisfied`
-   preserves that status; a requirement that drops out becomes `obsolete`, not
-   deleted.
-4. **Repository round-trip** (`e2e_plan_roundtrip`-style, dotenv-first): upsert
+   category.
+4. **Reconciliation test:** regenerate after marking a requirement `satisfied`
+   preserves that status *and* its `updatedBy`; a requirement that drops out
+   becomes `obsolete`, not deleted.
+5. **Repository round-trip** (`e2e_plan_roundtrip`-style, dotenv-first): upsert
    profile → generate → read every requirement back via `getDocument`,
    asserting Appwrite persistence (not JSON fallback). Confirms schema accepts
-   the payloads (write-probe, not list-probe — the phantom-attribute lesson).
-5. **Route tests** (supertest): auth/tenancy (404 on non-owned project),
-   validation (400 on bad enum), happy path.
-6. Coverage target 80% per repo standard.
+   the payloads incl. array attributes (write-probe, not list-probe — the
+   phantom-attribute lesson).
+6. **Route tests** (supertest): auth/tenancy (404 on non-owned project),
+   validation (400 on bad enum), happy path, and that `updatedBy` is written
+   from the session — never from the body.
+7. Coverage target 80% per repo standard.
 
 ## Migration & tooling
 
 - A dedicated idempotent `migrate_security_requirements_collections.ts` (its own
   file, not folded into the plan migration — separate concern, separate review)
   creating the two collections with the row-size-safe sizing and availability
-  polling already proven in #125.
+  polling already proven in #125. Includes the `frameworks`, `controlIds`, and
+  `sourceRuleId` string-array attributes, the `updatedBy` audit attribute
+  (string 64), and off-row `description` (≥16384).
 - Reuse `check_plan_collections.cjs`'s verification shape and the
   round-trip write-probe to confirm the schema end-to-end before wiring the UI.
 
