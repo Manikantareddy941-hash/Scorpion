@@ -69,6 +69,9 @@ export interface StoredRequirement extends GeneratedRequirement {
   justification?: string;
   updatedBy?: string;
   createdAt: string;
+  // Set once a requirement has been pushed to a sprint ticket (feature 3a).
+  ticketId?: string;
+  jiraKey?: string;
 }
 
 /** The plan produced by reconcile(): what to persist against the current state. */

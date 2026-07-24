@@ -9,6 +9,7 @@ jest.mock('../services/securityRequirementsService', () => ({
     generate: jest.fn(),
     list: jest.fn(),
     setLifecycle: jest.fn(),
+    pushToTicket: jest.fn(),
   },
 }));
 
@@ -17,7 +18,7 @@ import { securityRequirementsService as svc } from '../services/securityRequirem
 
 const mock = svc as unknown as {
   getProfile: jest.Mock; saveProfile: jest.Mock; generate: jest.Mock;
-  list: jest.Mock; setLifecycle: jest.Mock;
+  list: jest.Mock; setLifecycle: jest.Mock; pushToTicket: jest.Mock;
 };
 
 const buildApp = (userId = 'user-1') => {
@@ -103,6 +104,21 @@ describe('securityRequirementsRoutes', () => {
     const res = await request(buildApp())
       .patch('/api/plan/requirements/r1')
       .send({ lifecycleStatus: 'satisfied' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('POST ticket pushes the requirement with session-derived ownership', async () => {
+    mock.pushToTicket.mockResolvedValue({ ok: true, alreadyLinked: false, ticketId: 'tk1', jiraKey: 'SEC-42' });
+    const res = await request(buildApp()).post('/api/plan/requirements/r1/ticket');
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true, alreadyLinked: false, ticketId: 'tk1', jiraKey: 'SEC-42' });
+    expect(mock.pushToTicket).toHaveBeenCalledWith('r1', 'user-1', 'user1@example.com', { user_id: 'user-1', team_id: null });
+  });
+
+  it('POST ticket returns 404 when the requirement is not found or not owned', async () => {
+    mock.pushToTicket.mockResolvedValue('not_found');
+    const res = await request(buildApp()).post('/api/plan/requirements/r1/ticket');
     expect(res.statusCode).toBe(404);
   });
 });

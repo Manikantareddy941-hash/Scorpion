@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { ShieldCheck, RefreshCw, Check, Ban, RotateCcw, AlertTriangle, FileText } from 'lucide-react';
+import { ShieldCheck, RefreshCw, Check, Ban, RotateCcw, AlertTriangle, FileText, Send, Ticket } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 // Plan-phase Security Requirements workspace (feature 2a). Configure a project
@@ -39,6 +39,8 @@ interface Requirement {
   justification?: string;
   updatedBy?: string;
   remediation: string;
+  ticketId?: string;
+  jiraKey?: string;
 }
 
 const defaultProfile: Profile = {
@@ -174,6 +176,16 @@ export default function RequirementsWorkspace() {
     setWaiveTarget(null); setJustification('');
   };
 
+  const pushToJira = async (req: Requirement) => {
+    try {
+      const res = await fetch(`/api/plan/requirements/${req.$id}/ticket`, { method: 'POST', headers: await authHeaders() });
+      if (!res.ok) { toast.error('Push to Jira failed'); return; }
+      const result = await res.json();
+      setRequirements((prev) => prev.map((r) => (r.$id === req.$id ? { ...r, ticketId: result.ticketId, jiraKey: result.jiraKey } : r)));
+      toast.success(result.jiraKey ? `Pushed to Jira (${result.jiraKey})` : 'Ticket created (configure Jira to sync)');
+    } catch { toast.error('Push to Jira failed'); }
+  };
+
   const active = requirements.filter((r) => r.lifecycleStatus !== 'obsolete');
   const byFramework = FRAMEWORKS
     .map((fw) => ({ fw, items: active.filter((r) => r.frameworks.includes(fw)) }))
@@ -290,6 +302,20 @@ export default function RequirementsWorkspace() {
                         )}
                       </div>
                       <div className="flex flex-col gap-1 shrink-0">
+                        {r.jiraKey ? (
+                          <span title="Synced to Jira" className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-indigo-500/30 text-indigo-300 bg-indigo-500/10 font-mono">
+                            <Ticket size={13} /> {r.jiraKey}
+                          </span>
+                        ) : r.ticketId ? (
+                          <span title="Local ticket created; configure Jira to sync" className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-slate-600 text-slate-400">
+                            <Ticket size={13} /> ticket
+                          </span>
+                        ) : (
+                          <button type="button" onClick={() => pushToJira(r)} title="Push to Jira as a sprint ticket"
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10">
+                            <Send size={13} /> Push to Jira
+                          </button>
+                        )}
                         {r.lifecycleStatus !== 'satisfied' && (
                           <button type="button" onClick={() => setLifecycle(r, 'satisfied')} title="Mark satisfied"
                             className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10">
