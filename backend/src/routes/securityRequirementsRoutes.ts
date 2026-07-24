@@ -59,4 +59,13 @@ router.patch('/requirements/:reqId', async (req: AuthenticatedRequest, res: Resp
   res.json(result.data);
 });
 
+// Push a requirement into a sprint as a ticket (feature 3a). Ownership and
+// reporter come from the authenticated session, never the body.
+router.post('/requirements/:reqId/ticket', async (req: AuthenticatedRequest, res: Response) => {
+  const ownership = { user_id: req.user?.$id ?? '', team_id: null };
+  const result = await svc.pushToTicket(req.params.reqId, req.user?.$id, req.user?.email ?? '', ownership);
+  if (result === 'not_found') return notFound(res);
+  res.json(result);
+});
+
 export default router;

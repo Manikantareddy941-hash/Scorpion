@@ -50,6 +50,7 @@ async function run() {
     category: 'Authentication', frameworks: ['PCI DSS', 'SOC 2'], controlIds: ['PCI DSS 8.3.1', 'CC6.1'],
     severity: 'high', status: 'required', lifecycleStatus: 'open', justification: '',
     updatedBy: 'probe@x', sourceRuleId: ['pci-mfa', 'soc2-mfa'], remediation: 'r', createdAt: now,
+    ticketId: 'tk-probe', jiraKey: 'SEC-1',
   });
 
   console.log(`\n${failures === 0 ? 'ALL GREEN — both collections accept full writes.' : `${failures} collection(s) failed.`}`);

@@ -69,6 +69,9 @@ const COLLECTIONS: CollectionSpec[] = [
       { key: 'sourceRuleId', size: 64, required: false, array: true },
       { key: 'remediation', size: 16384, required: false },
       { key: 'createdAt', size: 64, required: true },
+      // 3a: set once the requirement has been pushed to a sprint ticket.
+      { key: 'ticketId', size: 64, required: false },
+      { key: 'jiraKey', size: 64, required: false },
     ],
     indexes: [{ key: 'projectId_idx', attributes: ['projectId'] }],
   },

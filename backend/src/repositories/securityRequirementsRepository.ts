@@ -66,6 +66,8 @@ function toRequirementPayload(r: StoredRequirement): Record<string, unknown> {
     sourceRuleId: r.sourceRuleId,
     remediation: r.remediation,
     createdAt: r.createdAt,
+    ticketId: r.ticketId ?? '',
+    jiraKey: r.jiraKey ?? '',
   };
 }
 
@@ -187,6 +189,19 @@ export const securityRequirementsRepository = {
       async () => {
         const db = await readMockDb();
         return db.requirements.find((r) => r.$id === reqId) ?? null;
+      },
+    );
+  },
+
+  async setTicketRef(reqId: string, ref: { ticketId: string; jiraKey?: string }): Promise<void> {
+    const patch = { ticketId: ref.ticketId, jiraKey: ref.jiraKey ?? '' };
+    await handleQuery(
+      async () => { await databases.updateDocument(DB_ID, REQUIREMENTS, reqId, patch); return undefined; },
+      async () => {
+        const db = await readMockDb();
+        const idx = db.requirements.findIndex((r) => r.$id === reqId);
+        if (idx >= 0) { db.requirements[idx] = { ...db.requirements[idx], ...patch }; await writeMockDb(db); }
+        return undefined;
       },
     );
   },
