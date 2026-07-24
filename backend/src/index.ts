@@ -63,6 +63,7 @@ import buildRoutes from './routes/buildRoutes';
 import deployRoutes from './routes/deployRoutes';
 import pipelineRoutes from './routes/pipelineRoutes';
 import planRoutes from './routes/planRoutes';
+import securityRequirementsRoutes from './routes/securityRequirementsRoutes';
 import threatModelRoutes from './routes/threatModelRoutes';
 import k8sAdmissionRoutes from './routes/k8sAdmission';
 import ingestRoutes from './routes/ingestRoutes';
@@ -358,6 +359,7 @@ app.use('/api/deployments', authenticate, deployRoutes);
 app.use('/api/deploy', authenticate, deployRoutes);
 app.use('/api/pipelines', pipelineRoutes);
 app.use('/api/plan', authenticate, planRoutes);
+app.use('/api/plan', authenticate, securityRequirementsRoutes);
 app.use('/api/threat-models', authenticate, threatModelRoutes);
 // K8s ValidatingWebhook: called by the kube-apiserver, not an authenticated user — no auth middleware.
 app.use('/api/v1/webhook', k8sAdmissionRoutes);

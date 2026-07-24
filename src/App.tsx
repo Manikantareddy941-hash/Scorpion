@@ -56,6 +56,7 @@ const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
 const PlanWorkspace = lazy(() => import('./pages/PlanWorkspace'));
+const RequirementsWorkspace = lazy(() => import('./pages/RequirementsWorkspace'));
 const PolicyBuilder = lazy(() => import('./pages/PolicyBuilder'));
 const SecurityOverview = lazy(() => import('./pages/SecurityOverview'));
 const TicketDashboard = lazy(() => import('./pages/TicketDashboard'));
@@ -187,6 +188,7 @@ function App() {
               <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
               <Route path="/jira-settings" element={<ProtectedRoute><JiraSettings /></ProtectedRoute>} />
               <Route path="/plan/*" element={<ProtectedRoute><PlanWorkspace /></ProtectedRoute>} />
+              <Route path="/requirements" element={<ProtectedRoute><RequirementsWorkspace /></ProtectedRoute>} />
               <Route path="/policy-builder" element={<ProtectedRoute><PolicyBuilder /></ProtectedRoute>} />
               <Route path="/overview" element={<ProtectedRoute><SecurityOverview /></ProtectedRoute>} />
               <Route path="/" element={<ProtectedRoute><Dashboard isSidebarCollapsed={isSidebarCollapsed} /></ProtectedRoute>} />
