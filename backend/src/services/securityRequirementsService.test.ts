@@ -109,14 +109,29 @@ describe('securityRequirementsService.pushToTicket (3a bridge)', () => {
 
     expect(res).toEqual({ ok: true, alreadyLinked: false, ticketId: 'tk1', jiraKey: 'SEC-42' });
     const [input, reporter, own] = ticketsCreate.mock.calls[0];
-    expect(input.priority).toBe('high');
-    expect(input.tags).toEqual(expect.arrayContaining(['scorpion-security', 'compliance', 'pci-dss', 'soc-2', 'req-pci-6.5.1-sqli']));
+    // 2b escalation: a required requirement bumps priority (high -> critical)
+    // and is tagged a compliance-blocker.
+    expect(input.priority).toBe('critical');
+    expect(input.tags).toEqual(expect.arrayContaining(['scorpion-security', 'compliance', 'pci-dss', 'soc-2', 'req-pci-6.5.1-sqli', 'compliance-blocker']));
     expect(input.description).toContain('PCI DSS 6.5.1');
     expect(input.description).toContain('Use parameterized queries');
     expect(reporter).toBe('auditor@x');
     expect(own).toEqual(ownership);
     expect(jiraPush).toHaveBeenCalledWith('tk1');
     expect(mockRepo.setTicketRef).toHaveBeenCalledWith('r1', { ticketId: 'tk1', jiraKey: 'SEC-42' });
+  });
+
+  it('does not escalate a recommended requirement (2b)', async () => {
+    mockRepo.getRequirement.mockResolvedValue(requirement({ status: 'recommended', severity: 'medium' }));
+    owner.mockResolvedValue('user-1');
+    ticketsCreate.mockResolvedValue({ conflict: false, ticket: { id: 'tk3' } });
+    jiraPush.mockResolvedValue({ ok: true, jiraKey: 'SEC-50' });
+
+    await svc.pushToTicket('r1', 'user-1', 'e@x', ownership);
+
+    const [input] = ticketsCreate.mock.calls[0];
+    expect(input.priority).toBe('medium');
+    expect(input.tags).not.toContain('compliance-blocker');
   });
 
   it('is idempotent — a requirement already linked returns the existing ticket', async () => {
