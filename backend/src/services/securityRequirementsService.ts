@@ -10,6 +10,16 @@ import { LifecycleStatus, ProjectProfile, StoredRequirement } from '../types/sec
 const SEVERITY_TO_NUMBER: Record<string, number> = { critical: 9, high: 7, medium: 4, low: 1 };
 const frameworkSlug = (framework: string): string => framework.toLowerCase().replace(/\s+/g, '-');
 
+// 2b: a required requirement is a compliance mandate — escalate its ticket one
+// priority notch (capped at critical) so it can't sit at the bottom of a
+// backlog. A recommended requirement keeps its severity-derived priority.
+const PRIORITY_LADDER = ['low', 'medium', 'high', 'critical'];
+function ticketPriority(severity: string, status: string): string {
+  if (status !== 'required') return severity;
+  const i = PRIORITY_LADDER.indexOf(severity);
+  return i < 0 ? severity : PRIORITY_LADDER[Math.min(i + 1, PRIORITY_LADDER.length - 1)];
+}
+
 function ticketDescription(r: StoredRequirement): string {
   return [
     r.description,
@@ -99,11 +109,12 @@ export const securityRequirementsService = {
     if (req.ticketId) return { ok: true, alreadyLinked: true, ticketId: req.ticketId, jiraKey: req.jiraKey };
 
     const tags = ['scorpion-security', 'compliance', ...req.frameworks.map(frameworkSlug), req.code.toLowerCase()];
+    if (req.status === 'required') tags.push('compliance-blocker');
     const { ticket } = await ticketsService.createTicket(
       {
         title: req.title,
         description: ticketDescription(req),
-        priority: req.severity,
+        priority: ticketPriority(req.severity, req.status) as 'critical' | 'high' | 'medium' | 'low',
         type: 'task',
         severity: SEVERITY_TO_NUMBER[req.severity] ?? 0,
         tags,

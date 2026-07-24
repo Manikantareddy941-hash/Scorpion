@@ -289,7 +289,11 @@ export default function RequirementsWorkspace() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span className={`text-xs px-2 py-0.5 rounded border ${SEVERITY_STYLES[r.severity]}`}>{r.severity}</span>
-                          {r.status === 'required' && <span className="text-xs px-2 py-0.5 rounded border border-red-500/30 text-red-300 bg-red-500/10">required</span>}
+                          {r.status === 'required' ? (
+                            <span className="text-xs px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold tracking-wide">REQUIRED</span>
+                          ) : (
+                            <span className="text-xs px-2 py-0.5 rounded border border-slate-600 text-slate-400">recommended</span>
+                          )}
                           <span className={`text-xs px-2 py-0.5 rounded border ${LIFECYCLE_STYLES[r.lifecycleStatus]}`}>{r.lifecycleStatus}</span>
                           <span className="text-xs text-slate-500 font-mono">{r.controlIds.join(', ')}</span>
                         </div>
