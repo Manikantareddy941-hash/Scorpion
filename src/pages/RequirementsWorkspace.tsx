@@ -43,6 +43,16 @@ interface Requirement {
   jiraKey?: string;
 }
 
+interface Correlation {
+  requirement: { $id: string };
+  status: 'violated' | 'attested' | 'unverified';
+  matchedFindings: unknown[];
+  contradictsAttestation: boolean;
+}
+
+// Per-requirement scan verdict, keyed by requirement $id.
+type CorrEntry = { status: string; count: number; contradicts: boolean };
+
 const defaultProfile: Profile = {
   appType: 'api', stack: ['node'], dataTypes: ['none'],
   deployment: 'cloud', authModel: 'session', frameworks: [],
@@ -84,6 +94,7 @@ export default function RequirementsWorkspace() {
   const [projectId, setProjectId] = useState('');
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [corr, setCorr] = useState<Record<string, CorrEntry>>({});
   const [generating, setGenerating] = useState(false);
   const [waiveTarget, setWaiveTarget] = useState<Requirement | null>(null);
   const [justification, setJustification] = useState('');
@@ -123,7 +134,22 @@ export default function RequirementsWorkspace() {
     } catch { toast.error('Failed to load requirements'); }
   }, [authHeaders]);
 
-  useEffect(() => { if (projectId) loadForProject(projectId); }, [projectId, loadForProject]);
+  // Scan correlation is a best-effort UI signal — a fetch failure just leaves
+  // requirements unbadged, it never blocks the workspace.
+  const loadCorrelation = useCallback(async (pid: string) => {
+    try {
+      const res = await fetch(`/api/plan/projects/${pid}/requirements/correlation`, { headers: await authHeaders() });
+      if (!res.ok) return;
+      const rows: Correlation[] = await res.json();
+      const map: Record<string, CorrEntry> = {};
+      for (const row of rows) {
+        map[row.requirement.$id] = { status: row.status, count: row.matchedFindings.length, contradicts: row.contradictsAttestation };
+      }
+      setCorr(map);
+    } catch { /* leave requirements unbadged */ }
+  }, [authHeaders]);
+
+  useEffect(() => { if (projectId) { loadForProject(projectId); loadCorrelation(projectId); } }, [projectId, loadForProject, loadCorrelation]);
 
   const toggle = (key: 'stack' | 'dataTypes' | 'frameworks', value: string) => {
     setProfile((prev) => {
@@ -150,7 +176,7 @@ export default function RequirementsWorkspace() {
       const res = await fetch(`/api/plan/projects/${projectId}/requirements/generate`, {
         method: 'POST', headers: await authHeaders(),
       });
-      if (res.ok) { setRequirements(await res.json()); toast.success('Requirements generated'); }
+      if (res.ok) { setRequirements(await res.json()); loadCorrelation(projectId); toast.success('Requirements generated'); }
       else { const e = await res.json(); toast.error(e.error || 'Generation failed'); }
     } catch { toast.error('Generation failed'); }
     finally { setGenerating(false); }
@@ -165,6 +191,7 @@ export default function RequirementsWorkspace() {
       if (res.ok) {
         const updated = await res.json();
         setRequirements((prev) => prev.map((r) => (r.$id === req.$id ? updated : r)));
+        loadCorrelation(projectId); // attestation change can flip the scan verdict
       } else toast.error('Update failed');
     } catch { toast.error('Update failed'); }
   };
@@ -191,6 +218,7 @@ export default function RequirementsWorkspace() {
     .map((fw) => ({ fw, items: active.filter((r) => r.frameworks.includes(fw)) }))
     .filter((g) => g.items.length > 0);
   const satisfiedCount = active.filter((r) => r.lifecycleStatus === 'satisfied').length;
+  const violatedCount = active.filter((r) => corr[r.$id]?.status === 'violated').length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -269,6 +297,7 @@ export default function RequirementsWorkspace() {
         <div className="flex items-center gap-4 mb-4 text-sm text-slate-400">
           <span><span className="text-slate-100 font-semibold">{active.length}</span> requirements</span>
           <span><span className="text-emerald-300 font-semibold">{satisfiedCount}</span> satisfied</span>
+          {violatedCount > 0 && <span><span className="text-red-400 font-semibold">{violatedCount}</span> violated by scan</span>}
         </div>
       )}
 
@@ -295,6 +324,13 @@ export default function RequirementsWorkspace() {
                             <span className="text-xs px-2 py-0.5 rounded border border-slate-600 text-slate-400">recommended</span>
                           )}
                           <span className={`text-xs px-2 py-0.5 rounded border ${LIFECYCLE_STYLES[r.lifecycleStatus]}`}>{r.lifecycleStatus}</span>
+                          {corr[r.$id]?.status === 'violated' && (
+                            <span title={`${corr[r.$id].count} live scan finding(s) contradict this requirement`}
+                              className="text-xs px-2 py-0.5 rounded bg-red-600 text-white font-semibold tracking-wide flex items-center gap-1">
+                              <AlertTriangle size={11} />
+                              {corr[r.$id].contradicts ? `ATTESTED BUT VIOLATED · ${corr[r.$id].count}` : `VIOLATED · ${corr[r.$id].count}`}
+                            </span>
+                          )}
                           <span className="text-xs text-slate-500 font-mono">{r.controlIds.join(', ')}</span>
                         </div>
                         <h4 className="font-medium text-slate-100">{r.title}</h4>

@@ -50,6 +50,14 @@ router.get('/projects/:projectId/requirements', async (req: AuthenticatedRequest
   res.json(result.data);
 });
 
+// Correlate requirements against live scanner findings (Code & Commit): each
+// requirement comes back tagged violated / attested / unverified.
+router.get('/projects/:projectId/requirements/correlation', async (req: AuthenticatedRequest, res: Response) => {
+  const result = await svc.getCorrelation(req.params.projectId, req.user?.$id);
+  if (result === 'denied') return notFound(res);
+  res.json(result.data);
+});
+
 router.patch('/requirements/:reqId', async (req: AuthenticatedRequest, res: Response) => {
   const parsed = patchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid update', details: parsed.error.issues });
