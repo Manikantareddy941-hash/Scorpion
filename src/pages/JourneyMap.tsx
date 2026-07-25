@@ -138,7 +138,7 @@ export default function JourneyMap() {
         if (hasCompromisedThreat && (node.id === 'monitor' || node.id === 'k8s')) {
             return 'compromised';
         }
-        if (node.id === 'release') return gateStatus === 'BLOCKED' ? 'BLOCKED' : 'passing';
+        if (node.id === 'release') return gateStatus === 'BLOCKED' ? 'BLOCKED' : gateStatus === 'OVERRIDDEN' ? 'warning' : 'passing';
         // Scanner nodes reflect their underlying tool's real availability from /api/health.
         if (node.scannerKey && health.services && health.services[node.scannerKey] === false) {
             return 'warning';
@@ -152,7 +152,7 @@ export default function JourneyMap() {
         if (!dashboard) return '...';
         if (node.id === 'repo') return `${dashboard.by_repo?.length || 0} Repos`;
         if (node.id === 'monitor') return threats.some(t => t.status === 'compromised') ? '⚠️ COMPROMISED' : 'SECURE';
-        if (node.id === 'release') return gateStatus === 'BLOCKED' ? `BLOCKED (${postureScore}%)` : `PASSED (${postureScore}%)`;
+        if (node.id === 'release') return gateStatus === 'BLOCKED' ? `BLOCKED (${postureScore}%)` : gateStatus === 'OVERRIDDEN' ? `OVERRIDDEN (${postureScore}%)` : `PASSED (${postureScore}%)`;
         if (node.statKey) return `${dashboard.by_type?.[node.statKey] || 0} Findings`;
         if (node.id === 'audit') return `${dashboard.total || 0} Logs`;
         if (node.id === 'k8s') return threats.some(t => t.status === 'compromised') ? '⚠️ INTRUSION' : 'COMPLIANT';

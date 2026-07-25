@@ -199,6 +199,17 @@ export const gateService = {
     return { status: state.exists && state.status ? state.status : 'passing' };
   },
 
+  /**
+   * Stamp the release-node state with a compliance verdict from the deploy path,
+   * so /api/gates/state reflects what actually shipped: BLOCKED (a prod deploy
+   * stopped on a violated control) or OVERRIDDEN (a break-glass shipped anyway).
+   * This is the single source of truth the Pipeline Gates panel already renders.
+   */
+  async stampReleaseVerdict(status: PipelineGateStatus): Promise<void> {
+    await gateRepository.ensurePipelineStateCollection();
+    await gateRepository.setReleaseNodeStatus(status);
+  },
+
   async legacyRelease(repoId: string, userId: string) {
     const result = await checkReleaseGate(repoId);
     await logAuditEvent('GATE_CHECK', `Release gate checked for ${repoId}. Result: ${result.allowed ? 'PASSED' : 'BLOCKED'} (${result.blocker_count} blockers)`, userId, repoId);

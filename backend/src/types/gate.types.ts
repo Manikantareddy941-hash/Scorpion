@@ -38,4 +38,8 @@ export interface GateResult {
   regoDenyReasons?: string[];
 }
 
-export type PipelineGateStatus = 'passing' | 'BLOCKED';
+// 'OVERRIDDEN' = shipped despite a compliance violation via an audited break-
+// glass. Distinct from 'passing' (compliant) and 'BLOCKED' (stopped): a release
+// that bypassed security is neither. Downstream (checkDeployable, K8s operators,
+// audit) can tell exactly what they are looking at.
+export type PipelineGateStatus = 'passing' | 'BLOCKED' | 'OVERRIDDEN';
