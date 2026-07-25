@@ -76,10 +76,12 @@ export function classifyFinding(f: CorrelatableFinding): FindingClass | null {
   if (cat === 'secret-exposure' || tool === 'gitleaks') return 'secret';
   if (cat === 'dependency-vulnerability') return 'dependency-vuln';
   if (cat === 'iac-misconfig' || cat === 'dockerfile-lint') return 'iac-misconfig';
-  if (tool === 'semgrep' || tool === 'bandit') {
-    const hay = `${f.ruleId ?? ''} ${f.category ?? ''} ${f.title ?? ''} ${f.message ?? ''}`;
-    if (INJECTION_RE.test(hay)) return 'injection';
-  }
+  // Injection is matched by keyword last, so the categorised classes above win
+  // first (a CVE titled "...SQL injection..." stays dependency-vuln). Any SAST
+  // tool qualifies — internal Semgrep/Bandit and ingested CodeQL/Snyk SARIF
+  // alike — since the rule id / message carries the injection signal.
+  const hay = `${f.ruleId ?? ''} ${f.category ?? ''} ${f.title ?? ''} ${f.message ?? ''}`;
+  if (INJECTION_RE.test(hay)) return 'injection';
   return null;
 }
 
