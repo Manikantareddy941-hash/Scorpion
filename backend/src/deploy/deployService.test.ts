@@ -20,11 +20,21 @@ jest.mock('../lib/appwrite', () => ({
 jest.mock('../services/incidentService', () => ({ createIncident: jest.fn() }));
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
 jest.mock('../services/cosignService', () => ({ verifyImageDigest: jest.fn() }));
+jest.mock('../services/securityRequirementsService', () => ({
+    securityRequirementsService: { complianceGate: jest.fn().mockResolvedValue({ blocked: false, violations: [] }) },
+}));
+jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn() }));
 
 import { databases } from '../lib/appwrite';
 import { triggerDeploy } from './deployService';
 import { createIncident } from '../services/incidentService';
 import { verifyImageDigest } from '../services/cosignService';
+import { securityRequirementsService } from '../services/securityRequirementsService';
+import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
+
+const mockCompliance = securityRequirementsService.complianceGate as jest.Mock;
+const mockAudit = logSecureAuditEvent as jest.Mock;
+const BLOCKED = { blocked: true, violations: [{ projectId: 'pA', code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', frameworks: ['PCI DSS'], severity: 'high', findingCount: 1, findings: [] }] };
 
 const mockTrivyNoCriticalCves = () => {
     (execFile as unknown as jest.Mock).mockImplementation((cmd: string, ...rest: any[]) => {
@@ -79,5 +89,54 @@ describe('triggerDeploy image signature verification gate', () => {
 
         expect(verifyImageDigest).not.toHaveBeenCalled();
         jest.useRealTimers();
+    });
+});
+
+describe('triggerDeploy compliance gate', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        delete process.env.COSIGN_PUB_KEY_PATH;
+        mockCompliance.mockResolvedValue({ blocked: false, violations: [] });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('hard-blocks a production deploy when a required control is violated', async () => {
+        mockTrivyNoCriticalCves();
+        mockDeployScaffolding({ repoId: 'repo-1' });
+        mockCompliance.mockResolvedValue(BLOCKED);
+
+        const result = await triggerDeploy('build-1', 'production', 'tester');
+
+        expect(result.status).toBe('failed');
+        expect(result.reason).toContain('Compliance gate');
+        expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({
+            title: expect.stringContaining('compliance controls violated'),
+            severity: 'CRITICAL',
+        }));
+        expect(mockAudit).not.toHaveBeenCalled();
+    });
+
+    it('proceeds under an audited break-glass override in production', async () => {
+        jest.useFakeTimers();
+        mockTrivyNoCriticalCves();
+        mockDeployScaffolding({ repoId: 'repo-1' });
+        mockCompliance.mockResolvedValue(BLOCKED);
+
+        const result = await triggerDeploy('build-1', 'production', 'tester', true);
+
+        expect(result.status).not.toBe('failed');
+        expect(mockAudit).toHaveBeenCalledWith('tester', 'BREAK_GLASS_BYPASS', 'repo-1', expect.stringContaining('bypassed'));
+    });
+
+    it('does not block a non-production deploy on a violation (warn only)', async () => {
+        jest.useFakeTimers();
+        mockTrivyNoCriticalCves();
+        mockDeployScaffolding({ repoId: 'repo-1' });
+        mockCompliance.mockResolvedValue(BLOCKED);
+
+        const result = await triggerDeploy('build-1', 'dev', 'tester');
+
+        expect(result.status).not.toBe('failed');
+        expect(mockAudit).not.toHaveBeenCalled();
     });
 });

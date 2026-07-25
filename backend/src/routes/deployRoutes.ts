@@ -16,7 +16,7 @@ const router = express.Router();
  */
 router.post(['/', '/trigger'], async (req: AuthenticatedRequest, res) => {
   try {
-    const { buildId, environment } = req.body;
+    const { buildId, environment, break_glass } = req.body;
     const userId = req.user?.$id;
     const triggeredBy = req.user?.email || 'unknown';
 
@@ -34,8 +34,19 @@ router.post(['/', '/trigger'], async (req: AuthenticatedRequest, res) => {
       return res.status(403).json({ error: 'You do not have permission to deploy this repository' });
     }
 
+    // Break-glass (bypass the compliance gate) is a separate, higher privilege
+    // than deploy — it requires gate:bypass. The override itself is tamper-
+    // audited inside triggerDeploy.
+    let breakGlass = false;
+    if (break_glass === true) {
+      if (!(await hasPermission(req, userId || '', 'gate:bypass', build.repoId))) {
+        return res.status(403).json({ error: 'Break-glass deploy requires the gate:bypass permission' });
+      }
+      breakGlass = true;
+    }
+
     // Trigger deployment async (doesn't await completion)
-    const result = await triggerDeploy(buildId, environment as 'dev' | 'staging' | 'production', triggeredBy);
+    const result = await triggerDeploy(buildId, environment as 'dev' | 'staging' | 'production', triggeredBy, breakGlass);
 
     res.status(202).json({
       message: 'Deployment triggered',
