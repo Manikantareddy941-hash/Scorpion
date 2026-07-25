@@ -2,7 +2,7 @@ jest.mock('../repositories/planRepository', () => ({
   planRepository: { getProjectOwner: jest.fn(), listVulnerabilitiesForRepos: jest.fn() },
 }));
 jest.mock('../repositories/projectRepoRepository', () => ({
-  projectRepoRepository: { listRepoIds: jest.fn(), listBindings: jest.fn(), setBindings: jest.fn() },
+  projectRepoRepository: { listRepoIds: jest.fn(), listBindings: jest.fn(), setBindings: jest.fn(), listProjectIdsForRepo: jest.fn() },
 }));
 jest.mock('../lib/appwrite', () => ({
   databases: { getDocument: jest.fn() },
@@ -32,6 +32,7 @@ import { pushTicketToJira } from './jiraService';
 const owner = planRepository.getProjectOwner as jest.Mock;
 const listVulns = planRepository.listVulnerabilitiesForRepos as jest.Mock;
 const listRepoIds = projectRepoRepository.listRepoIds as jest.Mock;
+const listProjectsForRepo = projectRepoRepository.listProjectIdsForRepo as jest.Mock;
 const setBindings = projectRepoRepository.setBindings as jest.Mock;
 const getRepoDoc = databases.getDocument as jest.Mock;
 const canAccess = canAccessResource as jest.Mock;
@@ -122,6 +123,34 @@ describe('securityRequirementsService.getCorrelation', () => {
     expect(res.data[0].status).toBe('violated');
     // The findings query is scoped to the project's bound repos, never the owner.
     expect(listVulns).toHaveBeenCalledWith(['r1', 'r2']);
+  });
+});
+
+describe('securityRequirementsService.fanOutCorrelation (SARIF ingest fan-out)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('re-correlates every project bound to the repo and reports each violated count', async () => {
+    listProjectsForRepo.mockResolvedValue(['pA', 'pB']);
+    listRepoIds.mockResolvedValue(['r1']);
+    mockRepo.listRequirements.mockResolvedValue([
+      { code: 'REQ', category: 'Secure Coding', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
+    ]);
+    listVulns.mockResolvedValue([
+      { tool: 'semgrep', category: 'sql-injection', ruleId: 'sql-injection', message: 'SQL injection', status: 'open' },
+    ]);
+
+    const res = await svc.fanOutCorrelation('r1');
+
+    expect(listProjectsForRepo).toHaveBeenCalledWith('r1');
+    expect(res).toEqual([
+      { projectId: 'pA', violated: 1, total: 1 },
+      { projectId: 'pB', violated: 1, total: 1 },
+    ]);
+  });
+
+  it('returns an empty list when no project is bound to the repo', async () => {
+    listProjectsForRepo.mockResolvedValue([]);
+    expect(await svc.fanOutCorrelation('orphan')).toEqual([]);
   });
 });
 

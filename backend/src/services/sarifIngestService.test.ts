@@ -6,15 +6,18 @@ jest.mock('../lib/appwrite', () => ({
   Query: { equal: (f: string, v: unknown) => ({ equal: [f, v] }), limit: (n: number) => ({ limit: n }) },
 }));
 jest.mock('./scanService', () => ({ ingestVulnerabilitiesDelta: jest.fn().mockResolvedValue({ uniqueIncoming: [] }) }));
+jest.mock('./securityRequirementsService', () => ({ securityRequirementsService: { fanOutCorrelation: jest.fn().mockResolvedValue([]) } }));
 jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 
 import { databases } from '../lib/appwrite';
 import { ingestVulnerabilitiesDelta } from './scanService';
+import { securityRequirementsService } from './securityRequirementsService';
 import { ingestSarif } from './sarifIngestService';
 
 const mockList = databases.listDocuments as jest.Mock;
 const mockCreate = databases.createDocument as jest.Mock;
 const mockDelta = ingestVulnerabilitiesDelta as jest.Mock;
+const mockFanOut = securityRequirementsService.fanOutCorrelation as jest.Mock;
 
 const sarifLog = {
   version: '2.1.0',
@@ -46,17 +49,20 @@ describe('ingestSarif', () => {
     expect(res).toEqual({ ok: false, reason: 'repo_not_found' });
   });
 
-  it('stores SARIF findings under the resolved repo via the delta path', async () => {
+  it('stores SARIF findings under the resolved repo via the delta path, then fans out to bound projects', async () => {
     mockList.mockResolvedValue({ documents: [{ $id: 'r1', url: 'https://x/y', user_id: 'user-1' }] });
+    mockFanOut.mockResolvedValue([{ projectId: 'pA', violated: 1, total: 5 }]);
 
     const res = await ingestSarif({ tenant: 'user-1', repoUrl: 'https://x/y', sarif: sarifLog });
 
-    expect(res).toEqual({ ok: true, scanId: 'scan-1', findings: 1 });
+    expect(res).toEqual({ ok: true, scanId: 'scan-1', findings: 1, affectedProjects: [{ projectId: 'pA', violated: 1, total: 5 }] });
     const [repoId, scanId, issues] = mockDelta.mock.calls[0];
     expect(repoId).toBe('r1');
     expect(scanId).toBe('scan-1');
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({ tool: 'codeql', ruleId: 'js/sql-injection' });
+    // Fan-out runs against the resolved repo id.
+    expect(mockFanOut).toHaveBeenCalledWith('r1');
   });
 
   it('matches by URL alone for the legacy global key (tenant null)', async () => {

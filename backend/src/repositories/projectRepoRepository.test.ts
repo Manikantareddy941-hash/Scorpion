@@ -45,4 +45,13 @@ describe('projectRepoRepository', () => {
     expect(mockDelete).toHaveBeenCalledTimes(1);
     expect(mockCreate).not.toHaveBeenCalled();
   });
+
+  it('listProjectIdsForRepo returns the distinct projects a repo is bound to', async () => {
+    mockList.mockResolvedValue({ documents: [
+      { projectId: 'pA', repoId: 'r1' },
+      { projectId: 'pB', repoId: 'r1' },
+      { projectId: 'pA', repoId: 'r1' },
+    ] });
+    expect(await repo.listProjectIdsForRepo('r1')).toEqual(['pA', 'pB']);
+  });
 });
