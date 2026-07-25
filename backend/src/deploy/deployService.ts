@@ -4,6 +4,7 @@ import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { verifyImageDigest } from '../services/cosignService';
 import { securityRequirementsService } from '../services/securityRequirementsService';
+import { gateRunRepository } from '../repositories/gateRunRepository';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { logger } from '../services/logger';
 
@@ -244,7 +245,23 @@ export async function triggerDeploy(
     const compliance = await securityRequirementsService.complianceGate(repoId);
     if (compliance.blocked) {
       const codes = compliance.violations.map(v => v.code).join(', ');
-      if (environment === 'production' && !breakGlass) {
+      const isHardBlock = environment === 'production' && !breakGlass;
+      // Ledger the deploy-gate event so it shows in the Pipeline Gates panel
+      // alongside CI runs. A break-glass override is the highest-stakes event to
+      // keep visible; a hard block, the next. Best-effort — never fail a deploy
+      // (or a block) on a ledger-write error.
+      gateRunRepository.record({
+        repoId,
+        source: 'deploy',
+        environment,
+        actor: triggeredBy,
+        commitSha: buildId,
+        status: isHardBlock ? 'blocked' : 'overridden',
+        violations: compliance.violations,
+        createdAt: new Date().toISOString(),
+      }).catch(err => logger.warn('[DeployService] failed to record deploy gate run', err instanceof Error ? err.message : err));
+
+      if (isHardBlock) {
         logger.warn(`[DeployService] Deployment ${deploymentId} blocked: ${compliance.violations.length} required control(s) violated.`);
         await deployRepository.updateDeploymentStatus(deploymentId, { status: 'failed' });
         await createIncident({

@@ -15,8 +15,9 @@ interface Violation {
   severity: string; findingCount: number; jiraKey?: string; findings: ViolationFinding[];
 }
 interface GateRun {
-  $id?: string; repoId: string; commitSha?: string; branch?: string;
-  status: 'passed' | 'blocked'; violations: Violation[]; createdAt: string;
+  $id?: string; repoId: string; source?: 'ci' | 'deploy'; environment?: string; actor?: string;
+  commitSha?: string; branch?: string;
+  status: 'passed' | 'blocked' | 'overridden'; violations: Violation[]; createdAt: string;
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -72,8 +73,9 @@ export default function PipelineGates() {
 
   useEffect(() => { if (projectId) loadRuns(projectId); }, [projectId, loadRuns]);
 
-  const visible = blockedOnly ? runs.filter((r) => r.status === 'blocked') : runs;
+  const visible = blockedOnly ? runs.filter((r) => r.status !== 'passed') : runs;
   const blockedCount = runs.filter((r) => r.status === 'blocked').length;
+  const overriddenCount = runs.filter((r) => r.status === 'overridden').length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
@@ -103,9 +105,10 @@ export default function PipelineGates() {
       <div className="flex items-center gap-4 mb-4 text-sm text-slate-400">
         <span><span className="text-slate-100 font-semibold">{runs.length}</span> runs</span>
         <span><span className="text-red-400 font-semibold">{blockedCount}</span> blocked</span>
+        <span><span className="text-amber-400 font-semibold">{overriddenCount}</span> overridden</span>
         <label className="flex items-center gap-2 ml-auto cursor-pointer">
           <input type="checkbox" checked={blockedOnly} onChange={(e) => setBlockedOnly(e.target.checked)} className="accent-red-500" />
-          Blocked only
+          Issues only
         </label>
       </div>
 
@@ -119,31 +122,44 @@ export default function PipelineGates() {
           {visible.map((run) => {
             const id = run.$id || run.createdAt;
             const isBlocked = run.status === 'blocked';
+            const isOverridden = run.status === 'overridden';
+            const hasIssue = isBlocked || isOverridden;
             const isOpen = expanded === id;
+            const pill = isBlocked
+              ? { cls: 'bg-red-600 text-white', label: 'BLOCKED' }
+              : isOverridden
+                ? { cls: 'bg-amber-500/20 text-amber-200 border border-amber-500/40', label: 'OVERRIDDEN' }
+                : { cls: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30', label: 'PASSED' };
+            const border = isBlocked ? 'border-red-500/30' : isOverridden ? 'border-amber-500/30' : 'border-slate-800';
             return (
-              <article key={id} className={`bg-slate-900 border rounded-lg ${isBlocked ? 'border-red-500/30' : 'border-slate-800'}`}>
+              <article key={id} className={`bg-slate-900 border rounded-lg ${border}`}>
                 <button
                   type="button"
                   onClick={() => setExpanded(isOpen ? null : id)}
                   className="w-full flex items-center gap-3 p-4 text-left"
-                  disabled={!isBlocked}
+                  disabled={!hasIssue}
                 >
-                  {isBlocked ? (
+                  {hasIssue ? (
                     isOpen ? <ChevronDown size={16} className="text-slate-500 shrink-0" /> : <ChevronRight size={16} className="text-slate-500 shrink-0" />
                   ) : <span className="w-4 shrink-0" />}
-                  <span className={`text-xs px-2 py-0.5 rounded font-semibold tracking-wide flex items-center gap-1 ${isBlocked ? 'bg-red-600 text-white' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}`}>
-                    {isBlocked ? <ShieldAlert size={12} /> : <ShieldCheck size={12} />}
-                    {isBlocked ? 'BLOCKED' : 'PASSED'}
+                  <span className={`text-xs px-2 py-0.5 rounded font-semibold tracking-wide flex items-center gap-1 ${pill.cls}`}>
+                    {hasIssue ? <ShieldAlert size={12} /> : <ShieldCheck size={12} />}
+                    {pill.label}
                   </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-400 uppercase tracking-wide">
+                    {run.source === 'deploy' ? 'deploy' : 'ci'}
+                  </span>
+                  {run.source === 'deploy' && run.environment && <span className="text-xs text-slate-400">{run.environment}</span>}
                   <span className="flex items-center gap-1 text-xs text-slate-400 font-mono">
                     <GitCommit size={13} /> {run.commitSha ? run.commitSha.slice(0, 7) : '—'}
                   </span>
                   {run.branch && <span className="text-xs text-slate-500">{run.branch}</span>}
-                  {isBlocked && <span className="text-xs text-red-300">{run.violations.length} control(s) violated</span>}
+                  {run.actor && <span className="text-xs text-slate-500">by {run.actor}</span>}
+                  {hasIssue && <span className={`text-xs ${isBlocked ? 'text-red-300' : 'text-amber-300'}`}>{run.violations.length} control(s) {isOverridden ? 'bypassed' : 'violated'}</span>}
                   <span className="ml-auto text-xs text-slate-500">{relativeTime(run.createdAt)}</span>
                 </button>
 
-                {isBlocked && isOpen && (
+                {hasIssue && isOpen && (
                   <div className="border-t border-slate-800 p-4 space-y-3">
                     {run.violations.map((v) => (
                       <div key={v.code} className="bg-slate-950/50 border border-slate-800 rounded-lg p-3">

@@ -24,6 +24,7 @@ jest.mock('../services/securityRequirementsService', () => ({
     securityRequirementsService: { complianceGate: jest.fn().mockResolvedValue({ blocked: false, violations: [] }) },
 }));
 jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn() }));
+jest.mock('../repositories/gateRunRepository', () => ({ gateRunRepository: { record: jest.fn().mockResolvedValue(undefined) } }));
 
 import { databases } from '../lib/appwrite';
 import { triggerDeploy } from './deployService';
@@ -31,9 +32,11 @@ import { createIncident } from '../services/incidentService';
 import { verifyImageDigest } from '../services/cosignService';
 import { securityRequirementsService } from '../services/securityRequirementsService';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
+import { gateRunRepository } from '../repositories/gateRunRepository';
 
 const mockCompliance = securityRequirementsService.complianceGate as jest.Mock;
 const mockAudit = logSecureAuditEvent as jest.Mock;
+const mockGateRun = gateRunRepository.record as jest.Mock;
 const BLOCKED = { blocked: true, violations: [{ projectId: 'pA', code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', frameworks: ['PCI DSS'], severity: 'high', findingCount: 1, findings: [] }] };
 
 const mockTrivyNoCriticalCves = () => {
@@ -114,6 +117,10 @@ describe('triggerDeploy compliance gate', () => {
             severity: 'CRITICAL',
         }));
         expect(mockAudit).not.toHaveBeenCalled();
+        // Ledgered as a deploy-source hard block so it shows in the panel.
+        expect(mockGateRun).toHaveBeenCalledWith(expect.objectContaining({
+            source: 'deploy', environment: 'production', actor: 'tester', status: 'blocked',
+        }));
     });
 
     it('proceeds under an audited break-glass override in production', async () => {
@@ -126,6 +133,10 @@ describe('triggerDeploy compliance gate', () => {
 
         expect(result.status).not.toBe('failed');
         expect(mockAudit).toHaveBeenCalledWith('tester', 'BREAK_GLASS_BYPASS', 'repo-1', expect.stringContaining('bypassed'));
+        // Ledgered as an overridden deploy — the highest-stakes event to surface.
+        expect(mockGateRun).toHaveBeenCalledWith(expect.objectContaining({
+            source: 'deploy', environment: 'production', actor: 'tester', status: 'overridden',
+        }));
     });
 
     it('does not block a non-production deploy on a violation (warn only)', async () => {
