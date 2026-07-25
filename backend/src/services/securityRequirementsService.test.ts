@@ -154,6 +154,58 @@ describe('securityRequirementsService.fanOutCorrelation (SARIF ingest fan-out)',
   });
 });
 
+describe('securityRequirementsService.complianceGate (Build & Test gate)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const violatingFinding = { tool: 'semgrep', category: 'sql-injection', ruleId: 'sql-injection', message: 'SQL injection', status: 'open' };
+
+  it('blocks when a REQUIRED requirement is violated by a live finding', async () => {
+    listProjectsForRepo.mockResolvedValue(['pA']);
+    listRepoIds.mockResolvedValue(['r1']);
+    mockRepo.listRequirements.mockResolvedValue([
+      { code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', category: 'Secure Coding', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
+    ]);
+    listVulns.mockResolvedValue([violatingFinding]);
+
+    const res = await svc.complianceGate('r1');
+
+    expect(res.blocked).toBe(true);
+    expect(res.violations).toEqual([
+      { projectId: 'pA', code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', frameworks: ['PCI DSS'], severity: 'high', findingCount: 1 },
+    ]);
+  });
+
+  it('does NOT block when only a recommended requirement is violated', async () => {
+    listProjectsForRepo.mockResolvedValue(['pA']);
+    listRepoIds.mockResolvedValue(['r1']);
+    mockRepo.listRequirements.mockResolvedValue([
+      { code: 'REQ-REC', title: 'nice to have', category: 'Secure Coding', status: 'recommended', severity: 'medium', lifecycleStatus: 'open', frameworks: ['SOC 2'] },
+    ]);
+    listVulns.mockResolvedValue([violatingFinding]);
+
+    const res = await svc.complianceGate('r1');
+    expect(res.blocked).toBe(false);
+    expect(res.violations).toHaveLength(0);
+  });
+
+  it('aggregates violations across every project bound to the repo', async () => {
+    listProjectsForRepo.mockResolvedValue(['pA', 'pB']);
+    listRepoIds.mockResolvedValue(['r1']);
+    mockRepo.listRequirements.mockResolvedValue([
+      { code: 'REQ', title: 't', category: 'Secure Coding', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
+    ]);
+    listVulns.mockResolvedValue([violatingFinding]);
+
+    const res = await svc.complianceGate('r1');
+    expect(res.violations.map((v) => v.projectId)).toEqual(['pA', 'pB']);
+  });
+
+  it('passes clean when no project is bound to the repo', async () => {
+    listProjectsForRepo.mockResolvedValue([]);
+    expect(await svc.complianceGate('orphan')).toEqual({ blocked: false, violations: [] });
+  });
+});
+
 describe('securityRequirementsService.setRepos (project<->repo binding)', () => {
   beforeEach(() => jest.clearAllMocks());
 

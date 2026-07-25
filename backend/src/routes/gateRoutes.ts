@@ -3,6 +3,7 @@ import { verifyUser } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { checkPermission } from '../middleware/iamMiddleware';
 import { gateService, checkReleaseGate } from '../services/gateService';
+import { securityRequirementsService } from '../services/securityRequirementsService';
 import { logger } from '../services/logger';
 import { AuthenticatedRequest, repoIdBodySchema } from '../types/gate.types';
 
@@ -29,6 +30,29 @@ router.post('/evaluate', verifyUser, validateBody(repoIdBodySchema), async (req:
     res.json(await gateService.evaluate(repo_id));
   } catch (err) {
     logger.error('[Gate Evaluate Error]', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+  }
+});
+
+// POST /api/gates/compliance — Build & Test gate. Blocks (403) when a required
+// security requirement of any project bound to this repo is violated by a live
+// finding. A CI step runs it and fails the build on 403. Separate from the
+// finding-severity release gate: this enforces the compliance rulebook.
+router.post('/compliance', verifyUser, validateBody(repoIdBodySchema), async (req: AuthenticatedRequest, res: Response) => {
+  const { repo_id } = req.body;
+  try {
+    if (!(await assertAccessOr403(req, res, repo_id))) return;
+    const result = await securityRequirementsService.complianceGate(repo_id);
+    if (result.blocked) {
+      return res.status(403).json({
+        allowed: false,
+        error: 'Compliance Gate BLOCKED: a required security control is violated by live findings',
+        violations: result.violations,
+      });
+    }
+    res.json({ allowed: true, violations: [] });
+  } catch (err) {
+    logger.error('[Gate Compliance Error]', err instanceof Error ? err.message : err);
     res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });

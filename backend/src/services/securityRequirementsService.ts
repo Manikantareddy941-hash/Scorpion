@@ -43,6 +43,16 @@ function ticketDescription(r: StoredRequirement): string {
 // transport layer can answer 404 for both — no enumeration oracle.
 type Access<T> = 'denied' | { ok: true; data: T };
 
+/** A required requirement a live finding violates — a pipeline-blocking event. */
+export interface ComplianceViolation {
+  projectId: string;
+  code: string;
+  title: string;
+  frameworks: string[];
+  severity: string;
+  findingCount: number;
+}
+
 // A stored finding doc (vulnerabilities collection) reduced to the fields the
 // correlation engine reads. Persisted findings are third-party-shaped, so read
 // defensively and fall back to `scanner` (deduplication renames tool->scanner).
@@ -131,6 +141,34 @@ export const securityRequirementsService = {
    * this doesn't persist a status; it surfaces the cross-project blast radius as
    * an audit signal and is the seam a Build & Test gate will call to pass/fail.
    */
+  /**
+   * Build & Test compliance gate: does any project bound to this repo have a
+   * REQUIRED requirement that live findings VIOLATE? Only required requirements
+   * block a pipeline — recommended violations are advisory (mirrors the 2b
+   * required/recommended split). Reuses computeCorrelation, so it enforces the
+   * exact project-scoped, on-demand verdict the UI shows.
+   */
+  async complianceGate(repoId: string): Promise<{ blocked: boolean; violations: ComplianceViolation[] }> {
+    const projectIds = await projectRepoRepository.listProjectIdsForRepo(repoId);
+    const violations: ComplianceViolation[] = [];
+    for (const projectId of projectIds) {
+      const correlated = await computeCorrelation(projectId);
+      for (const c of correlated) {
+        if (c.status === 'violated' && c.requirement.status === 'required') {
+          violations.push({
+            projectId,
+            code: c.requirement.code,
+            title: c.requirement.title,
+            frameworks: c.requirement.frameworks,
+            severity: c.requirement.severity,
+            findingCount: c.matchedFindings.length,
+          });
+        }
+      }
+    }
+    return { blocked: violations.length > 0, violations };
+  },
+
   async fanOutCorrelation(repoId: string): Promise<{ projectId: string; violated: number; total: number }[]> {
     const projectIds = await projectRepoRepository.listProjectIdsForRepo(repoId);
     const affected: { projectId: string; violated: number; total: number }[] = [];
