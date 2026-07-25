@@ -47,7 +47,7 @@ router.post('/compliance', verifyUser, validateBody(complianceBodySchema), async
     // Ledger every evaluation (pass and block) for the audit trail. Best-effort:
     // a recording failure must never change the gate verdict the CI depends on.
     gateRunRepository.record({
-      repoId: repo_id, commitSha: commit_sha, branch,
+      repoId: repo_id, source: 'ci', commitSha: commit_sha, branch,
       status: result.blocked ? 'blocked' : 'passed',
       violations: result.violations, createdAt: new Date().toISOString(),
     }).catch((err) => logger.warn('[Gate] failed to record gate run', err instanceof Error ? err.message : err));

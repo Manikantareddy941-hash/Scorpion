@@ -26,6 +26,10 @@ const DB_ID = process.env.APPWRITE_DATABASE_ID || '';
 const COLLECTION = 'plan_gate_runs';
 const ATTRIBUTES = [
   { key: 'repoId', size: 64, required: true },
+  // Where the gate fired ('ci' | 'deploy') plus deploy-source context.
+  { key: 'source', size: 16, required: false },
+  { key: 'environment', size: 32, required: false },
+  { key: 'actor', size: 128, required: false },
   { key: 'commitSha', size: 64, required: false },
   { key: 'branch', size: 255, required: false },
   { key: 'status', size: 16, required: true },

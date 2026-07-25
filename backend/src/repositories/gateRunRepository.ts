@@ -17,9 +17,17 @@ const MOCK_DB_PATH = path.join(process.cwd(), 'scratch', 'gate_runs_mock_db.json
 export interface GateRun {
   $id?: string;
   repoId: string;
+  // Where the gate fired: a CI pipeline call or the deploy path. Defaults to
+  // 'ci' for records written before this field existed.
+  source?: 'ci' | 'deploy';
+  // Deploy-source context.
+  environment?: string;
+  actor?: string;
   commitSha?: string;
   branch?: string;
-  status: 'passed' | 'blocked';
+  // 'overridden' = a break-glass deploy that shipped despite violations — the
+  // single most important event to keep visible.
+  status: 'passed' | 'blocked' | 'overridden';
   violations: ComplianceViolation[];
   createdAt: string;
 }
@@ -63,6 +71,9 @@ function fromDoc(doc: Record<string, unknown>): GateRun {
   return {
     $id: doc.$id as string,
     repoId: doc.repoId as string,
+    source: (doc.source as GateRun['source']) || 'ci',
+    environment: (doc.environment as string) || undefined,
+    actor: (doc.actor as string) || undefined,
     commitSha: (doc.commitSha as string) || undefined,
     branch: (doc.branch as string) || undefined,
     status: doc.status as GateRun['status'],
@@ -75,6 +86,9 @@ export const gateRunRepository = {
   async record(run: GateRun): Promise<void> {
     const payload = {
       repoId: run.repoId,
+      source: run.source ?? 'ci',
+      environment: run.environment ?? '',
+      actor: run.actor ?? '',
       commitSha: run.commitSha ?? '',
       branch: run.branch ?? '',
       status: run.status,
