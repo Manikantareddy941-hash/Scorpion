@@ -139,7 +139,7 @@ router.post('/sarif', ingestRateLimiter, requireCiApiKey, async (req: Request, r
     if (!result.ok) {
       return res.status(404).json({ error: 'Repository not connected to Scorpion. Add it via the dashboard first.' });
     }
-    return res.status(202).json({ scanId: result.scanId, findings: result.findings });
+    return res.status(202).json({ scanId: result.scanId, findings: result.findings, affectedProjects: result.affectedProjects });
   } catch (err) {
     logger.error('sarif-ingest unexpected failure', {
       event: 'sarif_ingest_error',

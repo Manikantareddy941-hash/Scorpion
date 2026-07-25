@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { normalizeSarif } from '../scanners/sarifNormalizer';
 import { deduplicateFindings } from '../deduplication';
 import { ingestVulnerabilitiesDelta } from './scanService';
+import { securityRequirementsService } from './securityRequirementsService';
 import { logger } from './logger';
 
 /**
@@ -13,7 +14,7 @@ import { logger } from './logger';
  */
 
 export type SarifIngestResult =
-  | { ok: true; scanId: string; findings: number }
+  | { ok: true; scanId: string; findings: number; affectedProjects: { projectId: string; violated: number; total: number }[] }
   | { ok: false; reason: 'repo_not_found' };
 
 interface IngestInput {
@@ -92,6 +93,11 @@ export async function ingestSarif(input: IngestInput): Promise<SarifIngestResult
 
   await ingestVulnerabilitiesDelta(repo.$id, scan.$id, issues, undefined, docPerms);
 
+  // Fan-out: re-correlate every project bound to this repo the moment its
+  // findings land, so a shared repo's new finding re-scores each project's
+  // requirements immediately (event-driven, not on-next-view).
+  const affectedProjects = await securityRequirementsService.fanOutCorrelation(repo.$id);
+
   await databases.updateDocument(DB_ID, COLLECTIONS.SCANS, scan.$id, {
     status: 'completed',
     completedAt: new Date().toISOString(),
@@ -102,7 +108,8 @@ export async function ingestSarif(input: IngestInput): Promise<SarifIngestResult
     repoId: repo.$id,
     scanId: scan.$id,
     findings: issues.length,
+    affectedProjects: affectedProjects.length,
   });
 
-  return { ok: true, scanId: scan.$id, findings: issues.length };
+  return { ok: true, scanId: scan.$id, findings: issues.length, affectedProjects };
 }

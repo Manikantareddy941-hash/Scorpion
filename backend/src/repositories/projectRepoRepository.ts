@@ -76,6 +76,22 @@ export const projectRepoRepository = {
   },
 
   /**
+   * Reverse lookup: every project a repo is bound to. Used by the SARIF-ingest
+   * fan-out to re-correlate each affected project the moment findings land. Uses
+   * the repoId index provisioned in the migration.
+   */
+  async listProjectIdsForRepo(repoId: string): Promise<string[]> {
+    const bindings = await handleQuery(
+      async () => {
+        const res = await databases.listDocuments(DB_ID, COLLECTION, [Query.equal('repoId', repoId), Query.limit(200)]);
+        return res.documents as unknown as RepoBinding[];
+      },
+      async () => (await readMockDb()).bindings.filter((b) => b.repoId === repoId),
+    );
+    return [...new Set(bindings.map((b) => b.projectId))];
+  },
+
+  /**
    * Replace the project's bindings with exactly this set (idempotent). The
    * caller is responsible for having validated repo ownership first — this
    * layer only persists.

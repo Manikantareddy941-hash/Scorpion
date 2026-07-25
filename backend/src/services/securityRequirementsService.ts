@@ -3,6 +3,7 @@ import { securityRequirementsRepository as repo } from '../repositories/security
 import { projectRepoRepository } from '../repositories/projectRepoRepository';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { canAccessResource } from './tenancyService';
+import { logger } from './logger';
 import { generate as engineGenerate, reconcile } from './securityRequirementsEngine';
 import { ticketsService, TicketOwnership } from './ticketsService';
 import { pushTicketToJira } from './jiraService';
@@ -69,6 +70,18 @@ async function owns(projectId: string, userId?: string): Promise<boolean> {
   return owner === userId;
 }
 
+/**
+ * Correlate a project's requirements against its bound-repo findings. Pure
+ * read: no ownership check (callers gate that) and nothing persisted —
+ * correlation is computed on demand, so it is always fresh for whoever reads.
+ */
+async function computeCorrelation(projectId: string): Promise<CorrelatedRequirement[]> {
+  const requirements = await repo.listRequirements(projectId);
+  const repoIds = await projectRepoRepository.listRepoIds(projectId);
+  const findings = await planRepository.listVulnerabilitiesForRepos(repoIds);
+  return correlate(requirements, findings.map(toCorrelatable));
+}
+
 export const securityRequirementsService = {
   async getProfile(projectId: string, userId?: string): Promise<Access<ProjectProfile | null>> {
     if (!(await owns(projectId, userId))) return 'denied';
@@ -106,12 +119,30 @@ export const securityRequirementsService = {
    */
   async getCorrelation(projectId: string, userId?: string): Promise<Access<CorrelatedRequirement[]>> {
     if (!(await owns(projectId, userId))) return 'denied';
-    const requirements = await repo.listRequirements(projectId);
-    // Project-scoped, not owner-scoped: only findings from the repos bound to
-    // this project. An unbound project correlates against nothing.
-    const repoIds = await projectRepoRepository.listRepoIds(projectId);
-    const findings = await planRepository.listVulnerabilitiesForRepos(repoIds);
-    return { ok: true, data: correlate(requirements, findings.map(toCorrelatable)) };
+    // Project-scoped, not owner-scoped: computeCorrelation reads only the repos
+    // bound to this project. An unbound project correlates against nothing.
+    return { ok: true, data: await computeCorrelation(projectId) };
+  },
+
+  /**
+   * Fan-out (SARIF ingest): the moment findings land for a repo, re-correlate
+   * every project bound to it — a shared library's new CVE instantly re-scores
+   * Project A's PCI reqs AND Project B's GDPR reqs. Correlation is on-demand, so
+   * this doesn't persist a status; it surfaces the cross-project blast radius as
+   * an audit signal and is the seam a Build & Test gate will call to pass/fail.
+   */
+  async fanOutCorrelation(repoId: string): Promise<{ projectId: string; violated: number; total: number }[]> {
+    const projectIds = await projectRepoRepository.listProjectIdsForRepo(repoId);
+    const affected: { projectId: string; violated: number; total: number }[] = [];
+    for (const projectId of projectIds) {
+      const correlated = await computeCorrelation(projectId);
+      const violated = correlated.filter((c) => c.status === 'violated').length;
+      affected.push({ projectId, violated, total: correlated.length });
+      logger.info('sarif fan-out re-correlated project', {
+        event: 'correlation_fanout', repoId, projectId, violated, total: correlated.length,
+      });
+    }
+    return affected;
   },
 
   async getRepos(projectId: string, userId?: string): Promise<Access<{ repoId: string; repoUrl: string }[]>> {
