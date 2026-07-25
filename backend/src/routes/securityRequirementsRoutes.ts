@@ -65,6 +65,13 @@ router.get('/projects/:projectId/repos', async (req: AuthenticatedRequest, res: 
   res.json(result.data);
 });
 
+// Compliance-gate run ledger for the project (Pipeline Gates panel).
+router.get('/projects/:projectId/gate-runs', async (req: AuthenticatedRequest, res: Response) => {
+  const result = await svc.getGateRuns(req.params.projectId, req.user?.$id);
+  if (result === 'denied') return notFound(res);
+  res.json(result.data);
+});
+
 const reposSchema = z.object({ repoIds: z.array(z.string()).max(200) });
 router.put('/projects/:projectId/repos', async (req: AuthenticatedRequest, res: Response) => {
   const parsed = reposSchema.safeParse(req.body);

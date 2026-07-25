@@ -79,6 +79,7 @@ export default function Sidebar({
     {
       title: 'TEST',
       items: [
+        { icon: ShieldCheck, label: 'PIPELINE GATES', path: '/gates' },
         { icon: Cpu, label: 'ANALYZE', path: '/analyze' },
         { icon: Bug, label: 'ISSUES', path: '/issues' },
         { icon: TestTube2, label: 'TEST', path: '/tests' }

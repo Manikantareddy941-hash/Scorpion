@@ -11,6 +11,12 @@ export const repoIdBodySchema = z.object({
 
 export type RepoIdBody = z.infer<typeof repoIdBodySchema>;
 
+// Compliance-gate CI call: repo plus the commit context to record in the ledger.
+export const complianceBodySchema = repoIdBodySchema.extend({
+  commit_sha: z.string().trim().max(64).optional(),
+  branch: z.string().trim().max(255).optional(),
+});
+
 export interface GateBlocker {
   $id: string;
   title?: string;
