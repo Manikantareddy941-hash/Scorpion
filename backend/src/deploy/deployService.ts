@@ -3,6 +3,8 @@ import { deployRepository, DeployTargetConfig, TrivyReport } from '../repositori
 import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { verifyImageDigest } from '../services/cosignService';
+import { securityRequirementsService } from '../services/securityRequirementsService';
+import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { logger } from '../services/logger';
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
@@ -110,7 +112,14 @@ async function resolveDeployTarget(environment: string, createIfMissing: boolean
 /**
  * Trigger a deployment
  */
-export async function triggerDeploy(buildId: string, environment: DeployEnvironment, triggeredBy: string = 'system') {
+export async function triggerDeploy(
+  buildId: string,
+  environment: DeployEnvironment,
+  triggeredBy: string = 'system',
+  // Emergency prod hotfix escape hatch. Only ever true when the caller proved
+  // the gate:bypass permission; the override is tamper-audited, never silent.
+  breakGlass: boolean = false,
+) {
   const deploymentId = ID.unique();
 
   try {
@@ -224,6 +233,36 @@ export async function triggerDeploy(buildId: string, environment: DeployEnvironm
         });
 
         return { deploymentId, status: 'failed', reason: 'Image signature verification failed' };
+      }
+    }
+
+    // 5c. Compliance gate: block a production deploy when a required security
+    // control is violated by live findings (the #133 verdict, project-scoped).
+    // Env-aware, mirroring the release preflight: production hard-blocks; dev/
+    // staging warn and proceed. Break-glass overrides the prod block for an
+    // emergency hotfix — always tamper-audited, never a silent bypass.
+    const compliance = await securityRequirementsService.complianceGate(repoId);
+    if (compliance.blocked) {
+      const codes = compliance.violations.map(v => v.code).join(', ');
+      if (environment === 'production' && !breakGlass) {
+        logger.warn(`[DeployService] Deployment ${deploymentId} blocked: ${compliance.violations.length} required control(s) violated.`);
+        await deployRepository.updateDeploymentStatus(deploymentId, { status: 'failed' });
+        await createIncident({
+          title: `Deployment Blocked: compliance controls violated for ${imageTag}`,
+          severity: 'CRITICAL',
+          source: 'ci_pipeline',
+          description: `Deployment ${deploymentId} to ${environment} was blocked: ${compliance.violations.length} required security control(s) are violated by live findings (${codes}). Remediate, or re-run with an audited break-glass override.`,
+          userId: await resolveRepoOwner(repoId),
+        });
+        return { deploymentId, status: 'failed', reason: 'Compliance gate: required security control(s) violated', violations: compliance.violations };
+      }
+      if (breakGlass && environment === 'production') {
+        await logSecureAuditEvent(
+          triggeredBy,
+          'BREAK_GLASS_BYPASS',
+          repoId,
+          `Compliance gate bypassed for production deployment ${deploymentId} of ${imageTag}: ${compliance.violations.length} violated control(s) [${codes}]`,
+        );
       }
     }
 
