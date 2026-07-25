@@ -1,5 +1,8 @@
 import { planRepository } from '../repositories/planRepository';
 import { securityRequirementsRepository as repo } from '../repositories/securityRequirementsRepository';
+import { projectRepoRepository } from '../repositories/projectRepoRepository';
+import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { canAccessResource } from './tenancyService';
 import { generate as engineGenerate, reconcile } from './securityRequirementsEngine';
 import { ticketsService, TicketOwnership } from './ticketsService';
 import { pushTicketToJira } from './jiraService';
@@ -104,8 +107,37 @@ export const securityRequirementsService = {
   async getCorrelation(projectId: string, userId?: string): Promise<Access<CorrelatedRequirement[]>> {
     if (!(await owns(projectId, userId))) return 'denied';
     const requirements = await repo.listRequirements(projectId);
-    const findings = await planRepository.listVulnerabilitiesForUser(userId);
+    // Project-scoped, not owner-scoped: only findings from the repos bound to
+    // this project. An unbound project correlates against nothing.
+    const repoIds = await projectRepoRepository.listRepoIds(projectId);
+    const findings = await planRepository.listVulnerabilitiesForRepos(repoIds);
     return { ok: true, data: correlate(requirements, findings.map(toCorrelatable)) };
+  },
+
+  async getRepos(projectId: string, userId?: string): Promise<Access<{ repoId: string; repoUrl: string }[]>> {
+    if (!(await owns(projectId, userId))) return 'denied';
+    const bindings = await projectRepoRepository.listBindings(projectId);
+    return { ok: true, data: bindings.map((b) => ({ repoId: b.repoId, repoUrl: b.repoUrl })) };
+  },
+
+  /**
+   * Bind a set of repositories to the project. Each repoId is validated against
+   * the caller's access before it is stored: binding a repo you don't own would
+   * let correlation read another tenant's findings, since the findings query is
+   * keyed by repo_id and not tenant-checked. repoUrl is read from the repo doc,
+   * never trusted from the body.
+   */
+  async setRepos(projectId: string, repoIds: string[], userId?: string): Promise<Access<{ repoId: string; repoUrl: string }[]>> {
+    if (!(await owns(projectId, userId))) return 'denied';
+    const validated: { repoId: string; repoUrl: string }[] = [];
+    for (const repoId of [...new Set(repoIds)]) {
+      const repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId).catch(() => null);
+      if (repoDoc && (await canAccessResource(repoDoc, userId!))) {
+        validated.push({ repoId, repoUrl: String((repoDoc as { url?: unknown }).url ?? '') });
+      }
+    }
+    const saved = await projectRepoRepository.setBindings(projectId, validated);
+    return { ok: true, data: saved.map((b) => ({ repoId: b.repoId, repoUrl: b.repoUrl })) };
   },
 
   async setLifecycle(

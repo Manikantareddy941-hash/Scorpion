@@ -616,6 +616,32 @@ export const planRepository = {
     }
   },
 
+  /**
+   * Findings for an explicit set of repositories. Used by requirement
+   * correlation to stay project-scoped: it passes only the repos bound to the
+   * project, never the owner's whole repo set. Empty input short-circuits to []
+   * (an unbound project correlates against nothing, by design).
+   */
+  async listVulnerabilitiesForRepos(repoIds: string[]): Promise<unknown[]> {
+    if (repoIds.length === 0) return [];
+    try {
+      const pageSize = 100;
+      const findings: unknown[] = [];
+      for (let page = 0; page < 20; page++) {
+        const list = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS || 'findings', [
+          Query.equal('repo_id', repoIds),
+          Query.limit(pageSize),
+          Query.offset(page * pageSize),
+        ]);
+        findings.push(...list.documents);
+        if (list.documents.length < pageSize) break;
+      }
+      return findings;
+    } catch {
+      return [];
+    }
+  },
+
   async listThreats(projectId: string): Promise<Threat[]> {
     return handleQuery(
       async () => {

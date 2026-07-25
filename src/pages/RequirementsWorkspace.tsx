@@ -15,6 +15,7 @@ const AUTH_MODELS = ['none', 'session', 'oauth', 'mtls'] as const;
 const FRAMEWORKS = ['PCI DSS', 'NIST 800-53', 'SOC 2', 'ISO 27001', 'HIPAA', 'GDPR'] as const;
 
 interface Project { $id: string; name: string }
+interface Repo { $id: string; url: string; name?: string }
 
 interface Profile {
   appType: string;
@@ -95,6 +96,8 @@ export default function RequirementsWorkspace() {
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [corr, setCorr] = useState<Record<string, CorrEntry>>({});
+  const [repos, setRepos] = useState<Repo[]>([]);
+  const [boundRepoIds, setBoundRepoIds] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
   const [waiveTarget, setWaiveTarget] = useState<Requirement | null>(null);
   const [justification, setJustification] = useState('');
@@ -122,15 +125,25 @@ export default function RequirementsWorkspace() {
   const loadForProject = useCallback(async (pid: string) => {
     try {
       const headers = await authHeaders();
-      const [profRes, reqRes] = await Promise.all([
+      const [profRes, reqRes, reposRes, boundRes] = await Promise.all([
         fetch(`/api/plan/projects/${pid}/profile`, { headers }),
         fetch(`/api/plan/projects/${pid}/requirements`, { headers }),
+        fetch('/api/repos', { headers }),
+        fetch(`/api/plan/projects/${pid}/repos`, { headers }),
       ]);
       if (profRes.ok) {
         const p = await profRes.json();
         setProfile(p ? { ...defaultProfile, ...p } : defaultProfile);
       }
       if (reqRes.ok) setRequirements(await reqRes.json());
+      if (reposRes.ok) {
+        const data = await reposRes.json();
+        setRepos(Array.isArray(data) ? data : data.documents ?? []);
+      }
+      if (boundRes.ok) {
+        const bound: { repoId: string }[] = await boundRes.json();
+        setBoundRepoIds(bound.map((b) => b.repoId));
+      }
     } catch { toast.error('Failed to load requirements'); }
   }, [authHeaders]);
 
@@ -156,6 +169,22 @@ export default function RequirementsWorkspace() {
       const has = prev[key].includes(value);
       return { ...prev, [key]: has ? prev[key].filter((v) => v !== value) : [...prev[key], value] };
     });
+  };
+
+  const toggleRepo = (id: string) =>
+    setBoundRepoIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const saveRepos = async () => {
+    try {
+      const res = await fetch(`/api/plan/projects/${projectId}/repos`, {
+        method: 'PUT', headers: await authHeaders(true), body: JSON.stringify({ repoIds: boundRepoIds }),
+      });
+      if (!res.ok) { toast.error('Failed to bind repositories'); return; }
+      const bound: { repoId: string }[] = await res.json();
+      setBoundRepoIds(bound.map((b) => b.repoId)); // server drops any repo you can't access
+      loadCorrelation(projectId); // scope changed — refresh the scan verdicts
+      toast.success('Repositories bound');
+    } catch { toast.error('Failed to bind repositories'); }
   };
 
   const saveProfile = async () => {
@@ -288,6 +317,29 @@ export default function RequirementsWorkspace() {
         <div className="mt-5 flex justify-end">
           <button type="button" onClick={saveProfile} disabled={!projectId} className="text-sm px-4 py-2 rounded-lg border border-slate-700 hover:border-slate-500 disabled:opacity-50">
             Save profile
+          </button>
+        </div>
+      </section>
+
+      {/* Bound repositories — the scope correlation pulls findings from */}
+      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-6">
+        <h2 className="text-sm font-semibold text-slate-300 mb-1 uppercase tracking-wide">Bound repositories</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Correlation pulls scanner findings only from the repositories bound here. An unbound project correlates against nothing —
+          this keeps one project&apos;s findings from bleeding into another&apos;s compliance view.
+        </p>
+        {repos.length === 0 ? (
+          <p className="text-sm text-slate-500">No connected repositories. Add one from the dashboard first.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {repos.map((r) => (
+              <Chip key={r.$id} label={r.name || r.url} active={boundRepoIds.includes(r.$id)} onClick={() => toggleRepo(r.$id)} />
+            ))}
+          </div>
+        )}
+        <div className="mt-5 flex justify-end">
+          <button type="button" onClick={saveRepos} disabled={!projectId} className="text-sm px-4 py-2 rounded-lg border border-slate-700 hover:border-slate-500 disabled:opacity-50">
+            Save repositories
           </button>
         </div>
       </section>

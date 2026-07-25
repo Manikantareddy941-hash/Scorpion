@@ -58,6 +58,22 @@ router.get('/projects/:projectId/requirements/correlation', async (req: Authenti
   res.json(result.data);
 });
 
+// Repositories bound to the project — the scope correlation pulls findings from.
+router.get('/projects/:projectId/repos', async (req: AuthenticatedRequest, res: Response) => {
+  const result = await svc.getRepos(req.params.projectId, req.user?.$id);
+  if (result === 'denied') return notFound(res);
+  res.json(result.data);
+});
+
+const reposSchema = z.object({ repoIds: z.array(z.string()).max(200) });
+router.put('/projects/:projectId/repos', async (req: AuthenticatedRequest, res: Response) => {
+  const parsed = reposSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid repos', details: parsed.error.issues });
+  const result = await svc.setRepos(req.params.projectId, parsed.data.repoIds, req.user?.$id);
+  if (result === 'denied') return notFound(res);
+  res.json(result.data);
+});
+
 router.patch('/requirements/:reqId', async (req: AuthenticatedRequest, res: Response) => {
   const parsed = patchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid update', details: parsed.error.issues });

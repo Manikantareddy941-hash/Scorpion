@@ -1,6 +1,15 @@
 jest.mock('../repositories/planRepository', () => ({
-  planRepository: { getProjectOwner: jest.fn(), listVulnerabilitiesForUser: jest.fn() },
+  planRepository: { getProjectOwner: jest.fn(), listVulnerabilitiesForRepos: jest.fn() },
 }));
+jest.mock('../repositories/projectRepoRepository', () => ({
+  projectRepoRepository: { listRepoIds: jest.fn(), listBindings: jest.fn(), setBindings: jest.fn() },
+}));
+jest.mock('../lib/appwrite', () => ({
+  databases: { getDocument: jest.fn() },
+  DB_ID: 'db',
+  COLLECTIONS: { REPOSITORIES: 'repositories' },
+}));
+jest.mock('./tenancyService', () => ({ canAccessResource: jest.fn() }));
 jest.mock('../repositories/securityRequirementsRepository', () => ({
   securityRequirementsRepository: {
     getProfile: jest.fn(), upsertProfile: jest.fn(), listRequirements: jest.fn(),
@@ -13,12 +22,19 @@ jest.mock('./jiraService', () => ({ pushTicketToJira: jest.fn() }));
 
 import { securityRequirementsService as svc } from './securityRequirementsService';
 import { planRepository } from '../repositories/planRepository';
+import { projectRepoRepository } from '../repositories/projectRepoRepository';
+import { databases } from '../lib/appwrite';
+import { canAccessResource } from './tenancyService';
 import { securityRequirementsRepository as repo } from '../repositories/securityRequirementsRepository';
 import { ticketsService } from './ticketsService';
 import { pushTicketToJira } from './jiraService';
 
 const owner = planRepository.getProjectOwner as jest.Mock;
-const listVulns = planRepository.listVulnerabilitiesForUser as jest.Mock;
+const listVulns = planRepository.listVulnerabilitiesForRepos as jest.Mock;
+const listRepoIds = projectRepoRepository.listRepoIds as jest.Mock;
+const setBindings = projectRepoRepository.setBindings as jest.Mock;
+const getRepoDoc = databases.getDocument as jest.Mock;
+const canAccess = canAccessResource as jest.Mock;
 const mockRepo = repo as unknown as Record<string, jest.Mock>;
 const ticketsCreate = ticketsService.createTicket as jest.Mock;
 const jiraPush = pushTicketToJira as jest.Mock;
@@ -90,22 +106,48 @@ describe('securityRequirementsService.getCorrelation', () => {
     expect(mockRepo.listRequirements).not.toHaveBeenCalled();
   });
 
-  it('flags a Secure Coding requirement as violated from a live injection finding', async () => {
+  it('correlates only the findings from the project-bound repos, not the whole owner set', async () => {
     owner.mockResolvedValue('user-1');
     mockRepo.listRequirements.mockResolvedValue([
       { code: 'REQ-PCI-6.5.1-SQLI', category: 'Secure Coding', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
     ]);
+    listRepoIds.mockResolvedValue(['r1', 'r2']);
     listVulns.mockResolvedValue([
       { tool: 'semgrep', category: 'py.sql-injection', ruleId: 'py.sql-injection', message: 'SQL injection', status: 'open' },
     ]);
 
     const res = await svc.getCorrelation('p1', 'user-1');
 
-    expect(res).not.toBe('denied');
-    if (res === 'denied') return;
+    if (res === 'denied') throw new Error('unexpected denial');
     expect(res.data[0].status).toBe('violated');
-    expect(res.data[0].matchedFindings).toHaveLength(1);
-    expect(listVulns).toHaveBeenCalledWith('user-1');
+    // The findings query is scoped to the project's bound repos, never the owner.
+    expect(listVulns).toHaveBeenCalledWith(['r1', 'r2']);
+  });
+});
+
+describe('securityRequirementsService.setRepos (project<->repo binding)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('denies when the caller does not own the project', async () => {
+    owner.mockResolvedValue('someone-else');
+    expect(await svc.setRepos('p1', ['r1'], 'user-1')).toBe('denied');
+    expect(setBindings).not.toHaveBeenCalled();
+  });
+
+  it('binds only repos the caller can access, taking repoUrl from the repo doc not the body', async () => {
+    owner.mockResolvedValue('user-1');
+    getRepoDoc.mockImplementation(async (_db, _col, id) =>
+      id === 'r-owned' ? { $id: 'r-owned', url: 'https://x/owned', user_id: 'user-1' }
+        : { $id: 'r-foreign', url: 'https://x/foreign', user_id: 'someone-else' });
+    canAccess.mockImplementation(async (repo) => repo.user_id === 'user-1');
+    setBindings.mockImplementation(async (_pid, repos) => repos.map((r: object, i: number) => ({ $id: `b${i}`, ...r })));
+
+    const res = await svc.setRepos('p1', ['r-owned', 'r-foreign'], 'user-1');
+
+    if (res === 'denied') throw new Error('unexpected denial');
+    // The foreign repo is dropped; only the owned one is persisted.
+    expect(setBindings).toHaveBeenCalledWith('p1', [{ repoId: 'r-owned', repoUrl: 'https://x/owned' }]);
+    expect(res.data).toEqual([{ repoId: 'r-owned', repoUrl: 'https://x/owned' }]);
   });
 });
 
