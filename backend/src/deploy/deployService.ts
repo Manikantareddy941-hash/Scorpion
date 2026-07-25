@@ -4,6 +4,7 @@ import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { verifyImageDigest } from '../services/cosignService';
 import { securityRequirementsService } from '../services/securityRequirementsService';
+import { gateService } from '../services/gateService';
 import { gateRunRepository } from '../repositories/gateRunRepository';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { logger } from '../services/logger';
@@ -260,6 +261,15 @@ export async function triggerDeploy(
         violations: compliance.violations,
         createdAt: new Date().toISOString(),
       }).catch(err => logger.warn('[DeployService] failed to record deploy gate run', err instanceof Error ? err.message : err));
+
+      // Stamp the release-node state so /api/gates/state is the single source of
+      // truth the panel already shows: a hard block leaves it BLOCKED; a break-
+      // glass ship permanently marks it OVERRIDDEN (not "passing" — it bypassed
+      // security). Best-effort; a state-write failure never gates the deploy.
+      if (environment === 'production') {
+        gateService.stampReleaseVerdict(isHardBlock ? 'BLOCKED' : 'OVERRIDDEN')
+          .catch(err => logger.warn('[DeployService] failed to stamp release verdict', err instanceof Error ? err.message : err));
+      }
 
       if (isHardBlock) {
         logger.warn(`[DeployService] Deployment ${deploymentId} blocked: ${compliance.violations.length} required control(s) violated.`);

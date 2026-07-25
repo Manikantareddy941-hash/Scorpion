@@ -25,6 +25,7 @@ jest.mock('../services/securityRequirementsService', () => ({
 }));
 jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn() }));
 jest.mock('../repositories/gateRunRepository', () => ({ gateRunRepository: { record: jest.fn().mockResolvedValue(undefined) } }));
+jest.mock('../services/gateService', () => ({ gateService: { stampReleaseVerdict: jest.fn().mockResolvedValue(undefined) } }));
 
 import { databases } from '../lib/appwrite';
 import { triggerDeploy } from './deployService';
@@ -33,10 +34,12 @@ import { verifyImageDigest } from '../services/cosignService';
 import { securityRequirementsService } from '../services/securityRequirementsService';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { gateRunRepository } from '../repositories/gateRunRepository';
+import { gateService } from '../services/gateService';
 
 const mockCompliance = securityRequirementsService.complianceGate as jest.Mock;
 const mockAudit = logSecureAuditEvent as jest.Mock;
 const mockGateRun = gateRunRepository.record as jest.Mock;
+const mockStamp = gateService.stampReleaseVerdict as jest.Mock;
 const BLOCKED = { blocked: true, violations: [{ projectId: 'pA', code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', frameworks: ['PCI DSS'], severity: 'high', findingCount: 1, findings: [] }] };
 
 const mockTrivyNoCriticalCves = () => {
@@ -121,6 +124,8 @@ describe('triggerDeploy compliance gate', () => {
         expect(mockGateRun).toHaveBeenCalledWith(expect.objectContaining({
             source: 'deploy', environment: 'production', actor: 'tester', status: 'blocked',
         }));
+        // Release-node state stamped BLOCKED so /api/gates/state reflects it.
+        expect(mockStamp).toHaveBeenCalledWith('BLOCKED');
     });
 
     it('proceeds under an audited break-glass override in production', async () => {
@@ -137,6 +142,8 @@ describe('triggerDeploy compliance gate', () => {
         expect(mockGateRun).toHaveBeenCalledWith(expect.objectContaining({
             source: 'deploy', environment: 'production', actor: 'tester', status: 'overridden',
         }));
+        // Release-node state permanently stamped OVERRIDDEN (not "passing").
+        expect(mockStamp).toHaveBeenCalledWith('OVERRIDDEN');
     });
 
     it('does not block a non-production deploy on a violation (warn only)', async () => {
@@ -149,5 +156,7 @@ describe('triggerDeploy compliance gate', () => {
 
         expect(result.status).not.toBe('failed');
         expect(mockAudit).not.toHaveBeenCalled();
+        // Non-prod does not touch the release-node state.
+        expect(mockStamp).not.toHaveBeenCalled();
     });
 });
