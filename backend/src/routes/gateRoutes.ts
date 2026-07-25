@@ -4,8 +4,9 @@ import { validateBody } from '../middleware/validate';
 import { checkPermission } from '../middleware/iamMiddleware';
 import { gateService, checkReleaseGate } from '../services/gateService';
 import { securityRequirementsService } from '../services/securityRequirementsService';
+import { gateRunRepository } from '../repositories/gateRunRepository';
 import { logger } from '../services/logger';
-import { AuthenticatedRequest, repoIdBodySchema } from '../types/gate.types';
+import { AuthenticatedRequest, repoIdBodySchema, complianceBodySchema } from '../types/gate.types';
 
 // Re-exported for backward compatibility: pipelineService.ts imports
 // checkReleaseGate directly from this module's old location.
@@ -38,11 +39,18 @@ router.post('/evaluate', verifyUser, validateBody(repoIdBodySchema), async (req:
 // security requirement of any project bound to this repo is violated by a live
 // finding. A CI step runs it and fails the build on 403. Separate from the
 // finding-severity release gate: this enforces the compliance rulebook.
-router.post('/compliance', verifyUser, validateBody(repoIdBodySchema), async (req: AuthenticatedRequest, res: Response) => {
-  const { repo_id } = req.body;
+router.post('/compliance', verifyUser, validateBody(complianceBodySchema), async (req: AuthenticatedRequest, res: Response) => {
+  const { repo_id, commit_sha, branch } = req.body;
   try {
     if (!(await assertAccessOr403(req, res, repo_id))) return;
     const result = await securityRequirementsService.complianceGate(repo_id);
+    // Ledger every evaluation (pass and block) for the audit trail. Best-effort:
+    // a recording failure must never change the gate verdict the CI depends on.
+    gateRunRepository.record({
+      repoId: repo_id, commitSha: commit_sha, branch,
+      status: result.blocked ? 'blocked' : 'passed',
+      violations: result.violations, createdAt: new Date().toISOString(),
+    }).catch((err) => logger.warn('[Gate] failed to record gate run', err instanceof Error ? err.message : err));
     if (result.blocked) {
       return res.status(403).json({
         allowed: false,

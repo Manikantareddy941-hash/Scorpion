@@ -1,6 +1,7 @@
 import { planRepository } from '../repositories/planRepository';
 import { securityRequirementsRepository as repo } from '../repositories/securityRequirementsRepository';
 import { projectRepoRepository } from '../repositories/projectRepoRepository';
+import { gateRunRepository, GateRun } from '../repositories/gateRunRepository';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { canAccessResource } from './tenancyService';
 import { logger } from './logger';
@@ -43,7 +44,18 @@ function ticketDescription(r: StoredRequirement): string {
 // transport layer can answer 404 for both — no enumeration oracle.
 type Access<T> = 'denied' | { ok: true; data: T };
 
-/** A required requirement a live finding violates — a pipeline-blocking event. */
+/** A finding that violates a control, reduced to what the gate panel links to. */
+export interface ViolationFinding {
+  id?: string;
+  title?: string;
+  tool?: string;
+  severity?: string;
+  file?: string;
+}
+
+/** A required requirement a live finding violates — a pipeline-blocking event.
+ *  Carries the traceability the UI turns into action: the Jira ticket (3a
+ *  bridge) and the specific findings (correlation) behind the block. */
 export interface ComplianceViolation {
   projectId: string;
   code: string;
@@ -51,6 +63,8 @@ export interface ComplianceViolation {
   frameworks: string[];
   severity: string;
   findingCount: number;
+  jiraKey?: string;
+  findings: ViolationFinding[];
 }
 
 // A stored finding doc (vulnerabilities collection) reduced to the fields the
@@ -60,6 +74,7 @@ function toCorrelatable(doc: unknown): CorrelatableFinding {
   const f = (doc ?? {}) as Record<string, unknown>;
   const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
   return {
+    id: str(f.$id),
     tool: str(f.tool) ?? str(f.scanner),
     category: str(f.category),
     ruleId: str(f.ruleId),
@@ -67,6 +82,7 @@ function toCorrelatable(doc: unknown): CorrelatableFinding {
     message: str(f.message),
     severity: str(f.severity),
     status: str(f.status),
+    file: str(f.file_path) ?? str(f.file),
   };
 }
 
@@ -162,6 +178,8 @@ export const securityRequirementsService = {
             frameworks: c.requirement.frameworks,
             severity: c.requirement.severity,
             findingCount: c.matchedFindings.length,
+            jiraKey: c.requirement.jiraKey,
+            findings: c.matchedFindings.map((f) => ({ id: f.id, title: f.title, tool: f.tool, severity: f.severity, file: f.file })),
           });
         }
       }
@@ -181,6 +199,14 @@ export const securityRequirementsService = {
       });
     }
     return affected;
+  },
+
+  /** Compliance-gate run history for the project — every evaluation across its
+   *  bound repos, newest first. Powers the Pipeline Gates panel. */
+  async getGateRuns(projectId: string, userId?: string): Promise<Access<GateRun[]>> {
+    if (!(await owns(projectId, userId))) return 'denied';
+    const repoIds = await projectRepoRepository.listRepoIds(projectId);
+    return { ok: true, data: await gateRunRepository.listByRepos(repoIds) };
   },
 
   async getRepos(projectId: string, userId?: string): Promise<Access<{ repoId: string; repoUrl: string }[]>> {

@@ -10,6 +10,7 @@ jest.mock('../lib/appwrite', () => ({
   COLLECTIONS: { REPOSITORIES: 'repositories' },
 }));
 jest.mock('./tenancyService', () => ({ canAccessResource: jest.fn() }));
+jest.mock('../repositories/gateRunRepository', () => ({ gateRunRepository: { listByRepos: jest.fn(), record: jest.fn() } }));
 jest.mock('../repositories/securityRequirementsRepository', () => ({
   securityRequirementsRepository: {
     getProfile: jest.fn(), upsertProfile: jest.fn(), listRequirements: jest.fn(),
@@ -25,6 +26,7 @@ import { planRepository } from '../repositories/planRepository';
 import { projectRepoRepository } from '../repositories/projectRepoRepository';
 import { databases } from '../lib/appwrite';
 import { canAccessResource } from './tenancyService';
+import { gateRunRepository } from '../repositories/gateRunRepository';
 import { securityRequirementsRepository as repo } from '../repositories/securityRequirementsRepository';
 import { ticketsService } from './ticketsService';
 import { pushTicketToJira } from './jiraService';
@@ -154,25 +156,46 @@ describe('securityRequirementsService.fanOutCorrelation (SARIF ingest fan-out)',
   });
 });
 
+describe('securityRequirementsService.getGateRuns', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('denies when the caller does not own the project', async () => {
+    owner.mockResolvedValue('someone-else');
+    expect(await svc.getGateRuns('p1', 'user-1')).toBe('denied');
+  });
+
+  it('returns the run ledger for the project\'s bound repos', async () => {
+    owner.mockResolvedValue('user-1');
+    listRepoIds.mockResolvedValue(['r1', 'r2']);
+    (gateRunRepository.listByRepos as jest.Mock).mockResolvedValue([{ repoId: 'r1', status: 'blocked' }]);
+    const res = await svc.getGateRuns('p1', 'user-1');
+    if (res === 'denied') throw new Error('unexpected denial');
+    expect(gateRunRepository.listByRepos).toHaveBeenCalledWith(['r1', 'r2']);
+    expect(res.data).toEqual([{ repoId: 'r1', status: 'blocked' }]);
+  });
+});
+
 describe('securityRequirementsService.complianceGate (Build & Test gate)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  const violatingFinding = { tool: 'semgrep', category: 'sql-injection', ruleId: 'sql-injection', message: 'SQL injection', status: 'open' };
+  const violatingFinding = { $id: 'f1', tool: 'semgrep', category: 'sql-injection', ruleId: 'sql-injection', title: 'sql-injection', message: 'SQL injection', severity: 'HIGH', status: 'open', file_path: 'src/db.js' };
 
-  it('blocks when a REQUIRED requirement is violated by a live finding', async () => {
+  it('blocks on a REQUIRED violation and carries the Jira + finding traceability', async () => {
     listProjectsForRepo.mockResolvedValue(['pA']);
     listRepoIds.mockResolvedValue(['r1']);
     mockRepo.listRequirements.mockResolvedValue([
-      { code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', category: 'Secure Coding', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
+      { code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', category: 'Secure Coding', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'], jiraKey: 'SEC-42' },
     ]);
     listVulns.mockResolvedValue([violatingFinding]);
 
     const res = await svc.complianceGate('r1');
 
     expect(res.blocked).toBe(true);
-    expect(res.violations).toEqual([
-      { projectId: 'pA', code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', frameworks: ['PCI DSS'], severity: 'high', findingCount: 1 },
-    ]);
+    expect(res.violations[0]).toMatchObject({
+      projectId: 'pA', code: 'REQ-PCI-6.5.1-SQLI', severity: 'high', findingCount: 1,
+      jiraKey: 'SEC-42',
+      findings: [{ id: 'f1', title: 'sql-injection', tool: 'semgrep', severity: 'HIGH', file: 'src/db.js' }],
+    });
   });
 
   it('does NOT block when only a recommended requirement is violated', async () => {

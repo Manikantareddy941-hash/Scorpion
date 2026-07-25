@@ -21,6 +21,7 @@ export type CorrelationStatus = 'violated' | 'attested' | 'unverified';
  * collection, so the service maps whatever the store returns onto this.
  */
 export interface CorrelatableFinding {
+  id?: string;
   tool?: string;
   category?: string;
   ruleId?: string;
@@ -28,6 +29,7 @@ export interface CorrelatableFinding {
   message?: string;
   severity?: string;
   status?: string;
+  file?: string;
 }
 
 export interface CorrelatedRequirement {
