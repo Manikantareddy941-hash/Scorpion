@@ -5,6 +5,7 @@ import { putScan } from '../services/imageStore';
 import { recordScanResult, summarizeSeverity } from '../services/scanAudit';
 import { VulnerablePackage } from '../services/reachabilityService';
 import { requireCiApiKey } from '../middleware/ciApiKey';
+import { ingestSarif } from '../services/sarifIngestService';
 import { logger } from '../services/logger';
 
 /**
@@ -105,6 +106,47 @@ router.post('/scan', ingestRateLimiter, requireCiApiKey, async (req: Request, re
       error: err instanceof Error ? err.message : String(err),
     });
     return res.status(500).json({ error: 'Ingest failed' });
+  }
+});
+
+// SARIF report pushed from the customer's own CI (CodeQL/Semgrep/Trivy/Snyk/...).
+// Findings are stored under the named repo and become correlatable like any
+// orchestrator-produced finding. Tenant is taken from the token, never the body.
+const sarifIngestSchema = z.object({
+  repo_url: z.string().url(),
+  branch: z.string().max(255).optional(),
+  sarif: z.object({ runs: z.array(z.unknown()).optional() }).passthrough(),
+}).strict();
+
+// POST /api/v1/ingest/sarif — rate limit before auth so abusive callers are shed.
+router.post('/sarif', ingestRateLimiter, requireCiApiKey, async (req: Request, res: Response) => {
+  const parsed = sarifIngestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    logger.warn('sarif-ingest validation failure', {
+      event: 'sarif_ingest_validation_failure',
+      clientIp: clientIp(req),
+      issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+    });
+    return res.status(400).json({ error: 'Invalid SARIF payload', details: parsed.error.flatten() });
+  }
+  try {
+    const result = await ingestSarif({
+      tenant: req.ciTenant ?? null,
+      repoUrl: parsed.data.repo_url,
+      sarif: parsed.data.sarif,
+      branch: parsed.data.branch,
+    });
+    if (!result.ok) {
+      return res.status(404).json({ error: 'Repository not connected to Scorpion. Add it via the dashboard first.' });
+    }
+    return res.status(202).json({ scanId: result.scanId, findings: result.findings });
+  } catch (err) {
+    logger.error('sarif-ingest unexpected failure', {
+      event: 'sarif_ingest_error',
+      clientIp: clientIp(req),
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return res.status(500).json({ error: 'SARIF ingest failed' });
   }
 });
 

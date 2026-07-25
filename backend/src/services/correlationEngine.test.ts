@@ -45,6 +45,12 @@ describe('classifyFinding', () => {
     expect(classifyFinding(finding())).toBe('injection');
     expect(classifyFinding({ tool: 'bandit', category: 'B608', message: 'Possible SQL injection vector' })).toBe('injection');
   });
+  it('classes an ingested SARIF injection finding (any tool) as injection', () => {
+    expect(classifyFinding({ tool: 'codeql', category: 'js/sql-injection', ruleId: 'js/sql-injection', message: 'user input' })).toBe('injection');
+  });
+  it('keeps a CVE mentioning injection as dependency-vuln (categorised class wins over keyword)', () => {
+    expect(classifyFinding({ tool: 'trivy', category: 'dependency-vulnerability', title: 'CVE-2020-1 SQL injection in libX' })).toBe('dependency-vuln');
+  });
   it('does not classify non-security noise (license, maintainability lint)', () => {
     expect(classifyFinding({ tool: 'trivy', category: 'license-compliance' })).toBeNull();
     expect(classifyFinding({ tool: 'semgrep', category: 'style.unused-import', ruleId: 'unused-import', title: 'unused', message: 'unused import' })).toBeNull();
