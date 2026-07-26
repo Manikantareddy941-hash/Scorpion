@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Activity, Shield,
   Clock, RefreshCw, Server,
@@ -29,6 +29,9 @@ export default function Monitor() {
   const [trends, setTrends] = useState<any[]>([]);
   const [health, setHealth] = useState<any[]>([]);
   const [findings, setFindings] = useState<any[]>([]);
+  // Last count this user could actually see, so a realtime nudge only notifies
+  // when their own tenant-scoped stream grew.
+  const findingsCountRef = useRef(0);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [filter, setFilter] = useState('All');
   
@@ -37,16 +40,24 @@ export default function Monitor() {
   const [securityData, setSecurityData] = useState<any[]>([]);
   const [healthChecksData, setHealthChecksData] = useState<any[]>([]);
 
-  const fetchData = async () => {
+  const fetchData = async (notifyOnNewFindings = false) => {
     try {
       const token = await getJWT();
       const res = await fetch(`/api/monitor?range=${timeRange}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      
+
+      const stream = data.findings_stream || [];
+      // Notify off what this user can actually see, not off the realtime event:
+      // the event may describe a document outside their tenancy.
+      if (notifyOnNewFindings && stream.length > findingsCountRef.current) {
+        toast.success(t('monitor.new_finding_detected'), { icon: '🔍' });
+      }
+      findingsCountRef.current = stream.length;
+
       setHealth(data.fleet || []);
-      setFindings(data.findings_stream || []);
+      setFindings(stream);
       setInfraData(data.infra_health || []);
       setSecurityData(data.security_events || []);
       setHealthChecksData(data.health_checks || []);
@@ -65,14 +76,20 @@ export default function Monitor() {
   useEffect(() => {
     fetchData();
     
-    // Subscribe to new findings
+    // Subscribe to new findings. The event is a signal that something changed,
+    // nothing more — the payload is a raw Appwrite document, a different shape
+    // from /api/monitor's findings_stream, and it arrives under the collection's
+    // Appwrite permissions rather than this user's tenancy scope. Rendering it
+    // directly mixed the two shapes and could surface another tenant's finding.
+    // Refetch through the API, which enforces ownership. (Same rule as
+    // ScanResults.tsx.)
+    let findingsDebounce: ReturnType<typeof setTimeout>;
     const unsubscribeFindings = client.subscribe(
       `databases.${DB_ID}.collections.${COLLECTIONS.VULNERABILITIES}.documents`,
       (response: any) => {
-        if (response.events.some((e: string) => e.includes('.create'))) {
-          setFindings(prev => [response.payload, ...prev].slice(0, 10));
-          toast.success(t('monitor.new_finding_detected'), { icon: '🔍' });
-        }
+        if (!response.events.some((e: string) => e.includes('.create'))) return;
+        clearTimeout(findingsDebounce);
+        findingsDebounce = setTimeout(() => { fetchData(true); }, 1000);
       }
     );
 
@@ -91,6 +108,7 @@ export default function Monitor() {
     return () => {
       if (unsubscribeFindings) unsubscribeFindings();
       if (unsubscribeScans) unsubscribeScans();
+      clearTimeout(findingsDebounce);
       clearInterval(interval);
     };
   }, [timeRange]); // Re-fetch when time range changes
