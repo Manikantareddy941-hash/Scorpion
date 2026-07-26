@@ -31,7 +31,7 @@ describe('POST /api/notifications', () => {
       .send({ title: 'Scan Completed', userId: 'someone-else' });
 
     expect(res.status).toBe(201);
-    expect(createDocument.mock.calls[0][3].userId).toBe('u1');
+    expect(createDocument.mock.calls[0][3].user_id).toBe('u1');
   });
 
   it('requires a title', async () => {

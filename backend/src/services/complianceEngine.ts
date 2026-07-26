@@ -56,7 +56,12 @@ export async function evaluateCompliance(userId: string) {
             Query.limit(50)
           ])
         : Promise.resolve({ documents: [] as any[] }),
-      databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [Query.equal('user_id', userId), Query.limit(100)])
+      databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [
+        repoIds.length > 0
+          ? Query.or([Query.equal('repo_id', repoIds), Query.equal('user_id', userId)])
+          : Query.equal('user_id', userId),
+        Query.limit(100)
+      ])
     ]);
 
     const scans = scansRes.documents;

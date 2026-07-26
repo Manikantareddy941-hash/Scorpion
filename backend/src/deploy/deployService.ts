@@ -23,17 +23,6 @@ function containerNameFor(repoId: string, environment: string): string {
   return `scorpion-${sanitizedRepoId}-${environment}`;
 }
 
-// repoId here is a real platform Repository document id (sourced from
-// pipeline_runs.repoId / builds.repoId), so the owner is a direct lookup.
-async function resolveRepoOwner(repoId: string): Promise<string | undefined> {
-  try {
-    const repo = await deployRepository.getRepository(repoId);
-    return repo.user_id;
-  } catch {
-    return undefined;
-  }
-}
-
 function reportHasCriticalCves(report: TrivyReport): boolean {
   if (!report.Results) return false;
   for (const result of report.Results) {
@@ -193,7 +182,7 @@ export async function triggerDeploy(
         severity: 'CRITICAL',
         source: 'ci_pipeline',
         description: `Deployment ${deploymentId} to ${environment} was blocked by GitOps gate due to critical vulnerabilities in the Docker image.`,
-        userId: await resolveRepoOwner(repoId)
+        repoId
       });
 
       if (SLACK_WEBHOOK_URL) {
@@ -231,7 +220,7 @@ export async function triggerDeploy(
           severity: 'CRITICAL',
           source: 'ci_pipeline',
           description: `Deployment ${deploymentId} to ${environment} was blocked: the image digest ${imageDigest} does not match its recorded build signature, indicating possible tampering or substitution.`,
-          userId: await resolveRepoOwner(repoId)
+          repoId
         });
 
         return { deploymentId, status: 'failed', reason: 'Image signature verification failed' };
@@ -279,7 +268,7 @@ export async function triggerDeploy(
           severity: 'CRITICAL',
           source: 'ci_pipeline',
           description: `Deployment ${deploymentId} to ${environment} was blocked: ${compliance.violations.length} required security control(s) are violated by live findings (${codes}). Remediate, or re-run with an audited break-glass override.`,
-          userId: await resolveRepoOwner(repoId),
+          repoId,
         });
         return { deploymentId, status: 'failed', reason: 'Compliance gate: required security control(s) violated', violations: compliance.violations };
       }
@@ -354,7 +343,7 @@ async function performHealthCheck(deploymentId: string, environment: string, por
         severity: 'HIGH',
         source: 'gitops',
         description: `Deployment ${deploymentId} failed health checks after 60 seconds. Auto-rollback initiated.`,
-        userId: await resolveRepoOwner(deployment.repoId)
+        repoId: deployment.repoId
       });
 
       await rollbackDeploy(deploymentId);

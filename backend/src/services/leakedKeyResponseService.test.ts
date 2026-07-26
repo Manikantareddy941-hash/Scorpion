@@ -63,7 +63,7 @@ describe('respondToLeakedKeys', () => {
         expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({
             severity: 'critical',
             source: 'ci_pipeline',
-            userId: 'user-1',
+            repoId: 'repo-1',
         }));
     });
 

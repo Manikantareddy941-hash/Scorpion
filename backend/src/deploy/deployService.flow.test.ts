@@ -100,7 +100,7 @@ describe('triggerDeploy', () => {
 
     expect(result).toEqual({ deploymentId: 'dep-1', status: 'failed', reason: 'Critical vulnerabilities found' });
     expect(repo.updateDeploymentStatus).toHaveBeenCalledWith('dep-1', { status: 'failed' });
-    expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({ severity: 'CRITICAL', userId: 'owner-1' }));
+    expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({ severity: 'CRITICAL', repoId: 'repo1' }));
     expect(repo.deployToDocker).not.toHaveBeenCalled();
   });
 
@@ -158,7 +158,10 @@ describe('triggerDeploy', () => {
     expect(repo.createDeployment).toHaveBeenCalledWith('dep-1', expect.objectContaining({ previousDeploymentId: '' }));
   });
 
-  it('files the CVE incident without an owner when the repository lookup fails', async () => {
+  // The incident is scoped to the repo id carried by the pipeline run, so it no
+  // longer depends on a repository lookup that can fail — ownership (and with it
+  // the incident's visibility) survives a missing repository document.
+  it('scopes the CVE incident to the repo even when the repository document is gone', async () => {
     arrangeHappyPath();
     repo.runTrivyScan.mockResolvedValue({
       Results: [{ Vulnerabilities: [{ Severity: 'CRITICAL' }] }],
@@ -168,7 +171,7 @@ describe('triggerDeploy', () => {
     const result = await triggerDeploy('build-1', 'production');
 
     expect(result.status).toBe('failed');
-    expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({ userId: undefined }));
+    expect(createIncident).toHaveBeenCalledWith(expect.objectContaining({ repoId: 'repo1' }));
   });
 
   it('marks the deployment failed when the target deployment errors', async () => {

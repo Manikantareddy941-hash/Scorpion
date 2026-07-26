@@ -9,8 +9,17 @@ type Doc = { $id: string } & Record<string, unknown>;
 type FakeQuery =
   | { op: 'equal'; attr: string; values: unknown[] }
   | { op: 'contains'; attr: string; values: unknown[] }
+  | { op: 'or'; queries: FakeQuery[] }
   | { op: 'limit'; n: number }
   | { op: 'ignore' };
+
+// A single query's predicate, so `or` can union the branches it wraps.
+function matches(doc: Doc, q: FakeQuery): boolean {
+  if (q.op === 'equal') return q.values.includes(doc[q.attr]);
+  if (q.op === 'contains') return q.values.some((v) => String(doc[q.attr] ?? '').includes(String(v)));
+  if (q.op === 'or') return q.queries.some((sub) => matches(doc, sub));
+  return true;
+}
 
 const store: Record<string, Doc[]> = {};
 
@@ -19,12 +28,8 @@ function applyQueries(docs: Doc[], queries: FakeQuery[] = []): Doc[] {
   let limit = Infinity;
   for (const q of queries) {
     if (!q || typeof q !== 'object') continue;
-    if (q.op === 'equal') {
-      out = out.filter((d) => q.values.includes(d[q.attr]));
-    } else if (q.op === 'contains') {
-      out = out.filter((d) =>
-        q.values.some((v) => String(d[q.attr] ?? '').includes(String(v)))
-      );
+    if (q.op === 'equal' || q.op === 'contains' || q.op === 'or') {
+      out = out.filter((d) => matches(d, q));
     } else if (q.op === 'limit') {
       limit = q.n;
     }
@@ -56,6 +61,7 @@ jest.mock('../lib/appwrite', () => ({
       attr,
       values: Array.isArray(value) ? value : [value]
     }),
+    or: (queries: FakeQuery[]) => ({ op: 'or', queries }),
     limit: (n: number) => ({ op: 'limit', n }),
     offset: () => ({ op: 'ignore' }),
     orderDesc: () => ({ op: 'ignore' }),

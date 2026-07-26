@@ -91,6 +91,30 @@ export const canAccessResource = async (
  * repo_id but doesn't itself carry an owner field (vulnerabilities,
  * findings, pipeline runs, scans, etc).
  */
+/**
+ * Union access check for an incident, which is owned by EITHER its repository
+ * (repo_id — shared with everyone who can access the repo) OR a single user
+ * (user_id — tenant-scoped incidents like APM spikes that belong to no repo).
+ * Repo access wins first so team members inherit visibility; falls back to
+ * direct user ownership for repo-less incidents.
+ */
+export const canAccessIncident = async (
+    incident: Record<string, unknown>,
+    userId?: string
+): Promise<boolean> => {
+    if (!userId) return false;
+    const repoId = typeof incident.repo_id === 'string' ? incident.repo_id : '';
+    if (repoId) {
+        try {
+            await assertRepoAccess(repoId, userId);
+            return true;
+        } catch {
+            // Not a repo owner/team-member; fall through to direct ownership.
+        }
+    }
+    return incident.user_id === userId;
+};
+
 export const assertRepoAccess = async (repoId: string, userId: string): Promise<Models.Document & Record<string, unknown>> => {
     let repo: Models.Document & Record<string, unknown>;
     try {
