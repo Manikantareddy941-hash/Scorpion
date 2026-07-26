@@ -23,6 +23,9 @@ WORKDIR /app/backend
 # setup-tools.sh (run via postinstall below) needs these to install
 # trivy/gitleaks/semgrep; musl-based alpine lacks bash and has unreliable
 # semgrep wheels, so this stage uses Debian slim instead.
+# hadolint ignore=DL3008: node:24-slim tracks a moving Debian repo, so exact
+# apt version pins would break the build the moment Debian rotates them. The
+# real dependency surface (scanner binaries) is version-pinned in setup-tools.sh.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ca-certificates python3 python3-pip tar \
     && rm -rf /var/lib/apt/lists/*
@@ -45,6 +48,12 @@ COPY --from=builder /app/backend/dist ./dist
 # The deploy runs `npm run migrate:up` against this image, so the .sql files
 # have to be in it — node-pg-migrate is a runtime dependency for that reason.
 COPY backend/migrations ./migrations
+
+# Drop to the built-in non-root `node` user (uid 1000). tmp is where the binary
+# runner clones repos to scan, so it must be writable by that user. In k8s the
+# securityContext forces uid 10001 + an emptyDir over this path instead.
+RUN mkdir -p /app/backend/tmp && chown -R node:node /app/backend
+USER node
 
 EXPOSE 3001
 

@@ -22,18 +22,26 @@ on:
         description: Comma list of zap,nuclei,ffuf (default all)
         required: false
 
+# Least privilege (CKV2_GHA_1): a manual DAST trigger only reads the repo and
+# talks to staging over the network; it never writes repo contents.
+permissions:
+  contents: read
+
 jobs:
   dast:
     name: DAST suite + release gate
+    # checkov:skip=CKV_GHA_7: target_url/scanners are deliberate operational
+    # overrides for a manual staging DAST run; this job produces no build
+    # artifact, so the SLSA "inputs must be empty" constraint does not apply.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: npm
