@@ -2,9 +2,10 @@
 # argocd-app.yaml is intentionally excluded (it deploys this kustomization).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: default
+namespace: scorpion
 
 resources:
+  - namespace.yaml
   - deployment.yaml
   - service.yaml
   - sealed-secret.yaml

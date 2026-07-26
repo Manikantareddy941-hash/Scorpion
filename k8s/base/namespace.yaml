@@ -1,0 +1,8 @@
+# Dedicated namespace for the Scorpion backend — keeps it out of `default`
+# (CKV_K8S_21) so NetworkPolicy and RBAC can be scoped to it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scorpion
+  labels:
+    app.kubernetes.io/name: scorpion-backend
