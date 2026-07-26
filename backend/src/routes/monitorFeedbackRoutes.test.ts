@@ -27,6 +27,22 @@ test('composes MTTR, reopen rate, and escape-by-phase', async () => {
   expect(res.body).toHaveProperty('byPhase');
 });
 
+test('returns ranked escape recommendations directed at the earlier gate', async () => {
+  (databases.listDocuments as jest.Mock)
+    .mockResolvedValueOnce({ documents: [{ $id: 'r1' }] })            // repos
+    .mockResolvedValueOnce({ documents: [                              // findings: 2 at test (zap), 1 at build (semgrep)
+      { severity: 'high', scanner: 'zap', status: 'open', $createdAt: '1970-01-01T00:00:00.000Z' },
+      { severity: 'high', scanner: 'zap', status: 'open', $createdAt: '1970-01-01T00:00:00.000Z' },
+      { severity: 'high', scanner: 'semgrep', status: 'open', $createdAt: '1970-01-01T00:00:00.000Z' },
+    ], total: 3 })
+    .mockResolvedValueOnce({ documents: [] });                        // incidents
+  const res = await request(app).get('/api/monitor/feedback');
+  expect(res.status).toBe(200);
+  expect(res.body.recommendations[0].phase).toBe('test'); // biggest leak first
+  expect(res.body.recommendations[0].count).toBe(2);
+  expect(res.body.recommendations[0].recommendation).toMatch(/build gate/i);
+});
+
 test('folds resolved runtime (Falco) incidents into MTTR and the operate escape phase', async () => {
   (databases.listDocuments as jest.Mock)
     .mockResolvedValueOnce({ documents: [{ $id: 'r1' }] })            // repos
