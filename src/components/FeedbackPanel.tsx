@@ -3,10 +3,18 @@ import { Timer } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 
+interface EscapeRecommendation {
+  phase: string;
+  count: number;
+  share: number;
+  recommendation: string;
+}
+
 interface FeedbackMetrics {
   mttr: number;
   reopenRate: number;
   byPhase: { phase: string; count: number }[];
+  recommendations?: EscapeRecommendation[];
 }
 
 function formatMttr(ms: number): string {
@@ -92,6 +100,24 @@ export default function FeedbackPanel() {
               </div>
             )}
           </div>
+
+          {metrics.recommendations && metrics.recommendations.length > 0 && (
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-2">
+                Where to tighten next
+              </h3>
+              <div className="space-y-2">
+                {metrics.recommendations.map((r) => (
+                  <div key={r.phase} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-4 py-3 flex items-start gap-3">
+                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded shrink-0 tabular-nums" style={{ color: 'var(--accent-primary)', background: 'color-mix(in srgb, var(--accent-primary) 15%, transparent)' }}>
+                      {r.phase} · {Math.round(r.share * 100)}%
+                    </span>
+                    <p className="text-xs text-[var(--text-primary)] leading-relaxed">{r.recommendation}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
