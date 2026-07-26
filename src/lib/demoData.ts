@@ -1,4 +1,14 @@
-import { databases, DB_ID, COLLECTIONS } from './appwrite';
+import { Databases } from 'appwrite';
+import { client, DB_ID, COLLECTIONS } from './appwrite';
+
+// Constructed here rather than imported: `databases` is intentionally not
+// exported from ./appwrite so no component can make a direct browser->database
+// query (domain reads go through the API, which enforces tenancy). Demo seeding
+// is the one deliberate exception — it only ever writes fixture documents, runs
+// solely behind the explicit `scorpion_demo_seeded` opt-in below, and fails
+// closed (the writes simply throw) when the collections are locked to the
+// server key, which is the desired production posture.
+const databases = new Databases(client);
 
 // Realistic threat feed (12 entries)
 export const MOCK_THREATS = [
