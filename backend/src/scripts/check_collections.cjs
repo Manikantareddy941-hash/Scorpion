@@ -2,7 +2,7 @@ const sdk = require('node-appwrite');
 const dotenv = require('dotenv');
 const path = require('path');
 
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const client = new sdk.Client();
 const databases = new sdk.Databases(client);

@@ -20,7 +20,7 @@ const { Client, Databases } = require('node-appwrite');
 const dotenv = require('dotenv');
 const path = require('path');
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT || '')

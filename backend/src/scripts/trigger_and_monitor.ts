@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import axios from 'axios';
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 import { databases, DB_ID } from '../lib/appwrite';
 

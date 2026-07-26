@@ -19,7 +19,7 @@
 // call 404s with general_route_not_found.
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { ingestVulnerabilitiesDelta } from '../services/scanService';

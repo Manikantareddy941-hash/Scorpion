@@ -16,7 +16,7 @@
  */
 import dotenv from 'dotenv';
 import path from 'path';
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { triggerScan } from '../services/scanService';
