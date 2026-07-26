@@ -15,17 +15,43 @@
 //   DROP_LEGACY_USERID=1 node dist/backend/src/scripts/sync_schema_attributes.js
 import { Client, Databases, Query } from 'node-appwrite';
 import dotenv from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// .env lives at backend/.env, but __dirname differs by how this is invoked:
+// src/scripts under ts-node vs dist/backend/src/scripts once compiled. A single
+// fixed '../../.env' is right for one and silently wrong for the other — it
+// resolves to dist/backend/.env, loads nothing, and the Appwrite client then
+// fails with "Endpoint must be a valid string". Try the candidates instead.
+const ENV_CANDIDATES = [
+  path.resolve(process.cwd(), '.env'),              // run from backend/ (documented)
+  path.resolve(__dirname, '../../.env'),            // ts-node: src/scripts -> backend/
+  path.resolve(__dirname, '../../../../.env'),      // compiled: dist/backend/src/scripts -> backend/
+];
+const envPath = ENV_CANDIDATES.find((p) => fs.existsSync(p));
+if (!envPath) {
+  console.error(`No .env found. Looked in:\n  ${ENV_CANDIDATES.join('\n  ')}`);
+  process.exit(1);
+}
+dotenv.config({ path: envPath });
+console.log(`Loaded env from ${envPath}`);
+
+// Fail with a readable message rather than node-appwrite's opaque
+// "Endpoint must be a valid string" when a var is missing.
+const REQUIRED = ['APPWRITE_ENDPOINT', 'APPWRITE_PROJECT_ID', 'APPWRITE_API_KEY', 'APPWRITE_DATABASE_ID'];
+const missing = REQUIRED.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`Missing required env var(s): ${missing.join(', ')} (loaded ${envPath})`);
+  process.exit(1);
+}
 
 const client = new Client()
-  .setEndpoint(process.env.APPWRITE_ENDPOINT || '')
-  .setProject(process.env.APPWRITE_PROJECT_ID || '')
-  .setKey(process.env.APPWRITE_API_KEY || '');
+  .setEndpoint(process.env.APPWRITE_ENDPOINT as string)
+  .setProject(process.env.APPWRITE_PROJECT_ID as string)
+  .setKey(process.env.APPWRITE_API_KEY as string);
 
 const databases = new Databases(client);
-const DATABASE_ID = process.env.APPWRITE_DATABASE_ID || '';
+const DATABASE_ID = process.env.APPWRITE_DATABASE_ID as string;
 const DROP_LEGACY = process.env.DROP_LEGACY_USERID === '1';
 
 /**
@@ -89,8 +115,6 @@ async function backfillNotificationOwner(): Promise<number> {
 }
 
 async function run() {
-  if (!DATABASE_ID) { console.error('APPWRITE_DATABASE_ID is not set — aborting.'); process.exit(1); }
-
   console.log('notifications: provisioning union-owner attributes...');
   // Optional, NOT required: Appwrite refuses a required attribute on a
   // collection that already holds documents (they have no value for it).
