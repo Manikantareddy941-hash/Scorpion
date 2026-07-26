@@ -33,10 +33,11 @@ interface IndexSpec {
 const INDEXES: IndexSpec[] = [
   { collection: 'scans', key: 'idx_repo_status', type: DatabasesIndexType.Key, attributes: ['repo_id', 'status'] },
   { collection: 'scans', key: 'idx_repo_started', type: DatabasesIndexType.Key, attributes: ['repo_id', 'startedAt'], orders: [OrderBy.Asc, OrderBy.Desc] },
-  { collection: 'scans', key: 'idx_user_id', type: DatabasesIndexType.Key, attributes: ['user_id'] },
+  // NOTE: scans.idx_user_id and repositories.idx_status removed (audit 2026-07-26)
+  // — no caller filters scans by user_id or repositories by status; they were
+  // ghost specs whose attributes don't exist in the schema.
 
   { collection: 'repositories', key: 'idx_user_id', type: DatabasesIndexType.Key, attributes: ['user_id'] },
-  { collection: 'repositories', key: 'idx_status', type: DatabasesIndexType.Key, attributes: ['status'] },
   { collection: 'repositories', key: 'idx_updated_at', type: DatabasesIndexType.Key, attributes: ['updated_at'], orders: [OrderBy.Desc] },
 
   { collection: 'vulnerabilities', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
@@ -63,7 +64,9 @@ const INDEXES: IndexSpec[] = [
   { collection: 'threats', key: 'idx_owner_status', type: DatabasesIndexType.Key, attributes: ['ownerUserId', 'status'] },
   { collection: 'project_policies', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
   { collection: 'policy_evaluations', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
-  { collection: 'incidents', key: 'idx_user_status', type: DatabasesIndexType.Key, attributes: ['user_id', 'status'] },
+  // Incidents are owned by their repository (repo_id), not a user — list/authz
+  // join on repo_id (see incidentRoutes / complianceEngine).
+  { collection: 'incidents', key: 'idx_repo_status', type: DatabasesIndexType.Key, attributes: ['repo_id', 'status'] },
 ];
 
 async function run() {

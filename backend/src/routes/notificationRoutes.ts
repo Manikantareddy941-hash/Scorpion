@@ -12,7 +12,7 @@ const router = Router();
 router.get('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const response = await databases.listDocuments(DB_ID, COLLECTIONS.NOTIFICATIONS, [
-            Query.equal('userId', req.user!.$id),
+            Query.equal('user_id', req.user!.$id),
             Query.orderDesc('$createdAt'),
             Query.limit(50)
         ]);
@@ -28,7 +28,7 @@ const NOTIFICATION_SEVERITIES = new Set(['info', 'low', 'medium', 'high', 'criti
  * Records a notification for the calling user.
  *
  * The browser used to create these documents itself, which meant it supplied
- * `userId` — so a caller could post a notification into someone else's tray.
+ * `user_id` — so a caller could post a notification into someone else's tray.
  * It is taken from the session here and the body's value is ignored.
  */
 router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -45,7 +45,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response, next: NextFunc
         }
 
         const doc = await databases.createDocument(DB_ID, COLLECTIONS.NOTIFICATIONS, ID.unique(), {
-            userId: req.user!.$id,
+            user_id: req.user!.$id,
             title: String(title).slice(0, 512),
             message: String(message ?? '').slice(0, 4096),
             severity: severity ? String(severity) : 'info',
