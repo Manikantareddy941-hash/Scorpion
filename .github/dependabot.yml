@@ -5,6 +5,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Wait 7 days before adopting a newly published version — a fresh release
+    # can be malicious or unstable (Semgrep dependabot-missing-cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     ignore:
       # TypeScript major is blocked: typescript-eslint crashes on TS 7 (PR #57).
@@ -24,6 +28,10 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    # Wait 7 days before adopting a newly published version — a fresh release
+    # can be malicious or unstable (Semgrep dependabot-missing-cooldown).
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     ignore:
       # bullmq exact-pins ioredis; a newer top-level ioredis duplicates the
@@ -46,12 +54,20 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Wait 7 days before adopting a newly published version — a fresh release
+    # can be malicious or unstable (Semgrep dependabot-missing-cooldown).
+    cooldown:
+      default-days: 7
 
   # Container base images
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    # Wait 7 days before adopting a newly published version — a fresh release
+    # can be malicious or unstable (Semgrep dependabot-missing-cooldown).
+    cooldown:
+      default-days: 7
     ignore:
       # Stay on even-numbered node LTS; odd majors (25, 27, ...) and
       # not-yet-LTS evens are noise. Bump deliberately instead.
@@ -62,6 +78,10 @@ updates:
     directory: /backend
     schedule:
       interval: weekly
+    # Wait 7 days before adopting a newly published version — a fresh release
+    # can be malicious or unstable (Semgrep dependabot-missing-cooldown).
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: node
         update-types: [version-update:semver-major]

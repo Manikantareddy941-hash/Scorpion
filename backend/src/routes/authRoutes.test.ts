@@ -186,6 +186,7 @@ describe('POST /auth/reset-password', () => {
 
     it('updates the password and deletes the reset record for a valid token', async () => {
         const secret = process.env.RESET_TOKEN_SECRET as string;
+        // nosemgrep: javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret -- secret comes from env, not a literal; this is a test.
         const resetToken = jwt.sign({ email: 'a@b.com' }, secret, { expiresIn: '5m' });
 
         (users.list as jest.Mock).mockResolvedValue({ total: 1, users: [{ $id: 'user-1' }] });
@@ -205,6 +206,7 @@ describe('POST /auth/reset-password', () => {
 
     it('returns 404 when the token is valid but the user no longer exists', async () => {
         const secret = process.env.RESET_TOKEN_SECRET as string;
+        // nosemgrep: javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret -- secret comes from env, not a literal; this is a test.
         const resetToken = jwt.sign({ email: 'gone@b.com' }, secret, { expiresIn: '5m' });
         (users.list as jest.Mock).mockResolvedValue({ total: 0, users: [] });
 
