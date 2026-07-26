@@ -1,0 +1,69 @@
+name: Appwrite Permission Audit
+
+# Fails when any Appwrite collection grants access to `any` (unauthenticated) or
+# `users` (every logged-in session). Those grants bypass the API entirely — the
+# browser SDK authenticates as the end user's session, so a collection open to
+# `users` is readable and writable by every customer, and one open to `any`
+# needs no credential at all (the endpoint and project id ship in the frontend
+# bundle).
+#
+# This is scheduled rather than per-PR on purpose: permissions drift in the
+# Appwrite console, not in a diff, so a PR trigger would catch nothing a
+# scheduled run doesn't — while forcing a database credential into every PR
+# workflow run.
+#
+# Required secrets. APPWRITE_AUDIT_API_KEY must be a key scoped to
+# `collections.read` ONLY — deliberately a different name from the app's
+# APPWRITE_API_KEY so the full-admin key never gets pasted here by habit. The
+# audit only enumerates collections and their permissions; it writes nothing,
+# so a read-scoped key is sufficient and keeps the blast radius on leak to
+# "attacker learns collection names".
+#   APPWRITE_ENDPOINT
+#   APPWRITE_PROJECT_ID
+#   APPWRITE_DATABASE_ID
+#   APPWRITE_AUDIT_API_KEY
+#
+# Missing secrets fail the job (the script exits 1 naming them) rather than
+# skipping green: a drift check that silently no-ops is worse than no check.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Collection permissions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Build Backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Audit collection permissions
+        working-directory: backend
+        env:
+          APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
+          APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          APPWRITE_DATABASE_ID: ${{ secrets.APPWRITE_DATABASE_ID }}
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_AUDIT_API_KEY }}
+        run: node dist/backend/src/scripts/audit_collection_permissions.js
