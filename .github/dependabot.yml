@@ -6,6 +6,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # TypeScript major is blocked: typescript-eslint crashes on TS 7 (PR #57).
+      # Drop when typescript-eslint ships TS-7 support.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # Tailwind v4 replaces the JS config with a CSS-first model — a deliberate
+      # styling migration, not an automated bump (PR #74). Bump by hand when scheduled.
+      - dependency-name: tailwindcss
+        update-types: [version-update:semver-major]
     groups:
       frontend-minor-patch:
         update-types: [minor, patch]
@@ -20,6 +29,14 @@ updates:
       # bullmq exact-pins ioredis; a newer top-level ioredis duplicates the
       # dependency and breaks BullMQ connection types. Drop when bullmq unpins.
       - dependency-name: ioredis
+      # TypeScript major is blocked: typescript-eslint crashes on TS 7 (PR #76).
+      # Drop when typescript-eslint ships TS-7 support.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # @types/node major tracks the Node runtime — bump deliberately alongside a
+      # Node upgrade, not on its own (PR #80 failed Backend CI).
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       backend-minor-patch:
         update-types: [minor, patch]
