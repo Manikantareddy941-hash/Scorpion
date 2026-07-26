@@ -1,0 +1,14 @@
+# Trivy vulnerability suppressions for the filesystem scan
+# (.github/workflows/stackpilot-scan.yml, scan-ref: .).
+#
+# Every entry MUST carry a justification so a future auditor can see exactly
+# why the alert was suppressed. Remove an entry the moment its premise changes.
+
+# GHSA-qwww-vcr4-c8h2 (react-router RSC-mode CSRF bypass): Not applicable.
+# This application is a Vite SPA using createBrowserRouter and does not utilize
+# React Server Components (RSC); the vulnerable code path requires RSC mode, so
+# the attack surface physically does not exist here. The only upstream fix is
+# react-router 8.x, a breaking framework major whose regression risk is not
+# justified for zero real security gain. Revisit if the app adopts react-router
+# RSC mode or migrates to v8.
+GHSA-qwww-vcr4-c8h2
