@@ -70,4 +70,30 @@ describe('ingestSarif', () => {
     const res = await ingestSarif({ tenant: null, repoUrl: 'https://x/y', sarif: sarifLog });
     expect(res).toMatchObject({ ok: true, scanId: 'scan-1' });
   });
+
+  it('resolves a repo whose stored URL differs only by .git / case (canonical fallback, no exact match)', async () => {
+    // Exact-URL query misses; the tenant-scoped fallback finds the canonical match.
+    mockList.mockImplementation(async (_db: string, _col: string, queries: { equal?: [string, unknown] }[]) => {
+      const byUrl = queries.some((q) => q.equal && q.equal[0] === 'url');
+      if (byUrl) return { documents: [] }; // no exact match for the .git/cased variant
+      return { documents: [{ $id: 'r-canon', url: 'https://github.com/org/repo', user_id: 'user-1' }] };
+    });
+
+    const res = await ingestSarif({ tenant: 'user-1', repoUrl: 'https://github.com/ORG/repo.git', sarif: sarifLog });
+
+    expect(res).toMatchObject({ ok: true, scanId: 'scan-1' });
+    expect(mockDelta.mock.calls[0][0]).toBe('r-canon'); // findings stored under the resolved repo
+  });
+
+  it('does not canonical-match a repo owned by another tenant', async () => {
+    mockList.mockImplementation(async (_db: string, _col: string, queries: { equal?: [string, unknown] }[]) => {
+      const byUrl = queries.some((q) => q.equal && q.equal[0] === 'url');
+      if (byUrl) return { documents: [] };
+      // Canonically identical URL, but owned by someone else -> still no match.
+      return { documents: [{ $id: 'r-foreign', url: 'https://github.com/org/repo', user_id: 'someone-else' }] };
+    });
+
+    const res = await ingestSarif({ tenant: 'user-1', repoUrl: 'https://github.com/org/repo.git', sarif: sarifLog });
+    expect(res).toEqual({ ok: false, reason: 'repo_not_found' });
+  });
 });
