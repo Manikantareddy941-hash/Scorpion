@@ -2,11 +2,12 @@ import { randomUUID } from 'crypto';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { planRepository } from '../repositories/planRepository';
 import { assertProjectAccess, severityToPriority } from './planService';
+import { canAccessIncident } from './tenancyService';
 import { Issue } from '../types/plan.types';
 import { logger } from './logger';
 
 export interface IncidentDoc {
-  $id: string; title: string; severity: string; user_id?: string; status?: string;
+  $id: string; title: string; severity: string; user_id?: string; repo_id?: string; status?: string;
   rootCause?: string; escapedPhase?: string; lessons?: string; actionItemIssueId?: string;
 }
 
@@ -48,7 +49,7 @@ export async function convertIncidentToIssue(
     logger.error('[incidentFeedback] getDocument failed', err);
     return 'not_found';
   }
-  if (!userId || incident.user_id !== userId) return 'forbidden';
+  if (!(await canAccessIncident(incident as unknown as Record<string, unknown>, userId))) return 'forbidden';
   if (incident.status !== 'resolved') return 'not_resolved';
   if (!incident.rootCause) return 'no_postmortem';
   if (incident.actionItemIssueId) return { ok: true, issueId: incident.actionItemIssueId }; // idempotent

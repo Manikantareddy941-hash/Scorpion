@@ -191,7 +191,8 @@ export async function handleFalcoEvent(event: FalcoEvent) {
         source: 'falco',
         relatedScanId: correlatedScanId,
         description: effectiveEvent.output,
-        userId: ownerUserId || undefined
+        userId: ownerUserId || undefined,
+        repoId: resolvedRepoId || undefined
       });
 
       // 3. Trigger Slack Alert dynamically via INTEGRATIONS collection

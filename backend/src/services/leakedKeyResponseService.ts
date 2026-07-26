@@ -63,7 +63,7 @@ export const respondToLeakedKeys = async (
                 source: 'ci_pipeline',
                 description: `A SCORPION API key ("${leakedKey.name}") was found in plaintext in repo ${repoId} (${match.File}, Gitleaks rule ${match.RuleID}) and was automatically revoked. Issue a replacement key if you still need it.`,
                 relatedScanId: undefined,
-                userId: ownerUserId,
+                repoId,
             });
         }
     } catch (err) {

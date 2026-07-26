@@ -27,17 +27,20 @@ export interface Incident {
   source: 'falco' | 'ci_pipeline' | 'gitops' | 'soar' | 'correlation' | 'apm';
   relatedScanId?: string;
   description: string;
-  // Owning user, when derivable (e.g. correlated from a scan's repo owner).
-  // Left unset for sources that don't yet resolve to a platform user
-  // (raw GitOps/ArgoCD app names aren't linked to repository records) --
-  // such incidents are intentionally invisible via the regular incidents
-  // API until that integration exists, rather than visible to everyone.
+  // Incident ownership is a union of two modes; a caller sets whichever applies:
+  //  - repoId: repo-scoped incidents (deploy blocks, Falco runtime threats,
+  //    leaked keys, ArgoCD gate) — visible to everyone with access to the repo.
+  //  - userId: tenant-scoped incidents that belong to no single repo (APM
+  //    auth-failure spikes, cross-tenant correlation) — visible to that user.
+  // An incident with neither is intentionally invisible via the incidents API
+  // (e.g. an unresolved Falco event) rather than visible to everyone.
   userId?: string;
+  repoId?: string;
 }
 
 export async function createIncident(incident: Incident) {
   try {
-    const { userId, ...rest } = incident;
+    const { userId, repoId, ...rest } = incident;
     const doc = await databases.createDocument(
       DB_ID,
       COLLECTIONS.INCIDENTS,
@@ -45,6 +48,7 @@ export async function createIncident(incident: Incident) {
       {
         ...rest,
         ...(userId ? { user_id: userId } : {}),
+        ...(repoId ? { repo_id: repoId } : {}),
         status: 'open',
         timestamp: new Date().toISOString() // for legacy field
       }

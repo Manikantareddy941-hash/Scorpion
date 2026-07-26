@@ -5,6 +5,7 @@ import { updateIncidentStatus } from '../services/incidentService';
 import { buildPostmortemPatch } from '../services/incidentPostmortem';
 import { convertIncidentToIssue } from '../services/incidentFeedbackService';
 import { soarRepository } from '../repositories/soarRepository';
+import { resolveOwnershipScope, canAccessIncident, TenantAccessError } from '../services/tenancyService';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
@@ -16,13 +17,28 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.$id || '';
     const { status } = req.query;
+
+    // Union ownership: incidents scoped to a repo the caller can access (shared
+    // repo-RBAC visibility), plus tenant-scoped incidents owned directly by the
+    // caller (APM/correlation, which belong to no single repo).
+    const scope = await resolveOwnershipScope(req, userId);
+    const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+      Query.equal(scope.field, scope.value),
+      Query.limit(500)
+    ]);
+    const repoIds = reposRes.documents.map((r) => r.$id);
+    const owner = repoIds.length > 0
+      ? Query.or([Query.equal('repo_id', repoIds), Query.equal('user_id', userId)])
+      : Query.equal('user_id', userId);
+
     const filters = [
-      Query.equal('user_id', userId),
+      owner,
       ...(status ? [Query.equal('status', status as string)] : [Query.orderDesc('$createdAt'), Query.limit(100)])
     ];
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, filters);
     res.json(result);
-  } catch {
+  } catch (err) {
+    if (err instanceof TenantAccessError) return res.status(403).json({ error: 'Access denied' });
     res.status(500).json({ error: 'Failed to fetch incidents' });
   }
 });
@@ -31,7 +47,7 @@ router.patch('/:id/status', async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.$id;
     const existing = await databases.getDocument(DB_ID, COLLECTIONS.INCIDENTS, req.params.id);
-    if (existing.user_id !== userId) {
+    if (!(await canAccessIncident(existing, userId))) {
       return res.status(403).json({ error: 'You do not have access to this incident' });
     }
 
@@ -47,7 +63,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.$id;
     const existing = await databases.getDocument(DB_ID, COLLECTIONS.INCIDENTS, req.params.id);
-    if (existing.user_id !== userId) {
+    if (!(await canAccessIncident(existing, userId))) {
       return res.status(403).json({ error: 'You do not have access to this incident' });
     }
 
@@ -68,7 +84,7 @@ router.patch('/:id/postmortem', async (req: AuthenticatedRequest, res) => {
     } catch {
       return res.status(404).json({ error: 'Incident not found' });
     }
-    if (!userId || incident.user_id !== userId) return res.status(403).json({ error: 'Forbidden' });
+    if (!(await canAccessIncident(incident, userId))) return res.status(403).json({ error: 'Forbidden' });
     if (incident.status !== 'resolved') return res.status(400).json({ error: 'Post-mortem requires a resolved incident' });
 
     const built = buildPostmortemPatch(req.body ?? {});
@@ -107,7 +123,7 @@ router.get('/:id/evidence', async (req: AuthenticatedRequest, res) => {
     } catch {
       return res.status(404).json({ error: 'Incident not found' });
     }
-    if (!userId || incident.user_id !== userId) return res.status(403).json({ error: 'Forbidden' });
+    if (!(await canAccessIncident(incident, userId))) return res.status(403).json({ error: 'Forbidden' });
 
     const rows = await soarRepository.listEvidenceForIncident(req.params.id);
     res.json(rows.map((r) => {

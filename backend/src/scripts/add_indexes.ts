@@ -64,9 +64,11 @@ const INDEXES: IndexSpec[] = [
   { collection: 'threats', key: 'idx_owner_status', type: DatabasesIndexType.Key, attributes: ['ownerUserId', 'status'] },
   { collection: 'project_policies', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
   { collection: 'policy_evaluations', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repo_id'] },
-  // Incidents are owned by their repository (repo_id), not a user — list/authz
-  // join on repo_id (see incidentRoutes / complianceEngine).
+  // Incidents use a union owner: repo-scoped (repo_id, shared repo-RBAC) OR
+  // tenant-scoped (user_id, e.g. APM/correlation). The list/authz filter on
+  // both, so index each (see incidentRoutes / complianceEngine).
   { collection: 'incidents', key: 'idx_repo_status', type: DatabasesIndexType.Key, attributes: ['repo_id', 'status'] },
+  { collection: 'incidents', key: 'idx_user_id', type: DatabasesIndexType.Key, attributes: ['user_id'] },
 ];
 
 async function run() {
