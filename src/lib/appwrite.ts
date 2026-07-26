@@ -1,11 +1,22 @@
-import { Client, Account, Databases, Functions, Storage, ID, Query } from 'appwrite';
+import { Client, Account, Functions, Storage, ID, Query } from 'appwrite';
 
 export const client = new Client()
   .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
   .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 
 export const account = new Account(client);
-export const databases = new Databases(client);
+// NOTE: `databases` is deliberately NOT exported.
+//
+// This client authenticates as the end user's Appwrite session, so any query
+// made through it is bounded only by that collection's Appwrite permissions —
+// not by the tenancy the backend enforces. Domain data must be read through the
+// API (see src/lib/*Api.ts), which scopes every query to the caller.
+//
+// Keeping the handle off this module is the guardrail: without it, a component
+// cannot re-introduce a direct browser->database query by reflex. `client` is
+// still exported because realtime subscriptions need it — but treat a realtime
+// event as a signal to refetch, never as data to render (see Monitor.tsx and
+// ScanResults.tsx for the rule and the reason).
 export const storage = new Storage(client);
 export const functions = new Functions(client);
 export { ID, Query };
