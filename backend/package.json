@@ -83,7 +83,7 @@
         "@types/cors": "^2.8.19",
         "@types/dockerode": "^4.0.1",
         "@types/express": "^5.0.6",
-        "@types/helmet": "^0.0.48",
+        "@types/helmet": "^4.0.0",
         "@types/jest": "^30.0.0",
         "@types/json2csv": "^5.0.7",
         "@types/jsonwebtoken": "^9.0.10",
