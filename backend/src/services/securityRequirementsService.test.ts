@@ -1,5 +1,11 @@
 jest.mock('../repositories/planRepository', () => ({
-  planRepository: { getProjectOwner: jest.fn(), listVulnerabilitiesForRepos: jest.fn() },
+  planRepository: {
+    getProjectOwner: jest.fn(),
+    listVulnerabilitiesForRepos: jest.fn(),
+    // Defaulted to [] so existing correlation tests (which don't set it) don't
+    // crash on the new second evidence stream in computeCorrelation.
+    listRuntimeIncidentsForRepos: jest.fn().mockResolvedValue([]),
+  },
 }));
 jest.mock('../repositories/projectRepoRepository', () => ({
   projectRepoRepository: { listRepoIds: jest.fn(), listBindings: jest.fn(), setBindings: jest.fn(), listProjectIdsForRepo: jest.fn() },
@@ -33,6 +39,7 @@ import { pushTicketToJira } from './jiraService';
 
 const owner = planRepository.getProjectOwner as jest.Mock;
 const listVulns = planRepository.listVulnerabilitiesForRepos as jest.Mock;
+const listIncidents = planRepository.listRuntimeIncidentsForRepos as jest.Mock;
 const listRepoIds = projectRepoRepository.listRepoIds as jest.Mock;
 const listProjectsForRepo = projectRepoRepository.listProjectIdsForRepo as jest.Mock;
 const setBindings = projectRepoRepository.setBindings as jest.Mock;
@@ -226,6 +233,55 @@ describe('securityRequirementsService.complianceGate (Build & Test gate)', () =>
   it('passes clean when no project is bound to the repo', async () => {
     listProjectsForRepo.mockResolvedValue([]);
     expect(await svc.complianceGate('orphan')).toEqual({ blocked: false, violations: [] });
+  });
+});
+
+describe('securityRequirementsService runtime-incident feedback (Monitor & Operate)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const shellIncident = { $id: 'inc1', rule: 'Terminal shell in container', priority: 'Critical', output: 'A shell was spawned', container_image: 'ghcr.io/acme/api', repo_id: 'r1', status: 'open' };
+  const monitoringReq = (over = {}) => ({ code: 'REQ-RUNTIME-DETECT', title: 'Detect runtime intrusions', category: 'Logging & Monitoring', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['SOC 2'], ...over });
+
+  it('getCorrelation: a live Falco incident violates a Logging & Monitoring requirement', async () => {
+    owner.mockResolvedValue('user-1');
+    mockRepo.listRequirements.mockResolvedValue([monitoringReq()]);
+    listRepoIds.mockResolvedValue(['r1']);
+    listVulns.mockResolvedValue([]);
+    listIncidents.mockResolvedValue([shellIncident]);
+
+    const res = await svc.getCorrelation('p1', 'user-1');
+
+    if (res === 'denied') throw new Error('unexpected denial');
+    expect(res.data[0].status).toBe('violated');
+    expect(res.data[0].matchedFindings[0]).toMatchObject({ tool: 'falco', file: 'ghcr.io/acme/api', severity: 'critical' });
+    expect(listIncidents).toHaveBeenCalledWith(['r1']);
+  });
+
+  it('complianceGate: an open runtime incident on a bound repo blocks the pipeline with falco traceability', async () => {
+    listProjectsForRepo.mockResolvedValue(['pA']);
+    listRepoIds.mockResolvedValue(['r1']);
+    mockRepo.listRequirements.mockResolvedValue([monitoringReq()]);
+    listVulns.mockResolvedValue([]);
+    listIncidents.mockResolvedValue([shellIncident]);
+
+    const res = await svc.complianceGate('r1');
+
+    expect(res.blocked).toBe(true);
+    expect(res.violations[0]).toMatchObject({
+      projectId: 'pA', code: 'REQ-RUNTIME-DETECT',
+      findings: [{ id: 'inc1', title: 'Terminal shell in container', tool: 'falco', file: 'ghcr.io/acme/api' }],
+    });
+  });
+
+  it('does not block when the runtime incident is already resolved', async () => {
+    listProjectsForRepo.mockResolvedValue(['pA']);
+    listRepoIds.mockResolvedValue(['r1']);
+    mockRepo.listRequirements.mockResolvedValue([monitoringReq()]);
+    listVulns.mockResolvedValue([]);
+    listIncidents.mockResolvedValue([{ ...shellIncident, status: 'resolved' }]);
+
+    const res = await svc.complianceGate('r1');
+    expect(res.blocked).toBe(false);
   });
 });
 

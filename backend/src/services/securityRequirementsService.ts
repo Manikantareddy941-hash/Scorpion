@@ -86,6 +86,35 @@ function toCorrelatable(doc: unknown): CorrelatableFinding {
   };
 }
 
+// Falco priority → the severity vocabulary the panel/correlation share. Only
+// affects how a violation is surfaced (correlate() never classifies on
+// severity), so an unknown priority degrades to 'low' rather than dropping.
+const FALCO_PRIORITY_TO_SEVERITY: Record<string, string> = {
+  critical: 'critical', emergency: 'critical', alert: 'critical',
+  error: 'high', warning: 'medium', notice: 'low', informational: 'low', info: 'low', debug: 'low',
+};
+
+// A runtime (Falco) incident doc reduced to what correlation reads. Tagged
+// category 'runtime-threat' so it can only ever violate a Logging & Monitoring
+// requirement (see CATEGORY_EVIDENCE). file carries the container image so the
+// gate panel shows which workload tripped.
+function toRuntimeCorrelatable(doc: unknown): CorrelatableFinding {
+  const f = (doc ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+  const rule = str(f.rule);
+  return {
+    id: str(f.$id),
+    tool: 'falco',
+    category: 'runtime-threat',
+    ruleId: rule,
+    title: rule,
+    message: str(f.output),
+    severity: FALCO_PRIORITY_TO_SEVERITY[(str(f.priority) ?? '').toLowerCase()] ?? 'low',
+    status: str(f.status),
+    file: str(f.container_image),
+  };
+}
+
 // Profile shape accepted from the transport layer (projectId is stamped here,
 // never taken from the body).
 type ProfileInput = Omit<ProjectProfile, 'projectId' | 'updatedAt'>;
@@ -104,8 +133,14 @@ async function owns(projectId: string, userId?: string): Promise<boolean> {
 async function computeCorrelation(projectId: string): Promise<CorrelatedRequirement[]> {
   const requirements = await repo.listRequirements(projectId);
   const repoIds = await projectRepoRepository.listRepoIds(projectId);
-  const findings = await planRepository.listVulnerabilitiesForRepos(repoIds);
-  return correlate(requirements, findings.map(toCorrelatable));
+  // Two evidence streams over the same bound repos: scanner findings (Code &
+  // Commit) and live runtime incidents (Monitor & Operate). Both feed the one
+  // correlate() call; runtime incidents can only violate Logging & Monitoring.
+  const [findings, incidents] = await Promise.all([
+    planRepository.listVulnerabilitiesForRepos(repoIds),
+    planRepository.listRuntimeIncidentsForRepos(repoIds),
+  ]);
+  return correlate(requirements, [...findings.map(toCorrelatable), ...incidents.map(toRuntimeCorrelatable)]);
 }
 
 export const securityRequirementsService = {
