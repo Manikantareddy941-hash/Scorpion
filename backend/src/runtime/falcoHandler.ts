@@ -24,6 +24,27 @@ export interface FalcoEvent {
   time: string;
 }
 
+/**
+ * Resolve a repo from an image digest via the build pipeline record that
+ * stamped both (buildService/deployService write {repoId, imageDigest}). This
+ * is the precise digest join for the Monitor->Plan feedback loop; '' when no
+ * build carries the digest or the read fails (caller falls back to the image-
+ * name route). Never throws — a runtime incident must persist regardless.
+ */
+async function resolveRepoIdByDigest(digest: string): Promise<string> {
+  try {
+    const builds = await databases.listDocuments(DB_ID, COLLECTIONS.BUILD_PIPELINES, [
+      Query.equal('imageDigest', digest),
+      Query.limit(1),
+    ]);
+    const repoId = builds.documents[0]?.repoId;
+    return typeof repoId === 'string' ? repoId : '';
+  } catch (err) {
+    logger.warn('[Falco Handler] digest->repo lookup failed (name route retained):', err instanceof Error ? err.message : err);
+    return '';
+  }
+}
+
 export async function handleFalcoEvent(event: FalcoEvent) {
   // --- classification gate (Component 2) ---
   // Fail-secure: any error here means no suppression, no override — the event
@@ -63,7 +84,11 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     // 1. Correlate with existing scan data
     let correlatedScanId = '';
     let ownerUserId = '';
-    
+    // repoId lets the Monitor->Plan feedback loop scope this incident to a
+    // project's bound repos (securityRequirementsService.computeCorrelation).
+    // Resolved by the name route below, then preferred-overridden by digest.
+    let resolvedRepoId = '';
+
     if (containerImage !== 'unknown') {
       correlatedScanId = await withSpan(
         'runtime.correlate',
@@ -74,11 +99,12 @@ export async function handleFalcoEvent(event: FalcoEvent) {
             Query.orderDesc('$createdAt'),
             Query.limit(1)
           ]);
-          
+
           if (latestScans.documents.length > 0) {
             logger.info(`[Falco Handler] Correlated with scan: ${latestScans.documents[0].$id}`);
             // Extract user_id from scan or repository to route the alert later
             const scanDoc = latestScans.documents[0];
+            if (scanDoc.repo_id) resolvedRepoId = scanDoc.repo_id;
             if (scanDoc.user_id) {
                ownerUserId = scanDoc.user_id;
             } else if (scanDoc.repo_id) {
@@ -94,6 +120,16 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       );
     }
 
+    // Digest is the strongest identity (the deploy/build pipeline stamps it and
+    // the admission webhook already trusts it), so it wins over the image-name
+    // match when present. Fail-secure: any lookup error leaves the name-route
+    // repoId untouched and never breaks incident creation.
+    const imageDigest = effectiveEvent.output_fields?.['container.image.digest'];
+    if (imageDigest) {
+      const repoIdByDigest = await resolveRepoIdByDigest(String(imageDigest));
+      if (repoIdByDigest) resolvedRepoId = repoIdByDigest;
+    }
+
     // 2. Persist incident to Appwrite
     const incidentDoc = await databases.createDocument(DB_ID, COLLECTIONS.INCIDENTS, ID.unique(), {
       rule: effectiveEvent.rule,
@@ -104,7 +140,8 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       status: 'open',
       timestamp: effectiveEvent.time || new Date().toISOString(),
       correlated_scan_id: correlatedScanId,
-      ...(ownerUserId ? { user_id: ownerUserId } : {})
+      ...(ownerUserId ? { user_id: ownerUserId } : {}),
+      ...(resolvedRepoId ? { repo_id: resolvedRepoId } : {})
     });
 
     await auditLog({
