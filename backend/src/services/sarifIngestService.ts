@@ -4,6 +4,7 @@ import { normalizeSarif } from '../scanners/sarifNormalizer';
 import { deduplicateFindings } from '../deduplication';
 import { ingestVulnerabilitiesDelta } from './scanService';
 import { securityRequirementsService } from './securityRequirementsService';
+import { canonicalizeRepoUrl } from '../utils/repoUrl';
 import { logger } from './logger';
 
 /**
@@ -33,21 +34,55 @@ const ownerReadPerms = (repo: Models.DefaultDocument): string[] => {
   return perms;
 };
 
+const tenantOwns = (r: Models.DefaultDocument, tenant: string | null): boolean =>
+  tenant === null || String(r.user_id) === tenant || String(r.team_id) === tenant;
+
+/**
+ * The tenant's own repositories — the candidate set for a canonical URL match.
+ * Queried by owner (indexed), never scanned wholesale, so one customer can't
+ * see another's repos. The legacy global key (tenant === null) has no owner to
+ * filter on, so it scans a capped set.
+ * ponytail: per-tenant repo counts are small; the caps below are the ceiling.
+ * If a tenant ever exceeds them, add a stored `urlCanonical` index instead.
+ */
+async function listTenantRepos(tenant: string | null): Promise<Models.DefaultDocument[]> {
+  if (tenant === null) {
+    const all = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.limit(200)]);
+    return all.documents;
+  }
+  const [byUser, byTeam] = await Promise.all([
+    databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', tenant), Query.limit(100)]),
+    databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('team_id', tenant), Query.limit(100)]),
+  ]);
+  return [...byUser.documents, ...byTeam.documents];
+}
+
 /**
  * Resolve the repo by URL, scoped to the presenting tenant. Tenant comes from
  * the authenticated CI token, never the request body — a body-supplied owner
- * would let one customer write findings into another's repo. The legacy global
- * key (tenant === null) matches by URL alone, as it does for image ingest.
+ * would let one customer write findings into another's repo.
+ *
+ * Two-step so a URL-format difference between CI and what was stored (a `.git`
+ * suffix, trailing slash, or case) doesn't silently 404 the whole ingest and
+ * blind the compliance gate for that repo:
+ *   1. exact URL match (indexed, the common case), then
+ *   2. canonical match over the tenant's own repos (handles the variants,
+ *      including repos stored before this normalization existed — no backfill).
  */
 async function resolveRepo(tenant: string | null, repoUrl: string): Promise<Models.DefaultDocument | null> {
-  const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+  const exact = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
     Query.equal('url', repoUrl),
     Query.limit(25),
   ]);
-  const owned = repos.documents.filter(
-    (r) => tenant === null || String(r.user_id) === tenant || String(r.team_id) === tenant,
+  const exactOwned = exact.documents.filter((r) => tenantOwns(r, tenant));
+  if (exactOwned[0]) return exactOwned[0];
+
+  const target = canonicalizeRepoUrl(repoUrl);
+  if (!target) return null;
+  const candidates = await listTenantRepos(tenant);
+  return (
+    candidates.find((r) => tenantOwns(r, tenant) && canonicalizeRepoUrl(String(r.url)) === target) ?? null
   );
-  return owned[0] ?? null;
 }
 
 function severityCounts(issues: { severity?: string }[]): Record<string, number> {
