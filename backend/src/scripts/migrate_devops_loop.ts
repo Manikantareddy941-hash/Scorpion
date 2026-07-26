@@ -2,7 +2,7 @@ import { Client, Databases, Permission, Role } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT || '')
