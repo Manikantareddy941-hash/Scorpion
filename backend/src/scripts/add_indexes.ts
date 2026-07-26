@@ -52,6 +52,11 @@ const INDEXES: IndexSpec[] = [
   { collection: 'audit_logs', key: 'idx_actor_timestamp', type: DatabasesIndexType.Key, attributes: ['actor', 'timestamp'], orders: [OrderBy.Asc, OrderBy.Desc] },
 
   { collection: 'build_pipelines', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repoId'] },
+  // Falco runtime incidents resolve repo_id by image digest through this lookup
+  // (falcoHandler.resolveRepoIdByDigest). Without the index, Query.equal throws,
+  // the fail-secure catch buries it, and the digest route is silently inert —
+  // leaving the Monitor->Plan loop blind. See the E2E seam audit.
+  { collection: 'build_pipelines', key: 'idx_image_digest', type: DatabasesIndexType.Key, attributes: ['imageDigest'] },
   { collection: 'deployments', key: 'idx_repo_id', type: DatabasesIndexType.Key, attributes: ['repoId'] },
   { collection: 'deployments', key: 'idx_build_id', type: DatabasesIndexType.Key, attributes: ['buildId'] },
 

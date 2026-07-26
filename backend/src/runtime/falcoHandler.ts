@@ -87,7 +87,13 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     // repoId lets the Monitor->Plan feedback loop scope this incident to a
     // project's bound repos (securityRequirementsService.computeCorrelation).
     // Resolved by the name route below, then preferred-overridden by digest.
+    // We track which route hit so a silently-inert resolver is observable: the
+    // name route matches SCANS.repoUrl (a git URL) against container.image.
+    // repository (an OCI registry path) — different namespaces, so it rarely
+    // hits; the digest route is the real path. Emitting the outcome means an
+    // unresolved incident (excluded from correlation + MTTR) is never silent.
     let resolvedRepoId = '';
+    let nameRouteHit = false;
 
     if (containerImage !== 'unknown') {
       correlatedScanId = await withSpan(
@@ -104,7 +110,7 @@ export async function handleFalcoEvent(event: FalcoEvent) {
             logger.info(`[Falco Handler] Correlated with scan: ${latestScans.documents[0].$id}`);
             // Extract user_id from scan or repository to route the alert later
             const scanDoc = latestScans.documents[0];
-            if (scanDoc.repo_id) resolvedRepoId = scanDoc.repo_id;
+            if (scanDoc.repo_id) { resolvedRepoId = scanDoc.repo_id; nameRouteHit = true; }
             if (scanDoc.user_id) {
                ownerUserId = scanDoc.user_id;
             } else if (scanDoc.repo_id) {
@@ -125,10 +131,25 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     // match when present. Fail-secure: any lookup error leaves the name-route
     // repoId untouched and never breaks incident creation.
     const imageDigest = effectiveEvent.output_fields?.['container.image.digest'];
+    let digestRouteHit = false;
     if (imageDigest) {
       const repoIdByDigest = await resolveRepoIdByDigest(String(imageDigest));
-      if (repoIdByDigest) resolvedRepoId = repoIdByDigest;
+      if (repoIdByDigest) { resolvedRepoId = repoIdByDigest; digestRouteHit = true; }
     }
+
+    // Resolution telemetry: 'digest' (precise), 'name' (rare — namespace
+    // mismatch), or 'unresolved' (incident won't scope to a project — invisible
+    // to correlation/MTTR). Structured so 'unresolved' rate is queryable in Loki
+    // rather than a silent gap. hasDigest distinguishes "no digest emitted" from
+    // "digest emitted but no matching build".
+    const resolution = digestRouteHit ? 'digest' : nameRouteHit ? 'name' : 'unresolved';
+    logger.info('[Falco Handler] repo resolution outcome', {
+      event: 'falco_repo_resolution',
+      resolution,
+      hasDigest: Boolean(imageDigest),
+      rule: effectiveEvent.rule,
+      image: containerImage,
+    });
 
     // 2. Persist incident to Appwrite
     const incidentDoc = await databases.createDocument(DB_ID, COLLECTIONS.INCIDENTS, ID.unique(), {
