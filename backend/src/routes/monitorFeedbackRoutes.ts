@@ -9,6 +9,33 @@ import { logger } from '../services/logger';
 interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
 const router = Router();
 
+/**
+ * Runtime (Falco) incidents as FindingRecords for the feedback metrics. scanner
+ * is 'falco' so escapeByPhase buckets them under 'operate'; createdAt/resolvedAt
+ * come from the incident's timestamp/resolvedAt so a resolved incident feeds
+ * MTTR. Fail-open: any read error (e.g. a pre-migration collection missing the
+ * repo_id attribute) returns [] so the findings-based metrics keep working.
+ */
+async function listRuntimeFindings(repoIds: string[]): Promise<FindingRecord[]> {
+  try {
+    const res = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [Query.equal('repo_id', repoIds), Query.limit(500)]);
+    return res.documents.map((d) => {
+      const w = d as unknown as Record<string, string | number>;
+      return {
+        severity: String(w.priority ?? 'info').toLowerCase(),
+        scanner: 'falco',
+        status: String(w.status ?? 'open'),
+        createdAt: new Date(String(w.timestamp ?? d.$createdAt)).getTime(),
+        resolvedAt: w.resolvedAt ? new Date(String(w.resolvedAt)).getTime() : undefined,
+        reopenCount: 0,
+      };
+    });
+  } catch (err) {
+    logger.warn('[feedbackRoutes] runtime incidents excluded from metrics', { error: err instanceof Error ? err.message : err });
+    return [];
+  }
+}
+
 router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = req.user?.$id || '';
@@ -28,7 +55,14 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
       };
     });
 
-    res.json({ mttr: mttr(findings), reopenRate: reopenRate(findings), byPhase: escapeByPhase(findings) });
+    // Fold in runtime (Falco) incidents so MTTR and the 'operate' escape phase
+    // actually count runtime threats — scoped by the repo_id #138 stamps.
+    // Fail-open on its own: a pre-migration incidents collection (no repo_id
+    // attr) must never break the findings-based metrics that already work.
+    const runtimeFindings = await listRuntimeFindings(repoIds);
+
+    const all = [...findings, ...runtimeFindings];
+    res.json({ mttr: mttr(all), reopenRate: reopenRate(all), byPhase: escapeByPhase(all) });
   } catch (err) { logger.error('[feedbackRoutes] failed', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
