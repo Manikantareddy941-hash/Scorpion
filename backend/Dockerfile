@@ -23,9 +23,11 @@ WORKDIR /app/backend
 # setup-tools.sh (run via postinstall below) needs these to install
 # trivy/gitleaks/semgrep; musl-based alpine lacks bash and has unreliable
 # semgrep wheels, so this stage uses Debian slim instead.
-# hadolint ignore=DL3008: node:24-slim tracks a moving Debian repo, so exact
-# apt version pins would break the build the moment Debian rotates them. The
-# real dependency surface (scanner binaries) is version-pinned in setup-tools.sh.
+# node:24-slim tracks a moving Debian repo, so exact apt version pins would
+# break the build the moment Debian rotates them; the real dependency surface
+# (scanner binaries) is version-pinned in setup-tools.sh. The ignore directive
+# must sit on the line directly above the instruction with no trailing reason.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl ca-certificates python3 python3-pip tar \
     && rm -rf /var/lib/apt/lists/*

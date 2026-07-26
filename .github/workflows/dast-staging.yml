@@ -13,6 +13,9 @@ name: DAST Staging Scan + Gate
 #   DAST_REPO_ID        Gate repo id to evaluate (defaults to "dast", which is
 #                       the repo_id the DAST routes ingest findings under)
 on:
+  # checkov:skip=CKV_GHA_7: target_url/scanners are deliberate operational overrides
+  # for a manual staging DAST run that produces no build artifact, so the SLSA
+  # "workflow_dispatch inputs must be empty" constraint does not apply here.
   workflow_dispatch:
     inputs:
       target_url:
@@ -30,9 +33,6 @@ permissions:
 jobs:
   dast:
     name: DAST suite + release gate
-    # checkov:skip=CKV_GHA_7: target_url/scanners are deliberate operational
-    # overrides for a manual staging DAST run; this job produces no build
-    # artifact, so the SLSA "inputs must be empty" constraint does not apply.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

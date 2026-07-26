@@ -29,6 +29,11 @@ kind: Deployment
 metadata:
   name: scorpion-backend
   namespace: scorpion
+  annotations:
+    # checkov honours skips for Kubernetes via these annotations, not inline
+    # comments. Format: checkov.io/skipN: <CKV_ID>=<reason>.
+    checkov.io/skip1: CKV_K8S_35=APPWRITE_API_KEY / CI_INGEST_API_KEY are read from process.env by the app; a file-mount migration is tracked separately.
+    checkov.io/skip2: CKV_K8S_43=Image digest is injected by the CD pipeline (kustomize edit set image ...@sha256:...).
   labels:
     app.kubernetes.io/name: scorpion-backend
 spec:
@@ -41,9 +46,6 @@ spec:
       labels:
         app.kubernetes.io/name: scorpion-backend
     spec:
-      # checkov:skip=CKV_K8S_35: APPWRITE_API_KEY / CI_INGEST_API_KEY are read from
-      # process.env by the app (src/lib/appwrite.ts, middleware/ciApiKey.ts); a
-      # file-mount migration is tracked separately, not a same-PR change.
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -55,8 +57,10 @@ spec:
         - name: scorpion-backend
           # kustomize rewrites this via `kustomize edit set image scorpion-backend=...`
           # CD pins a digest (…@sha256:…); the tag here is only a human-readable hint.
-          # checkov:skip=CKV_K8S_43: image digest is injected by the CD pipeline.
           image: scorpion-backend:0.1.0
+          # Always re-pull so a moved tag/digest is never served from a stale
+          # node cache (CKV_K8S_15).
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
