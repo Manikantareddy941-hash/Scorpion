@@ -10,6 +10,7 @@ import express from 'express';
 import request from 'supertest';
 import router from './monitorFeedbackRoutes';
 import { databases } from '../lib/appwrite';
+import { logger } from '../services/logger';
 
 const app = express(); app.use(express.json()); app.use('/api/monitor/feedback', router);
 
@@ -68,4 +69,9 @@ test('fails open: a runtime-incident read error leaves the findings metrics inta
   expect(res.status).toBe(200);
   expect(res.body.mttr).toBe(100); // findings metric unaffected
   expect(res.body.byPhase).toEqual([{ phase: 'build', count: 1 }]);
+  // ...but the degraded read is logged, not silent (audit finding #4).
+  const degraded = (logger.warn as jest.Mock).mock.calls.find(
+    (c) => (c[1] as { event?: string })?.event === 'feedback_read_degraded',
+  );
+  expect(degraded).toBeTruthy();
 });

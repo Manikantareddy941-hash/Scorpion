@@ -637,7 +637,14 @@ export const planRepository = {
         if (list.documents.length < pageSize) break;
       }
       return findings;
-    } catch {
+    } catch (err) {
+      // Fail-open, but never silently: a caught read error must be
+      // distinguishable from a genuinely empty result (which logs nothing), or
+      // a degraded query reads as "no violations" and the gate passes on air.
+      logger.warn('[PlanRepository] findings read degraded — failing open to empty', {
+        event: 'plan_read_degraded', source: 'vulnerabilities', repoCount: repoIds.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return [];
     }
   },
@@ -665,7 +672,13 @@ export const planRepository = {
         if (list.documents.length < pageSize) break;
       }
       return incidents;
-    } catch {
+    } catch (err) {
+      // Same fail-open-but-observable contract as listVulnerabilitiesForRepos:
+      // a degraded runtime read must not masquerade as "no incidents".
+      logger.warn('[PlanRepository] runtime incidents read degraded — failing open to empty', {
+        event: 'plan_read_degraded', source: 'runtime_incidents', repoCount: repoIds.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return [];
     }
   },

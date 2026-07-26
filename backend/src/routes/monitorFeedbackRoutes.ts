@@ -31,7 +31,12 @@ async function listRuntimeFindings(repoIds: string[]): Promise<FindingRecord[]> 
       };
     });
   } catch (err) {
-    logger.warn('[feedbackRoutes] runtime incidents excluded from metrics', { error: err instanceof Error ? err.message : err });
+    // Fail-open but observable: distinguishes a degraded read from a genuinely
+    // empty one, so MTTR is never quietly understated as "no runtime incidents".
+    logger.warn('[feedbackRoutes] runtime incidents read degraded — excluded from metrics', {
+      event: 'feedback_read_degraded', source: 'runtime_incidents', repoCount: repoIds.length,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return [];
   }
 }
