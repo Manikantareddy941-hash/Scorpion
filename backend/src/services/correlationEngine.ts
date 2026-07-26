@@ -12,7 +12,7 @@ import { StoredRequirement } from '../types/securityRequirements.types';
  * manufacture a compliance pass from a scanner that stayed quiet.
  */
 
-export type FindingClass = 'injection' | 'secret' | 'dependency-vuln' | 'iac-misconfig';
+export type FindingClass = 'injection' | 'secret' | 'dependency-vuln' | 'iac-misconfig' | 'runtime-threat';
 export type CorrelationStatus = 'violated' | 'attested' | 'unverified';
 
 /**
@@ -56,6 +56,9 @@ const CATEGORY_EVIDENCE: Record<string, FindingClass[]> = {
   'Secure Coding': ['injection'],
   'Vulnerability Management': ['dependency-vuln', 'iac-misconfig'],
   Cryptography: ['secret'],
+  // Monitor & Operate feedback: a live Falco runtime incident on a bound repo is
+  // evidence the runtime detection/protection control is failing right now.
+  'Logging & Monitoring': ['runtime-threat'],
 };
 
 // SAST injection family — semgrep/bandit carry the raw rule id as `category`,
@@ -75,6 +78,11 @@ export function isActiveFinding(f: CorrelatableFinding): boolean {
 export function classifyFinding(f: CorrelatableFinding): FindingClass | null {
   const cat = (f.category ?? '').toLowerCase();
   const tool = (f.tool ?? '').toLowerCase();
+  // Runtime (Falco) incidents arrive category-tagged 'runtime-threat' by the
+  // service mapper; tool==='falco' is the belt-and-braces fallback. Matched
+  // before the injection keyword scan so a rule name like "shell" can't be
+  // mis-swept into injection.
+  if (cat === 'runtime-threat' || tool === 'falco') return 'runtime-threat';
   if (cat === 'secret-exposure' || tool === 'gitleaks') return 'secret';
   if (cat === 'dependency-vulnerability') return 'dependency-vuln';
   if (cat === 'iac-misconfig' || cat === 'dockerfile-lint') return 'iac-misconfig';

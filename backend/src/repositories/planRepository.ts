@@ -642,6 +642,34 @@ export const planRepository = {
     }
   },
 
+  /**
+   * Runtime (Falco) incidents for an explicit set of repositories. The Monitor
+   * & Operate feedback leg: correlation reads these alongside scanner findings
+   * so a live runtime threat can violate a Logging & Monitoring requirement.
+   * Scoped by repo_id (stamped at ingest by falcoHandler). Empty input → [] and
+   * any read error → [] (fail-open on the read: a runtime signal never blocks
+   * the correlation call itself, matching listVulnerabilitiesForRepos).
+   */
+  async listRuntimeIncidentsForRepos(repoIds: string[]): Promise<unknown[]> {
+    if (repoIds.length === 0) return [];
+    try {
+      const pageSize = 100;
+      const incidents: unknown[] = [];
+      for (let page = 0; page < 20; page++) {
+        const list = await databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS || 'incidents', [
+          Query.equal('repo_id', repoIds),
+          Query.limit(pageSize),
+          Query.offset(page * pageSize),
+        ]);
+        incidents.push(...list.documents);
+        if (list.documents.length < pageSize) break;
+      }
+      return incidents;
+    } catch {
+      return [];
+    }
+  },
+
   async listThreats(projectId: string): Promise<Threat[]> {
     return handleQuery(
       async () => {

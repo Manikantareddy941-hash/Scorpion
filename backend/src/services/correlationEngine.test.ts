@@ -55,6 +55,10 @@ describe('classifyFinding', () => {
     expect(classifyFinding({ tool: 'trivy', category: 'license-compliance' })).toBeNull();
     expect(classifyFinding({ tool: 'semgrep', category: 'style.unused-import', ruleId: 'unused-import', title: 'unused', message: 'unused import' })).toBeNull();
   });
+  it('classes a Falco runtime incident as runtime-threat (by tool or category)', () => {
+    expect(classifyFinding({ tool: 'falco', title: 'Terminal shell in container' })).toBe('runtime-threat');
+    expect(classifyFinding({ category: 'runtime-threat', title: 'Write below binary dir' })).toBe('runtime-threat');
+  });
 });
 
 describe('isActiveFinding', () => {
@@ -116,6 +120,31 @@ describe('correlate', () => {
 
   it('does not count a resolved finding as a violation (scanner silence is not proof, but a fixed finding is not a live one)', () => {
     const [c] = correlate([req({ category: 'Secure Coding' })], [finding({ status: 'resolved' })]);
+    expect(c.status).toBe('unverified');
+  });
+
+  it('flags a Logging & Monitoring requirement as violated when a live Falco runtime incident is present', () => {
+    const [c] = correlate(
+      [req({ category: 'Logging & Monitoring' })],
+      [finding({ tool: 'falco', category: 'runtime-threat', ruleId: 'Terminal shell in container', title: 'Terminal shell in container', message: 'shell spawned', severity: 'critical' })],
+    );
+    expect(c.status).toBe('violated');
+    expect(c.matchedFindings).toHaveLength(1);
+  });
+
+  it('does not let a resolved Falco incident violate a Logging & Monitoring requirement', () => {
+    const [c] = correlate(
+      [req({ category: 'Logging & Monitoring' })],
+      [finding({ tool: 'falco', category: 'runtime-threat', title: 'shell', status: 'resolved' })],
+    );
+    expect(c.status).toBe('unverified');
+  });
+
+  it('does not let a runtime incident violate a code-level (Secure Coding) requirement', () => {
+    const [c] = correlate(
+      [req({ category: 'Secure Coding' })],
+      [finding({ tool: 'falco', category: 'runtime-threat', title: 'shell', message: 'shell', ruleId: 'shell' })],
+    );
     expect(c.status).toBe('unverified');
   });
 
