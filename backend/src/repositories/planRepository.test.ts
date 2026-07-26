@@ -44,9 +44,11 @@ jest.mock('fs/promises', () => ({
 
 import { planRepository } from './planRepository';
 import { databases } from '../lib/appwrite';
+import { logger } from '../services/logger';
 import { Issue, PlanSchema } from '../types/plan.types';
 
 const db = databases as jest.Mocked<typeof databases>;
+const warn = logger.warn as jest.Mock;
 
 const seedDb = (overrides: Partial<PlanSchema> = {}) => {
   const base: PlanSchema = {
@@ -319,5 +321,31 @@ describe('mock db bootstrap', () => {
     const projects = await planRepository.listProjects(undefined);
     expect(Array.isArray(projects)).toBe(true);
     expect(mockFileContent).not.toBeNull(); // default store was persisted
+  });
+});
+
+describe('fail-open reads are observable, not silent (audit finding #4)', () => {
+  const degraded = (source: string) =>
+    warn.mock.calls.find(
+      (c) => (c[1] as { event?: string; source?: string })?.event === 'plan_read_degraded'
+        && (c[1] as { source?: string })?.source === source,
+    );
+
+  it('listVulnerabilitiesForRepos logs plan_read_degraded on a read error and still returns []', async () => {
+    db.listDocuments.mockRejectedValueOnce(new Error('appwrite down'));
+    expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual([]);
+    expect(degraded('vulnerabilities')).toBeTruthy();
+  });
+
+  it('does NOT log degraded for a genuinely empty result (secure empty is distinguishable)', async () => {
+    db.listDocuments.mockResolvedValueOnce({ documents: [] } as never);
+    expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual([]);
+    expect(degraded('vulnerabilities')).toBeFalsy();
+  });
+
+  it('listRuntimeIncidentsForRepos logs plan_read_degraded(runtime_incidents) on a read error', async () => {
+    db.listDocuments.mockRejectedValueOnce(new Error('appwrite down'));
+    expect(await planRepository.listRuntimeIncidentsForRepos(['r1'])).toEqual([]);
+    expect(degraded('runtime_incidents')).toBeTruthy();
   });
 });
