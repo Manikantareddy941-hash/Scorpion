@@ -2,9 +2,10 @@ jest.mock('../middleware/auth', () => ({ verifyUser: (req: { user?: { $id: strin
 jest.mock('../services/tenancyService', () => ({ resolveOwnershipScope: jest.fn().mockResolvedValue({ field: 'user_id', value: 'u1' }) }));
 jest.mock('../lib/appwrite', () => ({
   databases: { listDocuments: jest.fn() }, DB_ID: 'db',
-  COLLECTIONS: { REPOSITORIES: 'repositories', FINDINGS: 'vulnerabilities' },
+  COLLECTIONS: { REPOSITORIES: 'repositories', FINDINGS: 'vulnerabilities', INCIDENTS: 'incidents' },
   Query: { equal: () => 'q', limit: () => 'l', orderDesc: () => 'o', greaterThanEqual: () => 'g' },
 }));
+jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 import express from 'express';
 import request from 'supertest';
 import router from './monitorFeedbackRoutes';
@@ -17,10 +18,38 @@ test('composes MTTR, reopen rate, and escape-by-phase', async () => {
     .mockResolvedValueOnce({ documents: [{ $id: 'r1' }] })            // repos
     .mockResolvedValueOnce({ documents: [                              // findings
       { severity: 'high', scanner: 'semgrep', status: 'resolved', $createdAt: '1970-01-01T00:00:00.000Z', resolvedAt: '1970-01-01T00:00:00.100Z', reopenCount: 0 },
-    ], total: 1 });
+    ], total: 1 })
+    .mockResolvedValueOnce({ documents: [] });                        // incidents
   const res = await request(app).get('/api/monitor/feedback');
   expect(res.status).toBe(200);
   expect(res.body).toHaveProperty('mttr');
   expect(res.body).toHaveProperty('reopenRate');
   expect(res.body).toHaveProperty('byPhase');
+});
+
+test('folds resolved runtime (Falco) incidents into MTTR and the operate escape phase', async () => {
+  (databases.listDocuments as jest.Mock)
+    .mockResolvedValueOnce({ documents: [{ $id: 'r1' }] })            // repos
+    .mockResolvedValueOnce({ documents: [], total: 0 })              // findings: none
+    .mockResolvedValueOnce({ documents: [                             // incidents
+      { $id: 'inc1', priority: 'Critical', scanner: undefined, status: 'resolved', repo_id: 'r1', timestamp: '1970-01-01T00:00:00.000Z', resolvedAt: '1970-01-01T00:10:00.000Z' },
+    ] });
+  const res = await request(app).get('/api/monitor/feedback');
+  expect(res.status).toBe(200);
+  // 10 minutes in ms — proves the incident's timestamp/resolvedAt drove MTTR.
+  expect(res.body.mttr).toBe(600_000);
+  expect(res.body.byPhase).toEqual([{ phase: 'operate', count: 1 }]);
+});
+
+test('fails open: a runtime-incident read error leaves the findings metrics intact', async () => {
+  (databases.listDocuments as jest.Mock)
+    .mockResolvedValueOnce({ documents: [{ $id: 'r1' }] })            // repos
+    .mockResolvedValueOnce({ documents: [                              // findings
+      { severity: 'high', scanner: 'semgrep', status: 'resolved', $createdAt: '1970-01-01T00:00:00.000Z', resolvedAt: '1970-01-01T00:00:00.100Z', reopenCount: 0 },
+    ], total: 1 })
+    .mockRejectedValueOnce(new Error('incidents.repo_id attribute missing')); // pre-migration
+  const res = await request(app).get('/api/monitor/feedback');
+  expect(res.status).toBe(200);
+  expect(res.body.mttr).toBe(100); // findings metric unaffected
+  expect(res.body.byPhase).toEqual([{ phase: 'build', count: 1 }]);
 });
