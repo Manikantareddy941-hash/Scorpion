@@ -293,7 +293,7 @@ describe('unguarded pass-throughs', () => {
   it('listProjects, createProject and listVulnerabilities delegate directly', async () => {
     repo.listProjects.mockResolvedValue([] as never);
     repo.createProject.mockResolvedValue({ $id: 'p1' } as never);
-    repo.listVulnerabilitiesForUser.mockResolvedValue([]);
+    repo.listVulnerabilitiesForUser.mockResolvedValue({ items: [], degraded: false });
 
     await planService.listProjects(OWNER);
     await planService.createProject({ name: 'N' }, OWNER);

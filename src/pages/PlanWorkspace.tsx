@@ -140,6 +140,9 @@ export default function PlanWorkspace() {
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([]);
   const [sprintSnapshots, setSprintSnapshots] = useState<SprintSnapshot[]>([]);
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
+  // True when the findings read failed, so an empty list means "unknown"
+  // rather than "none outstanding".
+  const [vulnerabilitiesDegraded, setVulnerabilitiesDegraded] = useState(false);
   const [threats, setThreats] = useState<Threat[]>([]);
 
   // UI States
@@ -220,9 +223,16 @@ export default function PlanWorkspace() {
       }
 
       // Load Vulnerabilities for linking
+      // { items, degraded }: an empty list from a failed read must not render
+      // as "all vulnerabilities are linked" — that asserts everything is
+      // handled at the one moment we could not check.
       const resVulns = await fetch('/api/plan/vulnerabilities', { headers });
       if (resVulns.ok) {
-        setVulnerabilities(await resVulns.json());
+        const payload = await resVulns.json();
+        setVulnerabilities(payload.items ?? []);
+        setVulnerabilitiesDegraded(Boolean(payload.degraded));
+      } else {
+        setVulnerabilitiesDegraded(true);
       }
     } catch (err) {
       console.error('Fetch initial plan data failed:', err);
@@ -1364,9 +1374,15 @@ export default function PlanWorkspace() {
                   ))}
 
                   {unlinkedVulnerabilities.length === 0 && (
-                    <div className="text-center py-6 text-[9px] uppercase italic text-[var(--text-secondary)] opacity-50">
-                      All scanned vulnerabilities are currently linked.
-                    </div>
+                    vulnerabilitiesDegraded ? (
+                      <div className="text-center py-6 text-[9px] uppercase italic text-[var(--color-warning,#d97706)]">
+                        Couldn&apos;t load scanned vulnerabilities — this list may be incomplete.
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-[9px] uppercase italic text-[var(--text-secondary)] opacity-50">
+                        All scanned vulnerabilities are currently linked.
+                      </div>
+                    )
                   )}
                 </div>
               </div>

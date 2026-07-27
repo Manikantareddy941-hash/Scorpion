@@ -601,11 +601,20 @@ export const planRepository = {
     );
   },
 
-  async listVulnerabilitiesForUser(userId: string | undefined): Promise<unknown[]> {
+  /**
+   * Findings across everything the user owns, for the Plan workspace's
+   * vulnerability→issue linking picker.
+   *
+   * Returns `degraded` for the same reason as listVulnerabilitiesForRepos: a
+   * read error yields an empty list, and an empty list renders as "all scanned
+   * vulnerabilities are currently linked" — a claim that everything is handled,
+   * made at the moment we could not check.
+   */
+  async listVulnerabilitiesForUser(userId: string | undefined): Promise<EvidenceRead> {
     try {
       const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId || '')]);
       const repoIds = repos.documents.map(r => r.$id);
-      if (repoIds.length === 0) return [];
+      if (repoIds.length === 0) return { items: [], degraded: false };
 
       const pageSize = 100;
       const findings: unknown[] = [];
@@ -621,9 +630,15 @@ export const planRepository = {
         findings.push(...list.documents);
         if (list.documents.length < pageSize) break;
       }
-      return findings;
-    } catch {
-      return [];
+      return { items: findings, degraded: false };
+    } catch (err) {
+      // Was a bare `catch { return [] }` — no log, no signal. The workspace
+      // then told the user every vulnerability was already linked.
+      logger.warn('[PlanRepository] user findings read degraded — returning empty and flagging', {
+        event: 'plan_read_degraded', source: 'vulnerabilities_for_user',
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { items: [], degraded: true };
     }
   },
 
