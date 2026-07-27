@@ -186,18 +186,21 @@ export async function runPipeline(runId: string) {
       startedAt: new Date().toISOString(),
     });
 
+    // A missing repository fails the run rather than conjuring a placeholder.
+    // Pipeline runs are authorized through their repository (canAccessRun ->
+    // canAccessResource), and nothing at execution time knows who owns this
+    // run — pipeline_runs carries no owner field. The previous fallback
+    // stamped user_id:'system', which belongs to no tenant, so the repo and
+    // every result hanging off it were unreachable by everyone including the
+    // user who triggered the run. Failing loudly beats producing dark data.
+    // The outer catch marks the run failed and notifies the stage.
     let repoDoc;
     try {
       repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, runDoc.repoId);
-    } catch (e) {
-      // If the repository document does not exist, create a minimal entry
-      repoDoc = await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, runDoc.repoId, {
-  name: runDoc.repoName || runDoc.repoId,
-  url: runDoc.cloneUrl || '',
-
-  user_id: 'system',
-  created_at: new Date().toISOString(),
-});
+    } catch {
+      throw new Error(
+        `Repository ${runDoc.repoId} no longer exists; cannot run pipeline ${runId} without an owning repository.`
+      );
     }
     const repoUrl = repoDoc.url;
 
@@ -443,20 +446,30 @@ export async function triggerPipelineRun(
   commitMessage: string = 'Triggered execution',
   author: string = 'unknown',
   repoName?: string,
-  cloneUrl?: string
+  cloneUrl?: string,
+  /**
+   * Owner to stamp if the repository has to be created. Required for that
+   * path: a repo with no real owner fails canAccessResource for everyone, so
+   * the run's own results become unreachable.
+   */
+  ownerUserId?: string
 ): Promise<string> {
   let repoDoc;
-try {
-  repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
-} catch {
-  repoDoc = await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {
-    name: repoName || repoId,
-    url: cloneUrl || '',
-
-    user_id: 'system',
-    created_at: new Date().toISOString(),
-});
-}
+  try {
+    repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId);
+  } catch {
+    if (!ownerUserId) {
+      throw new Error(
+        `Cannot create repository ${repoId}: no owner supplied. Refusing to create an unowned repository.`
+      );
+    }
+    repoDoc = await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {
+      name: repoName || repoId,
+      url: cloneUrl || '',
+      user_id: ownerUserId,
+      created_at: new Date().toISOString(),
+    });
+  }
   
   // 1. Resolve or create pipeline config
   let pipelineId = '';

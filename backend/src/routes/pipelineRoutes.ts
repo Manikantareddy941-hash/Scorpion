@@ -165,10 +165,17 @@ router.post('/trigger', verifyUser, triggerLimiter, async (req: AuthenticatedReq
         return res.status(403).json({ error: 'You do not have access to this repository' });
       }
     } catch {
+      // No `|| 'system'` fallback: a repo owned by 'system' belongs to no
+      // tenant, so canAccessResource denies everyone — including this caller,
+      // who would then be unable to read the run they just started. verifyUser
+      // guarantees a session, so an absent id here is a real fault.
+      if (!userId) {
+        return res.status(401).json({ error: 'Authentication required to create a repository' });
+      }
       await databases.createDocument(DB_ID, COLLECTIONS.REPOSITORIES, repoId, {
         name: req.body.repoName || repoId,
         url: req.body.cloneUrl || '',
-        user_id: userId || 'system',
+        user_id: userId,
         created_at: new Date().toISOString(),
       });
     }
@@ -178,7 +185,13 @@ router.post('/trigger', verifyUser, triggerLimiter, async (req: AuthenticatedReq
       branch,
       'MANUAL',
       'Manually triggered from Scorpion Console',
-      userEmail
+      userEmail,
+      req.body.repoName,
+      req.body.cloneUrl,
+      // Owner for the repo-create fallback inside triggerPipelineRun. The
+      // block above normally creates it first; this covers the race where the
+      // repository disappears in between.
+      userId
     );
 
     res.status(202).json({

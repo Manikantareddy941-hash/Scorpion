@@ -322,17 +322,26 @@ describe('runPipeline stage machine', () => {
         expect(lastRunUpdate()).toMatchObject({ status: 'success' });
     });
 
-    it('creates a minimal repo document when none exists', async () => {
+    // Previously this asserted that a missing repo was replaced by a minimal
+    // document stamped user_id:'system' — i.e. it pinned the defect as the
+    // contract. Runs are authorized through their repository
+    // (canAccessRun -> canAccessResource), so a 'system'-owned repo denied
+    // everyone, including whoever triggered the run; the run executed and its
+    // results were unreachable. runPipeline has no owner context to use
+    // (pipeline_runs carries no owner field), so the correct behaviour is to
+    // fail the run rather than fabricate one.
+    it('fails the run when the repository is gone, without fabricating one', async () => {
         db.getDocument.mockImplementation(async (_d: string, col: string) => {
             if (col === 'pipeline_runs') return stageRunDoc({ cloneUrl: 'https://github.com/a/b.git' });
             throw new Error('repo missing');
         });
-        db.createDocument.mockResolvedValue({ url: 'https://github.com/a/b.git', name: 'b' });
 
         await runPipeline(RUN_ID);
 
-        expect(db.createDocument).toHaveBeenCalledWith(
-            'test-db', 'repositories', 'repo-1', expect.objectContaining({ user_id: 'system' })
+        const repoCreates = db.createDocument.mock.calls.filter((c: unknown[]) => c[1] === 'repositories');
+        expect(repoCreates).toHaveLength(0);
+        expect(db.updateDocument).toHaveBeenCalledWith(
+            'test-db', 'pipeline_runs', RUN_ID, expect.objectContaining({ status: 'failed' })
         );
     });
 });
