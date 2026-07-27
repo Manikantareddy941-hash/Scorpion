@@ -81,3 +81,20 @@ test('an unsupported ownership field is still rejected before any query', async 
   ).rejects.toThrow(/Unsupported ownership field/);
   expect(query).not.toHaveBeenCalled();
 });
+
+test('team_id is a supported ownership field', async () => {
+  // repoService.syncRepo passes 'team_id' whenever a team is active, so
+  // rejecting it here breaks repo sync outright for every team-scoped user.
+  query.mockResolvedValueOnce({ rowCount: 1, rows: [row('r1', CANONICAL)] });
+
+  const res = await repoPgRepository.findByOwnershipAndUrl('team_id', 'team-9', CANONICAL);
+
+  expect(res.total).toBe(1);
+  expect(query.mock.calls[0][1]).toEqual(['team_id', 'team-9', CANONICAL]);
+});
+
+test('listByScope also accepts team_id', async () => {
+  query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+  await expect(repoPgRepository.listByScope('team_id', 'team-9')).resolves.toBeDefined();
+});
