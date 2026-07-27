@@ -8,7 +8,16 @@ const TENANT_SCAN_LIMIT = 500;
 // The dynamic ownership field arrives from route code (e.g. 'user_id'). It is
 // used as a JSONB key parameter, never interpolated into SQL — safe by
 // parameterization, but restrict to known fields anyway (defense in depth).
-const OWNERSHIP_FIELDS = new Set(['user_id', 'org_id']);
+//
+// 'team_id' belongs here: tenancyService resolves ownership to exactly
+// `user_id | team_id` and stamps both onto the repo document, and
+// repoService.syncRepo passes 'team_id' whenever a team is active. Its absence
+// made every team-scoped repo sync throw on the Postgres path.
+//
+// 'org_id' is retained but appears nowhere else in the backend — no migration
+// declares it, nothing writes it, nothing queries it. Kept rather than removed
+// pending confirmation that it is genuinely dead.
+const OWNERSHIP_FIELDS = new Set(['user_id', 'team_id', 'org_id']);
 
 function assertOwnershipField(field: string): void {
   if (!OWNERSHIP_FIELDS.has(field)) {
