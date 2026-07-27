@@ -255,7 +255,7 @@ describe('comments and automation rules', () => {
 describe('listVulnerabilitiesForUser', () => {
   it('returns empty when the user has no repos, without querying findings', async () => {
     db.listDocuments.mockResolvedValueOnce({ documents: [] } as never);
-    expect(await planRepository.listVulnerabilitiesForUser('u1')).toEqual([]);
+    expect(await planRepository.listVulnerabilitiesForUser('u1')).toEqual({ items: [], degraded: false });
     expect(db.listDocuments).toHaveBeenCalledTimes(1);
   });
 
@@ -266,12 +266,16 @@ describe('listVulnerabilitiesForUser', () => {
       .mockResolvedValueOnce({ documents: Array.from({ length: 40 }, (_, i) => ({ $id: `f${100 + i}` })) } as never);
 
     const findings = await planRepository.listVulnerabilitiesForUser('u1');
-    expect(findings).toHaveLength(140);
+    expect(findings.items).toHaveLength(140);
+    expect(findings.degraded).toBe(false);
   });
 
-  it('swallows Appwrite failures and returns empty', async () => {
+  // Renamed from 'swallows Appwrite failures and returns empty': swallowing was
+  // the defect. The empty list stays (callers must not crash) but now arrives
+  // labelled, so the UI can say 'couldn't load' instead of 'all linked'.
+  it('reports a degraded read rather than an indistinguishable empty list', async () => {
     db.listDocuments.mockRejectedValue(new Error('down'));
-    expect(await planRepository.listVulnerabilitiesForUser('u1')).toEqual([]);
+    expect(await planRepository.listVulnerabilitiesForUser('u1')).toEqual({ items: [], degraded: true });
   });
 });
 
@@ -342,6 +346,14 @@ describe('fail-open reads are observable, not silent (audit finding #4)', () => 
     // A genuinely empty result is NOT degraded — that distinction is the point.
     expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual({ items: [], degraded: false });
     expect(degraded('vulnerabilities')).toBeFalsy();
+  });
+
+  it('listVulnerabilitiesForUser reports degraded instead of an indistinguishable empty list', async () => {
+    // A bare catch{return []} here rendered as 'all scanned vulnerabilities are
+    // currently linked' — everything is handled, asserted when we could not look.
+    db.listDocuments.mockRejectedValueOnce(new Error('appwrite down'));
+    expect(await planRepository.listVulnerabilitiesForUser('u1')).toEqual({ items: [], degraded: true });
+    expect(degraded('vulnerabilities_for_user')).toBeTruthy();
   });
 
   it('listRuntimeIncidentsForRepos reports degraded(runtime_incidents) on a read error', async () => {

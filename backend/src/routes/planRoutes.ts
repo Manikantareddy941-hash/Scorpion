@@ -156,6 +156,9 @@ router.post('/issues/:issueId/worklogs', async (req: AuthenticatedRequest, res: 
 
 /* VULNERABILITIES */
 
+// Returns { items, degraded }. `degraded` lets the client distinguish "no
+// findings" from "could not read them" — rendering the latter as the former
+// tells the user everything is handled at the moment we could not check.
 router.get('/vulnerabilities', async (req: AuthenticatedRequest, res: Response) => {
   res.json(await planService.listVulnerabilities(req.user?.$id));
 });
