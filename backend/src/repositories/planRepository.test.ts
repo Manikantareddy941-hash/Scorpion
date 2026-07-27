@@ -331,21 +331,22 @@ describe('fail-open reads are observable, not silent (audit finding #4)', () => 
         && (c[1] as { source?: string })?.source === source,
     );
 
-  it('listVulnerabilitiesForRepos logs plan_read_degraded on a read error and still returns []', async () => {
+  it('listVulnerabilitiesForRepos reports degraded on a read error, still returning no items', async () => {
     db.listDocuments.mockRejectedValueOnce(new Error('appwrite down'));
-    expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual([]);
+    expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual({ items: [], degraded: true });
     expect(degraded('vulnerabilities')).toBeTruthy();
   });
 
   it('does NOT log degraded for a genuinely empty result (secure empty is distinguishable)', async () => {
     db.listDocuments.mockResolvedValueOnce({ documents: [] } as never);
-    expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual([]);
+    // A genuinely empty result is NOT degraded — that distinction is the point.
+    expect(await planRepository.listVulnerabilitiesForRepos(['r1'])).toEqual({ items: [], degraded: false });
     expect(degraded('vulnerabilities')).toBeFalsy();
   });
 
-  it('listRuntimeIncidentsForRepos logs plan_read_degraded(runtime_incidents) on a read error', async () => {
+  it('listRuntimeIncidentsForRepos reports degraded(runtime_incidents) on a read error', async () => {
     db.listDocuments.mockRejectedValueOnce(new Error('appwrite down'));
-    expect(await planRepository.listRuntimeIncidentsForRepos(['r1'])).toEqual([]);
+    expect(await planRepository.listRuntimeIncidentsForRepos(['r1'])).toEqual({ items: [], degraded: true });
     expect(degraded('runtime_incidents')).toBeTruthy();
   });
 });

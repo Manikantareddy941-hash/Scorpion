@@ -52,9 +52,14 @@ router.post('/compliance', verifyUser, validateBody(complianceBodySchema), async
       violations: result.violations, createdAt: new Date().toISOString(),
     }).catch((err) => logger.warn('[Gate] failed to record gate run', err instanceof Error ? err.message : err));
     if (result.blocked) {
+      // A degraded block is a different fact from a violation, and saying so
+      // saves an operator hunting for violations that do not exist.
       return res.status(403).json({
         allowed: false,
-        error: 'Compliance Gate BLOCKED: a required security control is violated by live findings',
+        error: result.degraded
+          ? 'Compliance Gate BLOCKED: the security evidence could not be read, so compliance could not be evaluated'
+          : 'Compliance Gate BLOCKED: a required security control is violated by live findings',
+        degraded: result.degraded,
         violations: result.violations,
       });
     }

@@ -234,7 +234,12 @@ export async function triggerDeploy(
     // emergency hotfix — always tamper-audited, never a silent bypass.
     const compliance = await securityRequirementsService.complianceGate(repoId);
     if (compliance.blocked) {
-      const codes = compliance.violations.map(v => v.code).join(', ');
+      // `degraded` means the evidence could not be read at all, so the empty
+      // violation list is an unknown rather than a pass. Name it explicitly:
+      // "0 controls violated" as a block reason reads like a bug.
+      const codes = compliance.degraded
+        ? 'evidence unavailable — compliance could not be evaluated'
+        : compliance.violations.map(v => v.code).join(', ');
       const isHardBlock = environment === 'production' && !breakGlass;
       // Ledger the deploy-gate event so it shows in the Pipeline Gates panel
       // alongside CI runs. A break-glass override is the highest-stakes event to
