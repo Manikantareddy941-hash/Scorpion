@@ -1,4 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
+import { repoRepository } from '../repositories/repoRepository';
 import { enqueueScan } from '../queues/scanQueue';
 import { logger } from './logger';
 
@@ -102,11 +103,12 @@ export const importRepoToProject = async (
             return { error: 'Project not found or access denied' };
         }
 
-        // check if repo exists
-        const existingRepos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-            Query.equal('user_id', userId),
-            Query.equal('url', url)
-        ]);
+        // Check if the repo exists, matching on canonical identity rather than
+        // exact string. This used to be an inline Query.equal('url', url), so
+        // importing an already-tracked repo under a different spelling
+        // (.git suffix, trailing slash, casing, SSH remote) created a second
+        // row for the same repository and split the project's findings.
+        const existingRepos = await repoRepository.findByOwnershipAndUrl('user_id', userId, url);
 
         let repo;
         if (existingRepos.total > 0) {

@@ -1,5 +1,6 @@
 import { Models } from 'node-appwrite';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
+import { repoRepository } from './repoRepository';
 
 export const webhookRepository = {
   async findReposByUrl(url: string) {
@@ -27,12 +28,17 @@ export const webhookRepository = {
     return users.updatePrefs(userId, { ...prefs, github_installation_id: installationId });
   },
 
+  /**
+   * Delegates to the canonical lookup rather than matching the URL exactly.
+   * The GitHub App install path calls this before creating a repo, so an
+   * exact-match miss on a spelling variant (.git suffix, casing, SSH remote)
+   * registered a second row for a repository already tracked.
+   *
+   * Fixed on the method rather than at its call site so any future caller
+   * inherits the canonical behaviour instead of reintroducing the bug.
+   */
   async findRepoByUserAndUrl(userId: string, url: string) {
-    return databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
-      Query.equal('user_id', userId),
-      Query.equal('url', url),
-      Query.limit(1)
-    ]);
+    return repoRepository.findByOwnershipAndUrl('user_id', userId, url);
   },
 
   async createRepo(data: Record<string, unknown>) {
