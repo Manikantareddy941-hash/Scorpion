@@ -4,7 +4,7 @@ jest.mock('../repositories/planRepository', () => ({
     listVulnerabilitiesForRepos: jest.fn(),
     // Defaulted to [] so existing correlation tests (which don't set it) don't
     // crash on the new second evidence stream in computeCorrelation.
-    listRuntimeIncidentsForRepos: jest.fn().mockResolvedValue([]),
+    listRuntimeIncidentsForRepos: jest.fn().mockResolvedValue({ items: [], degraded: false }),
   },
 }));
 jest.mock('../repositories/projectRepoRepository', () => ({
@@ -122,9 +122,9 @@ describe('securityRequirementsService.getCorrelation', () => {
       { code: 'REQ-PCI-6.5.1-SQLI', category: 'Secure Coding', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
     ]);
     listRepoIds.mockResolvedValue(['r1', 'r2']);
-    listVulns.mockResolvedValue([
+    listVulns.mockResolvedValue({ degraded: false, items: [
       { tool: 'semgrep', category: 'py.sql-injection', ruleId: 'py.sql-injection', message: 'SQL injection', status: 'open' },
-    ]);
+    ] });
 
     const res = await svc.getCorrelation('p1', 'user-1');
 
@@ -144,9 +144,9 @@ describe('securityRequirementsService.fanOutCorrelation (SARIF ingest fan-out)',
     mockRepo.listRequirements.mockResolvedValue([
       { code: 'REQ', category: 'Secure Coding', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
     ]);
-    listVulns.mockResolvedValue([
+    listVulns.mockResolvedValue({ degraded: false, items: [
       { tool: 'semgrep', category: 'sql-injection', ruleId: 'sql-injection', message: 'SQL injection', status: 'open' },
-    ]);
+    ] });
 
     const res = await svc.fanOutCorrelation('r1');
 
@@ -193,7 +193,7 @@ describe('securityRequirementsService.complianceGate (Build & Test gate)', () =>
     mockRepo.listRequirements.mockResolvedValue([
       { code: 'REQ-PCI-6.5.1-SQLI', title: 'Prevent injection', category: 'Secure Coding', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'], jiraKey: 'SEC-42' },
     ]);
-    listVulns.mockResolvedValue([violatingFinding]);
+    listVulns.mockResolvedValue({ degraded: false, items: [violatingFinding] });
 
     const res = await svc.complianceGate('r1');
 
@@ -211,7 +211,7 @@ describe('securityRequirementsService.complianceGate (Build & Test gate)', () =>
     mockRepo.listRequirements.mockResolvedValue([
       { code: 'REQ-REC', title: 'nice to have', category: 'Secure Coding', status: 'recommended', severity: 'medium', lifecycleStatus: 'open', frameworks: ['SOC 2'] },
     ]);
-    listVulns.mockResolvedValue([violatingFinding]);
+    listVulns.mockResolvedValue({ degraded: false, items: [violatingFinding] });
 
     const res = await svc.complianceGate('r1');
     expect(res.blocked).toBe(false);
@@ -224,7 +224,7 @@ describe('securityRequirementsService.complianceGate (Build & Test gate)', () =>
     mockRepo.listRequirements.mockResolvedValue([
       { code: 'REQ', title: 't', category: 'Secure Coding', status: 'required', severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'] },
     ]);
-    listVulns.mockResolvedValue([violatingFinding]);
+    listVulns.mockResolvedValue({ degraded: false, items: [violatingFinding] });
 
     const res = await svc.complianceGate('r1');
     expect(res.violations.map((v) => v.projectId)).toEqual(['pA', 'pB']);
@@ -232,7 +232,80 @@ describe('securityRequirementsService.complianceGate (Build & Test gate)', () =>
 
   it('passes clean when no project is bound to the repo', async () => {
     listProjectsForRepo.mockResolvedValue([]);
-    expect(await svc.complianceGate('orphan')).toEqual({ blocked: false, violations: [] });
+    expect(await svc.complianceGate('orphan')).toEqual({ blocked: false, violations: [], degraded: false });
+  });
+
+  // A gate that cannot read its evidence must not report "no violations".
+  // listVulnerabilitiesForRepos fails open to an empty list, so a degraded read
+  // previously produced zero violations -> blocked:false, and the deploy
+  // hard-block waved the release through on a database hiccup.
+  describe('degraded evidence', () => {
+    const requiredReq = {
+      code: 'REQ', title: 't', category: 'Secure Coding', status: 'required',
+      severity: 'high', lifecycleStatus: 'open', frameworks: ['PCI DSS'],
+    };
+
+    // clearAllMocks() clears call records but NOT implementations set with
+    // mockResolvedValue, so a `degraded: true` from one test leaks into the
+    // next and silently flips its verdict. Re-establish healthy reads here and
+    // let each test opt into degradation explicitly.
+    beforeEach(() => {
+      listVulns.mockResolvedValue({ items: [], degraded: false });
+      listIncidents.mockResolvedValue({ items: [], degraded: false });
+    });
+
+    it('blocks when the findings read is degraded, even with zero violations', async () => {
+      listProjectsForRepo.mockResolvedValue(['pA']);
+      listRepoIds.mockResolvedValue(['r1']);
+      mockRepo.listRequirements.mockResolvedValue([requiredReq]);
+      listVulns.mockResolvedValue({ items: [], degraded: true });
+
+      const res = await svc.complianceGate('r1');
+
+      expect(res.blocked).toBe(true);
+      expect(res.degraded).toBe(true);
+      // Distinguishable from a real violation: an operator debugging a blocked
+      // deploy must not go hunting for violations that do not exist.
+      expect(res.violations).toHaveLength(0);
+    });
+
+    it('blocks when the runtime-incident read is degraded', async () => {
+      listProjectsForRepo.mockResolvedValue(['pA']);
+      listRepoIds.mockResolvedValue(['r1']);
+      mockRepo.listRequirements.mockResolvedValue([requiredReq]);
+      listVulns.mockResolvedValue({ items: [], degraded: false });
+      listIncidents.mockResolvedValue({ items: [], degraded: true });
+
+      const res = await svc.complianceGate('r1');
+
+      expect(res.blocked).toBe(true);
+      expect(res.degraded).toBe(true);
+    });
+
+    it('reports degraded alongside genuine violations rather than hiding them', async () => {
+      listProjectsForRepo.mockResolvedValue(['pA']);
+      listRepoIds.mockResolvedValue(['r1']);
+      mockRepo.listRequirements.mockResolvedValue([requiredReq]);
+      listVulns.mockResolvedValue({ items: [violatingFinding], degraded: true });
+
+      const res = await svc.complianceGate('r1');
+
+      expect(res.blocked).toBe(true);
+      expect(res.degraded).toBe(true);
+      expect(res.violations).toHaveLength(1);
+    });
+
+    it('a healthy read is not marked degraded', async () => {
+      listProjectsForRepo.mockResolvedValue(['pA']);
+      listRepoIds.mockResolvedValue(['r1']);
+      mockRepo.listRequirements.mockResolvedValue([requiredReq]);
+      listVulns.mockResolvedValue({ items: [], degraded: false });
+
+      const res = await svc.complianceGate('r1');
+
+      expect(res.blocked).toBe(false);
+      expect(res.degraded).toBe(false);
+    });
   });
 });
 
@@ -246,8 +319,8 @@ describe('securityRequirementsService runtime-incident feedback (Monitor & Opera
     owner.mockResolvedValue('user-1');
     mockRepo.listRequirements.mockResolvedValue([monitoringReq()]);
     listRepoIds.mockResolvedValue(['r1']);
-    listVulns.mockResolvedValue([]);
-    listIncidents.mockResolvedValue([shellIncident]);
+    listVulns.mockResolvedValue({ degraded: false, items: [] });
+    listIncidents.mockResolvedValue({ degraded: false, items: [shellIncident] });
 
     const res = await svc.getCorrelation('p1', 'user-1');
 
@@ -261,8 +334,8 @@ describe('securityRequirementsService runtime-incident feedback (Monitor & Opera
     listProjectsForRepo.mockResolvedValue(['pA']);
     listRepoIds.mockResolvedValue(['r1']);
     mockRepo.listRequirements.mockResolvedValue([monitoringReq()]);
-    listVulns.mockResolvedValue([]);
-    listIncidents.mockResolvedValue([shellIncident]);
+    listVulns.mockResolvedValue({ degraded: false, items: [] });
+    listIncidents.mockResolvedValue({ degraded: false, items: [shellIncident] });
 
     const res = await svc.complianceGate('r1');
 
@@ -277,8 +350,8 @@ describe('securityRequirementsService runtime-incident feedback (Monitor & Opera
     listProjectsForRepo.mockResolvedValue(['pA']);
     listRepoIds.mockResolvedValue(['r1']);
     mockRepo.listRequirements.mockResolvedValue([monitoringReq()]);
-    listVulns.mockResolvedValue([]);
-    listIncidents.mockResolvedValue([{ ...shellIncident, status: 'resolved' }]);
+    listVulns.mockResolvedValue({ degraded: false, items: [] });
+    listIncidents.mockResolvedValue({ degraded: false, items: [{ ...shellIncident, status: 'resolved' }] });
 
     const res = await svc.complianceGate('r1');
     expect(res.blocked).toBe(false);

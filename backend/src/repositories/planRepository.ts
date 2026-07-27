@@ -8,6 +8,17 @@ import {
   AutomationRun, SprintSnapshot, Worklog, Threat
 } from '../types/plan.types';
 
+/**
+ * Result of an evidence read used by requirement correlation.
+ *
+ * `degraded` exists because these reads fail open: a read error returns an
+ * empty list so correlation cannot crash. Without the flag, callers cannot
+ * distinguish "this repo genuinely has no findings" from "the findings could
+ * not be read" — and the compliance gate consumed the former reading of an
+ * empty list as "no violations", passing a release on a database hiccup.
+ */
+export type EvidenceRead = { items: unknown[]; degraded: boolean };
+
 const MOCK_DB_PATH = path.join(process.cwd(), 'scratch', 'plan_mock_db.json');
 
 const defaultMockDb: PlanSchema = {
@@ -622,8 +633,8 @@ export const planRepository = {
    * project, never the owner's whole repo set. Empty input short-circuits to []
    * (an unbound project correlates against nothing, by design).
    */
-  async listVulnerabilitiesForRepos(repoIds: string[]): Promise<unknown[]> {
-    if (repoIds.length === 0) return [];
+  async listVulnerabilitiesForRepos(repoIds: string[]): Promise<EvidenceRead> {
+    if (repoIds.length === 0) return { items: [], degraded: false };
     try {
       const pageSize = 100;
       const findings: unknown[] = [];
@@ -636,16 +647,17 @@ export const planRepository = {
         findings.push(...list.documents);
         if (list.documents.length < pageSize) break;
       }
-      return findings;
+      return { items: findings, degraded: false };
     } catch (err) {
-      // Fail-open, but never silently: a caught read error must be
-      // distinguishable from a genuinely empty result (which logs nothing), or
-      // a degraded query reads as "no violations" and the gate passes on air.
-      logger.warn('[PlanRepository] findings read degraded — failing open to empty', {
+      // Still returns an empty list so a read error cannot crash correlation,
+      // but reports `degraded` so the caller can tell "nothing found" apart
+      // from "could not look". Logging alone was not enough: the compliance
+      // gate consumed the empty list as "no violations" and passed on air.
+      logger.warn('[PlanRepository] findings read degraded — returning empty and flagging', {
         event: 'plan_read_degraded', source: 'vulnerabilities', repoCount: repoIds.length,
         error: err instanceof Error ? err.message : String(err),
       });
-      return [];
+      return { items: [], degraded: true };
     }
   },
 
@@ -657,8 +669,8 @@ export const planRepository = {
    * any read error → [] (fail-open on the read: a runtime signal never blocks
    * the correlation call itself, matching listVulnerabilitiesForRepos).
    */
-  async listRuntimeIncidentsForRepos(repoIds: string[]): Promise<unknown[]> {
-    if (repoIds.length === 0) return [];
+  async listRuntimeIncidentsForRepos(repoIds: string[]): Promise<EvidenceRead> {
+    if (repoIds.length === 0) return { items: [], degraded: false };
     try {
       const pageSize = 100;
       const incidents: unknown[] = [];
@@ -671,15 +683,15 @@ export const planRepository = {
         incidents.push(...list.documents);
         if (list.documents.length < pageSize) break;
       }
-      return incidents;
+      return { items: incidents, degraded: false };
     } catch (err) {
-      // Same fail-open-but-observable contract as listVulnerabilitiesForRepos:
-      // a degraded runtime read must not masquerade as "no incidents".
-      logger.warn('[PlanRepository] runtime incidents read degraded — failing open to empty', {
+      // Same contract as listVulnerabilitiesForRepos: a degraded runtime read
+      // must not masquerade as "no incidents".
+      logger.warn('[PlanRepository] runtime incidents read degraded — returning empty and flagging', {
         event: 'plan_read_degraded', source: 'runtime_incidents', repoCount: repoIds.length,
         error: err instanceof Error ? err.message : String(err),
       });
-      return [];
+      return { items: [], degraded: true };
     }
   },
 

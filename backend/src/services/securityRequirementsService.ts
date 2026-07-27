@@ -130,7 +130,7 @@ async function owns(projectId: string, userId?: string): Promise<boolean> {
  * read: no ownership check (callers gate that) and nothing persisted —
  * correlation is computed on demand, so it is always fresh for whoever reads.
  */
-async function computeCorrelation(projectId: string): Promise<CorrelatedRequirement[]> {
+async function computeCorrelation(projectId: string): Promise<{ correlated: CorrelatedRequirement[]; degraded: boolean }> {
   const requirements = await repo.listRequirements(projectId);
   const repoIds = await projectRepoRepository.listRepoIds(projectId);
   // Two evidence streams over the same bound repos: scanner findings (Code &
@@ -140,7 +140,16 @@ async function computeCorrelation(projectId: string): Promise<CorrelatedRequirem
     planRepository.listVulnerabilitiesForRepos(repoIds),
     planRepository.listRuntimeIncidentsForRepos(repoIds),
   ]);
-  return correlate(requirements, [...findings.map(toCorrelatable), ...incidents.map(toRuntimeCorrelatable)]);
+  // Either read failing open to empty makes the verdict unsafe to trust: an
+  // unread finding is indistinguishable from an absent one, so "no violations"
+  // may simply mean "no evidence available".
+  return {
+    correlated: correlate(requirements, [
+      ...findings.items.map(toCorrelatable),
+      ...incidents.items.map(toRuntimeCorrelatable),
+    ]),
+    degraded: findings.degraded || incidents.degraded,
+  };
 }
 
 export const securityRequirementsService = {
@@ -182,7 +191,9 @@ export const securityRequirementsService = {
     if (!(await owns(projectId, userId))) return 'denied';
     // Project-scoped, not owner-scoped: computeCorrelation reads only the repos
     // bound to this project. An unbound project correlates against nothing.
-    return { ok: true, data: await computeCorrelation(projectId) };
+    // The UI surface reads the correlated list; a degraded read shows as an
+    // absence here rather than a block. Only the gate fails closed.
+    return { ok: true, data: (await computeCorrelation(projectId)).correlated };
   },
 
   /**
@@ -199,11 +210,13 @@ export const securityRequirementsService = {
    * required/recommended split). Reuses computeCorrelation, so it enforces the
    * exact project-scoped, on-demand verdict the UI shows.
    */
-  async complianceGate(repoId: string): Promise<{ blocked: boolean; violations: ComplianceViolation[] }> {
+  async complianceGate(repoId: string): Promise<{ blocked: boolean; violations: ComplianceViolation[]; degraded: boolean }> {
     const projectIds = await projectRepoRepository.listProjectIdsForRepo(repoId);
     const violations: ComplianceViolation[] = [];
+    let degraded = false;
     for (const projectId of projectIds) {
-      const correlated = await computeCorrelation(projectId);
+      const { correlated, degraded: readDegraded } = await computeCorrelation(projectId);
+      if (readDegraded) degraded = true;
       for (const c of correlated) {
         if (c.status === 'violated' && c.requirement.status === 'required') {
           violations.push({
@@ -219,18 +232,30 @@ export const securityRequirementsService = {
         }
       }
     }
-    return { blocked: violations.length > 0, violations };
+    // Fail CLOSED on degraded evidence. An empty violation list from an
+    // unreadable findings store is not a pass — it is an unknown, and a gate
+    // that answers "unknown" with "go ahead" is not a gate. `degraded` is
+    // returned separately so callers can say "could not evaluate" rather than
+    // sending an operator hunting for violations that do not exist. The
+    // audited break-glass override remains the escape hatch for a real outage.
+    if (degraded) {
+      logger.warn('[complianceGate] blocking on degraded evidence', {
+        event: 'compliance_gate_degraded', repoId, projectCount: projectIds.length,
+        violationCount: violations.length,
+      });
+    }
+    return { blocked: degraded || violations.length > 0, violations, degraded };
   },
 
   async fanOutCorrelation(repoId: string): Promise<{ projectId: string; violated: number; total: number }[]> {
     const projectIds = await projectRepoRepository.listProjectIdsForRepo(repoId);
     const affected: { projectId: string; violated: number; total: number }[] = [];
     for (const projectId of projectIds) {
-      const correlated = await computeCorrelation(projectId);
+      const { correlated, degraded } = await computeCorrelation(projectId);
       const violated = correlated.filter((c) => c.status === 'violated').length;
       affected.push({ projectId, violated, total: correlated.length });
       logger.info('sarif fan-out re-correlated project', {
-        event: 'correlation_fanout', repoId, projectId, violated, total: correlated.length,
+        event: 'correlation_fanout', repoId, projectId, violated, total: correlated.length, degraded,
       });
     }
     return affected;
