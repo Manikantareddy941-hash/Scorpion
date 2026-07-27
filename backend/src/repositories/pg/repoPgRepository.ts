@@ -1,5 +1,9 @@
 import { getPool } from '../../db/pool';
+import { canonicalizeRepoUrl } from '../../utils/repoUrl';
 import { DocRow, newId, toDoc } from './docTable';
+
+/** Upper bound on the canonical fallback scan; a tenant's repo list is small. */
+const TENANT_SCAN_LIMIT = 500;
 
 // The dynamic ownership field arrives from route code (e.g. 'user_id'). It is
 // used as a JSONB key parameter, never interpolated into SQL — safe by
@@ -20,13 +24,37 @@ type ListResult = { total: number; documents: DocRow[] };
  * documents existing services destructure. Missing ids REJECT like Appwrite.
  */
 export const repoPgRepository = {
+  /**
+   * Mirrors the Appwrite implementation: exact match first (the common case),
+   * then a canonical-identity fallback scoped to the same owner.
+   *
+   * An exact-match miss here doesn't merely fail a lookup — syncRepo then
+   * creates a SECOND repo row for what is the same repository, splitting the
+   * tenant's findings across two records. The variants are routine:
+   * .git suffixes, trailing slashes, casing, SSH remotes.
+   */
   async findByOwnershipAndUrl(field: string, value: string, url: string): Promise<ListResult> {
     assertOwnershipField(field);
     const result = await getPool().query(
       `SELECT id, data, created_at FROM app_repositories WHERE data->>$1 = $2 AND data->>'url' = $3 LIMIT 1`,
       [field, value, url]
     );
-    return { total: result.rowCount ?? 0, documents: result.rows.map(toDoc) };
+    if ((result.rowCount ?? 0) > 0) {
+      return { total: result.rowCount ?? 0, documents: result.rows.map(toDoc) };
+    }
+
+    const target = canonicalizeRepoUrl(url);
+    if (!target) return { total: 0, documents: [] };
+
+    const owned = await getPool().query(
+      `SELECT id, data, created_at FROM app_repositories WHERE data->>$1 = $2 LIMIT $3`,
+      [field, value, TENANT_SCAN_LIMIT]
+    );
+    const match = owned.rows
+      .map(toDoc)
+      .find((d) => canonicalizeRepoUrl(String(d.url ?? '')) === target);
+
+    return match ? { total: 1, documents: [match] } : { total: 0, documents: [] };
   },
 
   async updateRepo(id: string, fields: Record<string, unknown>): Promise<DocRow> {
