@@ -9,15 +9,13 @@ const TENANT_SCAN_LIMIT = 500;
 // used as a JSONB key parameter, never interpolated into SQL — safe by
 // parameterization, but restrict to known fields anyway (defense in depth).
 //
-// 'team_id' belongs here: tenancyService resolves ownership to exactly
-// `user_id | team_id` and stamps both onto the repo document, and
-// repoService.syncRepo passes 'team_id' whenever a team is active. Its absence
-// made every team-scoped repo sync throw on the Postgres path.
-//
-// 'org_id' is retained but appears nowhere else in the backend — no migration
-// declares it, nothing writes it, nothing queries it. Kept rather than removed
-// pending confirmation that it is genuinely dead.
-const OWNERSHIP_FIELDS = new Set(['user_id', 'team_id', 'org_id']);
+// The set mirrors tenancyService, which resolves ownership to exactly
+// `user_id | team_id` and stamps both onto the repo document. ('org_id' used to
+// be listed here; it appeared nowhere else in the backend — no migration
+// declared it, nothing wrote or queried it — so it was removed once confirmed
+// dead. A phantom entry in an access allowlist reads as though it means
+// something.)
+const OWNERSHIP_FIELDS = new Set(['user_id', 'team_id']);
 
 function assertOwnershipField(field: string): void {
   if (!OWNERSHIP_FIELDS.has(field)) {
