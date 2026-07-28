@@ -1,4 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
+import { fetchAllDocuments } from '../lib/paginate';
 import { logger } from './logger';
 
 const SOC2_CONTROLS = [
@@ -45,27 +46,43 @@ const GDPR_CONTROLS = [
 
 export async function evaluateCompliance(userId: string) {
   try {
-    const reposRes = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
-    const repoIds = reposRes.documents.map((r: any) => r.$id);
+    // Exhaustive reads, not capped ones. Controls are evaluated with predicates
+    // like `scans.every(s => criticalCount === 0)`, so a row that was never
+    // fetched reads as a row that does not exist — the control reports PASSING
+    // because the violating scan sat past the limit. The repositories read had
+    // no limit at all, which means Appwrite's default of 25: a user with more
+    // repos had the remainder excluded from the compliance scope entirely.
+    const reposRes = await fetchAllDocuments(COLLECTIONS.REPOSITORIES, [Query.equal('user_id', userId)]);
+    const repoIds = reposRes.items.map((r: any) => r.$id);
 
     const [scansRes, incidentsRes] = await Promise.all([
       repoIds.length > 0
-        ? databases.listDocuments(DB_ID, COLLECTIONS.SCANS, [
+        ? fetchAllDocuments(COLLECTIONS.SCANS, [
             Query.equal('repo_id', repoIds),
             Query.orderDesc('$createdAt'),
-            Query.limit(50)
           ])
-        : Promise.resolve({ documents: [] as any[] }),
-      databases.listDocuments(DB_ID, COLLECTIONS.INCIDENTS, [
+        : Promise.resolve({ items: [] as any[], total: 0, truncated: false }),
+      fetchAllDocuments(COLLECTIONS.INCIDENTS, [
         repoIds.length > 0
           ? Query.or([Query.equal('repo_id', repoIds), Query.equal('user_id', userId)])
           : Query.equal('user_id', userId),
-        Query.limit(100)
       ])
     ]);
 
-    const scans = scansRes.documents;
-    const incidents = incidentsRes.documents;
+    // A verdict computed on a partial set is not authoritative. The helper caps
+    // at a safety ceiling to keep a runaway data set from hanging the request,
+    // so say plainly when that ceiling was reached rather than letting the
+    // result stand as if complete.
+    if (reposRes.truncated || scansRes.truncated || incidentsRes.truncated) {
+      logger.warn('[Compliance Engine] evidence truncated — verdict computed on a partial set', {
+        event: 'compliance_evidence_truncated',
+        userId,
+        repos: reposRes.truncated, scans: scansRes.truncated, incidents: incidentsRes.truncated,
+      });
+    }
+
+    const scans = scansRes.items;
+    const incidents = incidentsRes.items;
     const allControls = [...SOC2_CONTROLS, ...ISO27001_CONTROLS, ...HIPAA_CONTROLS, ...GDPR_CONTROLS];
     const results = [];
 
