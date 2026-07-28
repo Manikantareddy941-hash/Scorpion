@@ -4,6 +4,9 @@ import type { SecurityEvent, SecurityEventType, Severity } from './securityEvent
 
 const COLLECTION = 'security_events';
 
+/** Max events read per correlation window. Reaching it is reported, not silent. */
+const WINDOW_EVENT_CAP = 500;
+
 export async function recordSecurityEvent(e: Omit<SecurityEvent, 'id'>): Promise<void> {
   try {
     await databases.createDocument(DB_ID, COLLECTION, ID.unique(), {
@@ -22,8 +25,20 @@ export async function collect(ownerUserId: string, windowMs: number): Promise<Se
     const res = await databases.listDocuments(DB_ID, COLLECTION, [
       Query.equal('ownerUserId', ownerUserId),
       Query.greaterThanEqual('timestamp', since),
-      Query.orderDesc('timestamp'), Query.limit(500),
+      Query.orderDesc('timestamp'), Query.limit(WINDOW_EVENT_CAP),
     ]);
+
+    // Deliberately capped rather than exhaustive — this is a time-boxed read and
+    // an unbounded window could be enormous. But the cap bites hardest exactly
+    // when it matters: a brute-force or scanning burst produces the most events,
+    // so the busier the window the more likely correlation silently misses the
+    // tail. Say so instead of quietly evaluating rules on a partial window.
+    if (res.documents.length >= WINDOW_EVENT_CAP) {
+      logger.warn('[securityEventSource] window hit the event cap — correlation sees a partial window', {
+        event: 'read_truncated', source: 'security_events', ownerUserId,
+        cap: WINDOW_EVENT_CAP, total: res.total, windowMs,
+      });
+    }
     return res.documents.map((d) => {
       const w = d as unknown as Record<string, string | number>;
       return {
