@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 import { planRepository } from '../repositories/planRepository';
 import { canAccessResource } from './tenancyService';
+import { projectRepoRepository } from '../repositories/projectRepoRepository';
+import { groupFindingsByCve } from '../plan/cveGrouping';
 import { Issue, Sprint, Threat } from '../types/plan.types';
 import { generateStrideThreats } from './threatAiService';
 import { runAutomation, writeSprintSnapshot, rollUnfinishedToBacklog } from './planAutomationService';
@@ -97,6 +99,22 @@ export const planService = {
     teamId?: string | null,
   ) {
     return planRepository.createProject({ ...input, userId, teamId });
+  },
+
+  /**
+   * Outstanding findings across this project's bound repositories, clustered by
+   * the upstream advisory they share — one Log4j CVE in six repos reads as one
+   * unit of work instead of six unrelated rows.
+   *
+   * `degraded` rides along for the same reason it does on the compliance gate:
+   * an unreadable findings store yields an empty cluster list, and "no shared
+   * advisories" must not be indistinguishable from "could not look".
+   */
+  async listCveClusters(projectId: string, userId?: string) {
+    if (!(await assertProjectAccess(projectId, userId))) return null;
+    const repoIds = await projectRepoRepository.listRepoIds(projectId);
+    const findings = await planRepository.listVulnerabilitiesForRepos(repoIds);
+    return { clusters: groupFindingsByCve(findings.items), degraded: findings.degraded };
   },
 
   async listEpics(projectId: string, userId?: string) {
