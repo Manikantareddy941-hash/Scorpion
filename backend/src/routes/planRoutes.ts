@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { planService } from '../services/planService';
+import { resolveCreationOwnership } from '../services/tenancyService';
 import { AuthenticatedRequest } from '../types/plan.types';
 
 const router = Router();
@@ -19,7 +20,11 @@ router.get('/projects', async (req: AuthenticatedRequest, res: Response) => {
 router.post('/projects', async (req: AuthenticatedRequest, res: Response) => {
   const { name, repoId, type } = req.body;
   if (!name) return res.status(400).json({ error: 'Project name is required' });
-  const data = await planService.createProject({ name, repoId, type }, req.user?.$id);
+  // Ownership comes from the session and the verified active team, never the
+  // body — a body-supplied team would let a caller file a project under a team
+  // they do not belong to.
+  const ownership = await resolveCreationOwnership(req, req.user?.$id || '');
+  const data = await planService.createProject({ name, repoId, type }, req.user?.$id, ownership.team_id);
   res.status(201).json(data);
 });
 

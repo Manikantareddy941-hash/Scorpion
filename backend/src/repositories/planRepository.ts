@@ -19,6 +19,12 @@ import {
  */
 export type EvidenceRead = { items: unknown[]; degraded: boolean };
 
+/**
+ * A project's ownership fields, as canAccessResource consumes them. Indexed so
+ * the rest of the document (name, repoId, timestamps) rides along untouched.
+ */
+export type ProjectOwnership = { user_id?: string; team_id?: string | null } & Record<string, unknown>;
+
 const MOCK_DB_PATH = path.join(process.cwd(), 'scratch', 'plan_mock_db.json');
 
 const defaultMockDb: PlanSchema = {
@@ -103,6 +109,23 @@ export const planRepository = {
   readMockDb,
   writeMockDb,
 
+  /**
+   * The project's ownership record: user_id and, once provisioned, team_id.
+   *
+   * getProjectOwner below returns only the owner id, which is why the Plan
+   * surface could authorize on strict owner equality and nothing else. Access
+   * checks need both fields to honour the union model.
+   */
+  async getProject(projectId: string): Promise<ProjectOwnership | null> {
+    try {
+      const doc = await databases.getDocument(DB_ID, 'plan_projects', projectId);
+      return doc as unknown as ProjectOwnership;
+    } catch {
+      const db = await readMockDb();
+      return (db.projects.find(p => p.$id === projectId) as unknown as ProjectOwnership) ?? null;
+    }
+  },
+
   async getProjectOwner(projectId: string): Promise<string | null> {
     try {
       const doc = await databases.getDocument(DB_ID, 'plan_projects', projectId);
@@ -149,7 +172,7 @@ export const planRepository = {
     );
   },
 
-  async createProject(input: { name: string; repoId?: string; type?: 'kanban' | 'scrum'; userId?: string }): Promise<Project> {
+  async createProject(input: { name: string; repoId?: string; type?: 'kanban' | 'scrum'; userId?: string; teamId?: string | null }): Promise<Project> {
     const newProj: Project = {
       $id: randomId('proj'),
       name: input.name,
@@ -162,7 +185,10 @@ export const planRepository = {
       async () => {
         const doc = await databases.createDocument(DB_ID, 'plan_projects', ID.unique(), {
           name: newProj.name, repoId: newProj.repoId, type: newProj.type,
-          createdAt: newProj.createdAt, user_id: newProj.user_id
+          createdAt: newProj.createdAt, user_id: newProj.user_id,
+          // Only written when a team is active. Omitted otherwise so this keeps
+          // working against a database where team_id has not been provisioned.
+          ...(input.teamId ? { team_id: input.teamId } : {}),
         });
         return doc as unknown as Project;
       },

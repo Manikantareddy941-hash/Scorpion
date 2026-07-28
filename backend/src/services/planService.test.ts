@@ -4,9 +4,11 @@
  * planRepository and the Gemini analyzer are fully mocked.
  */
 
+jest.mock('./tenancyService', () => ({ canAccessResource: jest.fn() }));
 jest.mock('../repositories/planRepository', () => ({
   planRepository: {
     getProjectOwner: jest.fn(),
+    getProject: jest.fn(),
     getSprintProjectId: jest.fn(),
     getIssueProjectId: jest.fn(),
     listProjects: jest.fn(),
@@ -52,11 +54,21 @@ import { generateStrideThreats } from './threatAiService';
 import { Threat } from '../types/plan.types';
 
 const repo = planRepository as jest.Mocked<typeof planRepository>;
+import { canAccessResource } from './tenancyService';
+const canAccess = canAccessResource as jest.Mock;
 const ai = generateStrideThreats as jest.Mock;
 
 const OWNER = 'user-1';
-const grantAccess = () => repo.getProjectOwner.mockResolvedValue(OWNER);
-const denyAccess = () => repo.getProjectOwner.mockResolvedValue('someone-else');
+// Access is now the union check (owner OR team member), so the guard is
+// driven through getProject + canAccessResource rather than owner equality.
+const grantAccess = () => {
+  repo.getProject.mockResolvedValue({ $id: 'p1', user_id: OWNER, team_id: null });
+  canAccess.mockResolvedValue(true);
+};
+const denyAccess = () => {
+  repo.getProject.mockResolvedValue({ $id: 'p1', user_id: 'someone-else', team_id: null });
+  canAccess.mockResolvedValue(false);
+};
 
 const threat = (overrides: Partial<Threat> = {}): Threat => ({
   $id: 't1', projectId: 'p1', title: 'Spoofed tokens', strideCategory: 'Spoofing',
@@ -93,13 +105,22 @@ describe('pure helpers', () => {
 describe('assertProjectAccess', () => {
   it('denies anonymous callers without hitting the repository', async () => {
     expect(await assertProjectAccess('p1', undefined)).toBe(false);
-    expect(repo.getProjectOwner).not.toHaveBeenCalled();
+    expect(repo.getProject).not.toHaveBeenCalled();
   });
 
-  it('grants only the owning user', async () => {
-    grantAccess();
+  it('defers to the union check rather than comparing the owner itself', async () => {
+    // canAccessResource owns the owner-or-team decision now, so drive it per
+    // caller — a blanket mockResolvedValue(true) would make the intruder
+    // assertion pass without proving anything.
+    repo.getProject.mockResolvedValue({ $id: 'p1', user_id: OWNER, team_id: null });
+    canAccess.mockImplementation(async (_project: unknown, userId?: string) => userId === OWNER);
+
     expect(await assertProjectAccess('p1', OWNER)).toBe(true);
     expect(await assertProjectAccess('p1', 'intruder')).toBe(false);
+    expect(canAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: OWNER }),
+      'intruder',
+    );
   });
 });
 

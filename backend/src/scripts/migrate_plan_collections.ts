@@ -73,9 +73,15 @@ const COLLECTIONS: CollectionSpec[] = [
       { kind: 'string', key: 'type', size: 16, required: true },
       { kind: 'string', key: 'createdAt', size: 64, required: true },
       { kind: 'string', key: 'user_id', size: 64, required: false },
+      // Owning team, when the project was created under one. Plan access is a
+      // union of owner and team (planService.assertProjectAccess); until this
+      // attribute exists the check falls back to owner-only, which is the
+      // behaviour that shipped before it.
+      { kind: 'string', key: 'team_id', size: 64, required: false },
     ],
     indexes: [
       { key: 'user_id_idx', attributes: ['user_id'] },
+      { key: 'team_id_idx', attributes: ['team_id'] },
       { key: 'createdAt_idx', attributes: ['createdAt'] },
     ],
   },
