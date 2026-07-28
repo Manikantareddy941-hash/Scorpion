@@ -3,10 +3,14 @@ jest.mock('../lib/appwrite', () => ({
   DB_ID: 'db', COLLECTIONS: { INCIDENTS: 'incidents' },
 }));
 jest.mock('../repositories/planRepository', () => ({
-  planRepository: { createIssue: jest.fn(), getProjectOwner: jest.fn() },
+  planRepository: { createIssue: jest.fn(), getProjectOwner: jest.fn(), getProject: jest.fn() },
 }));
+// Plan access is the union check now (owner OR team), so the guard runs through
+// getProject + canAccessResource rather than owner equality.
+jest.mock('./tenancyService', () => ({ canAccessResource: jest.fn(), canAccessIncident: jest.fn() }));
 import { databases } from '../lib/appwrite';
 import { planRepository } from '../repositories/planRepository';
+import { canAccessResource, canAccessIncident } from './tenancyService';
 import { buildIncidentIssueFields, convertIncidentToIssue, IncidentDoc } from './incidentFeedbackService';
 
 const incident: IncidentDoc = {
@@ -29,7 +33,9 @@ test('buildIncidentIssueFields maps postmortem to a security story', () => {
 describe('convertIncidentToIssue', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (planRepository.getProjectOwner as jest.Mock).mockResolvedValue('u1');
+    (planRepository.getProject as jest.Mock).mockResolvedValue({ $id: 'p1', user_id: 'u1', team_id: null });
+    (canAccessResource as jest.Mock).mockResolvedValue(true);
+    (canAccessIncident as jest.Mock).mockResolvedValue(true);
     (databases.getDocument as jest.Mock).mockResolvedValue(incident);
     (planRepository.createIssue as jest.Mock).mockImplementation(async (i) => i);
   });
@@ -50,12 +56,14 @@ describe('convertIncidentToIssue', () => {
   });
 
   test('forbidden when caller does not own the plan project', async () => {
-    (planRepository.getProjectOwner as jest.Mock).mockResolvedValue('someone-else');
+    (planRepository.getProject as jest.Mock).mockResolvedValue({ $id: 'p1', user_id: 'someone-else', team_id: null });
+    (canAccessResource as jest.Mock).mockResolvedValue(false);
     expect(await convertIncidentToIssue('p1', 'inc1', 'u1')).toBe('forbidden');
   });
 
   test('forbidden when caller does not own the incident', async () => {
     (databases.getDocument as jest.Mock).mockResolvedValue({ ...incident, user_id: 'other' });
+    (canAccessIncident as jest.Mock).mockResolvedValue(false);
     expect(await convertIncidentToIssue('p1', 'inc1', 'u1')).toBe('forbidden');
   });
 

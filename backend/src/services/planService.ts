@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { planRepository } from '../repositories/planRepository';
+import { canAccessResource } from './tenancyService';
 import { Issue, Sprint, Threat } from '../types/plan.types';
 import { generateStrideThreats } from './threatAiService';
 import { runAutomation, writeSprintSnapshot, rollUnfinishedToBacklog } from './planAutomationService';
@@ -47,10 +48,27 @@ export function buildThreatIssueFields(threat: Threat, projectId: string): Issue
   };
 }
 
+/**
+ * Union access check for a Plan project: the owner, or a member of the owning
+ * team. This used to be strict owner equality, so a teammate was refused a
+ * project they collaborate on — Plan was the last surface still single-owner
+ * after repositories and incidents moved to the union model (#151/#161).
+ *
+ * Safe on an un-migrated database: `team_id` is simply absent until the
+ * migration adds it, and canAccessResource then falls back to owner equality —
+ * exactly the previous behaviour. It cannot widen access by accident.
+ *
+ * Fails closed: an unreadable ownership record denies rather than proceeds.
+ */
 export async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
   if (!userId) return false;
-  const ownerId = await planRepository.getProjectOwner(projectId);
-  return ownerId === userId;
+  try {
+    const project = await planRepository.getProject(projectId);
+    if (!project) return false;
+    return await canAccessResource(project, userId);
+  } catch {
+    return false;
+  }
 }
 
 export function severityToPriority(severity: string): Issue['priority'] {
@@ -68,8 +86,17 @@ export const planService = {
     return planRepository.listProjects(userId);
   },
 
-  createProject(input: { name: string; repoId?: string; type?: 'kanban' | 'scrum' }, userId?: string) {
-    return planRepository.createProject({ ...input, userId });
+  /**
+   * `teamId` is stamped so the project is reachable by the whole team through
+   * assertProjectAccess. Without it a project created under an active team
+   * would still be owner-only, and the union check would have nothing to match.
+   */
+  createProject(
+    input: { name: string; repoId?: string; type?: 'kanban' | 'scrum' },
+    userId?: string,
+    teamId?: string | null,
+  ) {
+    return planRepository.createProject({ ...input, userId, teamId });
   },
 
   async listEpics(projectId: string, userId?: string) {
