@@ -20,12 +20,23 @@ interface SlaAttainment {
   attainment: number | null;
 }
 
+interface RepoMttr {
+  repoId: string;
+  name: string;
+  mttrMs: number | null;
+  findingCount: number;
+  breached: number;
+}
+
 interface FeedbackMetrics {
   mttr: number;
   reopenRate: number;
   byPhase: { phase: string; count: number }[];
   recommendations?: EscapeRecommendation[];
   sla?: SlaAttainment[];
+  byRepo?: RepoMttr[];
+  /** True when the repo scan hit its cap — the figures describe a subset. */
+  truncated?: boolean;
 }
 
 function formatMttr(ms: number | null): string {
@@ -85,6 +96,12 @@ export default function FeedbackPanel() {
       </div>
 
       {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+
+      {metrics?.truncated && (
+        <p className="text-[10px] font-mono uppercase tracking-wider mb-3" style={{ color: SEVERITY_TONE.medium }}>
+          Showing the first 500 repositories — these figures describe a subset.
+        </p>
+      )}
 
       {loading ? (
         <p className="text-xs text-[var(--text-secondary)]">Loading feedback metrics…</p>
@@ -154,6 +171,31 @@ export default function FeedbackPanel() {
               </div>
             )}
           </div>
+
+          {metrics.byRepo && metrics.byRepo.length > 0 && (
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-2">
+                Slowest repositories
+              </h3>
+              <div className="space-y-1.5">
+                {metrics.byRepo.slice(0, 8).map((r) => (
+                  <div
+                    key={r.repoId}
+                    className="rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-3 py-2 flex items-center justify-between gap-3"
+                  >
+                    <span className="text-xs text-[var(--text-primary)] truncate" title={r.name}>{r.name}</span>
+                    <span className="flex items-center gap-3 shrink-0 text-[10px] font-mono tabular-nums text-[var(--text-secondary)]">
+                      {r.breached > 0 && (
+                        <span style={{ color: SEVERITY_TONE.critical }}>{r.breached} overdue</span>
+                      )}
+                      <span>{r.findingCount} findings</span>
+                      <span className="text-[var(--text-primary)] font-semibold">{formatMttr(r.mttrMs)}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {metrics.recommendations && metrics.recommendations.length > 0 && (
             <div>
