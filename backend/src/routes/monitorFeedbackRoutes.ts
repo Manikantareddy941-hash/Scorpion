@@ -3,7 +3,7 @@ import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { resolveOwnershipScope } from '../services/tenancyService';
-import { mttr, reopenRate, escapeByPhase, escapeRecommendations, FindingRecord } from '../monitor/feedbackMetrics';
+import { mttr, reopenRate, escapeByPhase, escapeRecommendations, slaAttainment, FindingRecord } from '../monitor/feedbackMetrics';
 import { logger } from '../services/logger';
 
 interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
@@ -47,7 +47,9 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
     const scope = await resolveOwnershipScope(req, userId);
     const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value), Query.limit(50)]);
     const repoIds = repos.documents.map(r => r.$id);
-    if (repoIds.length === 0) return res.json({ mttr: 0, reopenRate: 0, byPhase: [], recommendations: [] });
+    if (repoIds.length === 0) {
+      return res.json({ mttr: 0, reopenRate: 0, byPhase: [], recommendations: [], sla: slaAttainment([]) });
+    }
 
     const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [Query.equal('repo_id', repoIds), Query.limit(500)]);
     const findings: FindingRecord[] = findingsRes.documents.map((d) => {
@@ -68,7 +70,16 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
 
     const all = [...findings, ...runtimeFindings];
     const byPhase = escapeByPhase(all);
-    res.json({ mttr: mttr(all), reopenRate: reopenRate(all), byPhase, recommendations: escapeRecommendations(byPhase) });
+    res.json({
+      mttr: mttr(all),
+      reopenRate: reopenRate(all),
+      byPhase,
+      recommendations: escapeRecommendations(byPhase),
+      // Per-severity attainment against the shared SLA windows: the aggregate
+      // mttr above is one number for everything, which hides a critical-severity
+      // backlog behind a healthy average on low-severity noise.
+      sla: slaAttainment(all),
+    });
   } catch (err) { logger.error('[feedbackRoutes] failed', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 

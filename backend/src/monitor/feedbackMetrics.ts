@@ -1,6 +1,79 @@
+import { SLA_HOURS, severityBucket } from '../../../shared/sla';
+
 export interface FindingRecord {
   severity: string; scanner: string; status: string;
   createdAt: number; resolvedAt?: number; reopenCount?: number;
+}
+
+export interface SlaAttainment {
+  severity: string;
+  targetHours: number;
+  /** Mean time to remediation for this severity, or null when nothing resolved. */
+  mttrMs: number | null;
+  /** Resolved inside the window. */
+  met: number;
+  /** Resolved late, plus anything still open past its deadline. */
+  breached: number;
+  /** Still open and still inside the window — outcome not yet decided. */
+  open: number;
+  /** met / (met + breached), or null when nothing has been decided yet. */
+  attainment: number | null;
+}
+
+/**
+ * SLA attainment per severity: how often remediation actually lands inside the
+ * agreed window, alongside the MTTR that produced it.
+ *
+ * Two deliberate choices:
+ *
+ * - An open finding already past its deadline counts as BREACHED, not pending.
+ *   Excluding it would flatter the number at exactly the moment remediation is
+ *   failing — the metric would look best when the backlog is worst.
+ * - `attainment` and `mttrMs` are null, never 0, when there is no data. A zero
+ *   renders as "0% of SLAs met", a failing grade invented from nothing; it is
+ *   the same lie as an empty findings list reading as "all clear".
+ *
+ * Thresholds come from shared/sla.ts so this agrees with the countdowns the UI
+ * already renders.
+ */
+export function slaAttainment(findings: FindingRecord[], now: number = Date.now()): SlaAttainment[] {
+  return Object.keys(SLA_HOURS).map((severity) => {
+    const targetHours = SLA_HOURS[severity];
+    const targetMs = targetHours * 3600_000;
+
+    const forSeverity = findings.filter((f) => severityBucket(f.severity) === severity);
+
+    let met = 0;
+    let breached = 0;
+    let open = 0;
+    const durations: number[] = [];
+
+    for (const f of forSeverity) {
+      if (f.status === 'resolved' && f.resolvedAt !== undefined) {
+        const took = f.resolvedAt - f.createdAt;
+        durations.push(took);
+        if (took <= targetMs) met++;
+        else breached++;
+      } else if (now - f.createdAt > targetMs) {
+        breached++;
+      } else {
+        open++;
+      }
+    }
+
+    const decided = met + breached;
+    return {
+      severity,
+      targetHours,
+      mttrMs: durations.length === 0
+        ? null
+        : Math.round(durations.reduce((a, b) => a + b, 0) / durations.length),
+      met,
+      breached,
+      open,
+      attainment: decided === 0 ? null : met / decided,
+    };
+  });
 }
 
 const PHASE: Record<string, string> = {

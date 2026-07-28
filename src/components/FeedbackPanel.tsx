@@ -10,14 +10,25 @@ interface EscapeRecommendation {
   recommendation: string;
 }
 
+interface SlaAttainment {
+  severity: string;
+  targetHours: number;
+  mttrMs: number | null;
+  met: number;
+  breached: number;
+  open: number;
+  attainment: number | null;
+}
+
 interface FeedbackMetrics {
   mttr: number;
   reopenRate: number;
   byPhase: { phase: string; count: number }[];
   recommendations?: EscapeRecommendation[];
+  sla?: SlaAttainment[];
 }
 
-function formatMttr(ms: number): string {
+function formatMttr(ms: number | null): string {
   if (!ms) return '—';
   const totalMinutes = Math.round(ms / 60_000);
   const hours = Math.floor(totalMinutes / 60);
@@ -25,6 +36,16 @@ function formatMttr(ms: number): string {
   if (hours === 0) return `${minutes}m`;
   return `${hours}h ${minutes}m`;
 }
+
+// null attainment means nothing has been decided yet — render it as unknown,
+// never as 0%, which would show a failing grade invented from no data.
+function formatAttainment(value: number | null): string {
+  return value === null ? '—' : `${Math.round(value * 100)}%`;
+}
+
+const SEVERITY_TONE: Record<string, string> = {
+  critical: '#dc2626', high: '#ea580c', medium: '#ca8a04', low: '#0284c7',
+};
 
 export default function FeedbackPanel() {
   const { getJWT } = useAuth();
@@ -58,7 +79,7 @@ export default function FeedbackPanel() {
         <div>
           <h2 className="text-sm font-black uppercase italic tracking-wider text-[var(--text-primary)]">Feedback Metrics</h2>
           <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider font-mono mt-0.5">
-            Mean time to resolve, reopen rate, and escape point by lifecycle phase
+            SLA attainment by severity, mean time to resolve, reopen rate, and escape point by phase
           </p>
         </div>
       </div>
@@ -81,6 +102,39 @@ export default function FeedbackPanel() {
               <p className="text-xl font-semibold tabular-nums text-[var(--text-primary)] mt-1">{Math.round(metrics.reopenRate * 100)}%</p>
             </div>
           </div>
+
+          {metrics.sla && metrics.sla.length > 0 && (
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-2">
+                SLA attainment by severity
+              </h3>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {metrics.sla.map((row) => (
+                  <div key={row.severity} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] px-4 py-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span
+                        className="text-[9px] font-black uppercase tracking-widest"
+                        style={{ color: SEVERITY_TONE[row.severity] ?? 'var(--text-secondary)' }}
+                      >
+                        {row.severity}
+                      </span>
+                      <span className="text-[9px] font-mono text-[var(--text-secondary)] tabular-nums">
+                        {row.targetHours}h
+                      </span>
+                    </div>
+                    <p className="text-xl font-semibold tabular-nums text-[var(--text-primary)] mt-1">
+                      {formatAttainment(row.attainment)}
+                    </p>
+                    <p className="text-[10px] font-mono text-[var(--text-secondary)] tabular-nums mt-1">
+                      {row.breached > 0 ? `${row.breached} breached · ` : ''}
+                      {row.open > 0 ? `${row.open} in window · ` : ''}
+                      mttr {formatMttr(row.mttrMs)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <h3 className="text-[11px] font-black uppercase tracking-widest text-[var(--text-secondary)] mb-2">Escapes by phase</h3>
