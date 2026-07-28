@@ -3,6 +3,73 @@ import { SLA_HOURS, severityBucket } from '../../../shared/sla';
 export interface FindingRecord {
   severity: string; scanner: string; status: string;
   createdAt: number; resolvedAt?: number; reopenCount?: number;
+  /** Owning repository, when the caller retained it (needed for the per-repo rollup). */
+  repoId?: string;
+}
+
+export interface RepoMttr {
+  repoId: string;
+  name: string;
+  /** Mean time to remediation for this repo, or null when nothing resolved. */
+  mttrMs: number | null;
+  findingCount: number;
+  /** Findings currently past their severity's SLA window. */
+  breached: number;
+}
+
+/**
+ * MTTR per repository, slowest first — the "which repo is holding us up"
+ * view that a single aggregate number cannot answer.
+ *
+ * Scoping is the caller's job: this only groups what it is given, and the
+ * feedback route already resolves the finding set through resolveOwnershipScope,
+ * so the rollup inherits the tenancy boundary rather than re-deriving one.
+ *
+ * A repo with nothing resolved reports null, not 0, and sorts last. Zero would
+ * rank an untouched backlog as the fastest repo on the board.
+ */
+export function mttrByRepo(
+  findings: FindingRecord[],
+  names: Record<string, string>,
+  now: number = Date.now(),
+): RepoMttr[] {
+  const groups = new Map<string, FindingRecord[]>();
+  for (const f of findings) {
+    if (!f.repoId) continue; // no owner to attribute it to; bucketing them together would invent a repo
+    const bucket = groups.get(f.repoId) ?? [];
+    bucket.push(f);
+    groups.set(f.repoId, bucket);
+  }
+
+  const rows: RepoMttr[] = [...groups.entries()].map(([repoId, group]) => {
+    const durations = group
+      .filter((f) => f.status === 'resolved' && f.resolvedAt !== undefined)
+      .map((f) => (f.resolvedAt as number) - f.createdAt);
+
+    const breached = group.filter(
+      (f) => f.status !== 'resolved'
+        && now - f.createdAt > SLA_HOURS[severityBucket(f.severity)] * 3600_000,
+    ).length;
+
+    return {
+      repoId,
+      // Fall back to the id rather than dropping the row: hiding a repo's
+      // backlog because a name lookup missed is worse than an ugly label.
+      name: names[repoId] ?? repoId,
+      mttrMs: durations.length === 0
+        ? null
+        : Math.round(durations.reduce((a, b) => a + b, 0) / durations.length),
+      findingCount: group.length,
+      breached,
+    };
+  });
+
+  return rows.sort((a, b) => {
+    if (a.mttrMs === null && b.mttrMs === null) return 0;
+    if (a.mttrMs === null) return 1;  // unmeasurable sorts last, never first
+    if (b.mttrMs === null) return -1;
+    return b.mttrMs - a.mttrMs;
+  });
 }
 
 export interface SlaAttainment {

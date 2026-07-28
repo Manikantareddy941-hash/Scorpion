@@ -3,7 +3,10 @@ import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { resolveOwnershipScope } from '../services/tenancyService';
-import { mttr, reopenRate, escapeByPhase, escapeRecommendations, slaAttainment, FindingRecord } from '../monitor/feedbackMetrics';
+import { mttr, reopenRate, escapeByPhase, escapeRecommendations, slaAttainment, mttrByRepo, FindingRecord } from '../monitor/feedbackMetrics';
+
+/** Repo scan cap. Hitting it means the metrics describe a subset — reported as `truncated`. */
+const REPO_SCAN_LIMIT = 500;
 import { logger } from '../services/logger';
 
 interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
@@ -44,11 +47,28 @@ async function listRuntimeFindings(repoIds: string[]): Promise<FindingRecord[]> 
 router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = req.user?.$id || '';
+    // Scope comes from resolveOwnershipScope, so every metric below inherits the
+    // tenancy boundary instead of re-deriving one — a bespoke grouping query is
+    // how a rollup starts including repos the caller cannot see.
     const scope = await resolveOwnershipScope(req, userId);
-    const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [Query.equal(scope.field, scope.value), Query.limit(50)]);
+    const repos = await databases.listDocuments(DB_ID, COLLECTIONS.REPOSITORIES, [
+      Query.equal(scope.field, scope.value),
+      Query.limit(REPO_SCAN_LIMIT),
+    ]);
     const repoIds = repos.documents.map(r => r.$id);
+    // Hitting the cap means the numbers describe a subset. Say so rather than
+    // presenting a partial rollup as the whole picture.
+    const truncated = repoIds.length >= REPO_SCAN_LIMIT;
     if (repoIds.length === 0) {
-      return res.json({ mttr: 0, reopenRate: 0, byPhase: [], recommendations: [], sla: slaAttainment([]) });
+      return res.json({
+        mttr: 0, reopenRate: 0, byPhase: [], recommendations: [],
+        sla: slaAttainment([]), byRepo: [], truncated: false,
+      });
+    }
+
+    const repoNames: Record<string, string> = {};
+    for (const r of repos.documents) {
+      repoNames[r.$id] = String((r as unknown as Record<string, unknown>).name ?? r.$id);
     }
 
     const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [Query.equal('repo_id', repoIds), Query.limit(500)]);
@@ -59,6 +79,7 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
         status: String(w.status ?? 'open'), createdAt: new Date(d.$createdAt).getTime(),
         resolvedAt: w.resolvedAt ? new Date(w.resolvedAt as string).getTime() : undefined,
         reopenCount: Number(w.reopenCount ?? 0),
+        repoId: w.repo_id ? String(w.repo_id) : undefined,
       };
     });
 
@@ -79,6 +100,11 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
       // mttr above is one number for everything, which hides a critical-severity
       // backlog behind a healthy average on low-severity noise.
       sla: slaAttainment(all),
+      // Which repo is holding remediation up — the aggregate above cannot say.
+      // Only scanner findings carry repo_id here; runtime incidents are folded
+      // into the totals but not attributed per repo.
+      byRepo: mttrByRepo(all, repoNames),
+      truncated,
     });
   } catch (err) { logger.error('[feedbackRoutes] failed', err); res.status(500).json({ error: 'Internal server error' }); }
 });
