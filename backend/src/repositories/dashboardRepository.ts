@@ -1,7 +1,30 @@
 import { Models } from 'node-appwrite';
 import { Octokit } from 'octokit';
 import { databases, DB_ID, Query, COLLECTIONS } from '../lib/appwrite';
+import { fetchAllDocuments } from '../lib/paginate';
 import { FindingDocument, RepoDocument, ScanDocument } from '../types/dashboard.types';
+
+/**
+ * Exhaustively-read list. Shaped like Models.DocumentList (documents/total) so
+ * existing consumers are unchanged, plus `truncated` for the safety ceiling.
+ *
+ * The findings reads used to cap at Query.limit(5000) while dashboardService
+ * took its headline count from `total` (the backend's real figure) and every
+ * breakdown from `documents`. Past the cap those disagreed: the headline said
+ * one number and the severity/by_repo/by_type/SLA widgets summed to less.
+ */
+type ExhaustiveList<T> = { documents: T[]; total: number; truncated: boolean };
+
+async function exhaustive<T>(collectionId: string, queries: string[]): Promise<ExhaustiveList<T>> {
+  const res = await fetchAllDocuments(collectionId, queries);
+  return {
+    documents: res.items as unknown as T[],
+    // Report what was actually read, so documents.length === total always
+    // holds and the parts cannot disagree with the headline.
+    total: res.items.length,
+    truncated: res.truncated,
+  };
+}
 
 export const dashboardRepository = {
   async getUserTeamIds(userId: string): Promise<string[]> {
@@ -33,34 +56,31 @@ export const dashboardRepository = {
     ]);
   },
 
-  async listFindingsForReposOrScans(repoIds: string[], scanIds: string[]): Promise<Models.DocumentList<FindingDocument>> {
+  async listFindingsForReposOrScans(repoIds: string[], scanIds: string[]): Promise<ExhaustiveList<FindingDocument>> {
     // COLLECTIONS.FINDINGS resolves to 'vulnerabilities' — the collection the
     // scan pipeline actually writes to. This method (and listOpenFindingsForRepos
     // below) hardcoded the literal 'findings', a legacy 350-doc collection whose
     // documents carry no repo_id, so the security dashboard's by_type, by_repo
     // and SLA widgets read stale data while the headline counts (sourced from
     // scans) showed the real numbers. That is the 171-here / 18-there split.
-    return databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+    return exhaustive<FindingDocument>(COLLECTIONS.FINDINGS, [
       Query.or([
         Query.equal('repo_id', repoIds),
         Query.equal('scanId', scanIds)
       ]),
-      Query.limit(5000)
     ]);
   },
 
-  async listOpenFindingsForRepos(repoIds: string[]): Promise<Models.DocumentList<FindingDocument>> {
-    return databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+  async listOpenFindingsForRepos(repoIds: string[]): Promise<ExhaustiveList<FindingDocument>> {
+    return exhaustive<FindingDocument>(COLLECTIONS.FINDINGS, [
       Query.equal('repo_id', repoIds),
       Query.equal('status', 'open'),
-      Query.limit(5000)
     ]);
   },
 
-  async listFindingsForReposScoped(repoIds: string[]): Promise<Models.DocumentList<FindingDocument>> {
-    return databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [
+  async listFindingsForReposScoped(repoIds: string[]): Promise<ExhaustiveList<FindingDocument>> {
+    return exhaustive<FindingDocument>(COLLECTIONS.FINDINGS, [
       Query.equal('repo_id', repoIds),
-      Query.limit(5000)
     ]);
   },
 

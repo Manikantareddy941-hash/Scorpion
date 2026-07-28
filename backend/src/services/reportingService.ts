@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchAllDocuments } from '../lib/paginate';
 import { logger } from './logger';
 
 // Heuristic mapping of tool results to OWASP Top 10 categories
@@ -99,13 +100,20 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         // 2️⃣ Fetch Vulnerabilities ONLY for those specific scan IDs
         logger.info(`[DB Call] DatabaseID: ${DB_ID}, CollectionID: ${COLLECTIONS.VULNERABILITIES}`);
         if (!COLLECTIONS.VULNERABILITIES) throw new Error("collectionId is undefined");
-        const vulnsDocs = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, [
+        // Exhaustive: a report is an aggregate, and a capped read makes it
+        // understate without saying so — the reader has no way to tell a clean
+        // posture from an unread tail.
+        const vulnsDocs = await fetchAllDocuments(COLLECTIONS.VULNERABILITIES, [
             Query.equal('scanId', latestScanIds),
             Query.equal('resolution_status', 'open'),
-            Query.limit(1000)
         ]);
+        if (vulnsDocs.truncated) {
+            logger.warn('[Reporting] vulnerability read hit the safety cap — report is incomplete', {
+                event: 'read_truncated', source: 'report_vulnerabilities', scanIds: latestScanIds.length,
+            });
+        }
 
-        const vulns = vulnsDocs.documents;
+        const vulns = vulnsDocs.items;
 
         // Mandatory Log: Fetched report data
         logger.info(`[VERIFICATION] Fetched Report Data (Vulns) for Scans ${JSON.stringify(latestScanIds)}:`, JSON.stringify(vulns, null, 2));
