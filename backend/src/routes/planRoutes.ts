@@ -28,6 +28,17 @@ router.post('/projects', async (req: AuthenticatedRequest, res: Response) => {
   res.status(201).json(data);
 });
 
+/* CVE CLUSTERS */
+
+// Outstanding findings across the project's bound repositories, grouped by the
+// advisory they share. Read-only: it proposes the grouping, it does not create
+// anything.
+router.get('/projects/:projectId/cve-clusters', async (req: AuthenticatedRequest, res: Response) => {
+  const data = await planService.listCveClusters(req.params.projectId, req.user?.$id);
+  if (data === null) return res.status(403).json({ error: 'You do not have access to this project' });
+  res.json(data);
+});
+
 /* EPICS */
 
 router.get('/projects/:projectId/epics', async (req: AuthenticatedRequest, res: Response) => {

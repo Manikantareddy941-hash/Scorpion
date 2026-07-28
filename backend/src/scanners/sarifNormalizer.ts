@@ -38,7 +38,13 @@ interface SarifRun {
 }
 interface SarifLog { runs?: SarifRun[] }
 
-const CVE_RULE = /^(CVE-|GHSA-|SNYK-|RUSTSEC-|OSV-)/i;
+/**
+ * Upstream advisory id prefixes. Exported because CVE grouping matches on the
+ * same shape — a second copy of this pattern is how two parts of the system
+ * start disagreeing about what counts as an advisory.
+ */
+export const ADVISORY_ID_RULE = /^(CVE-|GHSA-|SNYK-|RUSTSEC-|OSV-)/i;
+const CVE_RULE = ADVISORY_ID_RULE;
 const SECRET_TOOLS = /gitleaks|trufflehog|ggshield|detect-secrets/i;
 const SECRET_RULE = /secret|password|api[-_]?key|token|credential/i;
 const SCA_TOOLS = /trivy|grype|snyk|osv|dependency-?check|npm-?audit|owasp/i;
