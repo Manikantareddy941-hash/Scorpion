@@ -1,7 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { logger } from '../services/logger';
 import { planRepository } from '../repositories/planRepository';
-import { assertProjectAccess } from '../services/planService';
+import { assertLegacyProjectAccess } from '../services/planService';
 import { AuthenticatedRequest } from '../types/plan.types';
 import { AuthzMemo, AuthzResult, createMemo, evaluate } from './authorizationService';
 import { PlanPermission } from './roles';
@@ -99,7 +99,7 @@ export function requirePermission(permission: PlanPermission, from: ProjectSourc
     }
 
     // Shadow mode: compare, log, then defer to the legacy verdict.
-    const legacyAllowed = await assertProjectAccess(projectId, userId);
+    const legacyAllowed = await assertLegacyProjectAccess(projectId, userId);
     if (legacyAllowed !== result.allowed) {
       logger.warn('[authz] RBAC verdict disagrees with the legacy check', {
         event: 'rbac_divergence', projectId, userId, permission,

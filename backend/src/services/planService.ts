@@ -7,6 +7,7 @@ import { Issue, Sprint, Threat } from '../types/plan.types';
 import { generateStrideThreats } from './threatAiService';
 import { runAutomation, writeSprintSnapshot, rollUnfinishedToBacklog } from './planAutomationService';
 import { emptyTally, grantAdmin } from '../authz/backfill';
+import { listPermissions } from '../authz/authorizationService';
 import { logger } from './logger';
 
 function randomId(prefix: string): string {
@@ -64,7 +65,7 @@ export function buildThreatIssueFields(threat: Threat, projectId: string): Issue
  *
  * Fails closed: an unreadable ownership record denies rather than proceeds.
  */
-export async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
+export async function assertLegacyProjectAccess(projectId: string, userId?: string): Promise<boolean> {
   if (!userId) return false;
   try {
     const project = await planRepository.getProject(projectId);
@@ -73,6 +74,29 @@ export async function assertProjectAccess(projectId: string, userId?: string): P
   } catch {
     return false;
   }
+}
+
+/**
+ * Project access for the service layer: the legacy union OR an explicit RBAC
+ * grant.
+ *
+ * The union alone is owner-or-team, so someone an admin deliberately granted
+ * project_viewer — and who is neither the owner nor in the owning team — would
+ * clear the route middleware and then be refused here. Grant management would
+ * assign roles that do nothing.
+ *
+ * Strictly additive: it can only widen, never narrow, so no existing caller
+ * loses access. RBAC is consulted only when the legacy check has already said
+ * no, so the common path (the owner) costs nothing extra.
+ *
+ * This is coarse by design — it answers "may this user touch the project at
+ * all". The verb-level decision (issue:read versus issue:delete) belongs to
+ * requirePermission, which has already run by the time a service is reached.
+ */
+export async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
+  if (await assertLegacyProjectAccess(projectId, userId)) return true;
+  const { reason } = await listPermissions(projectId, userId);
+  return reason === 'granted';
 }
 
 export function severityToPriority(severity: string): Issue['priority'] {
@@ -90,11 +114,6 @@ export const planService = {
     return planRepository.listProjects(userId);
   },
 
-  /**
-   * `teamId` is stamped so the project is reachable by the whole team through
-   * assertProjectAccess. Without it a project created under an active team
-   * would still be owner-only, and the union check would have nothing to match.
-   */
   /**
    * Creates a project and, in the same operation, the access grants that make
    * it reachable.

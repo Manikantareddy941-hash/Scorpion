@@ -5,19 +5,19 @@ jest.mock('./authorizationService', () => ({
 jest.mock('../repositories/planRepository', () => ({
   planRepository: { getIssueProjectId: jest.fn(), getSprintProjectId: jest.fn() },
 }));
-jest.mock('../services/planService', () => ({ assertProjectAccess: jest.fn() }));
+jest.mock('../services/planService', () => ({ assertLegacyProjectAccess: jest.fn() }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } }));
 
 import { Response } from 'express';
 import { evaluate } from './authorizationService';
 import { planRepository } from '../repositories/planRepository';
-import { assertProjectAccess } from '../services/planService';
+import { assertLegacyProjectAccess } from '../services/planService';
 import { logger } from '../services/logger';
 import { requirePermission } from './requirePermission';
 import { AuthenticatedRequest } from '../types/plan.types';
 
 const evaluateMock = evaluate as jest.Mock;
-const legacy = assertProjectAccess as jest.Mock;
+const legacy = assertLegacyProjectAccess as jest.Mock;
 const getIssueProjectId = planRepository.getIssueProjectId as jest.Mock;
 const warn = logger.warn as jest.Mock;
 
