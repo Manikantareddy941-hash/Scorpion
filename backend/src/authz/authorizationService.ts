@@ -149,6 +149,25 @@ async function resolvePermissions(projectId: string, userId: string): Promise<Re
 }
 
 /**
+ * The caller's effective permissions on a project, for a client that needs to
+ * decide what to render.
+ *
+ * This is a convenience for the UI, never the enforcement boundary — every
+ * route still calls evaluate(). A client that hid a button is not a client that
+ * cannot call the endpoint behind it.
+ */
+export async function listPermissions(
+  projectId: string,
+  userId: string | undefined,
+): Promise<{ permissions: string[]; reason: AuthzReason }> {
+  if (!userId) return { permissions: [], reason: 'denied' };
+  const resolved = await resolvePermissions(projectId, userId);
+  if (resolved.kind === 'unavailable') return { permissions: [], reason: 'unavailable' };
+  if (resolved.kind === 'no_grants') return { permissions: [], reason: 'not_found' };
+  return { permissions: resolved.permissions, reason: 'granted' };
+}
+
+/**
  * Can `userId` perform `permission` on `projectId`?
  *
  * Fails closed at every step: an unreadable membership list, grant table or

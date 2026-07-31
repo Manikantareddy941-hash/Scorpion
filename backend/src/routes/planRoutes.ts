@@ -2,7 +2,9 @@ import { Router, Response } from 'express';
 import { planService } from '../services/planService';
 import { resolveCreationOwnership } from '../services/tenancyService';
 import { AuthenticatedRequest } from '../types/plan.types';
-import { requirePermission } from '../authz/requirePermission';
+import { requirePermission, isEnforcing } from '../authz/requirePermission';
+import { listPermissions } from '../authz/authorizationService';
+import { projectAccessService } from '../services/projectAccessService';
 
 const router = Router();
 
@@ -27,6 +29,71 @@ router.post('/projects', async (req: AuthenticatedRequest, res: Response) => {
   const ownership = await resolveCreationOwnership(req, req.user?.$id || '');
   const data = await planService.createProject({ name, repoId, type }, req.user?.$id, ownership.team_id);
   res.status(201).json(data);
+});
+
+/* PERMISSIONS (what the caller may do here, for rendering decisions) */
+
+// Gated on project:read, which every built-in role holds, so a viewer can ask.
+// `enforcing` rides along because it changes what the client should do with the
+// list: while RBAC is in shadow mode the permissions are computed but not
+// applied, so a client that hid controls based on them would hide everything
+// from users who still have full access through the legacy check.
+router.get('/projects/:projectId/permissions/me', requirePermission('project:read'), async (req: AuthenticatedRequest, res: Response) => {
+  const result = await listPermissions(req.params.projectId, req.user?.$id);
+  if (result.reason === 'unavailable') {
+    return res.status(503).json({ error: 'Permissions could not be read, please retry' });
+  }
+  res.json({ permissions: result.permissions, enforcing: isEnforcing() });
+});
+
+/* ACCESS (grant management) */
+
+// Admin-only: 'access:read' and 'access:write' are held by project_admin alone,
+// so requirePermission is the whole authorization story for this surface.
+// projectId always comes from the authorized path, never the body.
+
+const ACCESS_ERROR_STATUS: Record<string, { status: number; error: string }> = {
+  invalid_role: { status: 400, error: 'Unknown role' },
+  invalid_subject_type: { status: 400, error: 'subjectType must be "user" or "team"' },
+  already_granted: { status: 409, error: 'This subject already has a role here — use PATCH to change it' },
+  not_found: { status: 404, error: 'No such grant' },
+  ambiguous_subject: { status: 409, error: 'That id matches more than one grant; remove it by subject type' },
+  last_admin: { status: 409, error: 'This is the only admin left; promote someone else first' },
+};
+
+function sendAccessError(res: Response, code: string): Response {
+  const mapped = ACCESS_ERROR_STATUS[code];
+  return res.status(mapped?.status ?? 400).json({ error: mapped?.error ?? 'Invalid request' });
+}
+
+router.get('/projects/:projectId/access', requirePermission('access:read'), async (req: AuthenticatedRequest, res: Response) => {
+  res.json(await projectAccessService.list(req.params.projectId));
+});
+
+router.post('/projects/:projectId/access', requirePermission('access:write'), async (req: AuthenticatedRequest, res: Response) => {
+  const { subjectType, subjectId, roleKey } = req.body ?? {};
+  if (!subjectId || !roleKey) return res.status(400).json({ error: 'subjectId and roleKey are required' });
+  const result = await projectAccessService.grant(
+    req.params.projectId, { subjectType, subjectId, roleKey }, req.user?.$id || '',
+  );
+  if (typeof result === 'string') return sendAccessError(res, result);
+  res.status(201).json(result);
+});
+
+router.patch('/projects/:projectId/access/:subjectId', requirePermission('access:write'), async (req: AuthenticatedRequest, res: Response) => {
+  const { roleKey } = req.body ?? {};
+  if (!roleKey) return res.status(400).json({ error: 'roleKey is required' });
+  const result = await projectAccessService.changeRole(
+    req.params.projectId, req.params.subjectId, roleKey, req.user?.$id || '',
+  );
+  if (typeof result === 'string') return sendAccessError(res, result);
+  res.json(result);
+});
+
+router.delete('/projects/:projectId/access/:subjectId', requirePermission('access:write'), async (req: AuthenticatedRequest, res: Response) => {
+  const result = await projectAccessService.revoke(req.params.projectId, req.params.subjectId, req.user?.$id || '');
+  if (result !== 'ok') return sendAccessError(res, result);
+  res.json({ success: true });
 });
 
 /* CVE CLUSTERS */

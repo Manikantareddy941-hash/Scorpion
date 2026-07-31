@@ -3,13 +3,15 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   Plus, Trash2, Calendar, Shield, Sparkles, Settings, BarChart2,
   LayoutGrid, CheckCircle2, X, AlertTriangle, Play, Check, ArrowRight, User, Zap, RefreshCw, Layers, ListTodo, MoreVertical,
-  ChevronDown
+  ChevronDown, Users
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import toast from 'react-hot-toast';
+import { MembersAccessPanel } from '../components/plan/MembersAccessPanel';
+import { usePlanPermissions } from '../hooks/usePlanPermissions';
 
 // Types matched to Backend Schema
 interface Project {
@@ -128,11 +130,13 @@ interface Threat {
 
 export default function PlanWorkspace() {
   const { getJWT } = useAuth();
-  const [activeTab, setActiveTab] = useState<'board' | 'backlog' | 'threats' | 'timeline' | 'reports' | 'dashboard' | 'settings'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'backlog' | 'threats' | 'timeline' | 'reports' | 'dashboard' | 'settings' | 'access'>('board');
 
   // DB States
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjId, setSelectedProjId] = useState<string>('');
+  // Drives which controls are offered. Enforcement is server-side either way.
+  const permissions = usePlanPermissions(selectedProjId || null);
   const [epics, setEpics] = useState<Epic[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -863,7 +867,8 @@ export default function PlanWorkspace() {
             { id: 'timeline', label: 'Roadmap & Timeline', icon: Calendar },
             { id: 'reports', label: 'Agile Reports', icon: BarChart2 },
             { id: 'dashboard', label: 'Project Dashboard', icon: Shield },
-            { id: 'settings', label: 'Automation & Rules', icon: Settings }
+            { id: 'settings', label: 'Automation & Rules', icon: Settings },
+            { id: 'access', label: 'Members & Access', icon: Users }
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -923,9 +928,13 @@ export default function PlanWorkspace() {
                 </select>
               </div>
 
+              {/* Disabled rather than hidden: a viewer should be able to see
+                  that the action exists and why it is unavailable to them. */}
               <button
                 onClick={() => setCreateIssueOpen(true)}
-                className="btn-premium flex items-center gap-2 py-2 px-4"
+                disabled={!permissions.can('issue:write')}
+                title={permissions.can('issue:write') ? undefined : 'Your role on this project is read-only'}
+                className="btn-premium flex items-center gap-2 py-2 px-4 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Plus size={14} />
                 Create Issue
@@ -1889,6 +1898,12 @@ export default function PlanWorkspace() {
         )}
 
         {/* ── SETTINGS & RULES TAB ── */}
+        {activeTab === 'access' && selectedProjId && (
+          <div className="premium-card p-6">
+            <MembersAccessPanel projectId={selectedProjId} enforcing={permissions.enforcing} />
+          </div>
+        )}
+
         {activeTab === 'settings' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -2325,8 +2340,9 @@ export default function PlanWorkspace() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleDeleteIssue(selectedIssue.$id)}
-                  title="Delete Issue"
-                  className="p-2 text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded-xl transition-colors"
+                  disabled={!permissions.can('issue:delete')}
+                  title={permissions.can('issue:delete') ? 'Delete Issue' : 'Only editors and admins can delete issues'}
+                  className="p-2 text-[var(--status-error)] hover:bg-[var(--status-error)]/10 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <Trash2 size={16} />
                 </button>
