@@ -6,6 +6,8 @@ import { groupFindingsByCve } from '../plan/cveGrouping';
 import { Issue, Sprint, Threat } from '../types/plan.types';
 import { generateStrideThreats } from './threatAiService';
 import { runAutomation, writeSprintSnapshot, rollUnfinishedToBacklog } from './planAutomationService';
+import { emptyTally, grantAdmin } from '../authz/backfill';
+import { logger } from './logger';
 
 function randomId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
@@ -93,12 +95,55 @@ export const planService = {
    * assertProjectAccess. Without it a project created under an active team
    * would still be owner-only, and the union check would have nothing to match.
    */
-  createProject(
+  /**
+   * Creates a project and, in the same operation, the access grants that make
+   * it reachable.
+   *
+   * The grant is not optional bookkeeping. Under RBAC a project with no
+   * project_access row is invisible to everyone including the person who just
+   * created it, and they cannot delete what they cannot see. The migration
+   * backfilled existing projects; this is the same guarantee for new ones, and
+   * it uses the same idempotent grantAdmin.
+   *
+   * Both the owner and the active team are granted, matching the backfill: a
+   * teammate must be able to open a project created under their shared team.
+   *
+   * If the grants cannot be written for a project that IS in Appwrite, the
+   * project is removed and the call fails. Appwrite has no transactions, so
+   * this is the compensating action — an honest error the caller can retry
+   * beats a project that silently becomes unreachable the day enforcement is
+   * switched on.
+   *
+   * When the repository fell back to its local JSON store, however, nothing
+   * reached Appwrite and a grant would have nowhere to point. That path is
+   * already degraded by definition, so it is logged and allowed through rather
+   * than turned into a failure the fallback exists to avoid.
+   */
+  async createProject(
     input: { name: string; repoId?: string; type?: 'kanban' | 'scrum' },
     userId?: string,
     teamId?: string | null,
   ) {
-    return planRepository.createProject({ ...input, userId, teamId });
+    const project = await planRepository.createProject({ ...input, userId, teamId });
+    try {
+      const tally = emptyTally();
+      if (userId) await grantAdmin(project.$id, 'user', userId, tally, userId);
+      if (teamId) await grantAdmin(project.$id, 'team', teamId, tally, userId);
+      return project;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!(await planRepository.projectExistsInAppwrite(project.$id))) {
+        logger.warn('[plan] project went to the local JSON fallback, so no access grant was written', {
+          event: 'project_grant_skipped_fallback', projectId: project.$id, userId, error: message,
+        });
+        return project;
+      }
+      logger.error('[plan] project created but its access grant failed; rolling back', {
+        event: 'project_grant_failed', projectId: project.$id, userId, teamId, error: message,
+      });
+      await planRepository.deleteProject(project.$id).catch(() => undefined);
+      throw new Error('Project could not be created: access grant failed');
+    }
   },
 
   /**

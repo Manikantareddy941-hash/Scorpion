@@ -5,10 +5,17 @@
  */
 
 jest.mock('./tenancyService', () => ({ canAccessResource: jest.fn() }));
+// createProject also stamps its access grant now; without this the real one
+// runs and reaches for Appwrite.
+jest.mock('../authz/backfill', () => ({
+  grantAdmin: jest.fn(),
+  emptyTally: () => ({ projects: 0, granted: 0, existing: 0, unowned: [] }),
+}));
 jest.mock('../repositories/planRepository', () => ({
   planRepository: {
     getProjectOwner: jest.fn(),
     getProject: jest.fn(),
+    deleteProject: jest.fn(),
     getSprintProjectId: jest.fn(),
     getIssueProjectId: jest.fn(),
     listProjects: jest.fn(),

@@ -386,6 +386,46 @@ export const planRepository = {
     );
   },
 
+  /**
+   * Whether the project really reached Appwrite, with NO fallback.
+   *
+   * createProject silently lands in the local JSON store when Appwrite is
+   * unreachable, so its return value cannot tell the two apart. Access grants
+   * are only meaningful for a project that is actually in the database; this is
+   * how the caller knows which happened.
+   */
+  async projectExistsInAppwrite(projectId: string): Promise<boolean> {
+    try {
+      await databases.getDocument(DB_ID, 'plan_projects', projectId);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Only used to undo a project whose access grant could not be written. A
+   * project nobody holds a grant on is invisible to its own creator once RBAC
+   * enforcement is on, so it is removed rather than left as an orphan that
+   * only an operator can clean up.
+   */
+  async deleteProject(projectId: string): Promise<boolean> {
+    return handleQuery(
+      async () => {
+        await databases.deleteDocument(DB_ID, 'plan_projects', projectId);
+        return true;
+      },
+      async () => {
+        const db = await readMockDb();
+        const idx = db.projects.findIndex(p => p.$id === projectId);
+        if (idx === -1) return false;
+        db.projects.splice(idx, 1);
+        await writeMockDb(db);
+        return true;
+      },
+    );
+  },
+
   async deleteIssue(issueId: string): Promise<boolean> {
     return handleQuery(
       async () => {
