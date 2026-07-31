@@ -214,7 +214,33 @@ export const planRepository = {
     );
   },
 
-  async createEpic(projectId: string, input: { title: string; color?: string; startDate?: string; endDate?: string }): Promise<Epic> {
+  /**
+   * The epic already grouping this advisory, if one exists.
+   *
+   * Returns the literal 'unavailable' when the cveId attribute has not been
+   * provisioned yet. That case must not be reported as "no epic found": the
+   * caller would then create one on every invocation and litter the project
+   * with duplicates, which is precisely what cveId exists to prevent. Callers
+   * fail closed on it instead.
+   */
+  async findEpicByCve(projectId: string, cveId: string): Promise<Epic | null | 'unavailable'> {
+    try {
+      const docList = await databases.listDocuments(DB_ID, 'plan_epics', [
+        Query.equal('projectId', projectId),
+        Query.equal('cveId', cveId),
+        Query.limit(1),
+      ]);
+      return (docList.documents[0] as unknown as Epic) ?? null;
+    } catch (err) {
+      logger.warn('[PlanRepository] cveId lookup failed — treating epic grouping as unavailable', {
+        event: 'epic_cve_lookup_unavailable', projectId, cveId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return 'unavailable';
+    }
+  },
+
+  async createEpic(projectId: string, input: { title: string; color?: string; startDate?: string; endDate?: string; cveId?: string }): Promise<Epic> {
     const newEpic: Epic = {
       $id: randomId('epic'),
       projectId,
@@ -222,13 +248,17 @@ export const planRepository = {
       color: input.color || '#3b82f6',
       startDate: input.startDate,
       endDate: input.endDate,
-      status: 'active'
+      status: 'active',
+      cveId: input.cveId ?? null
     };
     return handleQuery(
       async () => {
         const doc = await databases.createDocument(DB_ID, 'plan_epics', ID.unique(), {
           projectId, title: newEpic.title, color: newEpic.color,
-          startDate: newEpic.startDate, endDate: newEpic.endDate, status: newEpic.status
+          startDate: newEpic.startDate, endDate: newEpic.endDate, status: newEpic.status,
+          // Only written when grouping an advisory, so a hand-made epic on a
+          // collection without the attribute still creates cleanly.
+          ...(input.cveId ? { cveId: input.cveId } : {})
         });
         return doc as unknown as Epic;
       },

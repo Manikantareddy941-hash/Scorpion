@@ -117,6 +117,86 @@ export const planService = {
     return { clusters: groupFindingsByCve(findings.items), degraded: findings.degraded };
   },
 
+  /**
+   * Groups every outstanding finding for one advisory under a single epic.
+   *
+   * One epic with N issues, rather than one issue covering N findings: the same
+   * CVE is patched at different times by different people per repository, and
+   * Issue.vulnId is singular, so per-repo traceability only survives this way.
+   *
+   * Per finding:
+   *   no issue yet          -> create one under the epic
+   *   issue with no epic    -> adopt it (its assignee, comments and logged
+   *                            time are real work; a second issue for the same
+   *                            finding is the duplicate this feature removes)
+   *   issue in another epic -> skip and report, never silently re-parent it
+   *                            out of a deliberate grouping
+   *
+   * Returns 'not_migrated' when cveId is unprovisioned. Proceeding would mint a
+   * duplicate epic on every call, so this fails closed rather than littering
+   * the project during a rollout window.
+   */
+  async createEpicFromCve(projectId: string, cveId: string, userId?: string) {
+    if (!(await assertProjectAccess(projectId, userId))) return null;
+
+    const existing = await planRepository.findEpicByCve(projectId, cveId);
+    if (existing === 'unavailable') return 'not_migrated' as const;
+
+    const repoIds = await projectRepoRepository.listRepoIds(projectId);
+    const findings = await planRepository.listVulnerabilitiesForRepos(repoIds);
+    // A cluster built from an unknown subset would produce an epic missing
+    // findings nobody could see were missing.
+    if (findings.degraded) return 'degraded' as const;
+
+    const cluster = groupFindingsByCve(findings.items).find((c) => c.cveId === cveId);
+    if (!cluster) return 'no_findings' as const;
+
+    const epic = existing ?? await planRepository.createEpic(projectId, {
+      title: `${cveId} — ${cluster.findingCount} finding(s) across ${cluster.repoIds.length} repo(s)`,
+      cveId,
+    });
+
+    const issues = await planRepository.listIssues(projectId);
+    const byVulnId = new Map(issues.filter(i => i.vulnId).map(i => [i.vulnId as string, i]));
+
+    const created: { findingId: string; issueId: string }[] = [];
+    const adopted: { findingId: string; issueId: string }[] = [];
+    const skipped: { findingId: string; issueId: string; reason: string }[] = [];
+
+    for (const findingId of cluster.findingIds) {
+      const issue = byVulnId.get(findingId);
+
+      if (!issue) {
+        const made = await planRepository.createIssue({
+          $id: randomId('issue'),
+          projectId,
+          epicId: epic.$id,
+          type: 'task',
+          title: `${cveId} — remediate finding ${findingId}`,
+          priority: severityToPriority(cluster.severity),
+          status: 'todo',
+          vulnId: findingId,
+          labels: ['security', `cve:${cveId}`],
+          timeLogged: 0,
+          createdAt: new Date().toISOString(),
+        } as Issue);
+        created.push({ findingId, issueId: made.$id });
+        continue;
+      }
+
+      if (issue.epicId === epic.$id) continue; // already grouped here: re-running is a no-op
+      if (issue.epicId) {
+        skipped.push({ findingId, issueId: issue.$id, reason: `already in ${issue.epicId}` });
+        continue;
+      }
+
+      await planRepository.updateIssue(issue.$id, { epicId: epic.$id });
+      adopted.push({ findingId, issueId: issue.$id });
+    }
+
+    return { epicId: epic.$id, cveId, created, adopted, skipped };
+  },
+
   async listEpics(projectId: string, userId?: string) {
     if (!(await assertProjectAccess(projectId, userId))) return null;
     return planRepository.listEpics(projectId);

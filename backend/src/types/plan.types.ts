@@ -22,6 +22,8 @@ export interface Epic {
   startDate?: string;
   endDate?: string;
   status: string;
+  /** Upstream advisory this epic groups, when it was created from a CVE cluster. */
+  cveId?: string | null;
 }
 
 export interface Sprint {

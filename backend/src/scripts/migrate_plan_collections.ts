@@ -95,8 +95,16 @@ const COLLECTIONS: CollectionSpec[] = [
       { kind: 'string', key: 'startDate', size: 64, required: false },
       { kind: 'string', key: 'endDate', size: 64, required: false },
       { kind: 'string', key: 'status', size: 32, required: true },
+      // Upstream advisory this epic groups, when created from a CVE cluster.
+      // Load-bearing for idempotency: without it "group all CVE-X" cannot find
+      // the epic it already made and would create another on every call, which
+      // is why the endpoint returns 412 until this exists.
+      { kind: 'string', key: 'cveId', size: 128, required: false },
     ],
-    indexes: [{ key: 'projectId_idx', attributes: ['projectId'] }],
+    indexes: [
+      { key: 'projectId_idx', attributes: ['projectId'] },
+      { key: 'cveId_idx', attributes: ['cveId'] },
+    ],
   },
   {
     id: 'plan_sprints',
