@@ -6,6 +6,9 @@ import { groupFindingsByCve } from '../plan/cveGrouping';
 import { Issue, Sprint, Threat } from '../types/plan.types';
 import { generateStrideThreats } from './threatAiService';
 import { runAutomation, writeSprintSnapshot, rollUnfinishedToBacklog } from './planAutomationService';
+import { emptyTally, grantAdmin } from '../authz/backfill';
+import { listPermissions } from '../authz/authorizationService';
+import { logger } from './logger';
 
 function randomId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
@@ -62,7 +65,7 @@ export function buildThreatIssueFields(threat: Threat, projectId: string): Issue
  *
  * Fails closed: an unreadable ownership record denies rather than proceeds.
  */
-export async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
+export async function assertLegacyProjectAccess(projectId: string, userId?: string): Promise<boolean> {
   if (!userId) return false;
   try {
     const project = await planRepository.getProject(projectId);
@@ -71,6 +74,29 @@ export async function assertProjectAccess(projectId: string, userId?: string): P
   } catch {
     return false;
   }
+}
+
+/**
+ * Project access for the service layer: the legacy union OR an explicit RBAC
+ * grant.
+ *
+ * The union alone is owner-or-team, so someone an admin deliberately granted
+ * project_viewer — and who is neither the owner nor in the owning team — would
+ * clear the route middleware and then be refused here. Grant management would
+ * assign roles that do nothing.
+ *
+ * Strictly additive: it can only widen, never narrow, so no existing caller
+ * loses access. RBAC is consulted only when the legacy check has already said
+ * no, so the common path (the owner) costs nothing extra.
+ *
+ * This is coarse by design — it answers "may this user touch the project at
+ * all". The verb-level decision (issue:read versus issue:delete) belongs to
+ * requirePermission, which has already run by the time a service is reached.
+ */
+export async function assertProjectAccess(projectId: string, userId?: string): Promise<boolean> {
+  if (await assertLegacyProjectAccess(projectId, userId)) return true;
+  const { reason } = await listPermissions(projectId, userId);
+  return reason === 'granted';
 }
 
 export function severityToPriority(severity: string): Issue['priority'] {
@@ -89,16 +115,54 @@ export const planService = {
   },
 
   /**
-   * `teamId` is stamped so the project is reachable by the whole team through
-   * assertProjectAccess. Without it a project created under an active team
-   * would still be owner-only, and the union check would have nothing to match.
+   * Creates a project and, in the same operation, the access grants that make
+   * it reachable.
+   *
+   * The grant is not optional bookkeeping. Under RBAC a project with no
+   * project_access row is invisible to everyone including the person who just
+   * created it, and they cannot delete what they cannot see. The migration
+   * backfilled existing projects; this is the same guarantee for new ones, and
+   * it uses the same idempotent grantAdmin.
+   *
+   * Both the owner and the active team are granted, matching the backfill: a
+   * teammate must be able to open a project created under their shared team.
+   *
+   * If the grants cannot be written for a project that IS in Appwrite, the
+   * project is removed and the call fails. Appwrite has no transactions, so
+   * this is the compensating action — an honest error the caller can retry
+   * beats a project that silently becomes unreachable the day enforcement is
+   * switched on.
+   *
+   * When the repository fell back to its local JSON store, however, nothing
+   * reached Appwrite and a grant would have nowhere to point. That path is
+   * already degraded by definition, so it is logged and allowed through rather
+   * than turned into a failure the fallback exists to avoid.
    */
-  createProject(
+  async createProject(
     input: { name: string; repoId?: string; type?: 'kanban' | 'scrum' },
     userId?: string,
     teamId?: string | null,
   ) {
-    return planRepository.createProject({ ...input, userId, teamId });
+    const project = await planRepository.createProject({ ...input, userId, teamId });
+    try {
+      const tally = emptyTally();
+      if (userId) await grantAdmin(project.$id, 'user', userId, tally, userId);
+      if (teamId) await grantAdmin(project.$id, 'team', teamId, tally, userId);
+      return project;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!(await planRepository.projectExistsInAppwrite(project.$id))) {
+        logger.warn('[plan] project went to the local JSON fallback, so no access grant was written', {
+          event: 'project_grant_skipped_fallback', projectId: project.$id, userId, error: message,
+        });
+        return project;
+      }
+      logger.error('[plan] project created but its access grant failed; rolling back', {
+        event: 'project_grant_failed', projectId: project.$id, userId, teamId, error: message,
+      });
+      await planRepository.deleteProject(project.$id).catch(() => undefined);
+      throw new Error('Project could not be created: access grant failed');
+    }
   },
 
   /**

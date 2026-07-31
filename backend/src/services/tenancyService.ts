@@ -1,6 +1,7 @@
 import { Request } from 'express';
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
+import { fetchAllDocuments } from '../lib/paginate';
 
 /**
  * Multi-tenancy boundary built on the existing Team/TeamMember model.
@@ -29,6 +30,23 @@ export const isTeamMember = async (teamId: string, userId: string): Promise<bool
     } catch {
         return false;
     }
+};
+
+/**
+ * Every team the user belongs to.
+ *
+ * Reads to completion rather than taking the default page: a membership missed
+ * here is a grant the authorization layer never sees, which reads as a denial.
+ * Throws rather than returning [] on failure — an empty list is indistinguishable
+ * from "member of nothing", and swallowing the error would turn an outage into a
+ * silent lockout.
+ */
+export const listTeamIdsForUser = async (userId: string): Promise<string[]> => {
+    const page = await fetchAllDocuments(COLLECTIONS.TEAM_MEMBERS, [Query.equal('user_id', userId)]);
+    if (page.truncated) throw new Error(`team membership read truncated at ${page.items.length}/${page.total}`);
+    return page.items
+        .map((d) => (d as unknown as { team_id?: string }).team_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
 };
 
 export class TenantAccessError extends Error {}
