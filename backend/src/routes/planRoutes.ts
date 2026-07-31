@@ -39,6 +39,28 @@ router.get('/projects/:projectId/cve-clusters', async (req: AuthenticatedRequest
   res.json(data);
 });
 
+// Groups every outstanding finding for one advisory under a single epic.
+// 412 when the cveId attribute has not been provisioned: without it a repeat
+// call would mint a duplicate epic, so this refuses rather than littering the
+// project during the migration window.
+router.post('/projects/:projectId/epics/from-cve', async (req: AuthenticatedRequest, res: Response) => {
+  const { cveId } = req.body ?? {};
+  if (!cveId || typeof cveId !== 'string') return res.status(400).json({ error: 'cveId is required' });
+
+  const result = await planService.createEpicFromCve(req.params.projectId, cveId, req.user?.$id);
+  if (result === null) return res.status(403).json({ error: 'You do not have access to this project' });
+  if (result === 'not_migrated') {
+    return res.status(412).json({ error: 'Epic grouping is being upgraded — try again shortly' });
+  }
+  if (result === 'degraded') {
+    return res.status(503).json({ error: 'Findings could not be read in full; grouping would be incomplete' });
+  }
+  if (result === 'no_findings') {
+    return res.status(404).json({ error: `No outstanding findings for ${cveId} in this project` });
+  }
+  res.status(201).json(result);
+});
+
 /* EPICS */
 
 router.get('/projects/:projectId/epics', async (req: AuthenticatedRequest, res: Response) => {
