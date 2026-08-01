@@ -7,7 +7,7 @@ jest.mock('@kubernetes/client-node', () => ({
   CoreV1Api: class {},
 }));
 
-import { KubernetesJobRunner } from './kubernetesJobRunner';
+import { KubernetesJobRunner, loadKubeConfig } from './kubernetesJobRunner';
 
 /** Minimal fakes for the two API clients the runner touches. */
 function fakes(statuses: Record<string, unknown>[]) {
@@ -120,4 +120,27 @@ test('each dispatch gets a distinct Job name', async () => {
 
   const names = f.batch.createNamespacedJob.mock.calls.map((c) => c[0].body.metadata.name);
   expect(names[0]).not.toBe(names[1]);
+});
+
+describe('kubeconfig selection', () => {
+  const stub = () => {
+    const calls: string[] = [];
+    return { calls, loadFromCluster: () => calls.push('cluster'), loadFromDefault: () => calls.push('default') };
+  };
+
+  test('uses in-cluster credentials when running in a pod', () => {
+    const kc = stub();
+    loadKubeConfig(kc, { KUBERNETES_SERVICE_HOST: '10.96.0.1' } as NodeJS.ProcessEnv);
+    expect(kc.calls).toEqual(['cluster']);
+  });
+
+  test('falls back to the local kubeconfig outside a cluster', () => {
+    // loadFromCluster does NOT throw when the in-cluster env vars are missing —
+    // it builds a config pointing at https://undefined:undefined, so a
+    // try/catch fallback never fires and the first API call dies. CI hit
+    // exactly this.
+    const kc = stub();
+    loadKubeConfig(kc, {} as NodeJS.ProcessEnv);
+    expect(kc.calls).toEqual(['default']);
+  });
 });

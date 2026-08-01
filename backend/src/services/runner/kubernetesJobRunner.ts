@@ -23,6 +23,27 @@ export interface JobOutcome {
 
 const POLL_INTERVAL_MS = 2000;
 
+/** Just the two methods this needs, so a test can supply a stub. */
+export interface LoadableConfig {
+  loadFromCluster(): void;
+  loadFromDefault(): void;
+}
+
+/**
+ * Chooses in-cluster credentials or a local kubeconfig.
+ *
+ * The obvious `try { loadFromCluster() } catch { loadFromDefault() }` is wrong:
+ * loadFromCluster does NOT throw when the in-cluster environment variables are
+ * absent. It builds a config with an undefined host and port, so the fallback
+ * never fires and the first API call dies on
+ * `https://undefined:undefined/apis/batch/v1/...`. Detect the environment
+ * explicitly rather than relying on it to fail.
+ */
+export function loadKubeConfig(kc: LoadableConfig, env: NodeJS.ProcessEnv = process.env): void {
+  if (env.KUBERNETES_SERVICE_HOST) kc.loadFromCluster();
+  else kc.loadFromDefault();
+}
+
 export class KubernetesJobRunner {
   private batch: k8s.BatchV1Api;
   private core: k8s.CoreV1Api;
@@ -30,11 +51,7 @@ export class KubernetesJobRunner {
   constructor(batch?: k8s.BatchV1Api, core?: k8s.CoreV1Api) {
     if (batch && core) { this.batch = batch; this.core = core; return; }
     const kc = new k8s.KubeConfig();
-    try {
-      kc.loadFromCluster();
-    } catch {
-      kc.loadFromDefault(); // local dev: ~/.kube/config
-    }
+    loadKubeConfig(kc);
     this.batch = batch ?? kc.makeApiClient(k8s.BatchV1Api);
     this.core = core ?? kc.makeApiClient(k8s.CoreV1Api);
   }
