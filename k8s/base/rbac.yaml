@@ -1,0 +1,79 @@
+# RBAC for the ephemeral runner.
+#
+# The backend currently runs as the `default` ServiceAccount with no
+# permissions, which is why it cannot dispatch anything. This gives it exactly
+# the access needed to run scans as Jobs — and nothing more.
+#
+# Scoped as a Role, not a ClusterRole, deliberately. The backend has no business
+# reading or creating workloads outside its own namespace, and a ClusterRole
+# here would let a compromised backend enumerate every pod in the cluster.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scorpion-backend
+  namespace: scorpion
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+    app.kubernetes.io/component: control-plane
+# The backend genuinely needs its token — dispatching a Job is an API call.
+# Contrast with scorpion-runner below, which is mounted no token at all.
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scorpion-job-dispatcher
+  namespace: scorpion
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+rules:
+  # Dispatch and reap scan Jobs.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+
+  # Read the pods a Job creates, to follow status and stream output.
+  # Deliberately NOT create/delete: pods are owned by their Job, and deleting
+  # the Job reaps them. Granting pod creation here would hand a compromised
+  # backend a way to run a container outside the Job template's securityContext.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  # Container output for the pipeline log stream.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scorpion-job-dispatcher
+  namespace: scorpion
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+subjects:
+  - kind: ServiceAccount
+    name: scorpion-backend
+    namespace: scorpion
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: scorpion-job-dispatcher
+---
+# Runner pods get their own ServiceAccount with NO role bound to it, and no
+# API token mounted. A scan executes hostile code; it must not be able to reach
+# the Kubernetes API at all, even read-only.
+#
+# This also gives the egress NetworkPolicy something to select on once the
+# workspace transport is decided.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scorpion-runner
+  namespace: scorpion
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+    app.kubernetes.io/component: runner
+automountServiceAccountToken: false

@@ -6,6 +6,7 @@ namespace: scorpion
 
 resources:
   - namespace.yaml
+  - rbac.yaml
   - deployment.yaml
   - service.yaml
   - sealed-secret.yaml

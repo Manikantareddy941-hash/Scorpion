@@ -168,3 +168,106 @@ jobs:
       - name: Container Isolation Smoke Test
         working-directory: backend
         run: node dist/backend/src/scripts/smoke_container_isolation.js
+
+  k8s-runner:
+    name: K8s Job Runner (kind)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # Downloaded directly at a pinned version rather than through a
+      # third-party action, so the supply chain for a security test is one
+      # auditable URL instead of someone else's composite action.
+      - name: Install kind
+        run: |
+          curl -fsSLo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind version
+
+      - name: Create Cluster
+        run: kind create cluster --name scorpion-ci --wait 180s
+
+      # Only the namespace and RBAC. The full kustomization would also create a
+      # Deployment whose image does not exist in this cluster, leaving a pod in
+      # ImagePullBackOff that has nothing to do with what is being tested.
+      - name: Apply Namespace and RBAC
+        run: |
+          kubectl apply -f k8s/base/namespace.yaml
+          kubectl apply -f k8s/base/rbac.yaml
+          kubectl get sa,role,rolebinding -n scorpion
+
+      # The dispatcher must run as the ServiceAccount it will use in production,
+      # not as cluster-admin. Otherwise the Role is assumed rather than proven,
+      # and a missing verb would only surface after deploy.
+      - name: Build a kubeconfig for the backend ServiceAccount
+        run: |
+          TOKEN=$(kubectl create token scorpion-backend -n scorpion --duration=1h)
+          SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+          kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' >ca.b64
+          cat >sa.kubeconfig <<EOF
+          apiVersion: v1
+          kind: Config
+          clusters:
+          - name: kind
+            cluster:
+              server: ${SERVER}
+              certificate-authority-data: $(cat ca.b64)
+          users:
+          - name: scorpion-backend
+            user:
+              token: ${TOKEN}
+          contexts:
+          - name: sa
+            context:
+              cluster: kind
+              user: scorpion-backend
+              namespace: scorpion
+          current-context: sa
+          EOF
+          echo "KUBECONFIG=$PWD/sa.kubeconfig" >>"$GITHUB_ENV"
+
+      # Proves the withheld verbs are actually withheld. Granting pod creation
+      # would let a compromised backend run a container outside the Job
+      # template's securityContext, so its absence is a security property.
+      - name: Assert the Role grants only what it should
+        run: |
+          set -e
+          kubectl auth can-i create jobs -n scorpion | grep -qx yes
+          kubectl auth can-i get pods/log -n scorpion | grep -qx yes
+          kubectl auth can-i create pods -n scorpion | grep -qx no
+          kubectl auth can-i list secrets -n scorpion | grep -qx no
+          kubectl auth can-i list pods --all-namespaces | grep -qx no
+          echo "Role scope confirmed"
+
+      - name: Pre-pull the workload image into the cluster
+        run: |
+          docker pull alpine:3.20
+          kind load docker-image alpine:3.20 --name scorpion-ci
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Build Backend
+        working-directory: backend
+        run: npm run build
+
+      # Asserts what the KUBELET enforced, by probing from inside the container.
+      # A Pod object read back only echoes the spec that was submitted.
+      - name: K8s Job Runner Smoke Test
+        working-directory: backend
+        run: node dist/backend/src/scripts/smoke_k8s_job_runner.js
+
+      - name: Tear Down Cluster
+        if: always()
+        run: kind delete cluster --name scorpion-ci
