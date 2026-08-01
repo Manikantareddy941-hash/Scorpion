@@ -95,7 +95,11 @@ export class KubernetesJobRunner {
     const deadline = Date.now() + (timeoutSeconds + 60) * 1000;
 
     while (Date.now() < deadline) {
-      const job = await this.batch.readNamespacedJobStatus({ name, namespace: RUNNER_NAMESPACE });
+      // readNamespacedJobStatus hits the jobs/status SUBRESOURCE, which needs a
+      // separate RBAC grant. The Job object already carries .status, so reading
+      // the object keeps the Role to plain `get jobs`. Only a real cluster
+      // surfaced this — a mock returns whatever status you tell it to.
+      const job = await this.batch.readNamespacedJob({ name, namespace: RUNNER_NAMESPACE });
       const status = job.status ?? {};
 
       if ((status.succeeded ?? 0) > 0) return { exitCode: 0, logs: '', timedOut: false };

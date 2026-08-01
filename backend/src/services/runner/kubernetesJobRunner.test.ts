@@ -14,7 +14,7 @@ function fakes(statuses: Record<string, unknown>[]) {
   let call = 0;
   const batch = {
     createNamespacedJob: jest.fn(async (_req: { body: { metadata: { name: string } } }) => ({})),
-    readNamespacedJobStatus: jest.fn(async () => ({
+    readNamespacedJob: jest.fn(async () => ({
       status: statuses[Math.min(call++, statuses.length - 1)],
     })),
     deleteNamespacedJob: jest.fn(async (_req: { name: string; propagationPolicy: string }) => ({})),
@@ -79,7 +79,7 @@ test('polls until the Job reports a terminal state', async () => {
   const f = fakes([{ active: 1 }, { active: 1 }, { succeeded: 1 }]);
 
   expect((await runWith(f)).exitCode).toBe(0);
-  expect(f.batch.readNamespacedJobStatus.mock.calls.length).toBeGreaterThanOrEqual(3);
+  expect(f.batch.readNamespacedJob.mock.calls.length).toBeGreaterThanOrEqual(3);
 });
 
 test('unreadable logs do not turn a successful run into a failure', async () => {
