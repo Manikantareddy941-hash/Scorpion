@@ -1,3 +1,4 @@
+import { statSync } from 'fs';
 import Docker from 'dockerode';
 
 /**
@@ -43,8 +44,51 @@ const num = (name: string, fallback: number): number => {
 /** Wall-clock ceiling. Without one a hanging container wedges the worker forever. */
 export const timeoutMs = (): number => num('RUNNER_TIMEOUT_MS', 15 * 60_000);
 
-/** Unprivileged by default; an operator can revert without a code change. */
-export const defaultUser = (): string => process.env.RUNNER_USER || '1000:1000';
+/**
+ * Which uid:gid the workload runs as.
+ *
+ * Derived from the workspace directory's owner rather than hardcoded, because
+ * the classic bind-mount trap is a container user that cannot write to the
+ * directory it was given: the host checks the repository out as one uid, the
+ * container runs as another, and every `npm install` dies with EACCES. Matching
+ * the directory owner makes writes work by construction, with no chown step.
+ *
+ * Precedence: an explicit RUNNER_USER always wins, so an operator can pin or
+ * revert without a deploy. Then the workspace owner. Then 1000:1000.
+ *
+ * A root-owned workspace is reported rather than silently honoured — running as
+ * root defeats the point, and the fix is to chown the checkout, not to widen
+ * the container.
+ */
+export function resolveUser(
+  workspacePath: string,
+  stat: (p: string) => { uid: number; gid: number } = statOwner,
+  warn?: (message: string) => void,
+): string {
+  if (process.env.RUNNER_USER) return process.env.RUNNER_USER;
+
+  try {
+    const { uid, gid } = stat(workspacePath);
+    // uid 0 on Linux means a root-owned checkout. On Windows every stat reports
+    // 0, which is why this falls through to the default rather than trusting it.
+    if (uid > 0) return `${uid}:${gid}`;
+    warn?.(
+      `[DockerRunner] Workspace ${workspacePath} reports uid 0. Falling back to ${FALLBACK_USER}; `
+      + 'if writes fail with EACCES, chown the checkout to that uid or set RUNNER_USER.',
+    );
+  } catch {
+    // Unreadable workspace: the container creation will fail on its own terms
+    // with a clearer message than anything invented here.
+  }
+  return FALLBACK_USER;
+}
+
+const FALLBACK_USER = '1000:1000';
+
+function statOwner(p: string): { uid: number; gid: number } {
+  const s = statSync(p);
+  return { uid: s.uid, gid: s.gid };
+}
 
 export function buildHostConfig(
   absoluteWorkspace: string,

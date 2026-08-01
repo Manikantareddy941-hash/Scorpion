@@ -1,7 +1,7 @@
 import Docker from 'dockerode';
 import { Writable } from 'stream';
 import path from 'path';
-import { IsolationOptions, buildHostConfig, defaultUser, timeoutMs } from './runner/hostConfig';
+import { IsolationOptions, buildHostConfig, resolveUser, timeoutMs } from './runner/hostConfig';
 
 export interface RunnerOptions extends IsolationOptions {
   image: string;         // Container image name (e.g., 'node:18-alpine')
@@ -41,7 +41,9 @@ export class DockerRunnerService {
       const hostConfig = buildHostConfig(absoluteWorkspace, options);
       // `null` means "use the image default", which is usually root. Anything
       // else runs unprivileged.
-      const user = options.user === null ? undefined : (options.user ?? defaultUser());
+      const user = options.user === null
+        ? undefined
+        : (options.user ?? resolveUser(absoluteWorkspace, undefined, (m) => logger.log(m)));
 
       logger.log(
         `[DockerRunner] Container isolation: network=${hostConfig.NetworkMode}, `

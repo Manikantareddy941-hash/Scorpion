@@ -1,4 +1,4 @@
-import { buildHostConfig, defaultUser, timeoutMs } from './hostConfig';
+import { buildHostConfig, resolveUser, timeoutMs } from './hostConfig';
 
 const WS = '/host/workspace';
 
@@ -32,15 +32,31 @@ describe('privilege', () => {
     expect(cfg.SecurityOpt).toEqual(['no-new-privileges']);
   });
 
-  test('runs unprivileged by default', () => {
-    expect(defaultUser()).toBe('1000:1000');
+  const owner = (uid: number, gid = uid) => () => ({ uid, gid });
+
+  test('runs as the workspace owner, so bind-mount writes cannot EACCES', () => {
+    // The classic trap: host checks out as one uid, container runs as another,
+    // and every npm install dies on a directory it was handed.
+    expect(resolveUser(WS, owner(1042, 1043))).toBe('1042:1043');
   });
 
-  test('the user is overridable without a code change', () => {
+  test('an explicit RUNNER_USER wins over the workspace owner', () => {
     // An image that genuinely cannot run unprivileged must not require a deploy
     // to unblock.
     process.env.RUNNER_USER = '2000:2000';
-    expect(defaultUser()).toBe('2000:2000');
+    expect(resolveUser(WS, owner(1042))).toBe('2000:2000');
+  });
+
+  test('a root-owned workspace falls back and says why, rather than running as root', () => {
+    const warnings: string[] = [];
+    expect(resolveUser(WS, owner(0), (m) => warnings.push(m))).toBe('1000:1000');
+    expect(warnings[0]).toMatch(/uid 0/);
+    expect(warnings[0]).toMatch(/EACCES/);
+  });
+
+  test('an unreadable workspace falls back rather than throwing', () => {
+    const boom = () => { throw new Error('ENOENT'); };
+    expect(resolveUser(WS, boom)).toBe('1000:1000');
   });
 });
 
