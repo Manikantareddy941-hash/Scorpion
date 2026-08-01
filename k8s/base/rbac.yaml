@@ -12,17 +12,19 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: scorpion-backend
+  namespace: scorpion
   labels:
     app.kubernetes.io/name: scorpion-backend
     app.kubernetes.io/component: control-plane
-  # No token is mounted by default: the backend talks to the API server through
-  # the projected token below, and nothing else in the pod needs credentials.
+# The backend genuinely needs its token — dispatching a Job is an API call.
+# Contrast with scorpion-runner below, which is mounted no token at all.
 automountServiceAccountToken: true
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: scorpion-job-dispatcher
+  namespace: scorpion
   labels:
     app.kubernetes.io/name: scorpion-backend
 rules:
@@ -48,11 +50,13 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: scorpion-job-dispatcher
+  namespace: scorpion
   labels:
     app.kubernetes.io/name: scorpion-backend
 subjects:
   - kind: ServiceAccount
     name: scorpion-backend
+    namespace: scorpion
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -68,6 +72,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: scorpion-runner
+  namespace: scorpion
   labels:
     app.kubernetes.io/name: scorpion-backend
     app.kubernetes.io/component: runner
