@@ -276,6 +276,8 @@ jobs:
           }
           sub get log yes
           sub create exec yes
+          # The WebSocket client upgrades over GET, so this verb is load-bearing.
+          sub get exec yes
           assert "create pods" no
           assert "delete pods" no
           assert "list secrets" no
