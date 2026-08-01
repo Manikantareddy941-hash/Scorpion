@@ -266,8 +266,16 @@ jobs:
           }
           assert "create jobs" yes
           assert "get pods" yes
-          assert "get pods/log" yes
-          assert "create pods/exec" yes
+          # `can-i get pods/log` parses the slash as a resource NAME, not a
+          # subresource, so it silently answers for plain `pods` instead. Both
+          # subresource checks need --subresource or they assert nothing.
+          sub() {
+            got=$(kubectl auth can-i $1 pods --subresource=$2 -n scorpion 2>/dev/null || true)
+            echo "  $1 pods --subresource=$2 -> want=$3 got=$got"
+            [ "$got" = "$3" ] || fail=1
+          }
+          sub get log yes
+          sub create exec yes
           assert "create pods" no
           assert "delete pods" no
           assert "list secrets" no
