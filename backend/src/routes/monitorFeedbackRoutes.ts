@@ -3,7 +3,7 @@ import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { resolveOwnershipScope } from '../services/tenancyService';
-import { mttr, reopenRate, escapeByPhase, escapeRecommendations, slaAttainment, mttrByRepo, FindingRecord } from '../monitor/feedbackMetrics';
+import { mttr, reopenRate, escapeByPhase, escapeRecommendations, slaAttainment, mttrByRepo, toFindingRecord, FindingRecord } from '../monitor/feedbackMetrics';
 
 /** Repo scan cap. Hitting it means the metrics describe a subset — reported as `truncated`. */
 const REPO_SCAN_LIMIT = 500;
@@ -72,16 +72,9 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
     }
 
     const findingsRes = await databases.listDocuments(DB_ID, COLLECTIONS.FINDINGS, [Query.equal('repo_id', repoIds), Query.limit(500)]);
-    const findings: FindingRecord[] = findingsRes.documents.map((d) => {
-      const w = d as unknown as Record<string, string | number>;
-      return {
-        severity: String(w.severity ?? 'info'), scanner: String(w.scanner ?? 'unknown'),
-        status: String(w.status ?? 'open'), createdAt: new Date(d.$createdAt).getTime(),
-        resolvedAt: w.resolvedAt ? new Date(w.resolvedAt as string).getTime() : undefined,
-        reopenCount: Number(w.reopenCount ?? 0),
-        repoId: w.repo_id ? String(w.repo_id) : undefined,
-      };
-    });
+    const findings: FindingRecord[] = findingsRes.documents.map(
+      (d) => toFindingRecord(d as unknown as Record<string, unknown>),
+    );
 
     // Fold in runtime (Falco) incidents so MTTR and the 'operate' escape phase
     // actually count runtime threats — scoped by the repo_id #138 stamps.

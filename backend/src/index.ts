@@ -69,6 +69,7 @@ import k8sAdmissionRoutes from './routes/k8sAdmission';
 import ingestRoutes from './routes/ingestRoutes';
 import ciTokenRoutes from './routes/ciTokenRoutes';
 import gateRulesRoutes from './routes/gateRulesRoutes';
+import autotuneRoutes from './routes/autotuneRoutes';
 import driftRoutes from './routes/driftRoutes';
 import canaryRoutes from './routes/canaryRoutes';
 import soarRoutes from './routes/soarRoutes';
@@ -337,6 +338,9 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/gates', gateRoutes);
 app.use('/api/v1/rules', authenticate, gateRulesRoutes);
+// Auto-tune proposals. Authenticated and user-scoped: nothing here can reach the
+// cluster-wide 'system' gate config.
+app.use('/api/autotune', authenticate, autotuneRoutes);
 app.use('/api/v1/drift', authenticate, driftRoutes);
 app.use('/api/canary', authenticate, canaryRoutes);
 app.use('/api/soar', authenticate, soarRoutes);
