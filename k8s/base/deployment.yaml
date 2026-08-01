@@ -47,6 +47,9 @@ spec:
         app.kubernetes.io/name: scorpion-backend
     spec:
       automountServiceAccountToken: false
+      # Without this the pod runs as `default`, which holds no permissions and
+      # cannot dispatch Jobs.
+      serviceAccountName: scorpion-backend
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
