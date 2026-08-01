@@ -27,7 +27,7 @@ export const MIN_PHASE_SHARE = 0.4;
 
 const MS_PER_DAY = 86_400_000;
 
-/** Highest first, for breaking a tie between equally common severities. */
+/** Evaluated highest-severity first, so the queue reads worst-first. */
 const SEVERITY_RANK = ['critical', 'high', 'medium', 'low'];
 
 export interface ProposalDraft {
@@ -72,20 +72,14 @@ export interface ProposeOptions {
   existingOpen?: { targetId: string; field: string }[];
 }
 
-/** The severity that dominates a set of findings; ties break toward the more severe. */
-function dominantSeverity(findings: FindingRecord[]): string {
+/** How many findings of each severity, for a set. */
+function countBySeverity(findings: FindingRecord[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const f of findings) {
     const bucket = severityBucket(f.severity);
     counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
   }
-  let best = '';
-  let bestCount = -1;
-  for (const severity of SEVERITY_RANK) {
-    const count = counts.get(severity) ?? 0;
-    if (count > bestCount) { best = severity; bestCount = count; }
-  }
-  return bestCount > 0 ? best : '';
+  return counts;
 }
 
 /**
@@ -161,60 +155,85 @@ export function proposeFromEscapes(
     }
 
     const phaseFindings = inWindow.filter((f) => escapeByPhase([f])[0]?.phase === phase.phase);
-    const severity = dominantSeverity(phaseFindings);
-    const rule = config.rules.find((r) => r.severity === severity);
-    if (!rule) {
-      skipped.push({
-        reason: 'no_rule_for_severity',
-        detail: `${phase.phase} leaks mostly ${severity || 'unknown'} findings, but no gate rule covers that severity`,
+    const bySeverity = countBySeverity(phaseFindings);
+
+    // Every severity is evaluated on its own count, rather than picking the one
+    // plurality winner. On the live data the split is medium 70 / high 66, so
+    // winner-take-all would let four medium findings suppress a proposal against
+    // 66 high ones — volume masking risk, and unstable week to week. Worst
+    // severity first, so the queue reads in the order an operator cares about.
+    for (const severity of SEVERITY_RANK) {
+      const count = bySeverity.get(severity) ?? 0;
+      if (count === 0) continue;
+
+      if (count < MIN_SAMPLE) {
+        skipped.push({
+          reason: 'below_sample',
+          detail: `${phase.phase}/${severity}: ${count} findings, need ${MIN_SAMPLE}`,
+        });
+        continue;
+      }
+
+      const rule = config.rules.find((r) => r.severity === severity);
+      if (!rule) {
+        skipped.push({
+          reason: 'no_rule_for_severity',
+          detail: `${phase.phase} leaks ${count} ${severity} findings, but no gate rule covers that severity`,
+        });
+        continue;
+      }
+
+      const draft = draftFor(rule);
+      if (!draft) {
+        skipped.push({
+          reason: 'at_floor',
+          detail: `${rule.severity} rule "${rule.id}" is already at threshold 0 — nothing stricter to propose`,
+        });
+        continue;
+      }
+
+      if (existing.has(`${rule.id}:${draft.field}`)) {
+        skipped.push({ reason: 'already_proposed', detail: `${rule.id}.${draft.field} already has an open proposal` });
+        continue;
+      }
+
+      const from = currentValue(rule, draft.field);
+      const verdict = isTightening(draft.field, from, draft.proposed);
+      if (!verdict.tightening) {
+        // Belt and braces. The kernel is the authority even against this engine.
+        skipped.push({ reason: 'not_tightening', detail: `${rule.id}.${draft.field}: ${verdict.reason}` });
+        continue;
+      }
+
+      proposals.push({
+        targetKind: 'gate_rule',
+        targetId: rule.id,
+        field: draft.field,
+        currentValue: from,
+        proposedValue: draft.proposed,
+        rationale:
+          `${(phase.share * 100).toFixed(0)}% of escaped findings in the last ${WINDOW_DAYS} days ` +
+          `surfaced at the ${phase.phase} phase (${phase.count} of ${total}), ` +
+          `${count} of them ${severity} severity. ` +
+          `${phase.recommendation} ` +
+          `Proposed: ${rule.severity} gate ${draft.field} ${String(from)} -> ${String(draft.proposed)}.`,
+        metricKey: `escape_share:${phase.phase}`,
+        metricValue: phase.share,
+        metricThreshold: MIN_PHASE_SHARE,
+        // `severity` rides along so the approval re-check verifies BOTH halves
+        // of the justification. Without it a proposal could still apply after
+        // the high-severity findings it argued about had dropped to two, as
+        // long as the phase share held up.
+        evidenceQuery: JSON.stringify({
+          kind: 'escape_share',
+          phase: phase.phase,
+          severity,
+          windowDays: WINDOW_DAYS,
+          minSample: MIN_SAMPLE,
+        }),
+        sampleSize: count,
       });
-      continue;
     }
-
-    const draft = draftFor(rule);
-    if (!draft) {
-      skipped.push({
-        reason: 'at_floor',
-        detail: `${rule.severity} rule "${rule.id}" is already at threshold 0 — nothing stricter to propose`,
-      });
-      continue;
-    }
-
-    if (existing.has(`${rule.id}:${draft.field}`)) {
-      skipped.push({ reason: 'already_proposed', detail: `${rule.id}.${draft.field} already has an open proposal` });
-      continue;
-    }
-
-    const from = currentValue(rule, draft.field);
-    const verdict = isTightening(draft.field, from, draft.proposed);
-    if (!verdict.tightening) {
-      // Belt and braces. The kernel is the authority even against this engine.
-      skipped.push({ reason: 'not_tightening', detail: `${rule.id}.${draft.field}: ${verdict.reason}` });
-      continue;
-    }
-
-    proposals.push({
-      targetKind: 'gate_rule',
-      targetId: rule.id,
-      field: draft.field,
-      currentValue: from,
-      proposedValue: draft.proposed,
-      rationale:
-        `${(phase.share * 100).toFixed(0)}% of escaped findings in the last ${WINDOW_DAYS} days ` +
-        `surfaced at the ${phase.phase} phase (${phase.count} of ${total}), mostly ${severity} severity. ` +
-        `${phase.recommendation} ` +
-        `Proposed: ${rule.severity} gate ${draft.field} ${String(from)} -> ${String(draft.proposed)}.`,
-      metricKey: `escape_share:${phase.phase}`,
-      metricValue: phase.share,
-      metricThreshold: MIN_PHASE_SHARE,
-      evidenceQuery: JSON.stringify({
-        kind: 'escape_share',
-        phase: phase.phase,
-        windowDays: WINDOW_DAYS,
-        minSample: MIN_SAMPLE,
-      }),
-      sampleSize: inWindow.length,
-    });
   }
 
   return { proposals, skipped };

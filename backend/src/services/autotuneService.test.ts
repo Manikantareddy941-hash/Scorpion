@@ -38,7 +38,7 @@ const proposal = (over: Record<string, unknown> = {}) => ({
   current_value: '5', proposed_value: '4',
   rationale: 'because', metric_key: 'escape_share:deploy',
   metric_value: 0.8, metric_threshold: 0.4,
-  evidence_query: JSON.stringify({ kind: 'escape_share', phase: 'deploy', windowDays: 30, minSample: 10 }),
+  evidence_query: JSON.stringify({ kind: 'escape_share', phase: 'deploy', severity: 'high', windowDays: 30, minSample: 10 }),
   created_at: new Date(NOW - DAY).toISOString(),
   expires_at: new Date(NOW + 13 * DAY).toISOString(),
   ...over,
@@ -210,5 +210,39 @@ describe('scan', () => {
 
     expect(result.created).toEqual([]);
     expect(result.skipped).toBeGreaterThan(0);
+  });
+});
+
+describe('the severity half of the evidence', () => {
+  test('refuses when the phase still dominates but that severity has evaporated', async () => {
+    // The proposal argued about HIGH findings at the deploy phase. Deploy is
+    // still 100% of escapes, but almost all of it is medium now — the change it
+    // asked for is no longer the change the data supports.
+    repo.getOwned.mockResolvedValue(proposal());
+    wireFindings([...findingDocs(3, 'checkov', 'high'), ...findingDocs(20, 'checkov', 'medium')]);
+
+    const result = await autotuneService.decide('p1', USER, 'approve', '', NOW) as { outcome: string; detail: string };
+
+    expect(result.outcome).toBe('stale');
+    expect(result.detail).toMatch(/only 3 high findings remain there/);
+    expect(gateSave).not.toHaveBeenCalled();
+  });
+
+  test('applies when both the share and the severity count still hold', async () => {
+    repo.getOwned.mockResolvedValue(proposal());
+    wireFindings(findingDocs(20, 'checkov', 'high'));
+
+    expect((await autotuneService.decide('p1', USER, 'approve', '', NOW)).outcome).toBe('applied');
+  });
+
+  test('a proposal written before the severity check is share-only, not broken', async () => {
+    // An older row carries no severity, so it is judged on the share alone
+    // rather than refused outright.
+    repo.getOwned.mockResolvedValue(proposal({
+      evidence_query: JSON.stringify({ kind: 'escape_share', phase: 'deploy', windowDays: 30, minSample: 10 }),
+    }));
+    wireFindings(findingDocs(20, 'checkov', 'medium'));
+
+    expect((await autotuneService.decide('p1', USER, 'approve', '', NOW)).outcome).toBe('applied');
   });
 });

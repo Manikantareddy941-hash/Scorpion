@@ -67,7 +67,7 @@ describe('phase share', () => {
 });
 
 describe('the phase-to-severity bridge', () => {
-  test('targets the rule for the severity that dominates the leaking phase', () => {
+  test('targets the rule governing the severity that leaked', () => {
     // Escapes are counted by phase; gate rules are keyed by severity. The rule
     // proposed against must be the one governing what actually leaked.
     const findings = [...many(12, 'checkov', 'critical'), ...many(2, 'semgrep', 'low')];
@@ -144,7 +144,7 @@ describe('the rationale is the product', () => {
 
     expect(rationale).toMatch(/80% of escaped findings/);
     expect(rationale).toMatch(/deploy phase \(12 of 15\)/);
-    expect(rationale).toMatch(/mostly high severity/);
+    expect(rationale).toMatch(/12 of them high severity/);
     expect(rationale).toMatch(/threshold 5 -> 4/);
   });
 
@@ -152,7 +152,7 @@ describe('the rationale is the product', () => {
     const { evidenceQuery } = run(many(12, 'checkov')).proposals[0];
 
     expect(JSON.parse(evidenceQuery)).toEqual({
-      kind: 'escape_share', phase: 'deploy', windowDays: WINDOW_DAYS, minSample: MIN_SAMPLE,
+      kind: 'escape_share', phase: 'deploy', severity: 'high', windowDays: WINDOW_DAYS, minSample: MIN_SAMPLE,
     });
   });
 });
@@ -193,4 +193,52 @@ test('findings that map to no known phase produce a skip, not silence', () => {
   expect(result.skipped).toEqual([
     { reason: 'no_actionable_phase', detail: expect.stringContaining('none map to a known pipeline phase') },
   ]);
+});
+
+describe('per-severity evaluation', () => {
+  test('a plurality of one severity cannot suppress a proposal for another', () => {
+    // The live split is medium 70 / high 66. Winner-take-all let four medium
+    // findings bury a proposal against 66 high ones — volume masking risk.
+    const findings = [...many(70, 'checkov', 'medium'), ...many(66, 'checkov', 'high')];
+    const cfg = config([{ id: 'r-high', severity: 'high', threshold: 5 }]);
+
+    const result = run(findings, cfg);
+
+    expect(result.proposals).toHaveLength(1);
+    expect(result.proposals[0]).toMatchObject({ targetId: 'r-high', currentValue: 5, proposedValue: 4 });
+    // ...and the ungoverned majority is still reported rather than ignored.
+    expect(result.skipped.some((s) => s.reason === 'no_rule_for_severity' && s.detail.includes('70 medium'))).toBe(true);
+  });
+
+  test('one proposal per governed severity in a leaking phase', () => {
+    const findings = [...many(30, 'checkov', 'critical'), ...many(30, 'checkov', 'high')];
+    const cfg = config([
+      { id: 'r-crit', severity: 'critical', threshold: 3 },
+      { id: 'r-high', severity: 'high', threshold: 5 },
+    ]);
+
+    const result = run(findings, cfg);
+
+    // Worst severity first, so the queue reads in the order that matters.
+    expect(result.proposals.map((p) => p.targetId)).toEqual(['r-crit', 'r-high']);
+  });
+
+  test('a severity below the minimum is skipped on its own count', () => {
+    const findings = [...many(30, 'checkov', 'high'), ...many(3, 'checkov', 'critical')];
+    const cfg = config([
+      { id: 'r-crit', severity: 'critical', threshold: 3 },
+      { id: 'r-high', severity: 'high', threshold: 5 },
+    ]);
+
+    const result = run(findings, cfg);
+
+    expect(result.proposals.map((p) => p.targetId)).toEqual(['r-high']);
+    expect(result.skipped).toContainEqual({ reason: 'below_sample', detail: 'deploy/critical: 3 findings, need 10' });
+  });
+
+  test('the evidence query names the severity, so approval can re-check it', () => {
+    const { evidenceQuery } = run(many(12, 'checkov', 'high')).proposals[0];
+
+    expect(JSON.parse(evidenceQuery).severity).toBe('high');
+  });
 });

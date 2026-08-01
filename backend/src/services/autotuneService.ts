@@ -1,5 +1,6 @@
 import { COLLECTIONS, Query } from '../lib/appwrite';
 import { fetchAllDocuments } from '../lib/paginate';
+import { severityBucket } from '../../../shared/sla';
 import { FindingRecord, escapeByPhase, toFindingRecord } from '../monitor/feedbackMetrics';
 import { MIN_SAMPLE, proposeFromEscapes } from '../autotune/proposalEngine';
 import { TunableField, TunableValue, canApply } from '../autotune/tighten';
@@ -62,7 +63,7 @@ export interface EvidenceCheck {
  * a visible delta instead of being rubber-stamped a week later.
  */
 export async function recheckEvidence(proposal: Proposal, findings: FindingRecord[], now: number): Promise<EvidenceCheck> {
-  const query = JSON.parse(proposal.evidence_query) as { kind: string; phase: string; windowDays: number };
+  const query = JSON.parse(proposal.evidence_query) as { kind: string; phase: string; severity?: string; windowDays: number };
   if (query.kind !== 'escape_share') {
     return { value: 0, stillJustified: false, detail: `unknown evidence kind "${query.kind}"` };
   }
@@ -82,11 +83,27 @@ export async function recheckEvidence(proposal: Proposal, findings: FindingRecor
   const phase = byPhase.find((p) => p.phase === query.phase);
   const share = total > 0 && phase ? phase.count / total : 0;
 
-  return {
-    value: share,
-    stillJustified: share >= proposal.metric_threshold,
-    detail: `${query.phase} was ${(proposal.metric_value * 100).toFixed(0)}% of escapes when proposed, now ${(share * 100).toFixed(0)}%`,
-  };
+  const wasThen = `${query.phase} was ${(proposal.metric_value * 100).toFixed(0)}% of escapes when proposed, now ${(share * 100).toFixed(0)}%`;
+  if (share < proposal.metric_threshold) return { value: share, stillJustified: false, detail: wasThen };
+
+  // The proposal rested on TWO facts: the phase leaks, and it leaks findings of
+  // this severity. Checking only the share would let it apply after the
+  // severity it argued about had dropped to a handful, as long as the phase
+  // still dominated. Older proposals carry no severity and are share-only.
+  if (query.severity) {
+    const severityCount = inWindow.filter(
+      (f) => severityBucket(f.severity) === query.severity && escapeByPhase([f])[0]?.phase === query.phase,
+    ).length;
+    if (severityCount < MIN_SAMPLE) {
+      return {
+        value: share,
+        stillJustified: false,
+        detail: `${wasThen}, but only ${severityCount} ${query.severity} findings remain there (need ${MIN_SAMPLE})`,
+      };
+    }
+  }
+
+  return { value: share, stillJustified: true, detail: wasThen };
 }
 
 export type DecisionResult =
