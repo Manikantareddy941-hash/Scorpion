@@ -141,6 +141,7 @@ async function main(): Promise<void> {
   fs.mkdirSync(path.join(workspace, 'nested'));
   fs.writeFileSync(path.join(workspace, 'nested', 'report.json'), '{"findings":[]}');
 
+  const transportLog = collector();
   const transported = await runner.run({
     name: 'transport',
     image: IMAGE,
@@ -149,8 +150,15 @@ async function main(): Promise<void> {
     command: ['/bin/sh', '-c'],
     args: [`cat /workspace/marker.txt; ${emitReportCommand('/workspace/nested/report.json')}`],
     timeoutSeconds: 180,
-  }, collector());
+  }, transportLog);
   fs.rmSync(workspace, { recursive: true, force: true });
+
+  // The dispatcher's own narration. Without it a transport failure reports only
+  // that it failed, which is what the first CI run of this check did.
+  const indent = (text: string, prefix: string) =>
+    text.split('\n').map((l) => `    ${prefix} ${l}`).join('\n');
+  console.log(indent(transportLog.text(), '>'));
+  if (transported.logs) console.log(indent(transported.logs, '|'));
 
   check(!transported.transportFailed, 'the workspace was streamed in over exec');
   check(transported.exitCode === 0, `the workload ran against it (exit ${transported.exitCode})`);
