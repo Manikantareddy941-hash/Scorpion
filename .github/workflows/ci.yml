@@ -157,3 +157,14 @@ jobs:
         env:
           RUN_DB_IT: "1"
           DATABASE_URL: postgres://scorpion:scorpion@localhost:5432/scorpion
+
+      # Runs real containers to prove the workload isolation flags actually
+      # hold. It lives in CI because a Linux runner is the only place it means
+      # anything: Docker Desktop on Windows and macOS shares bind mounts through
+      # a VM filesystem with permissive ownership, so the uid mismatch that
+      # throws EACCES in production cannot reproduce on a developer machine.
+      # The ubuntu runner has a real Docker daemon and a non-root checkout, so
+      # the workspace-owner derivation is exercised the way a worker node does.
+      - name: Container Isolation Smoke Test
+        working-directory: backend
+        run: node dist/backend/src/scripts/smoke_container_isolation.js
