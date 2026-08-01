@@ -1,6 +1,6 @@
 import { COLLECTIONS, Query } from '../lib/appwrite';
 import { fetchAllDocuments } from '../lib/paginate';
-import { FindingRecord, escapeByPhase } from '../monitor/feedbackMetrics';
+import { FindingRecord, escapeByPhase, toFindingRecord } from '../monitor/feedbackMetrics';
 import { MIN_SAMPLE, proposeFromEscapes } from '../autotune/proposalEngine';
 import { TunableField, TunableValue, canApply } from '../autotune/tighten';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
@@ -34,16 +34,7 @@ async function loadFindings(userId: string): Promise<FindingRecord[]> {
   const findings = await fetchAllDocuments(COLLECTIONS.FINDINGS, [Query.equal('repo_id', repoIds)]);
   if (findings.truncated) throw new Error(`findings read truncated at ${findings.items.length}/${findings.total}`);
 
-  return findings.items.map((d) => {
-    const w = d as unknown as Record<string, string | number>;
-    return {
-      severity: String(w.severity ?? 'info'),
-      scanner: String(w.scanner ?? 'unknown'),
-      status: String(w.status ?? 'open'),
-      createdAt: new Date(d.$createdAt).getTime(),
-      resolvedAt: w.resolvedAt ? new Date(String(w.resolvedAt)).getTime() : undefined,
-    };
-  });
+  return findings.items.map((d) => toFindingRecord(d as unknown as Record<string, unknown>));
 }
 
 /** Parses a value back to its real type using the field it belongs to. */

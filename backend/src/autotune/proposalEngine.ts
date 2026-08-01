@@ -57,7 +57,7 @@ export interface ProposalDraft {
  */
 export interface SkipReason {
   reason: 'below_sample' | 'below_share' | 'no_rule_for_severity' | 'at_floor'
-        | 'already_proposed' | 'not_tightening';
+        | 'already_proposed' | 'not_tightening' | 'no_actionable_phase';
   detail: string;
 }
 
@@ -136,6 +136,20 @@ export function proposeFromEscapes(
   const ranked = escapeRecommendations(byPhase);
   const total = ranked.reduce((sum, p) => sum + p.count, 0);
   const proposals: ProposalDraft[] = [];
+
+  // escapeRecommendations drops the 'unknown' bucket, so a set of findings whose
+  // scanner maps to no phase produces an empty ranking and the loop below never
+  // runs — zero proposals AND zero skips, which is indistinguishable from a
+  // broken engine. Say so instead. This is not hypothetical: every finding in
+  // the live database bucketed as 'unknown' until the scanner field was read
+  // from `tool` rather than the absent `scanner`.
+  if (ranked.length === 0) {
+    skipped.push({
+      reason: 'no_actionable_phase',
+      detail: `${inWindow.length} findings in the window, but none map to a known pipeline phase`,
+    });
+    return { proposals, skipped };
+  }
 
   for (const phase of ranked) {
     if (phase.share < MIN_PHASE_SHARE) {

@@ -178,3 +178,19 @@ test('a healthy pipeline yields no proposals and an explanation for each phase',
   expect(result.proposals).toEqual([]);
   expect(result.skipped.length).toBeGreaterThan(0);
 });
+
+test('findings that map to no known phase produce a skip, not silence', () => {
+  // Zero proposals AND zero skips is indistinguishable from a broken engine.
+  // Every finding in the live database looked like this until the scanner was
+  // read from `tool` rather than the absent `scanner` field.
+  const unmapped = Array.from({ length: 20 }, () => ({
+    scanner: 'some-tool-nobody-mapped', severity: 'high', status: 'open', createdAt: NOW - DAY,
+  }));
+
+  const result = run(unmapped);
+
+  expect(result.proposals).toEqual([]);
+  expect(result.skipped).toEqual([
+    { reason: 'no_actionable_phase', detail: expect.stringContaining('none map to a known pipeline phase') },
+  ]);
+});

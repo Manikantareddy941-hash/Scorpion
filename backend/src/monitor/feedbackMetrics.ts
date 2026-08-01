@@ -7,6 +7,31 @@ export interface FindingRecord {
   repoId?: string;
 }
 
+/**
+ * Maps a findings document to the record the metrics operate on.
+ *
+ * Exists because the scanner name is stored as `tool`, not `scanner`. Reading
+ * `scanner` yielded undefined on every row, so escapeByPhase bucketed all 658
+ * findings in the live database as 'unknown' and escapeRecommendations — which
+ * drops the unknown bucket — returned an empty list. The escape-phase panel has
+ * therefore been silently blank in production, and the auto-tune engine could
+ * never have proposed anything.
+ *
+ * `scanner` is kept as a fallback so callers that already normalise the field
+ * (the runtime-incident mapper stamps 'falco' directly) keep working.
+ */
+export function toFindingRecord(doc: Record<string, unknown>): FindingRecord {
+  return {
+    severity: String(doc.severity ?? 'info'),
+    scanner: String(doc.tool ?? doc.scanner ?? 'unknown'),
+    status: String(doc.status ?? 'open'),
+    createdAt: new Date(String(doc.$createdAt)).getTime(),
+    resolvedAt: doc.resolvedAt ? new Date(String(doc.resolvedAt)).getTime() : undefined,
+    reopenCount: Number(doc.reopenCount ?? 0),
+    repoId: doc.repo_id ? String(doc.repo_id) : undefined,
+  };
+}
+
 export interface RepoMttr {
   repoId: string;
   name: string;
