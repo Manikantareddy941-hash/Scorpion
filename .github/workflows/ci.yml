@@ -256,14 +256,25 @@ jobs:
       # template's securityContext, so its absence is a security property.
       - name: Assert the Role grants only what it should
         run: |
-          set -e
-          kubectl auth can-i create jobs -n scorpion | grep -qx yes
-          kubectl auth can-i get pods/log -n scorpion | grep -qx yes
-          kubectl auth can-i create pods/exec -n scorpion | grep -qx yes
-          kubectl auth can-i create pods -n scorpion | grep -qx no
-          kubectl auth can-i list secrets -n scorpion | grep -qx no
-          kubectl auth can-i list pods --all-namespaces | grep -qx no
-          echo "Role scope confirmed"
+          fail=0
+          # Every verdict is printed before it is asserted, so a failure names
+          # the check instead of exiting on an anonymous `set -e`.
+          assert() {
+            got=$(kubectl auth can-i $1 -n scorpion 2>/dev/null || true)
+            echo "  $1 -> want=$2 got=$got"
+            [ "$got" = "$2" ] || fail=1
+          }
+          assert "create jobs" yes
+          assert "get pods" yes
+          assert "get pods/log" yes
+          assert "create pods/exec" yes
+          assert "create pods" no
+          assert "delete pods" no
+          assert "list secrets" no
+          cluster=$(kubectl auth can-i list pods --all-namespaces 2>/dev/null || true)
+          echo "  list pods cluster-wide -> want=no got=$cluster"
+          [ "$cluster" = "no" ] || fail=1
+          if [ "$fail" = "0" ]; then echo "Role scope confirmed"; else echo "RBAC assertions failed"; exit 1; fi
 
       # Pre-loaded so the pods never need a registry pull, which the zero-egress
       # policy would block anyway once it applies to the pod.
