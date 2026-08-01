@@ -158,7 +158,11 @@ async function executeStageInContainer(
     image: executionImage,
     cmd,
     workspacePath: workspaceDir,
-    logger: pipeLogger
+    logger: pipeLogger,
+    // Only the build stage resolves dependencies, so only it gets egress. Test
+    // runs against what build already installed, which confines the
+    // exfiltration path of a malicious build script to a single stage.
+    allowEgress: stageLabel === 'Build',
   });
   if (executionOutcome.exitCode !== 0) {
     throw new Error(`${stageLabel} failed with exit code: ${executionOutcome.exitCode}`);

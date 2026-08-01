@@ -1,15 +1,21 @@
 import Docker from 'dockerode';
 import { Writable } from 'stream';
 import path from 'path';
+import { IsolationOptions, buildHostConfig, defaultUser, timeoutMs } from './runner/hostConfig';
 
-export interface RunnerOptions {
+export interface RunnerOptions extends IsolationOptions {
   image: string;         // Container image name (e.g., 'node:18-alpine')
   cmd: string[];         // Tokenized execution arguments (e.g., ['npm', 'run', 'build'])
   workspacePath: string; // The absolute path on your host machine to compile code inside
   logger: { log: (message: string) => void }; // Hooks straight into Scorpion's SSE pipeline logger
   env?: string[];        // KEY=value pairs injected into the container (e.g., cloud credentials) — never logged
   entrypoint?: string[]; // Override the image entrypoint (e.g., ['/bin/sh', '-c'])
+  /** Wall-clock ceiling in ms. Defaults to RUNNER_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
+
+/** Raised when a container exceeded its wall-clock budget and was killed. */
+export class ContainerTimeoutError extends Error {}
 
 export class DockerRunnerService {
   private docker: Docker;
@@ -32,20 +38,25 @@ export class DockerRunnerService {
 
       // Resolve host directory explicitly for safe mounting context
       const absoluteWorkspace = path.resolve(workspacePath);
+      const hostConfig = buildHostConfig(absoluteWorkspace, options);
+      // `null` means "use the image default", which is usually root. Anything
+      // else runs unprivileged.
+      const user = options.user === null ? undefined : (options.user ?? defaultUser());
 
-      logger.log(`[DockerRunner] Initializing isolated container shell context.`);
-      
+      logger.log(
+        `[DockerRunner] Container isolation: network=${hostConfig.NetworkMode}, `
+        + `user=${user ?? 'image default'}, mem=${Math.round((hostConfig.Memory ?? 0) / 1048576)}MB, `
+        + `pids=${hostConfig.PidsLimit}, caps=dropped`,
+      );
+
       container = await this.docker.createContainer({
         Image: image,
         Cmd: cmd,
         ...(entrypoint ? { Entrypoint: entrypoint } : {}),
         ...(env && env.length ? { Env: env } : {}),
+        ...(user ? { User: user } : {}),
         WorkingDir: '/workspace',
-        HostConfig: {
-          // Bind mount the current pipeline repository workspace directly into the container filesystem
-          Binds: [`${absoluteWorkspace}:/workspace`],
-          AutoRemove: false, // Keeping false explicitly until we query the exact outcome metrics
-        },
+        HostConfig: hostConfig,
         Tty: false,
       });
 
@@ -65,9 +76,27 @@ export class DockerRunnerService {
       logger.log(`[DockerRunner] Container spin-up successful. Executing payload script...`);
       await container.start();
 
-      // Block until container work cycles finish execution asynchronously
-      const terminationData = await container.wait();
-      const exitCode = terminationData.StatusCode;
+      // B6: an unbounded wait lets a hanging or deliberately looping payload
+      // occupy the worker forever. Kill on the deadline and report it as a
+      // timeout rather than as an ordinary non-zero exit, which an attacker
+      // could otherwise use to look like a merely failing build.
+      const budget = options.timeoutMs ?? timeoutMs();
+      let timedOut = false;
+      const killTimer = setTimeout(() => {
+        timedOut = true;
+        logger.log(`[DockerRunner] Wall-clock budget of ${budget}ms exceeded — killing container.`);
+        container?.kill().catch(() => undefined);
+      }, budget);
+
+      let exitCode: number;
+      try {
+        const terminationData = await container.wait();
+        exitCode = terminationData.StatusCode;
+      } finally {
+        clearTimeout(killTimer);
+      }
+
+      if (timedOut) throw new ContainerTimeoutError(`Container exceeded its ${budget}ms budget and was killed`);
 
       logger.log(`[DockerRunner] Payload processing completed with industrial status code: ${exitCode}`);
       return { exitCode };
@@ -78,7 +107,8 @@ export class DockerRunnerService {
     } finally {
       if (container) {
         try {
-          await container.remove();
+          // force: a killed container is still "running" to the daemon for a moment.
+          await container.remove({ force: true });
           logger.log(`[DockerRunner] Infrastructure environment torn down cleanly.`);
         } catch (cleanupError: any) {
           logger.log(`[DockerRunner] Warning: Post-run container teardown structural latency: ${cleanupError.message}`);
