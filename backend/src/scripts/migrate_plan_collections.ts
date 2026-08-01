@@ -33,6 +33,7 @@
 // Idempotent: existing collections, attributes and indexes are skipped.
 import { Client, Databases, DatabasesIndexType } from 'node-appwrite';
 import dotenv from 'dotenv';
+import { classifyAttributeFailure } from './lib/migrationErrors';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -312,7 +313,13 @@ async function ensureCollection(spec: CollectionSpec): Promise<void> {
       }
       console.log(`  [OK]   attribute "${a.key}"`);
     } catch (raw) {
-      if (already(raw)) console.log(`  [SKIP] attribute "${a.key}" already exists`);
+      // Appwrite validates the row-size budget BEFORE it checks existence, so a
+      // redundant create surfaces as "maximum number or size of attributes has
+      // been reached" rather than a conflict. plan_comments.body and
+      // plan_automation_runs.action/message did exactly that on a re-run: three
+      // [ERR] lines for attributes that were present and available all along.
+      const verdict = await classifyAttributeFailure(databases, DB_ID, spec.id, a.key, raw);
+      if (verdict === 'skip') console.log(`  [SKIP] attribute "${a.key}" already exists`);
       else console.error(`  [ERR]  attribute "${a.key}": ${(raw as Error).message}`);
     }
   }

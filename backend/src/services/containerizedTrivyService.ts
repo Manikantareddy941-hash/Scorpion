@@ -17,10 +17,30 @@ export class ContainerizedTrivyService {
     const hostReportPath = path.resolve(workspacePath, reportName);
 
     try {
+      // Trivy needs its vulnerability database. With a warmed cache mounted it
+      // runs fully offline, which is the goal: a scanner analysing hostile code
+      // has no business holding an outbound socket. Without one it must reach
+      // the registry, so the network is granted and the gap is stated loudly
+      // rather than left as a silent exception to the deny-by-default rule.
+      const dbCache = process.env.TRIVY_DB_CACHE;
+      if (!dbCache) {
+        logger.log(
+          '[Security Warning] TRIVY_DB_CACHE is not set, so this scan container runs WITH network access. '
+          + 'Point it at a warmed Trivy cache directory to run the scanner offline.',
+        );
+      }
+
       const result = await dockerRunnerService.runInContainer({
         image: 'aquasec/trivy:latest',
-        cmd: ['fs', '--format', 'json', '--output', `/workspace/${reportName}`, '/workspace'],
+        cmd: [
+          'fs', '--format', 'json', '--output', `/workspace/${reportName}`,
+          ...(dbCache ? ['--skip-db-update', '--skip-java-db-update', '--cache-dir', '/trivy-cache'] : []),
+          '/workspace',
+        ],
         workspacePath,
+        allowEgress: !dbCache,
+        // Read-only: the scanner reads the database, it never updates it here.
+        extraBinds: dbCache ? [`${dbCache}:/trivy-cache:ro`] : [],
         logger
       });
 

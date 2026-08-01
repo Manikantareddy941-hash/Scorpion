@@ -41,6 +41,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 import { DatabasesIndexType } from 'node-appwrite';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import { BUILTIN_ROLES } from '../authz/roles';
+import { classifyAttributeFailure } from './lib/migrationErrors';
 import { ACCESS_COLLECTION, backfillGrants } from '../authz/backfill';
 
 // lib/appwrite falls back to a default endpoint when the env is absent, which
@@ -168,7 +169,13 @@ async function ensureCollection(spec: Spec): Promise<void> {
       }
       console.log(`  [OK]   attribute "${a.key}"`);
     } catch (raw) {
-      if (already(raw)) console.log(`  [SKIP] attribute "${a.key}" already exists`);
+      // Appwrite validates the row-size budget BEFORE it checks existence, so a
+      // redundant create can surface as "maximum number or size of attributes
+      // has been reached" rather than a conflict. Resolve the failure against
+      // reality instead of printing [ERR] for a no-op on every re-run — a
+      // migration that cries wolf is one whose real errors get skimmed past.
+      const verdict = await classifyAttributeFailure(databases, DB_ID, spec.id, a.key, raw);
+      if (verdict === 'skip') console.log(`  [SKIP] attribute "${a.key}" already exists`);
       else console.error(`  [ERR]  attribute "${a.key}": ${(raw as Error).message}`);
     }
   }

@@ -103,6 +103,10 @@ async function runTofu(workspaceId: string, shellCmd: string, sink: (line: strin
         cmd: [shellCmd],
         workspacePath: wsDir(workspaceId),
         env: await resolveEnv(workspaceId),
+        // Provider plugins are fetched from the registry on init, so this stage
+        // needs egress. It is also the stage holding decrypted cloud
+        // credentials — tracked as B3 for the credential-separation pass.
+        allowEgress: true,
         logger: { log: sink },
     });
     return exitCode;
@@ -120,6 +124,8 @@ async function runCheckovGate(wsId: string, force: boolean, sink: (line: string)
         entrypoint: ['/bin/sh', '-c'],
         cmd: ['checkov -d /workspace -o json --quiet > /workspace/checkov.json || true'],
         workspacePath: wsDir(wsId),
+        // Checkov ships its policies in the image: no network needed.
+        allowEgress: false,
         logger: { log: sink },
     });
     const raw = await fs.readFile(path.join(wsDir(wsId), 'checkov.json'), 'utf8');
