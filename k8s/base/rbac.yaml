@@ -41,10 +41,23 @@ rules:
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
 
-  # Container output for the pipeline log stream.
+  # Container output for the pipeline log stream, and the report itself: the
+  # workload prints its findings to stdout rather than writing them to a shared
+  # volume, which is what lets the runner keep zero egress.
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
+
+  # Streams the workspace INTO the init container.
+  #
+  # This looks like a heavy grant and is not an escalation: the create-jobs verb
+  # above already lets the backend run any image with any command. Exec into a pod
+  # already constrained by the Job template's securityContext adds nothing it
+  # could not do more directly — and it is what keeps the runner from needing
+  # any network of its own.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

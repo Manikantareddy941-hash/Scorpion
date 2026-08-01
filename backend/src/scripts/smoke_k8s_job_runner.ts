@@ -19,7 +19,11 @@
 //
 // Run:
 //   npm run build && node dist/backend/src/scripts/smoke_k8s_job_runner.js
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { KubernetesJobRunner } from '../services/runner/kubernetesJobRunner';
+import { emitReportCommand, parseFramedReport } from '../services/runner/reportFraming';
 import { RUNNER_NAMESPACE } from '../services/runner/jobSpec';
 
 let failures = 0;
@@ -112,6 +116,49 @@ async function main(): Promise<void> {
 
   check(failed.exitCode !== 0, 'a failing workload reports non-zero rather than throwing');
   check(!failed.timedOut, 'an ordinary failure is not mislabelled as a timeout');
+
+
+  // The zero-egress NetworkPolicy. Only meaningful because CI runs an enforcing
+  // CNI — kindnet accepts the object and enforces nothing, which would make
+  // this check pass while proving the opposite.
+  console.log('\nZero egress:');
+  const net = await runner.run({
+    name: 'egress-probe',
+    image: IMAGE,
+    command: ['/bin/sh', '-c'],
+    args: ['(nc -z -w 3 1.1.1.1 443 && echo NET=reachable) || echo NET=blocked; (getent hosts example.com >/dev/null && echo DNS=resolved) || echo DNS=blocked'],
+    timeoutSeconds: 60,
+  }, collector());
+  console.log(net.logs.split('\n').map((l) => `    | ${l}`).join('\n'));
+  check(/NET=blocked/.test(net.logs), 'outbound TCP is refused');
+  check(/DNS=blocked/.test(net.logs), 'DNS does not resolve — there is no hole to tunnel through');
+
+  // The push transport, end to end: a real tarball over the exec channel into a
+  // pod that was waiting on the sentinel.
+  console.log('\nWorkspace transport:');
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'scorpion-ws-'));
+  fs.writeFileSync(path.join(workspace, 'marker.txt'), 'delivered-by-exec');
+  fs.mkdirSync(path.join(workspace, 'nested'));
+  fs.writeFileSync(path.join(workspace, 'nested', 'report.json'), '{"findings":[]}');
+
+  const transported = await runner.run({
+    name: 'transport',
+    image: IMAGE,
+    withWorkspace: true,
+    workspacePath: workspace,
+    command: ['/bin/sh', '-c'],
+    args: [`cat /workspace/marker.txt; ${emitReportCommand('/workspace/nested/report.json')}`],
+    timeoutSeconds: 180,
+  }, collector());
+  fs.rmSync(workspace, { recursive: true, force: true });
+
+  check(!transported.transportFailed, 'the workspace was streamed in over exec');
+  check(transported.exitCode === 0, `the workload ran against it (exit ${transported.exitCode})`);
+  check(transported.logs.includes('delivered-by-exec'), 'file contents survived the tar round trip');
+
+  const framed = parseFramedReport(transported.logs);
+  check(framed.ok, `the framed report verified its own length and digest${framed.ok ? '' : ` (${framed.reason})`}`);
+  if (framed.ok) check(framed.body === '{"findings":[]}', 'the report came back byte-identical');
 
   console.log('');
   if (failures > 0) { console.error(`FAILED — ${failures} check(s).`); process.exit(1); }

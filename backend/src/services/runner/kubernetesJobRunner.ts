@@ -1,6 +1,7 @@
 import * as k8s from '@kubernetes/client-node';
 import { randomUUID } from 'crypto';
 import { JobRequest, RUNNER_NAMESPACE, buildJob } from './jobSpec';
+import { ExecLike, TransportError, awaitLoaderReady, streamWorkspace } from './workspaceTransport';
 
 /**
  * Dispatches a workload as a Kubernetes Job and follows it to completion.
@@ -15,6 +16,14 @@ import { JobRequest, RUNNER_NAMESPACE, buildJob } from './jobSpec';
 export interface JobOutcome {
   /** 0 on success. 1 when the Job failed or hit its deadline. */
   exitCode: number;
+  /**
+   * True when the workspace never reached the pod.
+   *
+   * Kept distinct from an ordinary failure so infrastructure trouble is never
+   * reported as a scan verdict — an empty result from a Job that never received
+   * its code looks exactly like a clean scan otherwise.
+   */
+  transportFailed?: boolean;
   /** Container stdout+stderr, best effort — a pod reaped early may yield none. */
   logs: string;
   /** True when the Job exceeded activeDeadlineSeconds. */
@@ -50,13 +59,15 @@ export function loadKubeConfig(kc: LoadableConfig, env: NodeJS.ProcessEnv = proc
 export class KubernetesJobRunner {
   private batch: k8s.BatchV1Api;
   private core: k8s.CoreV1Api;
+  private exec?: ExecLike;
 
-  constructor(batch?: k8s.BatchV1Api, core?: k8s.CoreV1Api) {
-    if (batch && core) { this.batch = batch; this.core = core; return; }
+  constructor(batch?: k8s.BatchV1Api, core?: k8s.CoreV1Api, exec?: ExecLike) {
+    if (batch && core) { this.batch = batch; this.core = core; this.exec = exec; return; }
     const kc = new k8s.KubeConfig();
     loadKubeConfig(kc);
     this.batch = batch ?? kc.makeApiClient(k8s.BatchV1Api);
     this.core = core ?? kc.makeApiClient(k8s.CoreV1Api);
+    this.exec = exec ?? new k8s.Exec(kc);
   }
 
   /**
@@ -80,10 +91,30 @@ export class KubernetesJobRunner {
     await this.batch.createNamespacedJob({ namespace: RUNNER_NAMESPACE, body: job });
 
     try {
+      if (request.withWorkspace) {
+        if (!request.workspacePath) throw new TransportError('withWorkspace requires a workspacePath');
+        if (!this.exec) throw new TransportError('no exec client available to stream the workspace');
+        // The pod must be up before exec has anything to attach to, and the
+        // loader is blocking on a sentinel until it is fed.
+        const podName = await awaitLoaderReady(this.core, name);
+        logger.log(`[K8sRunner] Streaming workspace into ${podName}`);
+        await streamWorkspace(this.exec, podName, request.workspacePath);
+        logger.log('[K8sRunner] Workspace delivered; workload starting');
+      }
+
       const outcome = await this.awaitCompletion(name, request.timeoutSeconds ?? 900, logger);
       outcome.logs = await this.collectLogs(name, logger);
       logger.log(`[K8sRunner] Job ${name} finished: exit=${outcome.exitCode} timedOut=${outcome.timedOut}`);
       return outcome;
+    } catch (err) {
+      if (err instanceof TransportError) {
+        // Never reported as a scan verdict. A Job that never received its code
+        // produces an empty result, which is indistinguishable from a clean
+        // scan unless the caller is told the difference.
+        logger.log(`[K8sRunner] Workspace transport failed: ${err.message}`);
+        return { exitCode: 1, logs: '', timedOut: false, transportFailed: true };
+      }
+      throw err;
     } finally {
       await this.cleanup(name, logger);
     }
