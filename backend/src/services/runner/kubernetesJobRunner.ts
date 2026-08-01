@@ -23,6 +23,9 @@ export interface JobOutcome {
 
 const POLL_INTERVAL_MS = 2000;
 
+/** How many polls to give Kubernetes to write the condition explaining a failure. */
+const MAX_CONDITION_WAITS = 3;
+
 /** Just the two methods this needs, so a test can supply a stub. */
 export interface LoadableConfig {
   loadFromCluster(): void;
@@ -93,6 +96,7 @@ export class KubernetesJobRunner {
     // reported as a timeout, rather than this loop giving up first and calling
     // a still-running Job an error.
     const deadline = Date.now() + (timeoutSeconds + 60) * 1000;
+    let conditionWaits = 0;
 
     while (Date.now() < deadline) {
       // readNamespacedJobStatus hits the jobs/status SUBRESOURCE, which needs a
@@ -105,10 +109,23 @@ export class KubernetesJobRunner {
       if ((status.succeeded ?? 0) > 0) return { exitCode: 0, logs: '', timedOut: false };
 
       if ((status.failed ?? 0) > 0) {
-        // DeadlineExceeded is the cluster reporting our own activeDeadlineSeconds.
-        const deadlineExceeded = (status.conditions ?? []).some(
-          (c) => c.type === 'Failed' && c.reason === 'DeadlineExceeded',
-        );
+        const conditions = status.conditions ?? [];
+        // The failed count and the condition explaining it are not written
+        // atomically, so a first read can show the failure with no reason yet.
+        // Deciding from that would report every deadline as an ordinary
+        // failure, which is exactly the distinction this is meant to preserve.
+        // Bounded, not indefinite: if the condition never arrives, decide with
+        // what is known rather than holding an ordinary failure open for the
+        // whole remaining budget.
+        if (conditions.length === 0 && conditionWaits < MAX_CONDITION_WAITS) {
+          conditionWaits += 1;
+          await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+          continue;
+        }
+        // Matched on reason alone, not on `type === 'Failed'`: Kubernetes sets
+        // a FailureTarget condition carrying DeadlineExceeded before the
+        // terminal Failed one, and requiring the type misses that window.
+        const deadlineExceeded = conditions.some((c) => c.reason === 'DeadlineExceeded');
         return { exitCode: 1, logs: '', timedOut: deadlineExceeded };
       }
 

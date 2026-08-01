@@ -144,3 +144,26 @@ describe('kubeconfig selection', () => {
     expect(kc.calls).toEqual(['default']);
   });
 });
+
+describe('deadline detection', () => {
+  test('a FailureTarget condition counts, not only a terminal Failed one', async () => {
+    // Kubernetes writes FailureTarget with the reason before the Failed
+    // condition. Requiring type === 'Failed' misses that window and reports a
+    // deadline as an ordinary failure.
+    const f = fakes([{ failed: 1, conditions: [{ type: 'FailureTarget', reason: 'DeadlineExceeded' }] }]);
+
+    expect((await runWith(f)).timedOut).toBe(true);
+  });
+
+  test('a failure with no condition yet is re-polled rather than judged', async () => {
+    // The failed count and the condition explaining it are not written
+    // atomically; deciding from the first read would mislabel every deadline.
+    const f = fakes([
+      { failed: 1 },
+      { failed: 1, conditions: [{ type: 'Failed', reason: 'DeadlineExceeded' }] },
+    ]);
+
+    expect((await runWith(f)).timedOut).toBe(true);
+    expect(f.batch.readNamespacedJob.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
