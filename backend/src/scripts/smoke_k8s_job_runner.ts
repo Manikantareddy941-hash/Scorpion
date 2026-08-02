@@ -179,10 +179,14 @@ async function main(): Promise<void> {
     args: [buildScript(tool, args)], timeoutSeconds: 120,
   }, collector());
 
+  // The trailing newline is deliberate in every assertion below: `echo` appends
+  // one, real scanners terminate their JSON with one, and it is part of the
+  // bytes the digest covers. A report arriving without it is the off-by-one
+  // this section exists to catch.
   const clean = await scripted('echo', ['{"Results":[]}']);
   const cleanReport = parseFramedReport(clean.logs);
   check(cleanReport.ok, 'the generated script emits a parseable frame');
-  if (cleanReport.ok) check(cleanReport.body === '{"Results":[]}', 'tool stdout is captured and returned verbatim');
+  if (cleanReport.ok) check(cleanReport.body === '{"Results":[]}\n', 'tool stdout is returned verbatim, trailing newline included');
   check(clean.exitCode === 0, 'a successful tool reports exit 0');
 
   // Without capturing rc before the emission, every scanner would report
@@ -194,14 +198,14 @@ async function main(): Promise<void> {
   // so stdout can be redirected.
   const awkward = await scripted('echo', [`it's "quoted" $HOME`]);
   const awkwardReport = parseFramedReport(awkward.logs);
-  check(awkwardReport.ok && awkwardReport.body === `it's "quoted" $HOME`,
+  check(awkwardReport.ok && awkwardReport.body === `it's "quoted" $HOME\n`,
     'quotes and shell metacharacters in an argument survive unexpanded');
 
   // stderr must stay outside the frame, or it lands in stdout and makes a
   // crashed scanner look like one that reported.
   const noisy = await scripted('sh', ['-c', 'echo oops >&2; echo {}']);
   const noisyReport = parseFramedReport(noisy.logs);
-  check(noisyReport.ok && noisyReport.body === '{}', 'stderr does not contaminate the captured report');
+  check(noisyReport.ok && noisyReport.body === '{}\n', 'stderr does not contaminate the captured report');
   check(noisy.logs.indexOf('oops') < noisy.logs.indexOf(BEGIN_MARKER), 'stderr stays outside the frame, where the adapter reads it');
 
   console.log('');
