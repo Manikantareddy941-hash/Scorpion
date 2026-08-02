@@ -23,7 +23,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { KubernetesJobRunner } from '../services/runner/kubernetesJobRunner';
-import { emitReportCommand, parseFramedReport } from '../services/runner/reportFraming';
+import { BEGIN_MARKER, emitReportCommand, parseFramedReport } from '../services/runner/reportFraming';
+import { buildScript } from '../services/runner/kubernetesRunner';
 import { RUNNER_NAMESPACE } from '../services/runner/jobSpec';
 
 let failures = 0;
@@ -167,6 +168,41 @@ async function main(): Promise<void> {
   const framed = parseFramedReport(transported.logs);
   check(framed.ok, `the framed report verified its own length and digest${framed.ok ? '' : ` (${framed.reason})`}`);
   if (framed.ok) check(framed.body === '{"findings":[]}', 'the report came back byte-identical');
+
+  // The RunnerProvider script contract, run for real. The adapter's unit tests
+  // use a stub dispatcher, which cannot show whether the generated shell
+  // actually redirects, preserves the exit code, and emits a parseable frame
+  // inside a container with a read-only root filesystem.
+  console.log('\nRunnerProvider script contract:');
+  const scripted = async (tool: string, args: string[]) => runner.run({
+    name: 'script', image: IMAGE, command: ['/bin/sh', '-c'],
+    args: [buildScript(tool, args)], timeoutSeconds: 120,
+  }, collector());
+
+  const clean = await scripted('echo', ['{"Results":[]}']);
+  const cleanReport = parseFramedReport(clean.logs);
+  check(cleanReport.ok, 'the generated script emits a parseable frame');
+  if (cleanReport.ok) check(cleanReport.body === '{"Results":[]}', 'tool stdout is captured and returned verbatim');
+  check(clean.exitCode === 0, 'a successful tool reports exit 0');
+
+  // Without capturing rc before the emission, every scanner would report
+  // success no matter how it died — the emission itself always succeeds.
+  const failing = await scripted('false', []);
+  check(failing.exitCode !== 0, `a failing tool keeps its non-zero exit through the emission (got ${failing.exitCode})`);
+
+  // Quoting is a boundary here: the arguments are assembled into a shell string
+  // so stdout can be redirected.
+  const awkward = await scripted('echo', [`it's "quoted" $HOME`]);
+  const awkwardReport = parseFramedReport(awkward.logs);
+  check(awkwardReport.ok && awkwardReport.body === `it's "quoted" $HOME`,
+    'quotes and shell metacharacters in an argument survive unexpanded');
+
+  // stderr must stay outside the frame, or it lands in stdout and makes a
+  // crashed scanner look like one that reported.
+  const noisy = await scripted('sh', ['-c', 'echo oops >&2; echo {}']);
+  const noisyReport = parseFramedReport(noisy.logs);
+  check(noisyReport.ok && noisyReport.body === '{}', 'stderr does not contaminate the captured report');
+  check(noisy.logs.indexOf('oops') < noisy.logs.indexOf(BEGIN_MARKER), 'stderr stays outside the frame, where the adapter reads it');
 
   console.log('');
   if (failures > 0) { console.error(`FAILED — ${failures} check(s).`); process.exit(1); }
