@@ -63,6 +63,18 @@ describe('buildScript', () => {
         expect(script).toContain('>/tmp/report.json');
         expect(script.indexOf('>/tmp/report.json')).toBeLessThan(script.indexOf(BEGIN_MARKER));
     });
+
+    test('stderr is captured and replayed onto stdout ahead of the frame', () => {
+        // stdout and stderr are separate pipes merged by the kubelet with no
+        // ordering guarantee, so diagnostics left on stderr can surface BETWEEN
+        // the markers and corrupt the report. Replaying them onto the one
+        // stream puts the shell in charge of the order.
+        const script = buildScript('trivy', ['fs']);
+
+        expect(script).toContain('2>/tmp/stderr.log');
+        expect(script).toContain('cat /tmp/stderr.log');
+        expect(script.indexOf('cat /tmp/stderr.log')).toBeLessThan(script.indexOf(BEGIN_MARKER));
+    });
 });
 
 describe('KubernetesRunner', () => {
