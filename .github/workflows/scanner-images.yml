@@ -103,7 +103,7 @@ jobs:
                 test -f /opt/trivy-db/db/trivy.db || { echo "no trivy.db in the image"; exit 1; }
                 test -f /opt/trivy-db/db/metadata.json || { echo "no database metadata"; exit 1; }
                 size=$(wc -c < /opt/trivy-db/db/trivy.db)
-                echo "trivy.db = ${size} bytes"
+                echo "trivy.db = ${size} bytes ($((size / 1048576)) MiB)"
                 [ "$size" -gt 1048576 ] || { echo "database is implausibly small"; exit 1; }
               '
               ;;
@@ -167,26 +167,36 @@ jobs:
           common="--rm --network none --user 10001 --read-only --tmpfs /tmp:rw,size=256m
                   -v /tmp/fixture:/src:ro --entrypoint /bin/sh"
 
+          # A non-zero exit is NOT a gate failure. Scanners exit non-zero
+          # precisely when they find something, which is the outcome this step
+          # is demanding — judging on the exit code would fail every healthy
+          # image. The report is the evidence; stderr is kept for when it is not.
           case "${{ matrix.tool }}" in
             trivy)
               # The database is copied out of the image layer into a writable
               # mount first: trivy opens its BoltDB read-write even with
               # --skip-db-update, so reading it in place from a read-only root
-              # fails outright. The runner pod does the same with a disk-backed
-              # emptyDir; tmpfs here is the stricter of the two, so passing
-              # under it implies passing under the pod's volume.
-              docker run $common --tmpfs /cache:rw,size=768m "$img" -c \
+              # fails outright. Sized well above the database because a partial
+              # copy fails as "no findings", which looks identical to a broken
+              # scanner.
+              docker run $common --tmpfs /cache:rw,size=3g "$img" -c \
                 'cp -a "$SCORPION_TRIVY_DB"/. /cache/ && trivy fs --format json --cache-dir /cache --skip-db-update --skip-java-db-update --scanners vuln /src' \
-                > /tmp/report.json
-              findings=$(jq '[.Results[]?.Vulnerabilities // [] | length] | add // 0' /tmp/report.json)
+                > /tmp/report.json 2>/tmp/stderr.log || true
+              findings=$(jq '[.Results[]?.Vulnerabilities // [] | length] | add // 0' /tmp/report.json 2>/dev/null || echo 0)
               ;;
             semgrep)
               docker run $common "$img" -c \
                 'semgrep scan --config /rules --metrics=off --json --quiet /src' \
-                > /tmp/report.json
-              findings=$(jq '.results | length' /tmp/report.json)
+                > /tmp/report.json 2>/tmp/stderr.log || true
+              findings=$(jq '.results | length' /tmp/report.json 2>/dev/null || echo 0)
               ;;
           esac
+
+          # Printed unconditionally. The first run of this gate reported only
+          # that it failed, which is the least useful thing a gate can say.
+          echo "--- scanner stderr (last 40 lines) ---"
+          tail -40 /tmp/stderr.log || true
+          echo "--------------------------------------"
 
           echo "findings against the fixture: ${findings}"
           if [ "${findings:-0}" -eq 0 ]; then
