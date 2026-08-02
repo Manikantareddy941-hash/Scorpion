@@ -36,18 +36,29 @@ export const EXTRACT_COMMAND = [
 export class TransportError extends Error {}
 
 /**
- * A gzipped tar of `workspacePath`.
+ * A gzipped tar of `workspacePath`, plus any synthetic entries.
  *
  * `dot: true` because a repository's .gitignore, .github and similar are part
  * of what the scanners read; omitting them would silently change results.
+ *
+ * `extra` is appended to the STREAM rather than written to the host directory.
+ * The pod sees the same tree either way, and the host clone is left untouched —
+ * so a cleanup that fails cannot leave a synthetic credential sitting in a
+ * directory something else may later read or archive.
  */
-export function archiveWorkspace(workspacePath: string): Readable {
+export function archiveWorkspace(
+  workspacePath: string,
+  extra: readonly { name: string; content: string }[] = [],
+): Readable {
   // archiver v8 exposes archive classes rather than the v7 factory function.
   const archive = new TarArchive({ gzip: true });
   const out = new PassThrough();
   archive.on('error', (err: Error) => out.destroy(err));
   archive.pipe(out);
   archive.directory(workspacePath, false, undefined);
+  for (const file of extra) {
+    archive.append(Buffer.from(file.content, 'utf8'), { name: file.name });
+  }
   void archive.finalize();
   return out;
 }
@@ -71,13 +82,14 @@ export interface ExecLike {
  */
 export async function streamWorkspace(
   exec: ExecLike, podName: string, workspacePath: string,
+  extra: readonly { name: string; content: string }[] = [],
 ): Promise<void> {
   const stderr = new PassThrough();
   const errorText: string[] = [];
   stderr.on('data', (c: Buffer) => errorText.push(c.toString()));
 
   await new Promise<void>((resolve, reject) => {
-    const stdin = archiveWorkspace(workspacePath);
+    const stdin = archiveWorkspace(workspacePath, extra);
     stdin.on('error', (err: Error) => reject(new TransportError(`workspace archive failed: ${err.message}`)));
 
     exec.exec(

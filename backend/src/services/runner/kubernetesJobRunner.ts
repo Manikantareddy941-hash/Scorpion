@@ -98,7 +98,7 @@ export class KubernetesJobRunner {
         // loader is blocking on a sentinel until it is fed.
         const podName = await awaitLoaderReady(this.core, name);
         logger.log(`[K8sRunner] Streaming workspace into ${podName}`);
-        await streamWorkspace(this.exec, podName, request.workspacePath);
+        await streamWorkspace(this.exec, podName, request.workspacePath, request.extraFiles);
         logger.log('[K8sRunner] Workspace delivered; workload starting');
       }
 
