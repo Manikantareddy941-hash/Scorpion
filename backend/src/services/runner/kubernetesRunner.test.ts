@@ -133,6 +133,83 @@ describe('KubernetesRunner', () => {
         expect(runner.supports('trivy')).toBe(true);
     });
 
+    describe('the canary', () => {
+        const canaryOf = (d: { calls: unknown[] }) =>
+            (d.calls[0] as { extraFiles?: { name: string; content: string }[] }).extraFiles!;
+        const GITLEAKS = { ...RUN, tool: 'gitleaks', args: ['detect', '--source', '/tmp/ws'] };
+
+        test('is injected for gitleaks and required back in its report', async () => {
+            // Two-phase: read the planted marker, then answer with a report
+            // that mentions it, the way a working scanner would.
+            const runner = new KubernetesRunner({
+                run: async (request) => {
+                    const marker = (request.extraFiles ?? [])[0].name.match(/\.scorpion-canary-(\w+)/)![1];
+                    return { exitCode: 0, timedOut: false, logs: framedLog(JSON.stringify([
+                        { File: `.scorpion-canary-${marker}/credentials`, RuleID: 'aws-access-token' },
+                        { File: 'src/app.ts', RuleID: 'generic-api-key' },
+                    ])) };
+                },
+            });
+
+            const result = await runner.run(GITLEAKS);
+
+            expect(JSON.parse(result.stdout)).toEqual([{ File: 'src/app.ts', RuleID: 'generic-api-key' }]);
+        });
+
+        test('never reaches the caller — a synthetic credential on a dashboard is its own incident', async () => {
+            const runner = new KubernetesRunner({
+                run: async (request) => {
+                    const marker = (request.extraFiles ?? [])[0].name.match(/\.scorpion-canary-(\w+)/)![1];
+                    return { exitCode: 0, timedOut: false, logs: framedLog(JSON.stringify([
+                        { File: `.scorpion-canary-${marker}/credentials`, Match: 'AKIAEXAMPLEEXAMPLE00' },
+                    ])) };
+                },
+            });
+
+            const result = await runner.run(GITLEAKS);
+
+            expect(result.stdout).not.toMatch(/scorpion-canary/);
+            expect(result.stdout).not.toMatch(/AKIA/);
+        });
+
+        test('a report without the canary is refused — detection was suppressed or broken', async () => {
+            // The scanner ran and answered. It just did not find a secret
+            // planted directly in its path, so its "clean" verdict is
+            // unsupported.
+            const d = dispatcher({ logs: framedLog('[]') });
+
+            await expect(new KubernetesRunner(d).run(GITLEAKS)).rejects.toThrow(/canary was not detected/);
+        });
+
+        test('a report that cannot be parsed is refused, not forwarded', async () => {
+            // Unparseable means unscrubbable, and forwarding it would leak the
+            // planted credential.
+            const d = dispatcher({ logs: framedLog('not json at all') });
+
+            await expect(new KubernetesRunner(d).run(GITLEAKS)).rejects.toThrow(/could not be verified or removed/);
+        });
+
+        test('an empty report is left to the orchestrator rather than blamed on the canary', async () => {
+            // A crashed scanner produces nothing; the existing `exitCode !== 0
+            // && !stdout` rule already marks that unavailable. Demanding a
+            // canary here would report a crash as a trust failure.
+            const d = dispatcher({ exitCode: 2, logs: framedLog('') });
+
+            const result = await new KubernetesRunner(d).run(GITLEAKS);
+
+            expect(result.stdout).toBe('');
+            expect(result.exitCode).toBe(2);
+        });
+
+        test('is not planted for tools that could not detect it', async () => {
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await new KubernetesRunner(d).run(RUN);
+
+            expect(canaryOf(d)).toBeUndefined();
+        });
+    });
+
     test('the workspace is always streamed in — a scan of an empty tree is not a scan', async () => {
         const d = dispatcher({ logs: framedLog('{}') });
 

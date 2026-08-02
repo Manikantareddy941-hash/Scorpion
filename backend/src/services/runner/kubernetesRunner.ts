@@ -1,4 +1,5 @@
 import { logger } from '../logger';
+import { createCanary, requiresCanary, scrubCanary } from './canary';
 import { KubernetesJobRunner } from './kubernetesJobRunner';
 import { sanitizeName, WORKSPACE_PATH } from './jobSpec';
 import { BEGIN_MARKER, emitReportCommand, parseFramedReport } from './reportFraming';
@@ -65,9 +66,47 @@ export function buildScript(tool: string, args: string[]): string {
 /** Just the method the adapter needs, so a test can supply a stub. */
 export interface JobDispatcher {
   run(
-    request: { name: string; image: string; command?: string[]; args?: string[]; timeoutSeconds?: number; withWorkspace?: boolean; workspacePath?: string },
+    request: {
+      name: string; image: string; command?: string[]; args?: string[];
+      timeoutSeconds?: number; withWorkspace?: boolean; workspacePath?: string;
+      extraFiles?: readonly { name: string; content: string }[];
+    },
     log: { log: (m: string) => void },
   ): Promise<{ exitCode: number; logs: string; timedOut: boolean; transportFailed?: boolean }>;
+}
+
+/**
+ * Verifies the canary and strips it from the report.
+ *
+ * Runs before the result leaves the adapter, so nothing downstream — the
+ * normalizers, the policy engine, the stored findings, a PR comment — ever sees
+ * the synthetic credential.
+ *
+ * Every failure here is a refusal rather than a passed-through report. A report
+ * that cannot be parsed cannot be scrubbed either, and forwarding it would leak
+ * a fake secret into a customer's dashboard.
+ */
+function verifyAndScrub(tool: string, body: string, marker: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new Error(`${tool}: report is not parseable JSON, so the canary could not be verified or removed`);
+  }
+
+  const { cleaned, hits, leaked } = scrubCanary(parsed, marker);
+
+  if (hits === 0) {
+    // The scanner ran and reported, but did not find a secret planted directly
+    // in its path. Its detection was suppressed, broken, or bypassed, and any
+    // "clean" verdict from it is unsupported.
+    throw new Error(`${tool}: canary was not detected — the scanner's findings cannot be trusted`);
+  }
+  if (leaked) {
+    throw new Error(`${tool}: canary could not be fully removed from the report — refusing to forward it`);
+  }
+
+  return JSON.stringify(cleaned);
 }
 
 export class KubernetesRunner implements RunnerProvider {
@@ -88,6 +127,10 @@ export class KubernetesRunner implements RunnerProvider {
     const image = TOOL_IMAGES[tool];
     if (!image) throw new Error(`Tool '${tool}' has no container image — cannot run as a Job`);
 
+    // Planted before the tree is streamed, and required back in the report. See
+    // canary.ts — zero egress stops exfiltration, not a scanner that lies.
+    const canary = requiresCanary(tool) ? createCanary() : undefined;
+
     const outcome = await this.dispatcher.run({
       name: sanitizeName(tool),
       image,
@@ -96,6 +139,7 @@ export class KubernetesRunner implements RunnerProvider {
       timeoutSeconds: Math.ceil(timeoutMs / 1000),
       withWorkspace: true,
       workspacePath,
+      extraFiles: canary?.files,
     }, { log: (m: string) => logger.info(m) });
 
     // Infrastructure trouble, not a scan verdict. Thrown so the orchestrator's
@@ -124,6 +168,13 @@ export class KubernetesRunner implements RunnerProvider {
     const begin = outcome.logs.indexOf(BEGIN_MARKER);
     const stderr = begin === -1 ? '' : outcome.logs.slice(0, begin).trimEnd();
 
-    return { stdout: framed.body, stderr, exitCode: outcome.exitCode };
+    // An empty report is left to the orchestrator, which already treats a
+    // non-zero exit with no output as `unavailable`. Demanding a canary from a
+    // scanner that produced nothing would report a crash as a trust failure.
+    const stdout = canary && framed.body.trim()
+      ? verifyAndScrub(tool, framed.body, canary.marker)
+      : framed.body;
+
+    return { stdout, stderr, exitCode: outcome.exitCode };
   }
 }
