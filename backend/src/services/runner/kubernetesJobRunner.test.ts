@@ -1,6 +1,12 @@
 // Factory mock scoped to this file: the real package is ESM and unparseable
 // under ts-jest CJS; the factory keeps the real module from ever loading.
 // Both API clients are injected in these tests, so KubeConfig is never used.
+// archiver is ESM and reaches this file through workspaceTransport.
+jest.mock('archiver', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { PassThrough } = require('stream');
+  return { TarArchive: class extends PassThrough { directory(): void {} finalize(): void { this.end('t'); } } };
+});
 jest.mock('@kubernetes/client-node', () => ({
   KubeConfig: class { loadFromCluster(): void {} loadFromDefault(): void {} makeApiClient(): object { return {}; } },
   BatchV1Api: class {},
@@ -165,5 +171,41 @@ describe('deadline detection', () => {
 
     expect((await runWith(f)).timedOut).toBe(true);
     expect(f.batch.readNamespacedJob.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('workspace transport', () => {
+  const withWorkspace = { ...request, withWorkspace: true, workspacePath: '/tmp/does-not-matter' };
+
+  test('a transport failure is reported as transportFailed, never as a scan result', async () => {
+    // An empty result from a Job that never received its code looks exactly
+    // like a clean scan. The caller has to be able to tell them apart.
+    const f = fakes([{ succeeded: 1 }]);
+    const runner = new KubernetesJobRunner(f.batch as never, f.core as never, undefined);
+    const log = logger();
+
+    const outcome = await runner.run(withWorkspace, log);
+
+    expect(outcome.transportFailed).toBe(true);
+    expect(outcome.exitCode).not.toBe(0);
+  });
+
+  test('the Job is still cleaned up when transport fails', async () => {
+    const f = fakes([{ succeeded: 1 }]);
+    const runner = new KubernetesJobRunner(f.batch as never, f.core as never, undefined);
+
+    await runner.run(withWorkspace, logger());
+
+    expect(f.batch.deleteNamespacedJob).toHaveBeenCalled();
+  });
+
+  test('a run without a workspace never touches the transport', async () => {
+    const f = fakes([{ succeeded: 1 }]);
+    const runner = new KubernetesJobRunner(f.batch as never, f.core as never, undefined);
+
+    const outcome = await runner.run(request, logger());
+
+    expect(outcome.transportFailed).toBeUndefined();
+    expect(outcome.exitCode).toBe(0);
   });
 });

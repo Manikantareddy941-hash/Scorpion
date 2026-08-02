@@ -12,6 +12,7 @@ resources:
   - sealed-secret.yaml
   - validating-webhook.yaml
   - network-policy.yaml
+  - network-policy-runner.yaml
 
 # `kustomize edit set image scorpion-backend=ghcr.io/your-org/scorpion-backend:<tag>`
 # rewrites the container image without hand-editing deployment.yaml.

@@ -1,0 +1,38 @@
+# Zero egress for scan workloads.
+#
+# Runner pods execute code from repositories we did not write. With the
+# push-based workspace transport they have nothing legitimate to reach: the
+# backend streams the tree in over the Kubernetes exec channel and reads the
+# report back from container logs, so the pod never initiates a connection.
+#
+# That makes the policy a plain drop-all rather than an allowlist, which is the
+# point — there is no endpoint list to get wrong, and no DNS hole to abuse. A
+# malicious build script attempting to exfiltrate finds no route, no resolver
+# and no proxy.
+#
+# Scoped by LABEL, never by namespace. `podSelector: {}` here would also select
+# scorpion-backend, which talks to Appwrite Cloud — cutting that off is a full
+# outage, not a hardening step.
+#
+# WARNING: a NetworkPolicy is inert unless the CNI enforces it. kind's default
+# (kindnet) ignores these objects entirely, which is why CI installs Calico
+# before asserting anything. Confirm the production CNI enforces too, or this
+# file is decoration.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: scorpion-runner-deny-all
+  namespace: scorpion
+  labels:
+    app.kubernetes.io/name: scorpion-backend
+    app.kubernetes.io/component: runner
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: runner
+  # Declaring a policy type with no matching rules denies all traffic of that
+  # type. Egress stops exfiltration; Ingress because nothing should ever open a
+  # connection TO a scan workload.
+  policyTypes:
+    - Egress
+    - Ingress

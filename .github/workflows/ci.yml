@@ -194,17 +194,32 @@ jobs:
           sudo mv ./kind /usr/local/bin/kind
           kind version
 
-      - name: Create Cluster
-        run: kind create cluster --name scorpion-ci --wait 180s
+      # kindnet, kind's default CNI, ACCEPTS NetworkPolicy objects and enforces
+      # none of them. Testing the zero-egress policy against it would pass while
+      # proving nothing. Calico actually enforces, so the assertion is real.
+      - name: Create Cluster with an enforcing CNI
+        run: |
+          cat >kind-config.yaml <<'CFG'
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          networking:
+            disableDefaultCNI: true
+            podSubnet: "192.168.0.0/16"
+          CFG
+          kind create cluster --name scorpion-ci --config kind-config.yaml --wait 60s
+          kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+          kubectl -n kube-system rollout status daemonset/calico-node --timeout=300s
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s
 
       # Only the namespace and RBAC. The full kustomization would also create a
       # Deployment whose image does not exist in this cluster, leaving a pod in
       # ImagePullBackOff that has nothing to do with what is being tested.
-      - name: Apply Namespace and RBAC
+      - name: Apply Namespace, RBAC and the runner NetworkPolicy
         run: |
           kubectl apply -f k8s/base/namespace.yaml
           kubectl apply -f k8s/base/rbac.yaml
-          kubectl get sa,role,rolebinding -n scorpion
+          kubectl apply -f k8s/base/network-policy-runner.yaml
+          kubectl get sa,role,rolebinding,networkpolicy -n scorpion
 
       # The dispatcher must run as the ServiceAccount it will use in production,
       # not as cluster-admin. Otherwise the Role is assumed rather than proven,
@@ -241,18 +256,44 @@ jobs:
       # template's securityContext, so its absence is a security property.
       - name: Assert the Role grants only what it should
         run: |
-          set -e
-          kubectl auth can-i create jobs -n scorpion | grep -qx yes
-          kubectl auth can-i get pods/log -n scorpion | grep -qx yes
-          kubectl auth can-i create pods -n scorpion | grep -qx no
-          kubectl auth can-i list secrets -n scorpion | grep -qx no
-          kubectl auth can-i list pods --all-namespaces | grep -qx no
-          echo "Role scope confirmed"
+          fail=0
+          # Every verdict is printed before it is asserted, so a failure names
+          # the check instead of exiting on an anonymous `set -e`.
+          assert() {
+            got=$(kubectl auth can-i $1 -n scorpion 2>/dev/null || true)
+            echo "  $1 -> want=$2 got=$got"
+            [ "$got" = "$2" ] || fail=1
+          }
+          assert "create jobs" yes
+          assert "get pods" yes
+          # `can-i get pods/log` parses the slash as a resource NAME, not a
+          # subresource, so it silently answers for plain `pods` instead. Both
+          # subresource checks need --subresource or they assert nothing.
+          sub() {
+            got=$(kubectl auth can-i $1 pods --subresource=$2 -n scorpion 2>/dev/null || true)
+            echo "  $1 pods --subresource=$2 -> want=$3 got=$got"
+            [ "$got" = "$3" ] || fail=1
+          }
+          sub get log yes
+          sub create exec yes
+          # The WebSocket client upgrades over GET, so this verb is load-bearing.
+          sub get exec yes
+          assert "create pods" no
+          assert "delete pods" no
+          assert "list secrets" no
+          cluster=$(kubectl auth can-i list pods --all-namespaces 2>/dev/null || true)
+          echo "  list pods cluster-wide -> want=no got=$cluster"
+          [ "$cluster" = "no" ] || fail=1
+          if [ "$fail" = "0" ]; then echo "Role scope confirmed"; else echo "RBAC assertions failed"; exit 1; fi
 
-      - name: Pre-pull the workload image into the cluster
+      # Pre-loaded so the pods never need a registry pull, which the zero-egress
+      # policy would block anyway once it applies to the pod.
+      - name: Pre-pull images into the cluster
         run: |
           docker pull alpine:3.20
+          docker pull debian:12-slim
           kind load docker-image alpine:3.20 --name scorpion-ci
+          kind load docker-image debian:12-slim --name scorpion-ci
 
       - name: Install Backend Dependencies
         working-directory: backend
