@@ -29,6 +29,19 @@ import { TOOL_IMAGES, type RunnerProvider, type ToolResult, type ToolRun } from 
 const REPORT_PATH = '/tmp/report.json';
 
 /**
+ * Tool stderr is captured here rather than left to flow to the container's own
+ * stderr.
+ *
+ * stdout and stderr are separate pipes, merged by the kubelet with no ordering
+ * guarantee between them. Left alone, a scanner's diagnostics can surface
+ * BETWEEN the frame markers and corrupt the report — the digest catches it, so
+ * it fails closed rather than lying, but the scan fails for no real reason.
+ * Replaying stderr onto stdout keeps everything on one stream, where the shell
+ * guarantees the order.
+ */
+const STDERR_PATH = '/tmp/stderr.log';
+
+/**
  * Args carry host paths; the workspace is streamed to WORKSPACE_PATH inside the
  * pod. Same rewrite the Docker runner does for its bind mount.
  */
@@ -60,7 +73,14 @@ export function shellQuote(value: string): string {
  */
 export function buildScript(tool: string, args: string[]): string {
   const invocation = [tool, ...args].map(shellQuote).join(' ');
-  return `${invocation} >${REPORT_PATH}; rc=$?; ${emitReportCommand(REPORT_PATH)}; exit $rc`;
+  return [
+    `${invocation} >${REPORT_PATH} 2>${STDERR_PATH}`,
+    'rc=$?',
+    // Replayed onto stdout, ahead of the frame, so the two never race.
+    `cat ${STDERR_PATH}`,
+    emitReportCommand(REPORT_PATH),
+    'exit $rc',
+  ].join('; ');
 }
 
 /** Just the method the adapter needs, so a test can supply a stub. */
