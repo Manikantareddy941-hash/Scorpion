@@ -1,4 +1,4 @@
-import { orchestrateScan } from '../services/scan/orchestrator';
+import { assertScannersUsable, orchestrateScan } from '../services/scan/orchestrator';
 import { cloneRepo } from '../utils/git';
 import fs from 'fs/promises';
 import path from 'path';
@@ -11,6 +11,12 @@ export interface ScanPipelineResult {
   semgrep: any;
   gitleaks: any;
 }
+
+/**
+ * The tools this result carries — and therefore the only ones the policy engine
+ * can evaluate. Each must produce a verdict or the run is aborted.
+ */
+const REPORTED_TOOLS = ['trivy', 'semgrep', 'gitleaks'] as const;
 
 export async function runScanPipeline(options: { owner?: string; repo?: string; branch?: string; cloneUrl?: string; localPath?: string; scanType?: 'full' | 'sast' | 'sca' | 'secrets' }): Promise<ScanPipelineResult> {
   const randomId = crypto.randomBytes(6).toString('hex');
@@ -35,7 +41,18 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
     const results = await orchestrateScan(tempDir, { scanType: options.scanType || 'full' });
     const findResult = (tool: string) => results.find(r => r.tool === tool);
 
-    // 3. Process results
+    // 3. Refuse to hand back a verdict built on a scanner that never ran.
+    //
+    // Only the three tools this result carries are required: the policy engine
+    // evaluates these and nothing else, so a checkov or bandit failure cannot
+    // corrupt the gate decision and must not fail the pipeline.
+    //
+    // Throwing is the fail-closed path at every call site — ciOrchestrator sets
+    // the commit status to `error`, buildService aborts the build, repoService
+    // logs and abandons the background scan.
+    assertScannersUsable(results, REPORTED_TOOLS);
+
+    // 4. Process results
     // We return the raw objects, the orchestrator/policy engine will handle the parsing logic
     return {
       trivy:    parseJsonSafe(findResult('trivy')?.stdout ?? '{}'),
