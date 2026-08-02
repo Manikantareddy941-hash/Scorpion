@@ -64,6 +64,12 @@ export interface JobRequest {
   workspaceLimit?: string;
   /** Host directory streamed into the pod. Required when withWorkspace is set. */
   workspacePath?: string;
+  /**
+   * Synthetic files added to the archive but never to the host directory.
+   * Carries the canary payload — see canary.ts for why the report is required
+   * to contain it.
+   */
+  extraFiles?: readonly { name: string; content: string }[];
 }
 
 const DEFAULTS = {

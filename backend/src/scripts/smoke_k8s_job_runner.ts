@@ -25,7 +25,8 @@ import path from 'path';
 import { KubernetesJobRunner } from '../services/runner/kubernetesJobRunner';
 import { BEGIN_MARKER, emitReportCommand, parseFramedReport } from '../services/runner/reportFraming';
 import { buildScript } from '../services/runner/kubernetesRunner';
-import { RUNNER_NAMESPACE } from '../services/runner/jobSpec';
+import { RUNNER_NAMESPACE, WORKSPACE_PATH } from '../services/runner/jobSpec';
+import { createCanary } from '../services/runner/canary';
 
 let failures = 0;
 const check = (ok: boolean, msg: string): void => {
@@ -168,6 +169,36 @@ async function main(): Promise<void> {
   const framed = parseFramedReport(transported.logs);
   check(framed.ok, `the framed report verified its own length and digest${framed.ok ? '' : ` (${framed.reason})`}`);
   if (framed.ok) check(framed.body === '{"findings":[]}', 'the report came back byte-identical');
+
+  // The canary has to survive the tar round trip. The unit tests mock archiver,
+  // so nothing there shows whether an appended entry actually reaches the pod —
+  // and a canary that never arrives fails every scan closed.
+  console.log('\nCanary injection:');
+  const canary = createCanary();
+  const canaryWs = fs.mkdtempSync(path.join(os.tmpdir(), 'scorpion-canary-'));
+  fs.writeFileSync(path.join(canaryWs, 'app.js'), 'const x = 1;');
+
+  const planted = await runner.run({
+    name: 'canary',
+    image: IMAGE,
+    withWorkspace: true,
+    workspacePath: canaryWs,
+    extraFiles: canary.files,
+    command: ['/bin/sh', '-c'],
+    args: [`cat ${WORKSPACE_PATH}/${canary.files[0].name}; ls ${WORKSPACE_PATH}/app.js`],
+    timeoutSeconds: 180,
+  }, collector());
+
+  // Checked BEFORE cleanup: the payload goes into the archive stream, never the
+  // host directory, so a failed cleanup cannot strand a synthetic credential
+  // somewhere else may read it.
+  const onHost = fs.existsSync(path.join(canaryWs, canary.files[0].name));
+  fs.rmSync(canaryWs, { recursive: true, force: true });
+
+  check(planted.exitCode === 0, `the canary file arrives in the pod (exit ${planted.exitCode})`);
+  check(/AKIA[A-Z0-9]{16}/.test(planted.logs), 'it carries a credential a secret scanner will match');
+  check(planted.logs.includes('app.js'), 'the real workspace is still delivered alongside it');
+  check(!onHost, 'the host workspace was never written to');
 
   // The RunnerProvider script contract, run for real. The adapter's unit tests
   // use a stub dispatcher, which cannot show whether the generated shell
