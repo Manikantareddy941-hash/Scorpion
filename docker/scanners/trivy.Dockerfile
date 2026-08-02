@@ -36,3 +36,12 @@ ENV TRIVY_CACHE_BACKEND=memory
 
 LABEL org.opencontainers.image.title="scorpion-trivy" \
       org.scorpion.tool="trivy"
+
+# checkov:skip=CKV_DOCKER_2:A scan Job runs once and exits. There is no
+# long-lived process for a HEALTHCHECK to report on, and Kubernetes judges a
+# Job by its exit code rather than by container health.
+
+# Matches the runner pod's runAsUser. Declared here as well so the image is
+# non-root even if something runs it outside that securityContext — the DB is
+# world-readable and nothing at scan time writes inside the image.
+USER 10001

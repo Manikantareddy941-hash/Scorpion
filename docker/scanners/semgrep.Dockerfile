@@ -61,3 +61,12 @@ ENV HOME=/tmp \
 
 LABEL org.opencontainers.image.title="scorpion-semgrep" \
       org.scorpion.tool="semgrep"
+
+# checkov:skip=CKV_DOCKER_2:A scan Job runs once and exits. There is no
+# long-lived process for a HEALTHCHECK to report on, and Kubernetes judges a
+# Job by its exit code rather than by container health.
+
+# Matches the runner pod's runAsUser. Declared here as well so the image is
+# non-root even if something runs it outside that securityContext; HOME already
+# points at /tmp, which is the only path semgrep needs to write.
+USER 10001
