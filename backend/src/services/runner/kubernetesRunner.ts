@@ -1,5 +1,8 @@
 import { logger } from '../logger';
+import { logSecureAuditEvent } from '../../utils/tamperAuditLogger';
 import { createCanary, requiresCanary, scrubCanary } from './canary';
+import { bakedImageRef, isBaked, offlineProfile } from './offline';
+import { resolveScannerImage, type ResolvedScannerImage } from './scannerImage';
 import { KubernetesJobRunner } from './kubernetesJobRunner';
 import { sanitizeName, WORKSPACE_PATH } from './jobSpec';
 import { BEGIN_MARKER, emitReportCommand, parseFramedReport } from './reportFraming';
@@ -71,9 +74,12 @@ export function shellQuote(value: string): string {
  * image's PATH — true for every entry in TOOL_IMAGES, and the reason a tool
  * cannot simply be swapped for an image that only works via its entrypoint.
  */
-export function buildScript(tool: string, args: string[]): string {
+export function buildScript(tool: string, args: string[], prelude?: string): string {
   const invocation = [tool, ...args].map(shellQuote).join(' ');
   return [
+    // Staging must not be silently skipped: if the database copy fails, trivy
+    // falls back to finding nothing, which reads as a clean repository.
+    ...(prelude ? [`${prelude} || { echo "offline staging failed" >&2; exit 90; }`] : []),
     `${invocation} >${REPORT_PATH} 2>${STDERR_PATH}`,
     'rc=$?',
     // Replayed onto stdout, ahead of the frame, so the two never race.
@@ -90,6 +96,7 @@ export interface JobDispatcher {
       name: string; image: string; command?: string[]; args?: string[];
       timeoutSeconds?: number; withWorkspace?: boolean; workspacePath?: string;
       extraFiles?: readonly { name: string; content: string }[];
+      scratch?: { mountPath: string; sizeLimit: string };
     },
     log: { log: (m: string) => void },
   ): Promise<{ exitCode: number; logs: string; timedOut: boolean; transportFailed?: boolean }>;
@@ -143,23 +150,85 @@ export class KubernetesRunner implements RunnerProvider {
     return tool in TOOL_IMAGES;
   }
 
+  /**
+   * Resolves the image to a verified digest and applies the freshness policy.
+   *
+   * `degraded` proceeds loudly. A bake that missed a run leaves a database a
+   * day or two behind, and signature data is additive — the gap is worth a
+   * warning, not a platform-wide merge freeze.
+   *
+   * `stale` refuses, because past that point "no vulnerabilities found" means
+   * "none that this database has heard of", which is the silent-clean failure
+   * the whole phase exists to prevent.
+   *
+   * The override is operator-level rather than per-request on purpose: a stale
+   * database is a platform condition, and a per-scan flag would let any caller
+   * switch off freshness for themselves. It audits through the same
+   * BREAK_GLASS_BYPASS event as a compliance-gate bypass, so there is one
+   * emergency path to review rather than several.
+   */
+  private async resolveImage(tool: string): Promise<ResolvedScannerImage> {
+    const upstream = TOOL_IMAGES[tool];
+    if (!upstream) throw new Error(`Tool '${tool}' has no container image — cannot run as a Job`);
+
+    // Tools with nothing to download run from their upstream image on a mutable
+    // tag. There is no database to age and no signature of ours to check, so
+    // there is nothing here for the freshness gate to decide. They remain
+    // unpinned — the accepted `:latest` debt — and that is stated rather than
+    // hidden behind a verification path that would silently do nothing.
+    if (!isBaked(tool)) {
+      return { pinned: upstream, digest: '', builtAt: new Date(0), freshness: 'fresh', ageHours: 0 };
+    }
+
+    const image = await resolveScannerImage(bakedImageRef(tool));
+    const age = Math.round(image.ageHours);
+
+    if (image.freshness === 'degraded') {
+      logger.warn('[KubernetesRunner] scanner database is behind', {
+        event: 'scanner_db_degraded', tool, digest: image.digest, ageHours: age,
+      });
+    }
+
+    if (image.freshness === 'stale') {
+      if (process.env.SCANNER_DB_ALLOW_STALE !== 'true') {
+        throw new Error(
+          `${tool}: scanner database is ${age}h old — refusing to report a verdict from signatures this far behind`,
+        );
+      }
+      logger.error('[KubernetesRunner] scanning with a stale database under an override', {
+        event: 'scanner_db_stale_override', tool, digest: image.digest, ageHours: age,
+      });
+      await logSecureAuditEvent(
+        'system',
+        'BREAK_GLASS_BYPASS',
+        tool,
+        `Scanner freshness gate bypassed: ${tool} ran with a database ${age}h old (${image.digest})`,
+      ).catch(() => { /* auditing must not take the scan down with it */ });
+    }
+
+    return image;
+  }
+
   async run({ tool, args, workspacePath, timeoutMs }: ToolRun): Promise<ToolResult> {
-    const image = TOOL_IMAGES[tool];
-    if (!image) throw new Error(`Tool '${tool}' has no container image — cannot run as a Job`);
+    const image = await this.resolveImage(tool);
 
     // Planted before the tree is streamed, and required back in the report. See
     // canary.ts — zero egress stops exfiltration, not a scanner that lies.
     const canary = requiresCanary(tool) ? createCanary() : undefined;
 
+    const offline = offlineProfile(tool);
+
     const outcome = await this.dispatcher.run({
       name: sanitizeName(tool),
-      image,
+      // The verified digest, never the tag it was resolved from.
+      image: image.pinned,
       command: ['/bin/sh', '-c'],
-      args: [buildScript(tool, rewriteArgs(args, workspacePath))],
+      args: [buildScript(tool, offline.rewrite(rewriteArgs(args, workspacePath)), offline.prelude)],
       timeoutSeconds: Math.ceil(timeoutMs / 1000),
       withWorkspace: true,
       workspacePath,
       extraFiles: canary?.files,
+      scratch: offline.scratch,
     }, { log: (m: string) => logger.info(m) });
 
     // Infrastructure trouble, not a scan verdict. Thrown so the orchestrator's

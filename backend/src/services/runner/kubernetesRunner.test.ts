@@ -4,8 +4,13 @@ jest.mock('@kubernetes/client-node', () => ({}));
 // every test here injects a stub instead.
 jest.mock('archiver', () => ({ TarArchive: class {} }));
 jest.mock('../logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('../../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('./scannerImage', () => ({ resolveScannerImage: jest.fn() }));
 
 import { KubernetesRunner, buildScript, shellQuote, type JobDispatcher } from './kubernetesRunner';
+import { resolveScannerImage } from './scannerImage';
+import { logSecureAuditEvent } from '../../utils/tamperAuditLogger';
+import { TRIVY_CACHE_PATH } from './offline';
 import { WORKSPACE_PATH } from './jobSpec';
 import { BEGIN_MARKER, END_MARKER } from './reportFraming';
 import { createHash } from 'crypto';
@@ -28,6 +33,19 @@ const dispatcher = (outcome: Partial<Awaited<ReturnType<JobDispatcher['run']>>>)
 };
 
 const RUN = { tool: 'trivy', args: ['fs', '--format', 'json', '/tmp/ws'], workspacePath: '/tmp/ws', timeoutMs: 60000 };
+
+const resolveImage = resolveScannerImage as jest.Mock;
+const PINNED = 'ghcr.io/acme/scorpion-trivy@sha256:' + 'b'.repeat(64);
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.SCANNER_IMAGE_REPO = 'ghcr.io/acme';
+    delete process.env.SCANNER_DB_ALLOW_STALE;
+    resolveImage.mockResolvedValue({
+        pinned: PINNED, digest: 'sha256:' + 'b'.repeat(64),
+        builtAt: new Date(), freshness: 'fresh', ageHours: 2,
+    });
+});
 
 describe('shellQuote', () => {
     test('a quote in an argument cannot close the quoting and append a command', () => {
@@ -219,6 +237,110 @@ describe('KubernetesRunner', () => {
             await new KubernetesRunner(d).run(RUN);
 
             expect(canaryOf(d)).toBeUndefined();
+        });
+    });
+
+    describe('the baked image', () => {
+        const request = (d: { calls: unknown[] }) => d.calls[0] as {
+            image: string; args: string[]; scratch?: { mountPath: string; sizeLimit: string };
+        };
+
+        test('dispatches the verified digest, never the tag it came from', async () => {
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await new KubernetesRunner(d).run(RUN);
+
+            expect(request(d).image).toBe(PINNED);
+            expect(request(d).image).toContain('@sha256:');
+        });
+
+        test('asks for a scratch volume, because the database cannot be read in place', async () => {
+            // Trivy opens its BoltDB read-write, so a read-only rootfs makes the
+            // baked copy unreadable. The volume is what keeps the isolation.
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await new KubernetesRunner(d).run(RUN);
+
+            expect(request(d).scratch?.mountPath).toBe(TRIVY_CACHE_PATH);
+        });
+
+        test('stages the database and aborts if the copy fails', async () => {
+            // A partial or missing database makes trivy find nothing, which
+            // reads as a clean repository.
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await new KubernetesRunner(d).run(RUN);
+
+            const script = request(d).args[0];
+            expect(script).toContain('cp -a /opt/trivy-db/.');
+            expect(script).toMatch(/offline staging failed/);
+            expect(script.indexOf('cp -a')).toBeLessThan(script.indexOf("'trivy'"));
+        });
+
+        test('adds the offline flags so nothing reaches for the network', async () => {
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await new KubernetesRunner(d).run(RUN);
+
+            const script = request(d).args[0];
+            expect(script).toContain('--skip-db-update');
+            expect(script).toContain('--skip-java-db-update');
+        });
+
+        test('a degraded database scans, loudly', async () => {
+            // A missed bake leaves signatures a day or two behind. Blocking
+            // there would freeze every pipeline over a gap worth a warning.
+            resolveImage.mockResolvedValue({
+                pinned: PINNED, digest: 'sha256:x', builtAt: new Date(), freshness: 'degraded', ageHours: 40,
+            });
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await expect(new KubernetesRunner(d).run(RUN)).resolves.toBeDefined();
+        });
+
+        test('a stale database refuses to produce a verdict', async () => {
+            // Past the ceiling, "no vulnerabilities found" means "none this
+            // database has heard of" — the silent-clean failure again.
+            resolveImage.mockResolvedValue({
+                pinned: PINNED, digest: 'sha256:x', builtAt: new Date(), freshness: 'stale', ageHours: 400,
+            });
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await expect(new KubernetesRunner(d).run(RUN)).rejects.toThrow(/400h old/);
+        });
+
+        test('the stale override is operator-level and audits through break-glass', async () => {
+            // Not per-request: a stale database is a platform condition, and a
+            // per-scan flag would let any caller switch freshness off.
+            resolveImage.mockResolvedValue({
+                pinned: PINNED, digest: 'sha256:x', builtAt: new Date(), freshness: 'stale', ageHours: 400,
+            });
+            process.env.SCANNER_DB_ALLOW_STALE = 'true';
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            await expect(new KubernetesRunner(d).run(RUN)).resolves.toBeDefined();
+            expect(logSecureAuditEvent).toHaveBeenCalledWith(
+                'system', 'BREAK_GLASS_BYPASS', 'trivy', expect.stringContaining('400h old'),
+            );
+        });
+
+        test('a tool with nothing to download is not put through the freshness gate', async () => {
+            // gitleaks compiles its rules in. There is no database to age, so
+            // there is nothing for the gate to decide.
+            const d = dispatcher({ logs: framedLog('[]') });
+            const runner = new KubernetesRunner({
+                run: async (r) => {
+                    const marker = (r.extraFiles ?? [])[0].name.match(/\.scorpion-canary-(\w+)/)![1];
+                    return { exitCode: 0, timedOut: false, logs: framedLog(JSON.stringify([
+                        { File: `.scorpion-canary-${marker}/credentials` },
+                    ])) };
+                },
+            });
+
+            await runner.run({ ...RUN, tool: 'gitleaks', args: ['detect'] });
+
+            expect(resolveImage).not.toHaveBeenCalled();
+            void d;
         });
     });
 
