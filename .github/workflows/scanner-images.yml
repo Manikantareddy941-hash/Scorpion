@@ -185,10 +185,17 @@ jobs:
               findings=$(jq '[.Results[]?.Vulnerabilities // [] | length] | add // 0' /tmp/report.json 2>/dev/null || echo 0)
               ;;
             semgrep)
+              # No --quiet: it suppresses exactly the rule-loading diagnostics
+              # needed when the answer is "found nothing", and a silent zero is
+              # the hardest failure to tell from a working scan of clean code.
               docker run $common "$img" -c \
-                'semgrep scan --config /rules --metrics=off --json --quiet /src' \
+                'semgrep scan --config /rules --metrics=off --json /src' \
                 > /tmp/report.json 2>/tmp/stderr.log || true
               findings=$(jq '.results | length' /tmp/report.json 2>/dev/null || echo 0)
+              echo "--- semgrep self-report ---"
+              jq -c '{errors: (.errors // [] | map(.type // .message) | unique),
+                      scanned: (.paths.scanned // [] | length),
+                      skipped: (.paths.skipped // [] | length)}' /tmp/report.json 2>/dev/null || echo "report unparseable"
               ;;
           esac
 
