@@ -1,7 +1,7 @@
 import { Models, Permission, Role } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
-import { orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
+import { assertScannersUsable, orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
 import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit, normalizeHadolint } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
@@ -438,6 +438,15 @@ export const triggerScan = async (
             timeoutPromise
         ]);
         await addScanLog(scanId!, "All security engines finalized.");
+
+        // Abort before anything downstream can mistake a scanner that never ran
+        // for a clean one. Unlike the CI pipeline this normalizes all six tools
+        // into the stored finding set and the quality gate, so every scanner
+        // that reported must have produced a verdict — no subset is passed.
+        //
+        // The catch at the end of this function marks the scan `failed` with
+        // `gate_status: 'failed'`, which is the fail-closed outcome.
+        assertScannersUsable(rawResults);
 
         // 7️⃣ Walk repo for file/line stats
         const languageCounts: Record<string, number> = {};
