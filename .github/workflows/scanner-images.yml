@@ -1,0 +1,268 @@
+# Bakes scanner images with their signature databases included.
+#
+# The runner namespace denies all egress, so a scanner that fetches its rules or
+# vulnerability database at scan time cannot run there. This workflow moves that
+# fetch to build time and publishes a signed, timestamped image.
+#
+# The important part is the canary gate below. An image whose database silently
+# came back empty — a network blip, an upstream layout change, a wrong path —
+# is signed, fresh, and useless: it reports "no findings" for everything. Size
+# checks do not catch that, because a valid-but-empty database is a valid file.
+# So every image must DETECT a known-vulnerable fixture before it is pushed.
+#
+# The gate runs the image under the same constraints as the runner pod
+# (--network none, uid 10001, read-only root), which is the only way to learn
+# here rather than in production that a scanner needed to write somewhere or
+# reach something.
+name: Scanner Images
+
+on:
+  schedule:
+    # Trivy publishes database updates every six hours; daily keeps us inside
+    # the 24h "fresh" band the backend enforces with one run of slack.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'docker/scanners/**'
+      - '.github/workflows/scanner-images.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scanner-images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  TRIVY_VERSION: '0.58.1'
+  SEMGREP_VERSION: '1.97.0'
+
+jobs:
+  bake:
+    name: Bake ${{ matrix.tool }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Neither image should be held back because the other's upstream is having
+      # a bad day.
+      fail-fast: false
+      matrix:
+        tool: [trivy, semgrep]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Resolve image reference
+        id: ref
+        run: |
+          set -euo pipefail
+          # GHCR rejects uppercase in a repository path, and the owner here has
+          # capitals.
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=${{ env.REGISTRY }}/${owner}/scorpion-${{ matrix.tool }}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        id: build
+        run: |
+          set -euo pipefail
+          case "${{ matrix.tool }}" in
+            trivy)   version_arg="TRIVY_VERSION=${{ env.TRIVY_VERSION }}" ;;
+            semgrep) version_arg="SEMGREP_VERSION=${{ env.SEMGREP_VERSION }}" ;;
+          esac
+
+          # Built and loaded locally FIRST so the gate runs against the exact
+          # bytes that get pushed. Building twice — once to test, once to push —
+          # would leave a window where the tested image and the signed image are
+          # not the same artifact.
+          docker build \
+            --file "docker/scanners/${{ matrix.tool }}.Dockerfile" \
+            --build-arg "$version_arg" \
+            --label "org.scorpion.db.built-at=${{ steps.ref.outputs.built_at }}" \
+            --label "org.scorpion.tool=${{ matrix.tool }}" \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --tag "scorpion-${{ matrix.tool }}:candidate" \
+            docker/scanners
+
+      - name: Assert the database is present and non-trivial
+        run: |
+          set -euo pipefail
+          img="scorpion-${{ matrix.tool }}:candidate"
+
+          case "${{ matrix.tool }}" in
+            trivy)
+              # 1MiB floor: the real database is tens of megabytes, and a
+              # truncated download lands far below this.
+              docker run --rm --entrypoint /bin/sh "$img" -c '
+                set -e
+                test -f /opt/trivy-db/db/trivy.db || { echo "no trivy.db in the image"; exit 1; }
+                test -f /opt/trivy-db/db/metadata.json || { echo "no database metadata"; exit 1; }
+                size=$(wc -c < /opt/trivy-db/db/trivy.db)
+                echo "trivy.db = ${size} bytes ($((size / 1048576)) MiB)"
+                [ "$size" -gt 1048576 ] || { echo "database is implausibly small"; exit 1; }
+              '
+              ;;
+            semgrep)
+              docker run --rm --entrypoint /bin/sh "$img" -c '
+                set -e
+                count=$(find /rules -name "*.yaml" -o -name "*.yml" | wc -l)
+                echo "vendored rule files = ${count}"
+                [ "$count" -gt 100 ] || { echo "implausibly few rules vendored"; exit 1; }
+              '
+              ;;
+          esac
+
+      - name: Build the known-vulnerable fixture
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fixture
+
+          # Generated here rather than committed. A vulnerable manifest living in
+          # the repository would fail this project's own Trivy CRITICAL gate,
+          # upload false code-scanning alerts, attract Dependabot pull requests
+          # against packages nothing installs, and contaminate the published
+          # SBOM. None of that buys anything the gate does not already get from
+          # generating it.
+          cat > /tmp/fixture/requirements.txt <<'PY'
+          Flask==0.12.2
+          Jinja2==2.7.2
+          PyYAML==3.12
+          urllib3==1.24.1
+          requests==2.19.1
+          PY
+
+          cat > /tmp/fixture/app.py <<'PY'
+          import subprocess
+          import flask
+
+          app = flask.Flask(__name__)
+
+
+          @app.route("/run")
+          def run():
+              # Deliberate command injection, for the scanner to find.
+              cmd = flask.request.args.get("cmd")
+              return subprocess.check_output(cmd, shell=True)
+
+
+          @app.route("/calc")
+          def calc():
+              return str(eval(flask.request.args.get("expr")))
+          PY
+
+      - name: Canary gate — the image must DETECT, offline, under pod constraints
+        run: |
+          set -euo pipefail
+          img="scorpion-${{ matrix.tool }}:candidate"
+
+          # --network none proves the image works with the egress it will
+          # actually have. --user 10001 --read-only --tmpfs /tmp reproduces the
+          # runner pod's securityContext, so a scanner that needs to write
+          # somewhere fails here instead of in production.
+          common="--rm --network none --user 10001 --read-only --tmpfs /tmp:rw,size=256m
+                  -v /tmp/fixture:/src:ro --entrypoint /bin/sh"
+
+          # A non-zero exit is NOT a gate failure. Scanners exit non-zero
+          # precisely when they find something, which is the outcome this step
+          # is demanding — judging on the exit code would fail every healthy
+          # image. The report is the evidence; stderr is kept for when it is not.
+          case "${{ matrix.tool }}" in
+            trivy)
+              # The database is copied out of the image layer into a writable
+              # mount first: trivy opens its BoltDB read-write even with
+              # --skip-db-update, so reading it in place from a read-only root
+              # fails outright. Sized well above the database because a partial
+              # copy fails as "no findings", which looks identical to a broken
+              # scanner.
+              docker run $common --tmpfs /cache:rw,size=3g "$img" -c \
+                'cp -a "$SCORPION_TRIVY_DB"/. /cache/ && trivy fs --format json --cache-dir /cache --skip-db-update --skip-java-db-update --scanners vuln /src' \
+                > /tmp/report.json 2>/tmp/stderr.log || true
+              findings=$(jq '[.Results[]?.Vulnerabilities // [] | length] | add // 0' /tmp/report.json 2>/dev/null || echo 0)
+              ;;
+            semgrep)
+              # No --quiet: it suppresses exactly the rule-loading diagnostics
+              # needed when the answer is "found nothing", and a silent zero is
+              # the hardest failure to tell from a working scan of clean code.
+              docker run $common "$img" -c \
+                'semgrep scan --config /rules --metrics=off --json /src' \
+                > /tmp/report.json 2>/tmp/stderr.log || true
+              findings=$(jq '.results | length' /tmp/report.json 2>/dev/null || echo 0)
+              echo "--- semgrep self-report ---"
+              jq -c '{errors: (.errors // [] | map(.type // .message) | unique),
+                      scanned: (.paths.scanned // [] | length),
+                      skipped: (.paths.skipped // [] | length)}' /tmp/report.json 2>/dev/null || echo "report unparseable"
+              ;;
+          esac
+
+          # Printed unconditionally. The first run of this gate reported only
+          # that it failed, which is the least useful thing a gate can say.
+          echo "--- scanner stderr (last 40 lines) ---"
+          tail -40 /tmp/stderr.log || true
+          echo "--------------------------------------"
+
+          echo "findings against the fixture: ${findings}"
+          if [ "${findings:-0}" -eq 0 ]; then
+            echo "::error::${{ matrix.tool }} found nothing in a known-vulnerable fixture."
+            echo "::error::Refusing to publish — an image that detects nothing reports every repository clean."
+            exit 1
+          fi
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        id: push
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          image="${{ steps.ref.outputs.image }}"
+          docker tag "scorpion-${{ matrix.tool }}:candidate" "${image}:current"
+          docker push "${image}:current"
+
+          # The manifest digest, read back after the push. This is what gets
+          # signed and what the backend dispatches — never the tag, which can be
+          # moved underneath us between verification and use.
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "${image}:current" | cut -d@ -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "published ${image}@${digest}"
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+
+      - name: Sign the digest
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${COSIGN_PRIVATE_KEY:-}" ]; then
+            echo "::error::COSIGN_PRIVATE_KEY is not configured."
+            echo "::error::The backend refuses unsigned scanner images, so publishing one would block every scan."
+            exit 1
+          fi
+          cosign sign --key env://COSIGN_PRIVATE_KEY --yes \
+            "${{ steps.ref.outputs.image }}@${{ steps.push.outputs.digest }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### scorpion-${{ matrix.tool }}"
+            echo ""
+            echo "| field | value |"
+            echo "|---|---|"
+            echo "| built-at | \`${{ steps.ref.outputs.built_at }}\` |"
+            echo "| digest | \`${{ steps.push.outputs.digest || 'not published (pull request)' }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
