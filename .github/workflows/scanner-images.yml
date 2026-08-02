@@ -100,9 +100,9 @@ jobs:
               # truncated download lands far below this.
               docker run --rm --entrypoint /bin/sh "$img" -c '
                 set -e
-                test -f /db/db/trivy.db || { echo "no trivy.db in the image"; exit 1; }
-                test -f /db/db/metadata.json || { echo "no database metadata"; exit 1; }
-                size=$(wc -c < /db/db/trivy.db)
+                test -f /opt/trivy-db/db/trivy.db || { echo "no trivy.db in the image"; exit 1; }
+                test -f /opt/trivy-db/db/metadata.json || { echo "no database metadata"; exit 1; }
+                size=$(wc -c < /opt/trivy-db/db/trivy.db)
                 echo "trivy.db = ${size} bytes"
                 [ "$size" -gt 1048576 ] || { echo "database is implausibly small"; exit 1; }
               '
@@ -169,8 +169,14 @@ jobs:
 
           case "${{ matrix.tool }}" in
             trivy)
-              docker run $common "$img" -c \
-                'trivy fs --format json --cache-dir /db --skip-db-update --skip-java-db-update --scanners vuln /src' \
+              # The database is copied out of the image layer into a writable
+              # mount first: trivy opens its BoltDB read-write even with
+              # --skip-db-update, so reading it in place from a read-only root
+              # fails outright. The runner pod does the same with a disk-backed
+              # emptyDir; tmpfs here is the stricter of the two, so passing
+              # under it implies passing under the pod's volume.
+              docker run $common --tmpfs /cache:rw,size=768m "$img" -c \
+                'cp -a "$SCORPION_TRIVY_DB"/. /cache/ && trivy fs --format json --cache-dir /cache --skip-db-update --skip-java-db-update --scanners vuln /src' \
                 > /tmp/report.json
               findings=$(jq '[.Results[]?.Vulnerabilities // [] | length] | add // 0' /tmp/report.json)
               ;;

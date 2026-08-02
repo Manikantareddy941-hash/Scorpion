@@ -34,10 +34,15 @@ FROM semgrep/semgrep:${SEMGREP_VERSION}
 
 COPY --from=rules /rules /rules
 
-# Semgrep writes settings on first run. The pod's root filesystem is read-only
-# and /tmp is the one writable mount, so this is pointed there rather than at
-# the home directory it would otherwise pick.
-ENV SEMGREP_SETTINGS_FILE=/tmp/semgrep-settings.yml \
+# Semgrep writes both a settings file and a log directory on startup. The
+# settings path is configurable; the log directory is not — it is derived from
+# $HOME, which is `/` for a uid with no passwd entry, and creating `/.semgrep`
+# on a read-only root filesystem aborts the process before any scanning starts.
+#
+# Pointing HOME at /tmp, the pod's one writable mount, is what makes the image
+# runnable as uid 10001 at all.
+ENV HOME=/tmp \
+    SEMGREP_SETTINGS_FILE=/tmp/semgrep-settings.yml \
     SEMGREP_SEND_METRICS=off
 
 LABEL org.opencontainers.image.title="scorpion-semgrep" \
