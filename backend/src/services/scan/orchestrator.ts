@@ -22,6 +22,71 @@ export interface ScanResult {
     unavailable?: boolean;
 }
 
+/**
+ * Raised when a scanner the caller depends on produced no verdict.
+ *
+ * Thrown rather than returned because every consumer of a scan already handles
+ * a throw by failing closed — `triggerScan` marks the scan failed, and the CI
+ * orchestrator sets the commit status to `error`, which branch protection
+ * treats as "not passing". A new return shape would need each consumer to
+ * remember to check it, and the one that forgets is the fail-open this exists
+ * to close.
+ */
+export class ScannerUnavailableError extends Error {
+    constructor(readonly tools: string[], detail: string) {
+        super(`Scan aborted — no verdict from: ${detail}`);
+        this.name = 'ScannerUnavailableError';
+    }
+}
+
+/**
+ * Enforces the contract `ScanResult.unavailable` describes.
+ *
+ * The flag has been set correctly since it was introduced and read by nothing:
+ * both consumers mapped an empty stdout to `{}` and reported zero findings, so
+ * a missing binary, a dead daemon, an OOM kill or a crashed scanner all
+ * produced a passing gate.
+ *
+ * @param required Tools the caller's verdict actually depends on. Omit to
+ *   require every scanner that reported. Naming a subset matters: a checkov
+ *   failure cannot corrupt a verdict computed only from trivy, semgrep and
+ *   gitleaks, and aborting on it would be a false alarm. A named tool missing
+ *   from `results` entirely counts as no verdict — the caller is about to
+ *   report zero findings for a scanner that left no record of running.
+ */
+export function assertScannersUsable(
+    results: ScanResult[],
+    required?: readonly ScanResult['tool'][],
+): void {
+    // `[].every(...)` is true, so an empty set would sail through the checks
+    // below and report a clean scan for a run where nothing executed.
+    if (results.length === 0) {
+        throw new ScannerUnavailableError([], 'no scanner produced a result');
+    }
+
+    const failures: { tool: string; reason: string }[] = [];
+
+    for (const result of results) {
+        if (required && !required.includes(result.tool)) continue;
+        if (result.unavailable) {
+            failures.push({ tool: result.tool, reason: result.error || result.stderr || 'no verdict' });
+        }
+    }
+
+    for (const tool of required ?? []) {
+        if (!results.some(r => r.tool === tool)) {
+            failures.push({ tool, reason: 'scanner did not run' });
+        }
+    }
+
+    if (failures.length > 0) {
+        throw new ScannerUnavailableError(
+            failures.map(f => f.tool),
+            failures.map(f => `${f.tool} (${f.reason})`).join(', '),
+        );
+    }
+}
+
 // Dockerfile naming conventions: plain, dotted, and dir/Dockerfile.env variants.
 const DOCKERFILE_NAMES = ['Dockerfile', 'dockerfile', 'Dockerfile.dev', 'Dockerfile.prod'];
 
