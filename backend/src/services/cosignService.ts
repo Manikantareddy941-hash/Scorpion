@@ -121,3 +121,45 @@ export const verifyBlobContent = async (content: string, signature: string): Pro
 /** Verifies a signed image digest. See verifyBlobContent for throw semantics. */
 export const verifyImageDigest = (digest: string, signature: string): Promise<boolean> =>
     verifyBlobContent(digest, signature);
+
+/**
+ * Verifies a signature stored in the REGISTRY alongside the image, rather than
+ * a detached blob signature we transported ourselves.
+ *
+ * Distinct from verifyImageDigest on purpose. That one is for content we sign
+ * and carry (provenance statements, CI-ingested digests), and it needs the
+ * signature kept somewhere until it is checked — which is exactly why it cannot
+ * be used for scanner images: the only store available is a one-hour cache, and
+ * these images live for a day.
+ *
+ * `cosign sign` publishes the signature as a `.sig` tag in the registry, so
+ * there is nothing to store and nothing to expire. Trust comes from the public
+ * key, not from us having kept the signature safe.
+ *
+ * Throws (rather than returning false) when verification could not be attempted
+ * at all — no key, no cosign — so the caller can distinguish "this image is
+ * untrustworthy" from "we are not in a position to judge". Both block; only one
+ * is the image's fault.
+ */
+export const verifyImageSignature = async (imageRef: string): Promise<boolean> => {
+    const pubKeyPath = process.env.COSIGN_PUB_KEY_PATH;
+    if (!pubKeyPath) {
+        throw new Error('COSIGN_PUB_KEY_PATH is not configured');
+    }
+    const resolved = await resolveToolCommand('cosign');
+    if (resolved.status !== 'installed') {
+        throw new Error('cosign CLI is not installed');
+    }
+
+    try {
+        await execFileAsync(
+            resolved.cmd,
+            [...resolved.prefixArgs, 'verify', '--key', pubKeyPath, imageRef],
+            { timeout: COSIGN_TIMEOUT_MS }
+        );
+        return true;
+    } catch (err: any) {
+        logger.error('[Cosign] Image signature verification failed:', err.message);
+        return false;
+    }
+};
