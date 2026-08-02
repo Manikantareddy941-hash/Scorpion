@@ -31,6 +31,12 @@ export function emitReportCommand(file: string): string {
   return [
     `echo '${BEGIN_MARKER}'`,
     `cat ${file}`,
+    // An unconditional newline, so the parser always has exactly one separator
+    // to strip. Without it the framing is off by one for any report that ends
+    // with a newline — which is every real scanner, since `wc -c` counts that
+    // byte while the parser was removing it as a delimiter. A report file
+    // written without a trailing newline hid this completely.
+    `echo ""`,
     `echo "${END_MARKER}:$(wc -c <${file} | tr -d ' '):$(sha256sum ${file} | cut -d' ' -f1)"`,
   ].join('; ');
 }
@@ -52,7 +58,10 @@ export function parseFramedReport(stdout: string): FramedReport {
   const bodyStart = begin + BEGIN_MARKER.length;
   // Trim exactly one newline on each side rather than all whitespace: the
   // digest was computed over the file, and stripping significant leading or
-  // trailing whitespace would fail an otherwise valid report.
+  // trailing whitespace would fail an otherwise valid report. Both newlines are
+  // separators the producer emits unconditionally — see emitReportCommand,
+  // where the trailing one exists solely so this stays exact for reports that
+  // do and do not end with a newline of their own.
   const body = stdout.slice(bodyStart, endIdx).replace(/^\r?\n/, '').replace(/\r?\n$/, '');
 
   const trailer = stdout.slice(endIdx + END_MARKER.length).split(/\r?\n/)[0];

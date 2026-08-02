@@ -87,11 +87,34 @@ describe('the emitter and the parser stay in step', () => {
   });
 
   test('output shaped the way the command produces it round-trips', () => {
-    // Mirrors `echo BEGIN; cat file; echo END:<bytes>:<sha>` exactly.
+    // Mirrors `echo BEGIN; cat file; echo ""; echo END:<bytes>:<sha>` for a
+    // report file with no trailing newline of its own.
     const bytes = Buffer.byteLength(REPORT, 'utf8');
     const sha = createHash('sha256').update(REPORT).digest('hex');
     const asShellWouldEmit = `${BEGIN_MARKER}\n${REPORT}\n${END_MARKER}:${bytes}:${sha}\n`;
 
     expect(parseFramedReport(asShellWouldEmit)).toEqual({ ok: true, body: REPORT });
+  });
+
+  test('a report file that ends with a newline round-trips exactly', () => {
+    // The shape every real scanner produces — trivy and semgrep both terminate
+    // their JSON with a newline. `wc -c` counts that byte, so the parser has to
+    // return it. This was off by one until a cluster run caught it: the fixture
+    // used everywhere else was written without a trailing newline, so the
+    // separator the parser strips and the byte the digest covered happened to
+    // be the same character.
+    const withNewline = `${REPORT}\n`;
+    const bytes = Buffer.byteLength(withNewline, 'utf8');
+    const sha = createHash('sha256').update(withNewline).digest('hex');
+    const asShellWouldEmit = `${BEGIN_MARKER}\n${withNewline}\n${END_MARKER}:${bytes}:${sha}\n`;
+
+    expect(parseFramedReport(asShellWouldEmit)).toEqual({ ok: true, body: withNewline });
+  });
+
+  test('the command emits a separator newline unconditionally', () => {
+    // The whole fix. Without it the frame is off by one for exactly the reports
+    // that matter, and nothing in the unit tests would notice.
+    expect(emitReportCommand('/workspace/report.json'))
+      .toMatch(/cat \/workspace\/report\.json; echo ""/);
   });
 });
