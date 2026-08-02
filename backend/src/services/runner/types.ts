@@ -6,7 +6,7 @@
  * than something hardcoded per call site.
  */
 
-export type RunnerMode = 'docker' | 'binary';
+export type RunnerMode = 'docker' | 'binary' | 'kubernetes';
 
 export interface ToolRun {
   /** Logical tool name, e.g. 'trivy'. Maps to an image or a binary per mode. */
