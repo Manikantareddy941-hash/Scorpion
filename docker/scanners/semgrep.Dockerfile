@@ -12,10 +12,19 @@ ARG SEMGREP_VERSION=1.97.0
 
 # Cloned in a separate stage so git never ships in the scanning image.
 #
-# Everything that is not a rule file is deleted: the upstream repository ships
-# each rule beside its test fixtures, which are deliberately vulnerable sample
-# files. Left in place, semgrep would scan them as if they were the user's code
-# and report findings against every repository we look at.
+# Everything that is not a rule file is deleted, for two independent reasons.
+#
+# The upstream repository ships each rule beside its test fixtures, which are
+# deliberately vulnerable sample files. Left in place, semgrep would scan them
+# as if they were the user's code and report findings against every repository.
+#
+# It also ships YAML that is not a rule at all — CI workflows, pre-commit
+# config, templates. Semgrep treats ONE unparseable file as a fatal
+# InvalidRuleSchemaError and abandons the entire config, scanning zero files
+# while exiting in a way that looks like a clean result.
+#
+# So the filter is on content, not filename: a semgrep rule file has a top-level
+# `rules:` key. That holds whatever else upstream decides to ship.
 #
 # Version-pinning git would tie the build to an Alpine package revision that
 # eventually leaves the mirrors, breaking it for no security gain — the base tag
@@ -26,9 +35,14 @@ ARG SEMGREP_RULES_REF=develop
 RUN apk add --no-cache git \
  && git clone --depth 1 --branch "${SEMGREP_RULES_REF}" \
       https://github.com/semgrep/semgrep-rules.git /rules \
- && rm -rf /rules/.git \
+ && rm -rf /rules/.git /rules/.github \
  && find /rules -type f ! -name '*.yaml' ! -name '*.yml' -delete \
- && find /rules -type d -empty -delete
+ && find /rules -type f \( -name '*.yaml' -o -name '*.yml' \) \
+      -exec sh -c 'grep -qE "^rules:" "$1" || rm -f "$1"' _ {} \; \
+ && find /rules -type d -empty -delete \
+ && count=$(find /rules -type f | wc -l) \
+ && echo "kept ${count} rule files" \
+ && [ "${count}" -gt 100 ]
 
 FROM semgrep/semgrep:${SEMGREP_VERSION}
 
