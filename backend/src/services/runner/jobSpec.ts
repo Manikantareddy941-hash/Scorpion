@@ -70,6 +70,13 @@ export interface JobRequest {
    * to contain it.
    */
   extraFiles?: readonly { name: string; content: string }[];
+  /**
+   * An extra writable volume, for tools that cannot read their own baked data
+   * in place under a read-only root filesystem. Disk-backed like the workspace:
+   * trivy's database is over a gigabyte, and a memory-backed volume would count
+   * against the container's memory limit and OOM the pod instead.
+   */
+  scratch?: { mountPath: string; sizeLimit: string };
 }
 
 const DEFAULTS = {
@@ -186,6 +193,7 @@ export function buildJob(request: JobRequest, suffix: string): V1Job {
               volumeMounts: [
                 { name: 'tmp', mountPath: '/tmp' },
                 ...(request.withWorkspace ? [{ name: 'workspace', mountPath: WORKSPACE_PATH }] : []),
+                ...(request.scratch ? [{ name: 'scratch', mountPath: request.scratch.mountPath }] : []),
               ],
             },
           ],
@@ -200,6 +208,9 @@ export function buildJob(request: JobRequest, suffix: string): V1Job {
               // any size would OOM the pod rather than fill a disk.
               ? [{ name: 'workspace', emptyDir: { sizeLimit: request.workspaceLimit ?? DEFAULTS.workspaceLimit } }]
               : []),
+            // Disk-backed for the same reason, and more so: this holds a copy
+            // of a database well over a gigabyte.
+            ...(request.scratch ? [{ name: 'scratch', emptyDir: { sizeLimit: request.scratch.sizeLimit } }] : []),
           ],
         },
       },
