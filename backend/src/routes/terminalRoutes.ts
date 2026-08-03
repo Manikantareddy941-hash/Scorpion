@@ -68,19 +68,49 @@ router.post('/exec', terminalLimiter, async (req: AuthedRequest, res: Response) 
         return res.status(503).json({ error: 'Role verification unavailable — command refused' });
     }
 
-    let outcome: 'ok' | 'rejected' | 'error' = 'ok';
+    let outcome: 'ok' | 'rejected' | 'error' | 'refused_unauditable' = 'ok';
     let lines: readonly string[] = [];
     let status = 200;
     let errorMessage: string | undefined;
+    // What actually ran, for the audit record. Falls back to the raw input only
+    // when the verb never resolved (unknown command), where raw text is all there is.
+    let verb: string | null = null;
+    let argv: readonly string[] = [];
+    let mutating = false;
+    let alreadyAudited = false;
 
     try {
-        const result = await dispatch(raw, ctx);
+        const result = await dispatch(raw, ctx, async (command, resolvedArgs) => {
+            verb = command.name;
+            argv = resolvedArgs;
+            mutating = command.mutating;
+
+            // Fail-closed for state-changing verbs: the record is written before the
+            // handler runs, and a failed write aborts the command. Auditing afterwards
+            // cannot fail closed — the change would already have happened.
+            if (command.mutating) {
+                await writeAudit(ctx, command.name, resolvedArgs, true, 'started');
+                alreadyAudited = true;
+            }
+        });
         lines = result.lines;
+        verb = result.command;
+        argv = result.argv;
+        mutating = result.mutating;
     } catch (err) {
         if (err instanceof CommandError) {
             outcome = 'rejected';
             status = err.status;
             errorMessage = err.message;
+            verb = err.verb ?? null;
+        } else if (mutating && !alreadyAudited) {
+            // The pre-execution audit write threw, so the handler never ran.
+            outcome = 'refused_unauditable';
+            status = 503;
+            errorMessage = 'Audit ledger unavailable — mutating command refused';
+            logger.error('[terminal] refused mutating command, ledger unavailable', {
+                event: 'terminal_audit_unavailable', userId: ctx.userId, command: verb,
+            });
         } else {
             outcome = 'error';
             status = 500;
@@ -89,35 +119,73 @@ router.post('/exec', terminalLimiter, async (req: AuthedRequest, res: Response) 
         }
     }
 
-    await recordAudit(ctx, raw, outcome);
+    // Read-only verbs are audited after the fact and tolerate a failed write; a
+    // mutating verb that already wrote its 'started' record gets an outcome record
+    // best-effort, since the intent is durably on the ledger either way.
+    await recordAudit(ctx, verb, argv, mutating, outcome, verb === null ? raw : undefined);
 
     return status === 200
         ? res.json({ lines })
         : res.status(status).json({ error: errorMessage });
 });
 
+/** Raw input is only recorded when no verb resolved, and is bounded so the ledger can't be flooded. */
+const RAW_ECHO_LIMIT = 512;
+
 /**
- * Writes the command to the tamper-evident ledger — including rejected ones, which
- * are the interesting ones for an investigation.
- *
- * Fail-open with a loud structured log, matching the established pattern for the
- * degraded-read paths in this codebase. That is only defensible while every verb is
- * read-only. THE MOMENT A MUTATING VERB IS REGISTERED, this must become fail-closed:
- * an unlogged privileged action is exactly the property this surface exists to avoid.
+ * Writes one entry to the tamper-evident ledger. Throws on failure — callers decide
+ * whether that is fatal, which is what makes fail-closed possible for mutating verbs.
  */
-async function recordAudit(ctx: TerminalContext, command: string, outcome: string): Promise<void> {
+async function writeAudit(
+    ctx: TerminalContext,
+    command: string | null,
+    argv: readonly string[],
+    mutating: boolean,
+    outcome: string,
+    rawFallback?: string,
+): Promise<void> {
+    await logSecureAuditEvent(
+        ctx.userId,
+        'TERMINAL_COMMAND',
+        'system',
+        JSON.stringify({
+            command,
+            argv,
+            mutating,
+            outcome,
+            role: ctx.role,
+            email: ctx.email,
+            // Present only for input that never resolved to a verb; that raw text is
+            // the whole forensic value of the record in that case.
+            ...(rawFallback !== undefined ? { raw: rawFallback.slice(0, RAW_ECHO_LIMIT) } : {}),
+        }),
+    );
+}
+
+/**
+ * Best-effort audit for the paths where a failed write must not change the outcome:
+ * read-only verbs, rejections, and the closing record of a mutating verb whose
+ * 'started' entry is already durable.
+ *
+ * Fail-open here is deliberate and bounded — it can no longer silently cover a state
+ * change, because a mutating verb is audited before it runs and refuses if that fails.
+ */
+async function recordAudit(
+    ctx: TerminalContext,
+    command: string | null,
+    argv: readonly string[],
+    mutating: boolean,
+    outcome: string,
+    rawFallback?: string,
+): Promise<void> {
     try {
-        await logSecureAuditEvent(
-            ctx.userId,
-            'TERMINAL_COMMAND',
-            'system',
-            JSON.stringify({ command, outcome, role: ctx.role, email: ctx.email }),
-        );
+        await writeAudit(ctx, command, argv, mutating, outcome, rawFallback);
     } catch (err) {
         logger.error('[terminal] terminal_audit_degraded — command ran but was not recorded', {
             event: 'terminal_audit_degraded',
             userId: ctx.userId,
             command,
+            mutating,
             outcome,
             error: err instanceof Error ? err.message : String(err),
         });

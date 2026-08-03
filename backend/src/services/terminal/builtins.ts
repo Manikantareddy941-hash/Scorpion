@@ -19,6 +19,7 @@ const help: TerminalCommand = {
     summary: 'List the commands available to you.',
     usage: 'help',
     maxArgs: 0,
+    mutating: false,
     handler: async (_args, ctx) => {
         const available = listCommands(ctx.role);
         return [
@@ -37,6 +38,7 @@ const whoami: TerminalCommand = {
     summary: 'Show the identity and role this session resolved to.',
     usage: 'whoami',
     maxArgs: 0,
+    mutating: false,
     handler: async (_args, ctx) => [
         `user:  ${ctx.email}`,
         `id:    ${ctx.userId}`,
@@ -49,6 +51,7 @@ const version: TerminalCommand = {
     summary: 'Show backend version and runtime.',
     usage: 'version',
     maxArgs: 0,
+    mutating: false,
     handler: async () => [
         `scorpion-backend ${process.env.npm_package_version ?? 'unknown'}`,
         `node ${process.version}`,

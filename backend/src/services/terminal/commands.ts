@@ -37,6 +37,17 @@ export interface TerminalCommand {
     name: string;
     summary: string;
     usage: string;
+    /**
+     * Whether this verb changes state. REQUIRED — deliberately not optional.
+     *
+     * This is the switch the audit path reads, not documentation. A mutating verb
+     * has its audit record written BEFORE the handler runs, and refuses to run at
+     * all if that write fails; a read-only verb is audited afterwards and tolerates
+     * a failed write. Making the field required means a new verb cannot be
+     * registered without its author deciding which side it is on — the compiler
+     * asks the question that a comment previously only hinted at.
+     */
+    mutating: boolean;
     /** Roles permitted to run this verb. Omitted means any authenticated caller. */
     allowedRoles?: readonly string[];
     /**
@@ -56,6 +67,13 @@ export class CommandError extends Error {
     constructor(
         message: string,
         readonly status: 400 | 403 | 404 = 400,
+        /**
+         * The verb, when the failure happened after it resolved (role denial,
+         * too many arguments). Absent for an unknown verb, where there is nothing
+         * to name. Lets the audit record a resolved verb rather than raw input
+         * wherever one exists.
+         */
+        readonly verb?: string,
     ) {
         super(message);
         this.name = 'CommandError';
@@ -108,13 +126,34 @@ export interface DispatchResult {
     lines: readonly string[];
     /** The resolved verb, or null for blank input. Used for the audit record. */
     command: string | null;
+    /**
+     * Arguments as the handler received them, already tokenised. The audit records
+     * these rather than the raw input string: raw text can differ from what actually
+     * executed (whitespace, rejected trailing tokens), and an investigation needs to
+     * know what ran, not what was typed.
+     */
+    argv: readonly string[];
+    /** Copied from the resolved command so callers need not re-look-it-up. */
+    mutating: boolean;
 }
 
 /**
  * Parse, authorise, and run. Throws CommandError for caller mistakes; anything else
  * propagating out is a genuine fault and the route maps it to a 500.
  */
-export async function dispatch(rawInput: string, ctx: TerminalContext): Promise<DispatchResult> {
+export async function dispatch(
+    rawInput: string,
+    ctx: TerminalContext,
+    /**
+     * Called after the verb resolves and passes authorisation, but BEFORE the
+     * handler runs. Throwing from here prevents execution entirely.
+     *
+     * This exists so the caller can write a mutating verb's audit record first and
+     * abort if that write fails. Auditing after the fact cannot fail closed: by then
+     * the state change has already happened and no error response un-does it.
+     */
+    beforeRun?: (command: TerminalCommand, argv: readonly string[]) => Promise<void>,
+): Promise<DispatchResult> {
     if (rawInput.length > MAX_INPUT_LENGTH) {
         throw new CommandError(`command too long (max ${MAX_INPUT_LENGTH} characters)`);
     }
@@ -122,7 +161,7 @@ export async function dispatch(rawInput: string, ctx: TerminalContext): Promise<
 
     const tokens = tokenize(rawInput);
     if (tokens.length === 0) {
-        return { lines: [], command: null };
+        return { lines: [], command: null, argv: [], mutating: false };
     }
     if (tokens.length > MAX_TOKENS) {
         throw new CommandError(`too many arguments (max ${MAX_TOKENS})`);
@@ -143,6 +182,7 @@ export async function dispatch(rawInput: string, ctx: TerminalContext): Promise<
         throw new CommandError(
             `'${command.name}' requires role ${command.allowedRoles?.join(' or ')} — you have '${ctx.role}'`,
             403,
+            command.name,
         );
     }
 
@@ -151,11 +191,15 @@ export async function dispatch(rawInput: string, ctx: TerminalContext): Promise<
             command.maxArgs === 0
                 ? `'${command.name}' takes no arguments — got ${args.length}`
                 : `'${command.name}' takes at most ${command.maxArgs} argument(s) — got ${args.length}`,
+            400,
+            command.name,
         );
     }
 
+    await beforeRun?.(command, args);
+
     const lines = await command.handler(args, ctx);
-    return { lines, command: command.name };
+    return { lines, command: command.name, argv: args, mutating: command.mutating };
 }
 
 /** Test seam only. Production registration happens once at module load in ./builtins. */

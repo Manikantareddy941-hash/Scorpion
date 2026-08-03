@@ -52,7 +52,7 @@ describe('dispatch — no path from input to execution', () => {
 
     test('a valid verb with hostile-looking arguments still only runs the handler', async () => {
         const handler = jest.fn().mockResolvedValue(['ok']);
-        register({ name: 'probe', summary: 's', usage: 'probe', handler });
+        register({ name: 'probe', summary: 's', usage: 'probe', mutating: false, handler });
 
         await dispatch('probe ; rm -rf / $(id)', adminCtx);
 
@@ -79,7 +79,7 @@ describe('dispatch — input bounds', () => {
     });
 
     test('blank input is a no-op, not an error', async () => {
-        await expect(dispatch('   ', adminCtx)).resolves.toEqual({ lines: [], command: null });
+        await expect(dispatch('   ', adminCtx)).resolves.toEqual({ lines: [], command: null, argv: [], mutating: false });
     });
 });
 
@@ -88,7 +88,7 @@ describe('dispatch — role enforcement', () => {
         register({
             name: 'restricted',
             summary: 's',
-            usage: 'restricted',
+            usage: 'restricted', mutating: false,
             allowedRoles: ['admin'],
             handler: async () => ['ran'],
         });
@@ -98,7 +98,7 @@ describe('dispatch — role enforcement', () => {
 
     test('the handler is never invoked when the role check fails', async () => {
         const handler = jest.fn().mockResolvedValue(['ran']);
-        register({ name: 'restricted', summary: 's', usage: 'restricted', allowedRoles: ['admin'], handler });
+        register({ name: 'restricted', summary: 's', usage: 'restricted', mutating: false, allowedRoles: ['admin'], handler });
 
         await expect(dispatch('restricted', userCtx)).rejects.toThrow(CommandError);
         expect(handler).not.toHaveBeenCalled();
@@ -108,16 +108,18 @@ describe('dispatch — role enforcement', () => {
         register({
             name: 'restricted',
             summary: 's',
-            usage: 'restricted',
+            usage: 'restricted', mutating: false,
             allowedRoles: ['admin'],
             handler: async () => ['ran'],
         });
 
-        await expect(dispatch('restricted', adminCtx)).resolves.toEqual({ lines: ['ran'], command: 'restricted' });
+        await expect(dispatch('restricted', adminCtx)).resolves.toEqual({
+            lines: ['ran'], command: 'restricted', argv: [], mutating: false,
+        });
     });
 
     test('listCommands hides verbs the role cannot run', () => {
-        register({ name: 'restricted', summary: 's', usage: 'restricted', allowedRoles: ['admin'], handler: async () => [] });
+        register({ name: 'restricted', summary: 's', usage: 'restricted', mutating: false, allowedRoles: ['admin'], handler: async () => [] });
 
         expect(listCommands('user').map((c) => c.name)).not.toContain('restricted');
         expect(listCommands('admin').map((c) => c.name)).toContain('restricted');
@@ -126,8 +128,8 @@ describe('dispatch — role enforcement', () => {
 
 describe('registry', () => {
     test('duplicate registration throws rather than silently overwriting', () => {
-        register({ name: 'dup', summary: 's', usage: 'dup', handler: async () => [] });
-        expect(() => register({ name: 'dup', summary: 's', usage: 'dup', handler: async () => [] }))
+        register({ name: 'dup', summary: 's', usage: 'dup', mutating: false, handler: async () => [] });
+        expect(() => register({ name: 'dup', summary: 's', usage: 'dup', mutating: false, handler: async () => [] }))
             .toThrow(/duplicate command registration/);
     });
 });
@@ -146,6 +148,64 @@ describe('builtins', () => {
             expect.stringContaining('u2'),
             expect.stringContaining('admin'),
         ]));
+    });
+});
+
+describe('mutating declaration and the pre-execution hook', () => {
+    test('dispatch reports the resolved verb and argv, not the raw input', async () => {
+        register({ name: 'probe', summary: 's', usage: 'probe', mutating: false, handler: async () => ['ok'] });
+
+        // Extra whitespace in the raw string must not reach the audit record.
+        const r = await dispatch('  probe   --env   prod  ', adminCtx);
+        expect(r.command).toBe('probe');
+        expect(r.argv).toEqual(['--env', 'prod']);
+        expect(r.mutating).toBe(false);
+    });
+
+    test('beforeRun fires after authorisation and before the handler', async () => {
+        const order: string[] = [];
+        register({
+            name: 'change', summary: 's', usage: 'change', mutating: true,
+            handler: async () => { order.push('handler'); return ['done']; },
+        });
+
+        await dispatch('change', adminCtx, async () => { order.push('beforeRun'); });
+
+        expect(order).toEqual(['beforeRun', 'handler']);
+    });
+
+    test('a throwing beforeRun prevents the handler running at all', async () => {
+        // This is the property that makes fail-closed auditing possible: if the
+        // ledger write throws, the state change must never happen.
+        const handler = jest.fn().mockResolvedValue(['done']);
+        register({ name: 'change', summary: 's', usage: 'change', mutating: true, handler });
+
+        await expect(
+            dispatch('change', adminCtx, async () => { throw new Error('ledger down'); }),
+        ).rejects.toThrow('ledger down');
+
+        expect(handler).not.toHaveBeenCalled();
+    });
+
+    test('beforeRun does not fire for a verb the role cannot run', async () => {
+        const beforeRun = jest.fn();
+        register({
+            name: 'change', summary: 's', usage: 'change', mutating: true,
+            allowedRoles: ['admin'], handler: async () => ['done'],
+        });
+
+        await expect(dispatch('change', userCtx, beforeRun)).rejects.toThrow(CommandError);
+        expect(beforeRun).not.toHaveBeenCalled();
+    });
+
+    test('a role denial carries the resolved verb; an unknown verb carries none', async () => {
+        register({
+            name: 'change', summary: 's', usage: 'change', mutating: true,
+            allowedRoles: ['admin'], handler: async () => ['done'],
+        });
+
+        await expect(dispatch('change', userCtx)).rejects.toMatchObject({ verb: 'change' });
+        await expect(dispatch('nosuchverb', userCtx)).rejects.toMatchObject({ verb: undefined });
     });
 });
 
