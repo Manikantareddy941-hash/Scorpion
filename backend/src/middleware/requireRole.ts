@@ -14,6 +14,23 @@ import { logger } from '../services/logger';
  * Fail-closed: any lookup failure rejects the request rather than letting it
  * through unauthorized.
  */
+/**
+ * Resolves a user's role, defaulting to 'user' when they have no role document.
+ *
+ * Throws on lookup failure rather than returning the default — a caller that
+ * cannot reach the ROLES collection must fail closed, never silently downgrade
+ * to 'user' (or, worse, be treated as privileged by a caller that expected a
+ * throw). Both `requireRole` below and the terminal command surface depend on
+ * that contract.
+ */
+export const resolveRole = async (userId: string): Promise<string> => {
+  const roleRes = await databases.listDocuments(DB_ID, COLLECTIONS.ROLES, [
+    Query.equal('userId', userId),
+    Query.limit(1),
+  ]);
+  return (roleRes.documents[0]?.role as string | undefined) ?? 'user';
+};
+
 export const requireRole = (...allowed: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req as { user?: { $id?: string } }).user?.$id;
@@ -22,12 +39,7 @@ export const requireRole = (...allowed: string[]) => {
     }
 
     try {
-      const roleRes = await databases.listDocuments(DB_ID, COLLECTIONS.ROLES, [
-        Query.equal('userId', userId),
-        Query.limit(1),
-      ]);
-
-      const role = (roleRes.documents[0]?.role as string | undefined) ?? 'user';
+      const role = await resolveRole(userId);
 
       if (!allowed.includes(role)) {
         logger.warn(

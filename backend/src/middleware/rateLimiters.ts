@@ -17,3 +17,10 @@ export const aiLimiter = makeLimiter(60 * 1000, 10);
 
 /** For ZIP upload + extraction. */
 export const uploadLimiter = makeLimiter(60 * 1000, 10);
+
+/**
+ * For the Scorpion Terminal command surface. Generous enough for interactive typing,
+ * tight enough that the endpoint can't be used to enumerate the verb table or to
+ * flood the hash-chained audit ledger (every command writes one entry).
+ */
+export const terminalLimiter = makeLimiter(60 * 1000, 60);

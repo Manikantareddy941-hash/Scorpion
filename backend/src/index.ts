@@ -49,6 +49,7 @@ import auditRoutes from './routes/auditRoutes';
 import remediateRouter from './routes/remediate';
 import dashboardRoutes from './routes/dashboardRoutes';
 import gateRoutes from './routes/gateRoutes';
+import terminalRoutes from './routes/terminalRoutes';
 import dockerScanRoutes from './routes/dockerScanRoutes';
 import dastRoutes from './routes/dastRoutes';
 import nucleiRoutes from './routes/nucleiRoutes';
@@ -354,6 +355,10 @@ app.use('/api/compliance', authenticate, complianceRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/gates', gateRoutes);
+// Scorpion Terminal. Behind `authenticate` like every other user-facing route —
+// there is no second auth path for this surface, and no shell behind it: input is
+// tokenised and looked up in a fixed verb table. See services/terminal/commands.ts.
+app.use('/api/terminal', authenticate, terminalRoutes);
 app.use('/api/v1/rules', authenticate, gateRulesRoutes);
 // Auto-tune proposals. Authenticated and user-scoped: nothing here can reach the
 // cluster-wide 'system' gate config.
