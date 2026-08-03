@@ -324,6 +324,20 @@ describe('KubernetesRunner', () => {
             );
         });
 
+        test('reports what produced the result, so the verdict stays interpretable', async () => {
+            // "Clean" means "clean against the signatures this scanner held".
+            // Without the digest and the database date on the record, no past
+            // scan can be re-read when a CVE lands.
+            const d = dispatcher({ logs: framedLog('{}') });
+
+            const result = await new KubernetesRunner(d).run(RUN);
+
+            expect(result.provenance).toMatchObject({
+                tool: 'trivy', image: PINNED, freshness: 'fresh',
+            });
+            expect(result.provenance?.dbBuiltAt).toEqual(expect.any(String));
+        });
+
         test('a tool with nothing to download is not put through the freshness gate', async () => {
             // gitleaks compiles its rules in. There is no database to age, so
             // there is nothing for the gate to decide.
