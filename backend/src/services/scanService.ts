@@ -2,6 +2,7 @@ import { Models, Permission, Role } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
 import { assertScannersUsable, orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
+import { collectRepoStats, assertScanTargetUsable } from './scan/repoStats';
 import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit, normalizeHadolint } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
@@ -449,41 +450,28 @@ export const triggerScan = async (
         assertScannersUsable(rawResults);
 
         // 7️⃣ Walk repo for file/line stats
-        const languageCounts: Record<string, number> = {};
-        const extensionMap: Record<string, string> = {
-            '.java': 'Java', '.ts': 'TypeScript', '.tsx': 'TypeScript',
-            '.js': 'JavaScript', '.py': 'Python', '.go': 'Go',
-            '.cpp': 'C++', '.cs': 'C#'
-        };
-        let totalLines = 0;
-        let totalFiles = 0;
+        const repoStats = collectRepoStats(scanPath);
+        const { totalFiles, totalLines, detectedLanguage } = repoStats;
 
-        const walkSync = (dir: string) => {
-            try {
-                const files = fs.readdirSync(dir);
-                files.forEach(file => {
-                    const fullPath = path.join(dir, file);
-                    try {
-                        if (fs.statSync(fullPath).isDirectory()) {
-                            if (file !== '.git' && file !== 'node_modules') walkSync(fullPath);
-                        } else {
-                            totalFiles++;
-                            const ext = path.extname(file).toLowerCase();
-                            try {
-                                const content = fs.readFileSync(fullPath, 'utf-8');
-                                totalLines += content.split('\n').length;
-                            } catch {}
-                            if (extensionMap[ext]) {
-                                const lang = extensionMap[ext];
-                                languageCounts[lang] = (languageCounts[lang] || 0) + 1;
-                            }
-                        }
-                    } catch {}
-                });
-            } catch {}
-        };
-        walkSync(scanPath);
-        const detectedLanguage = Object.entries(languageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
+        // A scan that walked zero files did not find nothing — it examined
+        // nothing, and "clean" would be a lie. The scanners above can exit 0 with
+        // empty output against a missing, empty or unreadable directory, which
+        // assertScannersUsable cannot catch because they genuinely ran. Fail
+        // closed here; the catch at the end marks the scan `failed` with
+        // `gate_status: 'failed'`.
+        assertScanTargetUsable(repoStats, scanPath);
+
+        // Files were found but some paths were unreadable: the scan is valid but
+        // its coverage is incomplete, so say so rather than silently under-reporting.
+        if (repoStats.unreadable.length > 0) {
+            logger.warn('[Scan] scan_walk_degraded — some paths could not be read', {
+                event: 'scan_walk_degraded',
+                scanId,
+                repoId,
+                unreadableCount: repoStats.unreadable.length,
+                sample: repoStats.unreadable.slice(0, 5),
+            });
+        }
 
         logger.info(`[STRICT DEBUG] Raw Scan Output Lengths: Semgrep: ${rawResults.find(r => r.tool === 'semgrep')?.stdout.length || 0}, Gitleaks: ${rawResults.find(r => r.tool === 'gitleaks')?.stdout.length || 0}, Trivy: ${rawResults.find(r => r.tool === 'trivy')?.stdout.length || 0}, Checkov: ${rawResults.find(r => r.tool === 'checkov')?.stdout.length || 0}, Bandit: ${rawResults.find(r => r.tool === 'bandit')?.stdout.length || 0}, Hadolint: ${rawResults.find(r => r.tool === 'hadolint')?.stdout.length || 0}`);
 
