@@ -69,13 +69,15 @@ describe('signImageDigest', () => {
         expect(resolveToolCommand).not.toHaveBeenCalled();
     });
 
-    it('returns null when cosign is not installed', async () => {
+    // REVERSAL, deliberate. Previously asserted null here. A key is configured,
+    // so signing was asked for; an absent signer is a broken host, not an
+    // opt-out. Returning null let a sabotaged signer produce an unsigned image
+    // that the deploy gate then waves through as making no claim.
+    it('throws when a key is configured but cosign is not installed', async () => {
         process.env.COSIGN_KEY_PATH = '/keys/cosign.key';
         (resolveToolCommand as jest.Mock).mockResolvedValue({ status: 'missing' });
 
-        const result = await signImageDigest('sha256:abc');
-
-        expect(result).toBeNull();
+        await expect(signImageDigest('sha256:abc')).rejects.toThrow('cosign CLI could not be resolved');
     });
 
     it('signs and returns the base64 signature when configured and installed', async () => {
@@ -89,14 +91,23 @@ describe('signImageDigest', () => {
         expect(result).toEqual({ signature: 'BASE64SIGNATURE==', publicKeyPath: '/keys/cosign.pub' });
     });
 
-    it('returns null (not a throw) if the cosign command itself fails', async () => {
+    // REVERSAL, deliberate. The old name said the quiet part out loud —
+    // "(not a throw)". A bad key, a wrong passphrase or a timeout means the
+    // signature the caller asked for does not exist; reporting that as null made
+    // it indistinguishable from never having asked.
+    it('throws if the cosign command itself fails', async () => {
         process.env.COSIGN_KEY_PATH = '/keys/cosign.key';
         (resolveToolCommand as jest.Mock).mockResolvedValue({ status: 'installed', cmd: 'cosign', prefixArgs: [] });
         mockExecFile((_cmd, _args, _opts, cb) => cb(new Error('signing failed'), null));
 
-        const result = await signImageDigest('sha256:abc');
+        await expect(signImageDigest('sha256:abc')).rejects.toThrow('cosign sign-blob failed: signing failed');
+    });
 
-        expect(result).toBeNull();
+    // The one surviving null: nobody asked for a signature, so nothing is wrong.
+    it('still returns null — not a throw — when no key is configured', async () => {
+        delete process.env.COSIGN_KEY_PATH;
+
+        await expect(signImageDigest('sha256:abc')).resolves.toBeNull();
     });
 });
 

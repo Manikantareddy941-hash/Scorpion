@@ -13,7 +13,7 @@ import { logger } from './logger';
 import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
 import { containerizedTrivyService } from './containerizedTrivyService';
-import { getImageDigest, signImageDigest } from './cosignService';
+import { getImageDigest, signImageDigest, CosignSigningError } from './cosignService';
 import { EnvironmentDocument, PipelineRunDocument, StageUpdate } from '../types/pipeline.types';
 import { GateBlocker } from '../types/gate.types';
 
@@ -271,12 +271,26 @@ export async function runPipeline(runId: string) {
           });
           await pipeLogger.log(`Image digest signed: ${digest}`);
         } else {
-          await pipeLogger.log('Image signing skipped (cosign/COSIGN_KEY_PATH not configured).');
+          // Reachable only when COSIGN_KEY_PATH is unset — a configured-but-
+          // broken signer throws now rather than reporting itself as skipped.
+          await pipeLogger.log('Image signing skipped (COSIGN_KEY_PATH not configured).');
         }
       } catch (signErr) {
         const message = signErr instanceof Error ? signErr.message : String(signErr);
-        logger.warn(`[PipelineService] Image signing step failed for ${imageTag}:`, message);
-        await pipeLogger.log(`Image signing step failed: ${message}`);
+        // This is the path deployService reads first (pipeline_runs, with
+        // BUILD_PIPELINES only as fallback), so a swallow here is the more
+        // load-bearing of the two. Same rule as buildService: a pipeline
+        // configured to sign that cannot produce a signature must fail, because
+        // the resulting unsigned run is indistinguishable downstream from one
+        // that never intended to sign — and that one deploys freely.
+        if (signErr instanceof CosignSigningError) {
+          logger.error(`[PipelineService] Image signing failed for ${imageTag} — failing the run:`, message);
+          await pipeLogger.log(`Image signing failed: ${message}`);
+          throw signErr;
+        }
+        // Reading the digest is best-effort; it does not weaken the gate.
+        logger.warn(`[PipelineService] Image digest step failed for ${imageTag}:`, message);
+        await pipeLogger.log(`Image digest step failed: ${message}`);
       }
     } else if (buildTool === 'gradle') {
       await executeStageInContainer(

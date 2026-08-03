@@ -69,8 +69,10 @@ export const buildProvenanceStatement = (ctx: BuildContext): SlsaProvenanceState
 
 /**
  * Builds and signs a provenance statement for a completed build. Returns
- * null (not an error) when signing isn't configured/available — same
- * opt-in semantics as signImageDigest.
+ * null (not an error) when signing isn't configured — same opt-in semantics as
+ * signImageDigest. Throws CosignSigningError when signing WAS configured and
+ * failed; "available" is no longer folded into the null case, because a broken
+ * signer and a deliberate opt-out call for opposite responses.
  *
  * The signature covers JSON.stringify(statement); verifyProvenance
  * re-serializes the stored statement the same way, so the statement object

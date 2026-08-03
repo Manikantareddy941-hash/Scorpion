@@ -76,12 +76,16 @@ describe('attestProvenance', () => {
         expect(result!.statement.subject[0].digest.sha256).toBe('abc123');
     });
 
-    it('returns null (not a throw) if cosign fails', async () => {
+    // REVERSAL, deliberate. attestProvenance signs through signBlobContent and
+    // inherits its contract: null means signing was never configured, a throw
+    // means it was configured and failed. Provenance that silently does not
+    // exist is provenance nobody notices is missing.
+    it('throws if cosign fails', async () => {
         process.env.COSIGN_KEY_PATH = '/keys/cosign.key';
         (resolveToolCommand as jest.Mock).mockResolvedValue({ status: 'installed', cmd: 'cosign', prefixArgs: [] });
         mockExecFile((_cmd, _args, _opts, cb) => cb(new Error('boom'), null));
 
-        expect(await attestProvenance(ctx)).toBeNull();
+        await expect(attestProvenance(ctx)).rejects.toThrow('cosign sign-blob failed: boom');
     });
 });
 
