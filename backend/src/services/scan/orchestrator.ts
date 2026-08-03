@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { validateTools } from '../../utils/toolCheck';
 import { logger } from '../logger';
 import { getRunner } from '../runner';
+import type { ToolProvenance } from '../runner/provenance';
 
 // Safety: 5 minute timeout for any individual tool scan
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
@@ -20,6 +21,12 @@ export interface ScanResult {
      * findings" for a scanner that never ran is a security lie.
      */
     unavailable?: boolean;
+    /**
+     * What produced this result — image digest and database age, when the
+     * runner knows. A "clean" verdict is only meaningful alongside what it was
+     * clean against, and that context cannot be reconstructed after the fact.
+     */
+    provenance?: ToolProvenance;
 }
 
 /**
@@ -119,7 +126,7 @@ const executeTool = async (toolId: string, userArgs: string[], toolName: ScanRes
     }
 
     try {
-        const { stdout, stderr, exitCode } = await runner.run({
+        const { stdout, stderr, exitCode, provenance } = await runner.run({
             tool: toolId,
             args: userArgs,
             workspacePath,
@@ -137,10 +144,13 @@ const executeTool = async (toolId: string, userArgs: string[], toolName: ScanRes
                 error: `${toolName} produced no output (exit ${exitCode})`,
                 status: exitCode,
                 unavailable: true,
+                // Kept even on the unavailable path: knowing WHICH image failed
+                // to produce a verdict is most of the diagnosis.
+                provenance,
             };
         }
 
-        return { tool: toolName, stdout, stderr, status: exitCode };
+        return { tool: toolName, stdout, stderr, status: exitCode, provenance };
     } catch (err) {
         // Failed to start at all (no daemon, missing binary, timeout).
         const message = err instanceof Error ? err.message : String(err);
