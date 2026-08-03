@@ -7,9 +7,14 @@ FROM node:24-slim AS builder
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
+# npm ci, not npm install: ci installs exactly what package-lock.json names and
+# fails if the lock and package.json disagree. `npm install` is free to resolve
+# versions the lock never recorded, which means the image that gets scanned is
+# not provably the image that ships — the exact property the signed scanner
+# supply chain exists to guarantee.
 # --ignore-scripts: this stage only compiles TypeScript, it doesn't need the
 # scanning tools that the postinstall hook (setup-tools.sh) installs.
-RUN npm install --ignore-scripts
+RUN npm ci --ignore-scripts
 
 COPY backend/ ./
 COPY shared/ /app/shared/
@@ -43,8 +48,15 @@ ENV RUNNER_MODE=binary
 COPY backend/package*.json backend/setup-tools.sh ./
 # SCORPION_REQUIRE_TOOLS makes setup-tools.sh fail the build if any scanner is
 # missing. Shipping an image whose scanners silently do nothing is the failure
-# mode this exists to prevent.
-RUN SCORPION_REQUIRE_TOOLS=1 npm install --only=production
+# mode this exists to prevent. Lifecycle scripts stay enabled here (no
+# --ignore-scripts) precisely so that postinstall hook runs.
+#
+# --omit=dev replaces the deprecated --only=production (same behaviour).
+# --omit=peer keeps react/react-dom/scheduler out: npm 7+ auto-installs optional
+# peers, and `resend` declares @react-email/render as one. No backend source
+# imports react, so those packages would be unused weight in the image and noise
+# in the SBOM. Revisit only if Resend's React email templates are ever adopted.
+RUN SCORPION_REQUIRE_TOOLS=1 npm ci --omit=dev --omit=peer
 
 COPY --from=builder /app/backend/dist ./dist
 # The deploy runs `npm run migrate:up` against this image, so the .sql files
