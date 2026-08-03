@@ -61,13 +61,44 @@ const ATTRIBUTES: { key: string; size: number; note: string }[] = [
   },
 ];
 
+/**
+ * Reads the collection once before touching anything.
+ *
+ * Two reasons. It turns "does this attribute already exist" into a fact rather
+ * than something inferred from the text of a failure. And it separates a
+ * PROJECT-level problem — paused for inactivity, wrong endpoint, revoked key —
+ * from an attribute-level one. Without it, one paused project reports as N
+ * identical attribute errors, and the operator reads a list of things to debug
+ * when there is exactly one thing to fix.
+ */
+async function existingAttributeKeys(): Promise<Set<string>> {
+  try {
+    const list = await databases.listAttributes(DB_ID, COLLECTION);
+    return new Set(list.attributes.map((a) => (a as { key: string }).key));
+  } catch (err) {
+    const message = (err as Error).message;
+    console.error(`[FATAL] cannot read collection "${COLLECTION}" — nothing was changed.`);
+    console.error(`        ${message}`);
+    if (/paused/i.test(message)) {
+      console.error('        Restore the project from the Appwrite console, then re-run this script.');
+    }
+    process.exit(1);
+  }
+}
+
 async function run(): Promise<void> {
   console.log(`Provisioning provenance attributes on "${COLLECTION}" in ${DB_ID}\n`);
+
+  const existing = await existingAttributeKeys();
 
   let failed = 0;
   const created: string[] = [];
 
   for (const attr of ATTRIBUTES) {
+    if (existing.has(attr.key)) {
+      console.log(`  [=] skip (exists): ${attr.key}`);
+      continue;
+    }
     try {
       // Optional, and no default. A default would stamp every historical scan
       // with a value implying it was pinned and dated when it was not.
