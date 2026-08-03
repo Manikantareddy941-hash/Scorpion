@@ -32,8 +32,12 @@ import path from 'path';
 // Must load before ../lib/appwrite, which reads process.env at import time.
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
+import { Query } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { classifyAttributeFailure } from './lib/migrationErrors';
+
+/** Well above any collection here, and asserted against `total` rather than assumed. */
+const ATTRIBUTE_PAGE_LIMIT = 200;
 
 const REQUIRED = ['APPWRITE_ENDPOINT', 'APPWRITE_PROJECT_ID', 'APPWRITE_API_KEY', 'APPWRITE_DATABASE_ID'];
 const missingEnv = REQUIRED.filter((k) => !process.env[k]);
@@ -73,7 +77,17 @@ const ATTRIBUTES: { key: string; size: number; note: string }[] = [
  */
 async function existingAttributeKeys(): Promise<Set<string>> {
   try {
-    const list = await databases.listAttributes(DB_ID, COLLECTION);
+    // listAttributes pages at 25 by default, and `scans` already holds more
+    // than that. Without an explicit limit an existing attribute past the first
+    // page reads as absent, and this preflight would confidently try to create
+    // something that is already there. Verified the hard way: the first
+    // read-back of this very migration reported both new attributes missing.
+    const list = await databases.listAttributes(DB_ID, COLLECTION, [Query.limit(ATTRIBUTE_PAGE_LIMIT)]);
+    if (list.total > ATTRIBUTE_PAGE_LIMIT) {
+      throw new Error(
+        `collection has ${list.total} attributes, more than the ${ATTRIBUTE_PAGE_LIMIT} read here — raise the limit rather than trusting a partial view`,
+      );
+    }
     return new Set(list.attributes.map((a) => (a as { key: string }).key));
   } catch (err) {
     const message = (err as Error).message;

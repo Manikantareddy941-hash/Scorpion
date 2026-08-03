@@ -197,33 +197,71 @@ export async function triggerDeploy(
       return { deploymentId, status: 'failed', reason: 'Critical vulnerabilities found' };
     }
 
-    // 5b. Verify the build's image signature, if one was recorded and
-    // verification is configured. Skips gracefully when signing wasn't set
-    // up (most installs) - only blocks when a signature WAS recorded but
-    // fails to verify, which means the image was tampered with or
-    // substituted after the build signed it.
-    if (imageDigest && imageSignature && process.env.COSIGN_PUB_KEY_PATH) {
-      let verified = false;
+    // 5b. Verify the build's image signature when one was recorded.
+    //
+    // A recorded signature is a claim that this exact digest was signed at build
+    // time. Once the claim exists there are three outcomes and only one of them
+    // deploys: verified, refuted (the digest does not match its signature —
+    // tampering or substitution), and unjudgeable (no key, no cosign — we are
+    // not in a position to say).
+    //
+    // The third used to pass. It no longer does. cosignService throws instead of
+    // returning false precisely so this caller can tell a bad image from a blind
+    // check, and treating "cannot check" as "checked out" hands a silent bypass
+    // to anyone who can make cosign unresolvable — breaking this gate is far
+    // cheaper than defeating it.
+    //
+    // The COSIGN_PUB_KEY_PATH condition that used to guard this branch is gone
+    // on purpose: an absent key made verification skip silently, which is the
+    // same fail-open by a quieter route. A missing key is now an unjudgeable
+    // outcome and blocks like any other.
+    //
+    // A build with no recorded signature still proceeds. Signing is opt-in, and
+    // an unsigned build is making no claim to check.
+    if (imageDigest && imageSignature) {
+      let outcome: 'verified' | 'refuted' | 'unjudgeable';
+      let blindReason = '';
+
       try {
-        verified = await verifyImageDigest(imageDigest, imageSignature);
+        outcome = (await verifyImageDigest(imageDigest, imageSignature)) ? 'verified' : 'refuted';
       } catch (err) {
-        logger.warn(`[DeployService] Could not attempt image signature verification for ${deploymentId}:`, err instanceof Error ? err.message : err);
-        verified = true; // couldn't attempt verification (tool/config issue) - don't block on that alone
+        outcome = 'unjudgeable';
+        blindReason = err instanceof Error ? err.message : String(err);
       }
 
-      if (!verified) {
-        logger.error(`[DeployService] Deployment blocked for ${deploymentId}: image signature verification failed.`);
+      if (outcome !== 'verified') {
+        const refuted = outcome === 'refuted';
+        const reason = refuted
+          ? 'Image signature verification failed'
+          : 'Image signature could not be verified';
+        const detail = refuted
+          ? `the image digest ${imageDigest} does not match its recorded build signature, indicating possible tampering or substitution`
+          : `the recorded signature for ${imageDigest} could not be checked (${blindReason}), leaving the image unverified rather than trusted`;
+
+        logger.error(`[DeployService] Deployment blocked for ${deploymentId}: ${reason.toLowerCase()}.`);
         await deployRepository.updateDeploymentStatus(deploymentId, { status: 'failed' });
 
         await createIncident({
-          title: `Deployment Blocked: Image signature verification failed for ${imageTag}`,
+          title: `Deployment Blocked: ${reason} for ${imageTag}`,
           severity: 'CRITICAL',
           source: 'ci_pipeline',
-          description: `Deployment ${deploymentId} to ${environment} was blocked: the image digest ${imageDigest} does not match its recorded build signature, indicating possible tampering or substitution.`,
+          description: `Deployment ${deploymentId} to ${environment} was blocked: ${detail}.`,
           repoId
         });
 
-        return { deploymentId, status: 'failed', reason: 'Image signature verification failed' };
+        // Tamper-audited for the same reason break-glass is. A deploy stopped by
+        // a broken verifier and a deploy stopped by a bad signature are
+        // indistinguishable in the deployment record, and only one of them is an
+        // operator's problem to fix. Best-effort: an audit-write failure must not
+        // turn a clean block into a thrown error the caller handles differently.
+        await logSecureAuditEvent(
+          triggeredBy,
+          refuted ? 'IMAGE_SIGNATURE_REFUTED' : 'IMAGE_SIGNATURE_UNVERIFIABLE',
+          repoId,
+          `Deployment ${deploymentId} of ${imageTag} to ${environment} blocked: ${detail}`,
+        ).catch(err => logger.warn('[DeployService] failed to audit signature gate block', err instanceof Error ? err.message : err));
+
+        return { deploymentId, status: 'failed', reason };
       }
     }
 

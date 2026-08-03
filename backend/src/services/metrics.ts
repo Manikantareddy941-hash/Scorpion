@@ -86,6 +86,28 @@ export const blockedCves = new Counter({
   registers: [register]
 });
 
+/**
+ * 1 when this process is configured to sign (COSIGN_KEY_PATH or
+ * COSIGN_PUB_KEY_PATH set) but cannot — cosign unresolvable, key file
+ * unreadable, or a signing key with no matching public key. 0 otherwise,
+ * including on installs that never configured signing.
+ *
+ * A gauge rather than a counter on purpose. The condition is a state, not an
+ * event: it is decided once at boot and holds until the process restarts, so
+ * "how many times did this happen" answers nothing while "is it true right now"
+ * is exactly what an alert needs. It also self-clears on the restart that
+ * follows a fix, which a counter never would.
+ *
+ * Every build this process runs with signing configured will FAIL while this is
+ * 1 — that is deliberate (see cosignService.signBlobContent) and is why this
+ * wants to page rather than sit on a dashboard.
+ */
+export const signingConfigBroken = new Gauge({
+  name: 'scorpion_signing_config_broken',
+  help: 'Signing is configured but unusable; builds that attempt to sign will fail',
+  registers: [register]
+});
+
 // --- Rolling Buffer Logic ---
 export interface TelemetrySnapshot {
   timestamp: number;
