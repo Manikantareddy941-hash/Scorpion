@@ -5,6 +5,7 @@ import { getScan, getSignature, type Tenant } from '../services/imageStore';
 import { isPostgresEnabled } from '../db/pool';
 import { ciTokenRepository } from '../repositories/pg/ciTokenRepository';
 import { verifyImageDigest } from '../services/cosignService';
+import { signatureEnforcementActive } from '../services/signaturePolicy';
 import { VulnerablePackage, ReachabilityResult } from '../services/reachabilityService';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
 import { podSecurityRepository } from '../repositories/podSecurityRepository';
@@ -260,7 +261,9 @@ export async function checkImageSignature(
   env: string,
   tenant: Tenant = null
 ): Promise<{ status: 'ready' | 'blocked'; reason: string }> {
-  if (process.env.REQUIRE_IMAGE_SIGNATURE !== 'true' || env !== 'prod') {
+  // Shared with deployService via signaturePolicy so the two gates cannot answer
+  // this question differently again — see that module's header for what drifted.
+  if (!signatureEnforcementActive(env)) {
     return { status: 'ready', reason: 'signature enforcement off' };
   }
   const digest = imageDigest(image);

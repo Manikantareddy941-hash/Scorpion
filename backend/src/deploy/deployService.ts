@@ -3,6 +3,7 @@ import { deployRepository, DeployTargetConfig, TrivyReport } from '../repositori
 import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { verifyImageDigest } from '../services/cosignService';
+import { signatureEnforcementActive } from '../services/signaturePolicy';
 import { securityRequirementsService } from '../services/securityRequirementsService';
 import { gateService } from '../services/gateService';
 import { gateRunRepository } from '../repositories/gateRunRepository';
@@ -216,8 +217,48 @@ export async function triggerDeploy(
     // same fail-open by a quieter route. A missing key is now an unjudgeable
     // outcome and blocks like any other.
     //
-    // A build with no recorded signature still proceeds. Signing is opt-in, and
-    // an unsigned build is making no claim to check.
+    // A build with no recorded signature still proceeds *unless enforcement is
+    // active*. Signing is opt-in, and an unsigned build makes no claim to check —
+    // but that reasoning only holds while nobody has declared that a claim is
+    // mandatory. REQUIRE_IMAGE_SIGNATURE is that declaration.
+    //
+    // This block is why the flag was previously a no-op on the path that matters.
+    // k8sAdmission refused unsigned images; this service waved them through; and
+    // this service is the one the deploy flow calls. Enabling the flag armed a
+    // cluster webhook that has to be registered to do anything, while the
+    // application kept deploying unsigned images and reporting success. Now both
+    // gates answer through signatureEnforcementActive().
+    if (signatureEnforcementActive(environment) && !(imageDigest && imageSignature)) {
+      const missing = !imageDigest ? 'no image digest was recorded' : 'no build signature was recorded';
+      const detail =
+        `${imageTag} carries ${missing}, and REQUIRE_IMAGE_SIGNATURE is set for ${environment} — ` +
+        'an image that makes no signature claim cannot satisfy a policy that requires one';
+
+      logger.error(`[DeployService] Deployment blocked for ${deploymentId}: unsigned image under signature enforcement.`);
+      await deployRepository.updateDeploymentStatus(deploymentId, { status: 'failed' });
+
+      await createIncident({
+        title: `Deployment Blocked: unsigned image ${imageTag}`,
+        severity: 'CRITICAL',
+        source: 'ci_pipeline',
+        description: `Deployment ${deploymentId} to ${environment} was blocked: ${detail}.`,
+        repoId
+      });
+
+      // Best-effort, deliberately: this is a DENY. A deny that fails to log is
+      // not an unlogged privileged action — the deploy did not happen. Required
+      // audit writes are reserved for events that GRANT (break-glass), where a
+      // missing entry means a bypass nobody can see.
+      await logSecureAuditEvent(
+        triggeredBy,
+        'IMAGE_SIGNATURE_MISSING',
+        repoId,
+        `Deployment ${deploymentId} of ${imageTag} to ${environment} blocked: ${detail}`,
+      ).catch(err => logger.warn('[DeployService] failed to audit unsigned-image block', err instanceof Error ? err.message : err));
+
+      return { deploymentId, status: 'failed', reason: 'Image signature required but not present' };
+    }
+
     if (imageDigest && imageSignature) {
       let outcome: 'verified' | 'refuted' | 'unjudgeable';
       let blindReason = '';
