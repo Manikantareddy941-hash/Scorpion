@@ -245,7 +245,7 @@ flowchart TD
 
 **Backend**
 - Express · TypeScript · Node.js
-- BullMQ + ioredis · socket.io
+- BullMQ + ioredis
 - Octokit / `@octokit/auth-app` · simple-git · dockerode
 - zod · helmet · express-rate-limit · bcrypt · jsonwebtoken
 - openai · pdfkit · json2csv · archiver

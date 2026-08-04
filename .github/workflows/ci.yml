@@ -145,6 +145,87 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      # `npm run build` is `prisma generate && tsc`, which EMITS. This is the
+      # no-emit typecheck over the full include set — src, scripts and every
+      # *.test.ts — which the build does not cover. Hard gate: currently zero
+      # errors, so it holds the line from today rather than tolerating a backlog.
+      - name: Check TypeScript Types
+        working-directory: backend
+        run: npx tsc --noEmit
+
+      # Ratchet, not a cliff. There are 7 pre-existing cycles, six of them the
+      # same shape: a repository facade importing its own pg adapter while the
+      # adapter imports back. Failing on all 7 today would just get this step
+      # deleted; failing on the 8th stops the bleed. Lower the baseline as they
+      # are broken.
+      #
+      # --exclude '^generated/' keeps Prisma's codegen out of the count. Three of
+      # its internal modules are mutually circular, and leaving them in would tie
+      # this threshold to a file we do not write — regenerate the client and the
+      # gate fires on nothing.
+      #
+      # --json + a parser, rather than grepping madge's human output for a count:
+      # a grep that finds no match yields zero, so a crashed or misconfigured
+      # madge would read as "no cycles" and PASS. This step fails closed — output
+      # that will not parse is a failure, not a zero.
+      - name: Check Circular Dependencies
+        working-directory: backend
+        run: |
+          # Written outside the working tree so a local run of this step does not
+          # drop an untracked madge.json into backend/.
+          OUT="${RUNNER_TEMP:-/tmp}/madge.json"
+          # `|| true` because madge exits 1 whenever it finds ANY cycle, and
+          # Actions runs this under `bash -eo pipefail`. Without it the step
+          # aborts here on every run — the baseline is 7, so there is always a
+          # cycle — and the ratchet below never executes. That is a gate that
+          # fails on every build, which gets deleted just as fast as one that
+          # never fires.
+          #
+          # Discarding the exit code is safe ONLY because the parser below
+          # validates the output: a madge that genuinely crashed writes nothing
+          # parseable and still fails the step. The exit code is redundant here,
+          # the output is the evidence.
+          # Exact version, fetched rather than installed as a devDependency.
+          # madge@8 declares peerDependencies { typescript: '^5.4.4' } and this
+          # project is on TypeScript 6, so adding it to package.json makes plain
+          # `npm ci --ignore-scripts` fail with ERESOLVE -- which is exactly the
+          # command the Dockerfile builder stage runs. A lint tool is not worth
+          # breaking the image build or adding --legacy-peer-deps to the
+          # Dockerfile to paper over. Pin the version here instead; revisit when
+          # madge supports TS 6.
+          npx --yes madge@8.0.0 --circular --json --extensions ts \
+              --ts-config tsconfig.json --exclude '^generated/' src/ > "$OUT" || true
+          MADGE_OUT="$OUT" node -e '
+            const fs = require("fs");
+            const BASELINE = 7;
+            let cycles;
+            try {
+              cycles = JSON.parse(fs.readFileSync(process.env.MADGE_OUT, "utf8"));
+            } catch (err) {
+              console.error("::error::madge produced output that could not be parsed — failing closed rather than reading it as zero cycles: " + err.message);
+              process.exit(1);
+            }
+            if (!Array.isArray(cycles)) {
+              console.error("::error::madge output was not an array of cycles — failing closed");
+              process.exit(1);
+            }
+            console.log(`circular dependencies: ${cycles.length} (baseline ${BASELINE})`);
+            if (cycles.length > BASELINE) {
+              cycles.forEach((c, i) => console.log(`  ${i + 1}) ${c.join(" > ")}`));
+              console.error(`::error::New circular dependency introduced (${cycles.length} > ${BASELINE}). Break the cycle, or lower nothing — the baseline only moves down.`);
+              process.exit(1);
+            }
+          '
+
+      # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
+      # via ts-node-dev -> chokidar, which is a devDependency and never reaches the
+      # production image, so scoping to production deps lets the level stay at
+      # `high` instead of being relaxed to `critical` to accommodate a finding that
+      # does not ship.
+      - name: Dependency Audit
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Run DB Migrations
         working-directory: backend
         run: npm run migrate:up
