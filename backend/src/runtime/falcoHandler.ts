@@ -117,7 +117,17 @@ export async function handleFalcoEvent(event: FalcoEvent) {
                try {
                   const repoDoc = await databases.getDocument(DB_ID, COLLECTIONS.REPOSITORIES, scanDoc.repo_id);
                   ownerUserId = repoDoc.user_id;
-               } catch (e) {}
+               } catch (e) {
+                  // Swallowing this left ownerUserId undefined, which silently
+                  // drops the routing for a *runtime* security alert — the alert
+                  // is still recorded but never reaches a human. Non-fatal (the
+                  // event must still be stored), so log loudly instead of
+                  // failing, and make the un-routed state explicit.
+                  logger.error(
+                     `[Falco Handler] Could not resolve owner for repo ${scanDoc.repo_id} — alert will be recorded but NOT routed to a user`,
+                     { repoId: scanDoc.repo_id, scanId: scanDoc.$id, error: e instanceof Error ? e.message : String(e) },
+                  );
+               }
             }
             return scanDoc.$id;
           }

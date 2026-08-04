@@ -139,13 +139,40 @@ describe('cache and bulk validation', () => {
     expect(results).toHaveLength(6);
   });
 
-  it('initToolCache warms every scanner', async () => {
+  it('initToolCache warms every scanner it can resolve', async () => {
     const mod = loadOnPlatform('linux');
-    spawn.mockReturnValue(fail());
+    spawn.mockImplementation((cmd: string) => (cmd === 'which' ? ok('/usr/bin/tool') : ok('v1')));
     await mod.initToolCache();
     spawn.mockClear();
 
     await mod.resolveToolCommand('semgrep'); // cache hit → no new spawns
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  // REVERSAL, deliberate. This previously warmed the cache with an all-failing
+  // spawn and asserted the next resolve spawned nothing — i.e. it asserted that
+  // a 'missing' verdict sticks. It no longer does, and must not: the cache has
+  // no TTL, so a negative cached during a slow boot would outlive its cause and
+  // block every signed deploy until the process restarts. Re-probing an absent
+  // tool is the intended cost.
+  it('re-probes a missing tool instead of caching the negative', async () => {
+    const mod = loadOnPlatform('linux');
+    spawn.mockReturnValue(fail());
+    await mod.initToolCache();
+    spawn.mockClear();
+
+    expect((await mod.resolveToolCommand('semgrep')).status).toBe('missing');
+    expect(spawn).toHaveBeenCalled();
+  });
+
+  it('picks up a tool that appears after an earlier lookup failed', async () => {
+    const mod = loadOnPlatform('linux');
+    spawn.mockReturnValue(fail());
+    expect((await mod.resolveToolCommand('cosign')).status).toBe('missing');
+
+    // The binary mounts late — the next call must see it, not the stale verdict.
+    spawn.mockImplementation((cmd: string) => (cmd === 'which' ? ok('/usr/bin/cosign') : ok('v2.4.1')));
+
+    expect(await mod.resolveToolCommand('cosign')).toMatchObject({ status: 'installed', version: 'v2.4.1' });
   });
 });

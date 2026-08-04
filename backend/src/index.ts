@@ -49,6 +49,7 @@ import auditRoutes from './routes/auditRoutes';
 import remediateRouter from './routes/remediate';
 import dashboardRoutes from './routes/dashboardRoutes';
 import gateRoutes from './routes/gateRoutes';
+import terminalRoutes from './routes/terminalRoutes';
 import dockerScanRoutes from './routes/dockerScanRoutes';
 import dastRoutes from './routes/dastRoutes';
 import nucleiRoutes from './routes/nucleiRoutes';
@@ -123,11 +124,28 @@ requiredEnv.forEach(env => {
 
 import { validateTools } from './services/scan/orchestrator';
 import { initToolCache } from './utils/toolCheck';
+import { probeSigningReadiness } from './services/cosignService';
+import { signingConfigBroken } from './services/metrics';
 
 (async () => {
     logger.info("🛡️  Security Tool Chain Diagnostic:");
     await initToolCache();
     await validateTools();
+
+    // Report the signature path's readiness at boot rather than at the first
+    // blocked release. Non-fatal by design, and silent on installs that never
+    // configured signing — see probeSigningReadiness for why it stays quiet.
+    //
+    // The gauge is set here rather than inside probeSigningReadiness so that
+    // cosignService stays free of a metrics import: metrics.ts starts a 15s
+    // setInterval at module load, and pulling that into cosignService would leak
+    // a timer into every suite that imports it. The composition root is the right
+    // place to decide what a verdict is worth telling Prometheus.
+    await probeSigningReadiness()
+        .then((readiness) => signingConfigBroken.set(readiness === 'degraded' ? 1 : 0))
+        .catch((err: unknown) =>
+            logger.warn('[Cosign] Signing readiness probe failed to run', err instanceof Error ? err.message : String(err)),
+        );
 
     // --- Recovery Mechanism ---
     try {
@@ -337,6 +355,10 @@ app.use('/api/compliance', authenticate, complianceRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/gates', gateRoutes);
+// Scorpion Terminal. Behind `authenticate` like every other user-facing route —
+// there is no second auth path for this surface, and no shell behind it: input is
+// tokenised and looked up in a fixed verb table. See services/terminal/commands.ts.
+app.use('/api/terminal', authenticate, terminalRoutes);
 app.use('/api/v1/rules', authenticate, gateRulesRoutes);
 // Auto-tune proposals. Authenticated and user-scoped: nothing here can reach the
 // cluster-wide 'system' gate config.

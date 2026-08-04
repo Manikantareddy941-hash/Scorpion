@@ -18,7 +18,13 @@ set -uo pipefail
 
 REQUIRE_TOOLS="${SCORPION_REQUIRE_TOOLS:-0}"
 
-TRIVY_VERSION="${TRIVY_VERSION:-0.58.1}"
+# 0.58.1 was unreachable: Aqua prunes old GitHub release tarballs, and every
+# version below 0.69.3 now 404s, which made this script fail and (correctly)
+# refuse to build the image. 0.69.3 is the oldest that still resolves and is
+# already the pin used by functions/trivy-scanner, so this adds no new version
+# to the tree. The Docker Hub channel is unaffected by the pruning, so the
+# offline scanner bake in docker/scanners/ is not impacted by this.
+TRIVY_VERSION="${TRIVY_VERSION:-0.69.3}"
 GITLEAKS_VERSION="${GITLEAKS_VERSION:-8.30.1}"
 SEMGREP_VERSION="${SEMGREP_VERSION:-1.101.0}"
 CHECKOV_VERSION="${CHECKOV_VERSION:-3.2.334}"

@@ -35,7 +35,14 @@ jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error
 jest.mock('./dockerRunnerService', () => ({ dockerRunnerService: { runInContainer: jest.fn() } }));
 jest.mock('./sshService', () => ({ sshService: { executeDeployment: jest.fn() } }));
 jest.mock('./containerizedTrivyService', () => ({ containerizedTrivyService: { runTrivyScan: jest.fn() } }));
-jest.mock('./cosignService', () => ({ getImageDigest: jest.fn(), signImageDigest: jest.fn() }));
+// CosignSigningError must be a real class in the mock: pipelineService does an
+// `instanceof` against it to decide whether a signing failure fails the run, and
+// `instanceof undefined` is a TypeError, not a false.
+jest.mock('./cosignService', () => ({
+  getImageDigest: jest.fn(),
+  signImageDigest: jest.fn(),
+  CosignSigningError: class CosignSigningError extends Error {},
+}));
 
 import crypto from 'crypto';
 import { Response } from 'express';

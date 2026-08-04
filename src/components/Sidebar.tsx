@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Bell, Settings, Users, BarChart2, ListTodo, Scale,
   ChevronLeft, ChevronRight, Layout, Clock, Map,
   TestTube2, Activity, Rocket, Cpu, Shield, GitBranch, Bug,
-  Zap, Package, Tag, Ticket, ShieldCheck, Boxes
+  Zap, Package, Tag, Ticket, ShieldCheck, Boxes, TerminalSquare
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -122,6 +122,7 @@ export default function Sidebar({
     {
       title: 'SYSTEM',
       items: [
+        { icon: TerminalSquare, label: 'SCORPION TERMINAL', path: '/terminal' },
         { icon: Settings, label: 'SETTINGS', path: '/settings' }
       ]
     }

@@ -4,7 +4,7 @@ import { logger } from '../services/logger';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
-import { getImageDigest, signImageDigest } from '../services/cosignService';
+import { getImageDigest, signImageDigest, CosignSigningError } from '../services/cosignService';
 import { attestProvenance } from '../services/provenanceService';
 import { putProvenance } from '../services/imageStore';
 import fs from 'fs/promises';
@@ -152,7 +152,10 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
             });
             logs += `Image digest signed: ${digest}\n`;
           } else {
-            logs += `Image signing skipped (cosign/COSIGN_KEY_PATH not configured).\n`;
+            // Reachable only when COSIGN_KEY_PATH is unset. A configured-but-
+            // broken signer throws now, so this line no longer doubles as the
+            // report for a failure.
+            logs += `Image signing skipped (COSIGN_KEY_PATH not configured).\n`;
           }
 
           // SLSA provenance: statement over this digest + repo/commit, signed
@@ -180,8 +183,29 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
             logs += `Provenance attestation skipped (signing not configured).\n`;
           }
         } catch (signErr: any) {
-          logger.warn(`[BuildService] Image signing/provenance step failed for ${imageName}:`, signErr.message);
-          logs += `Image signing/provenance step failed: ${signErr.message}\n`;
+          // A failed signature is not the same class of event as the rest of this
+          // block. If the pipeline was configured to sign and the signer broke,
+          // the build fails: an unsigned image from a host that intended to sign
+          // is indistinguishable downstream from an image nobody ever meant to
+          // sign, and deployService's gate deliberately waves the latter through
+          // as making no claim. Swallowing this made sabotaging the signer a
+          // complete bypass of the deploy signature gate — cheaper than defeating
+          // the crypto, which is the wrong relative cost.
+          //
+          // `.logs` is attached because the outer catch prefers error.logs over
+          // its own accumulator, and losing the build transcript here would hide
+          // why the pipeline stopped.
+          if (signErr instanceof CosignSigningError) {
+            logger.error(`[BuildService] Image signing failed for ${imageName} — failing the build:`, signErr.message);
+            logs += `Image signing failed: ${signErr.message}\n`;
+            throw Object.assign(signErr, { logs });
+          }
+
+          // Everything else this block does is best-effort: reading the digest,
+          // resolving the commit, writing provenance to Redis. A Redis blip is
+          // not a reason to fail a build that produced a correctly signed image.
+          logger.warn(`[BuildService] Image provenance step failed for ${imageName}:`, signErr.message);
+          logs += `Image provenance step failed: ${signErr.message}\n`;
         }
       } else if (buildTool === 'gradle') {
         const res1 = await execWithLogs('./gradlew build -x test', tempDir, pipelineId, logs);

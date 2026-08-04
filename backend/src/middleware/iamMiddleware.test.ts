@@ -89,6 +89,39 @@ describe('resolveIamStatements', () => {
         const req = fakeReq({ headers: { 'x-active-team-id': 'team-1' } as any });
         await expect(resolveIamStatements(req, 'user-1', 'repo-1')).rejects.toThrow('Not a member of team team-1');
     });
+
+    // The two cases below are the fail-closed halves of the same rule: an
+    // authorization decision that could not be made is not an authorization
+    // decision that succeeded. Both previously resolved to a *policy* — the
+    // unparseable case to ADMIN_IAM_POLICY for an admin/owner, which meant a
+    // corrupt policy blob granted strictly more than the real policy it replaced.
+    it('DENIES rather than granting the role default when the team policy is unparseable', async () => {
+        (databases.getDocument as jest.Mock).mockResolvedValue({ $id: 'team-1', policy: '{"Statement": [' });
+        (databases.listDocuments as jest.Mock).mockResolvedValue({
+            total: 1,
+            documents: [{ role: 'owner' }],
+        });
+
+        const req = fakeReq({ headers: { 'x-active-team-id': 'team-1' } as any });
+        await expect(resolveIamStatements(req, 'user-1', 'repo-1')).rejects.toThrow(/could not be parsed/);
+    });
+
+    it('DENIES rather than falling back to DEFAULT_IAM_POLICY when the policy store is unreachable', async () => {
+        (databases.getDocument as jest.Mock).mockRejectedValue(new Error('appwrite unreachable'));
+
+        const req = fakeReq({ headers: { 'x-active-team-id': 'team-1' } as any });
+        await expect(resolveIamStatements(req, 'user-1', 'repo-1')).rejects.toThrow(/could not be retrieved/);
+    });
+
+    it('does not leak an admin grant through hasPermission when the policy store is unreachable', async () => {
+        (databases.getDocument as jest.Mock).mockRejectedValue(new Error('appwrite unreachable'));
+
+        const req = fakeReq({ headers: { 'x-active-team-id': 'team-1' } as any });
+        // Rejecting (not resolving false) is the point: a caller that forgets to
+        // handle the throw gets a 500 from its route handler, which is still a
+        // deny. Resolving false would be fine too; resolving true never is.
+        await expect(hasPermission(req, 'user-1', 'repo:deploy', 'repo-1')).rejects.toThrow(/could not be retrieved/);
+    });
 });
 
 describe('hasPermission', () => {

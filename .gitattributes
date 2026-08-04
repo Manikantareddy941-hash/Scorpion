@@ -1,0 +1,19 @@
+# npm rewrites lockfiles with the platform's native line endings. On Windows
+# that means CRLF, while these files are stored LF, and core.autocrlf is false
+# so git commits the bytes verbatim. The result is that a six-package change
+# lands as a 15,000-line whole-file diff that no one can review.
+#
+# Forcing eol=lf makes the checkout LF regardless of platform, so a regenerated
+# lockfile diffs against the blob line for line. All three lockfiles are already
+# LF in HEAD, so this introduces no renormalization.
+package-lock.json text eol=lf
+
+# Shell scripts run in Linux containers (setup-tools.sh is invoked as a postinstall
+# inside the backend image). A CRLF checkout produces `\r`-terminated shebangs and
+# `command not found` at build time.
+*.sh text eol=lf
+
+# Dockerfiles are read by the daemon, not the host shell, but CRLF in a RUN line
+# leaks into the executed command the same way.
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf

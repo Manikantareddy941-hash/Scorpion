@@ -29,6 +29,7 @@ const Teams = lazy(() => import('./pages/Teams'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Governance = lazy(() => import('./pages/Governance'));
+const ScorpionTerminal = lazy(() => import('./components/ScorpionTerminal'));
 const Repositories = lazy(() => import('./pages/Repositories'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ScanResults = lazy(() => import('./pages/ScanResults'));
@@ -197,6 +198,7 @@ function App() {
               <Route path="/issues" element={<ProtectedRoute><Issues /></ProtectedRoute>} />
               <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+              <Route path="/terminal" element={<ProtectedRoute><ScorpionTerminal /></ProtectedRoute>} />
               <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
               <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

@@ -32,7 +32,13 @@ jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error
 jest.mock('./dockerRunnerService', () => ({ dockerRunnerService: { runInContainer: jest.fn() } }));
 jest.mock('./sshService', () => ({ sshService: { executeDeployment: jest.fn() } }));
 jest.mock('./containerizedTrivyService', () => ({ containerizedTrivyService: { runTrivyScan: jest.fn() } }));
-jest.mock('./cosignService', () => ({ getImageDigest: jest.fn(), signImageDigest: jest.fn() }));
+// Real class, not a jest.fn: pipelineService does `instanceof CosignSigningError`
+// on the signing failure path, and `instanceof undefined` throws a TypeError.
+jest.mock('./cosignService', () => ({
+  getImageDigest: jest.fn(),
+  signImageDigest: jest.fn(),
+  CosignSigningError: class CosignSigningError extends Error {},
+}));
 
 import { triggerPipelineRun, runPipeline } from './pipelineService';
 import { databases } from '../lib/appwrite';

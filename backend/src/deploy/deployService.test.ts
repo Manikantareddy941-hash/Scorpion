@@ -23,7 +23,12 @@ jest.mock('../services/cosignService', () => ({ verifyImageDigest: jest.fn() }))
 jest.mock('../services/securityRequirementsService', () => ({
     securityRequirementsService: { complianceGate: jest.fn().mockResolvedValue({ blocked: false, violations: [] }) },
 }));
-jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn() }));
+// mockResolvedValue, not a bare jest.fn(): the signature gate calls
+// logSecureAuditEvent(...).catch(...) so an audit-write failure cannot turn a
+// clean block into a thrown error, and `.catch` on the `undefined` a bare mock
+// returns is a TypeError. The break-glass path only awaits it, which is why a
+// bare mock was sufficient before.
+jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../repositories/gateRunRepository', () => ({ gateRunRepository: { record: jest.fn().mockResolvedValue(undefined) } }));
 jest.mock('../services/gateService', () => ({ gateService: { stampReleaseVerdict: jest.fn().mockResolvedValue(undefined) } }));
 

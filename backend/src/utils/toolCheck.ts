@@ -89,12 +89,25 @@ const performResolution = async (toolName: string): Promise<ResolvedCommand> => 
 };
 
 export const resolveToolCommand = async (toolName: string): Promise<ResolvedCommand> => {
-    if (cache.has(toolName)) {
-        return cache.get(toolName)!;
+    const cached = cache.get(toolName);
+    // Only a successful resolution is remembered. A 'missing' result is
+    // deliberately not cached: this map has no TTL, so one failed lookup — a
+    // slow PATH at boot, a sidecar that mounts its tools late — would pin the
+    // answer to "missing" for the life of the process. That was survivable while
+    // an unresolvable tool merely skipped a check. Now that an unresolvable
+    // cosign blocks every deploy of a signed image (deployService 5b), a cached
+    // negative is an outage that outlives its cause and clears only on restart.
+    //
+    // The cost is re-probing a genuinely absent tool on each call: two spawnSync
+    // calls, on a path that is about to fail anyway.
+    if (cached?.status === 'installed') {
+        return cached;
     }
 
     const resolved = await performResolution(toolName);
-    cache.set(toolName, resolved);
+    if (resolved.status === 'installed') {
+        cache.set(toolName, resolved);
+    }
     return resolved;
 };
 

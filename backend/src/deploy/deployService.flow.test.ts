@@ -20,12 +20,16 @@ jest.mock('../services/incidentService', () => ({ createIncident: jest.fn() }));
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
 jest.mock('../services/cosignService', () => ({ verifyImageDigest: jest.fn() }));
 jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+// Mocked so the signature gate's audit write is assertable rather than merely
+// swallowed by its .catch(). The real logger chains hashes into Appwrite.
+jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn().mockResolvedValue(undefined) }));
 
 import { triggerDeploy, rollbackDeploy } from './deployService';
 import { deployRepository } from '../repositories/deployRepository';
 import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { verifyImageDigest } from '../services/cosignService';
+import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 
 const repo = deployRepository as jest.Mocked<typeof deployRepository>;
 
@@ -113,7 +117,12 @@ describe('triggerDeploy', () => {
     expect(result.status).toBe('success');
   });
 
-  it('proceeds when signature verification cannot even be attempted (tool/config issue)', async () => {
+  // REVERSAL, deliberate. This test previously asserted `status: 'success'` for
+  // this exact arrangement — an unverifiable signature shipped. Do not restore
+  // that. cosignService throws rather than returning false so this caller can
+  // distinguish a bad image from a blind check; both block, and only one of them
+  // is the image's fault. See verifyImageSignature's contract in cosignService.
+  it('blocks when a recorded signature cannot be verified at all (tool/config issue)', async () => {
     process.env.COSIGN_PUB_KEY_PATH = '/keys/cosign.pub';
     arrangeHappyPath();
     repo.getPipelineRun.mockResolvedValue({ repoId: 'repo1', imageDigest: 'sha256:abc', imageSignature: 'sig' } as never);
@@ -121,7 +130,57 @@ describe('triggerDeploy', () => {
 
     const result = await triggerDeploy('build-1', 'production');
 
+    expect(result.status).toBe('failed');
+    expect(result.reason).toBe('Image signature could not be verified');
+    expect(repo.deployToDocker).not.toHaveBeenCalled();
+    // Audited under a distinct action from a refuted signature: an operator
+    // reading the ledger needs to know whether to fix the image or the toolchain.
+    // 'system' is triggerDeploy's default actor when no caller is named.
+    expect(logSecureAuditEvent).toHaveBeenCalledWith(
+      'system', 'IMAGE_SIGNATURE_UNVERIFIABLE', 'repo1', expect.stringContaining('cosign missing'),
+    );
+  });
+
+  // The condition that used to short-circuit the whole branch. Previously this
+  // deployed with no verification performed and no record that none happened.
+  it('blocks a recorded signature when COSIGN_PUB_KEY_PATH is unset, rather than skipping', async () => {
+    delete process.env.COSIGN_PUB_KEY_PATH;
+    arrangeHappyPath();
+    repo.getPipelineRun.mockResolvedValue({ repoId: 'repo1', imageDigest: 'sha256:abc', imageSignature: 'sig' } as never);
+    (verifyImageDigest as jest.Mock).mockRejectedValue(new Error('COSIGN_PUB_KEY_PATH is not configured'));
+
+    const result = await triggerDeploy('build-1', 'dev');
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toBe('Image signature could not be verified');
+  });
+
+  it('records a refuted signature under its own audit action', async () => {
+    process.env.COSIGN_PUB_KEY_PATH = '/keys/cosign.pub';
+    arrangeHappyPath();
+    repo.getPipelineRun.mockResolvedValue({ repoId: 'repo1', imageDigest: 'sha256:abc', imageSignature: 'sig' } as never);
+    (verifyImageDigest as jest.Mock).mockResolvedValue(false);
+
+    const result = await triggerDeploy('build-1', 'production');
+
+    expect(result.reason).toBe('Image signature verification failed');
+    expect(logSecureAuditEvent).toHaveBeenCalledWith(
+      'system', 'IMAGE_SIGNATURE_REFUTED', 'repo1', expect.stringContaining('does not match'),
+    );
+  });
+
+  // The opt-in escape hatch that must survive. An unsigned build makes no claim,
+  // so there is nothing to block on. Guards against over-correcting the gate into
+  // "no cosign, no deploys, ever" — which would break every install that never
+  // configured signing.
+  it('still deploys when the build recorded no signature at all', async () => {
+    delete process.env.COSIGN_PUB_KEY_PATH;
+    arrangeHappyPath();
+
+    const result = await triggerDeploy('build-1', 'production');
+
     expect(result.status).toBe('success');
+    expect(verifyImageDigest).not.toHaveBeenCalled();
   });
 
   it('uses a stored kubernetes deploy target when one exists', async () => {
