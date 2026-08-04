@@ -20,6 +20,10 @@ import { logger } from './logger';
 const execFileAsync = promisify(execFile);
 const COSIGN_TIMEOUT_MS = 30_000;
 
+// Imported for the boot probe only — the enforcement predicate itself lives in
+// signaturePolicy so deployService and k8sAdmission share one answer.
+import { signatureEnforcementRequested } from './signaturePolicy';
+
 export const isCosignAvailable = async (): Promise<boolean> => {
     const resolved = await resolveToolCommand('cosign');
     return resolved.status === 'installed';
@@ -55,6 +59,22 @@ export type SigningReadiness =
 export const probeSigningReadiness = async (): Promise<SigningReadiness> => {
     const signKey = process.env.COSIGN_KEY_PATH;
     const pubKey = process.env.COSIGN_PUB_KEY_PATH;
+
+    // REQUIRE_IMAGE_SIGNATURE is a third way to declare intent, and the most
+    // dangerous one to leave unspoken: enforcement on with no verification key
+    // blocks every production deploy, and keying silence on the cosign vars alone
+    // meant this install got no boot signal at all. It is not a misconfiguration
+    // of signing — nothing about the key vars is wrong — which is exactly why it
+    // needs saying out loud.
+    if (signatureEnforcementRequested() && !pubKey) {
+        logger.error(
+            '[Cosign] REQUIRE_IMAGE_SIGNATURE is set but COSIGN_PUB_KEY_PATH is not. ' +
+            'Every production deploy will be BLOCKED: enforcement demands a signature claim ' +
+            'and there is no key to verify one with. Set COSIGN_PUB_KEY_PATH or unset ' +
+            'REQUIRE_IMAGE_SIGNATURE.',
+        );
+        return 'degraded';
+    }
 
     if (!signKey && !pubKey) {
         logger.info('[Cosign] No signing keys configured — builds will not be signed and the deploy signature gate has nothing to check.');

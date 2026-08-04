@@ -187,10 +187,31 @@ export const gateService = {
     };
   },
 
+  /**
+   * Break-glass: force the release node to passing so a blocked deploy can ship.
+   *
+   * The audit write is `required` and happens BEFORE the state change, and the
+   * ordering is the whole point. Previously the override was applied first and
+   * audited second, on a logger that could not report failure — so an unreachable
+   * ledger produced a live, effective bypass with no record that anyone had used
+   * it. That is the one event in this codebase where a missing audit entry is
+   * itself the incident: the entire purpose of break-glass is that it leaves a
+   * mark.
+   *
+   * Refusing the override when it cannot be recorded is the fail-closed choice,
+   * and it is safe to make here because break-glass is an interactive operator
+   * action — the caller gets an error and can retry, unlike a background job.
+   */
   async override(repoId: string, userId: string) {
     await gateRepository.ensurePipelineStateCollection();
+    await logSecureAuditEvent(
+      userId,
+      'BREAK_GLASS_BYPASS',
+      repoId,
+      `Manual Break Glass override activated for repository: ${repoId}`,
+      { required: true },
+    );
     await gateRepository.setReleaseNodeStatus('passing');
-    await logSecureAuditEvent(userId, 'BREAK_GLASS_BYPASS', repoId, `Manual Break Glass override activated for repository: ${repoId}`);
   },
 
   async getState(): Promise<{ status: PipelineGateStatus }> {
