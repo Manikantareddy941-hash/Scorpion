@@ -1,0 +1,124 @@
+{
+  "manifest_version": "1.0",
+  "artifact": "scorpion-backend",
+  "generated_utc": "2026-08-03T11:45:00Z",
+  "git_head_at_audit": "9bb8673f5b15895a9891ec47f07dbe4d4dd0e3fe",
+  "anchoring": {
+    "scheme": "sha256-content-digest",
+    "note": "Digest-anchored, NOT cosign-signed. No COSIGN_KEY_PATH was available in the audit environment, and this manifest deliberately does not claim a cryptographic signature it does not have. To anchor it properly: cosign sign-blob --key $COSIGN_KEY_PATH RELEASE_MANIFEST_2026-08-03.json"
+  },
+  "verification": {
+    "typecheck": {
+      "command": "npx tsc --noEmit",
+      "config_used": "backend/tsconfig.json",
+      "result": "PASS",
+      "errors": 0,
+      "files_compiled": {
+        "src": 517,
+        "test": 173,
+        "shared": 2
+      },
+      "typescript_version": "6.0.3",
+      "duration_s": 13
+    },
+    "tests": {
+      "command": "npx jest",
+      "runner": "jest 30.4.2 / ts-jest 29.4.12",
+      "sharded": "12 shards (shell timeout constraint)",
+      "suites_total": 173,
+      "suites_passed": 173,
+      "suites_failed": 0,
+      "tests_passed": 1450,
+      "tests_failed": 0,
+      "tests_skipped": 97,
+      "skipped_reason": "12 DB-integration suites gated on RUN_DB_IT + DATABASE_URL; they DO run in ci.yml against its Postgres service"
+    },
+    "dependency_audit": {
+      "command": "npm audit",
+      "critical": 0,
+      "high": 1,
+      "moderate": 0,
+      "low": 0,
+      "high_detail": "picomatch <=2.3.1 (ReDoS + POSIX class method injection) via ts-node-dev -> chokidar@3.6.0. devDependency only; excluded from the production image stage. Not shipped."
+    },
+    "circular_dependencies": {
+      "tool": "madge --circular",
+      "found": 10,
+      "generated_prisma": 3,
+      "actionable": 7
+    },
+    "environment_caveat": "tsc and jest were executed against a local-disk mirror of the working tree. The OneDrive-synced path could not complete a cold compile inside the shell timeout. Digests below are taken from the OneDrive working tree, i.e. the files that were actually verified.",
+    "tests_on_pinned_sqlite_tree": {
+      "trigger": "better-sqlite3 pinned 13.x -> ^12.6.0 mid-audit (resolves 12.11.1)",
+      "install": "npm ci from on-disk lockfile, 1119 packages, exit 0",
+      "typecheck": "tsc --noEmit PASS, 0 errors",
+      "suites_total": 174,
+      "suites_passed": 174,
+      "suites_failed": 0,
+      "tests_passed": 1474,
+      "tests_failed": 0,
+      "tests_skipped": 97,
+      "delta_note": "+1 suite / +24 tests vs the 13.x run is services/terminal/commands.test.ts, which landed after that run. Downgrade is test-neutral.",
+      "retracted": "Hypothesis that prismaAdapter.ts:1's static import would crash a Postgres-only container without a SQLite binding. DISPROVED: require() loads, only new Database() throws. Binding is lazy."
+    }
+  },
+  "security_gates": {
+    "image_signature_deploy_gate": "FAIL-CLOSED (verified/refuted/unjudgeable; unjudgeable blocks + CRITICAL incident + tamper-audited event)",
+    "cosign_signing": "FAIL-CLOSED (null only when COSIGN_KEY_PATH unset; all other failures throw CosignSigningError)",
+    "tool_resolution_cache": "FAIL-CLOSED (negative results no longer cached)",
+    "k8s_admission_signature": "FAIL-CLOSED WHEN ENABLED \u2014 dormant by default (requires REQUIRE_IMAGE_SIGNATURE=true AND env=prod)",
+    "iam_authorization": "FAIL-CLOSED as of this audit (was FAIL-OPEN: unparseable policy escalated admin/owner to ADMIN_IAM_POLICY; unreachable policy store granted DEFAULT_IAM_POLICY)",
+    "dev_auth_bypass": "FAIL-CLOSED (requires explicit ALLOW_DEV_AUTH_BYPASS=true AND NODE_ENV!=production)",
+    "redis_transport": "FAIL-CLOSED as of this audit (production boot refuses an unset REDIS_URL)"
+  },
+  "release_gate": {
+    "type_safe": true,
+    "tests_green": true,
+    "cleared_for_production": false,
+    "blocking": [
+      "src/build/buildService.ts has zero tests and duplicates services/pipelineService.ts security logic",
+      "prometheus.yml has no rule_files/alerting \u2014 scorpion_signing_config_broken pages nobody",
+      "IAM allow/deny decisions emit no tamper-audited audit entry"
+    ],
+    "non_blocking": [
+      "7 actionable circular dependencies (repository facade <-> pg adapter)",
+      "Provenance has no read path (verifyProvenance / getProvenance uncalled)",
+      "REQUIRE_IMAGE_SIGNATURE not enabled in any environment",
+      "statusTelemetry.prune has a single caller (correlationQueueWorker)",
+      "scanService.ts:475-483 empty catches can mask a zero-file scan as clean",
+      "Terminal surface (9bb8673): ledger records raw input rather than the resolved verb/argv; audit fail-open guarded by comment not by a required `mutating` field; terminalRoutes.ts untested",
+      "Dockerfile:55-59 --omit=peer is a no-op (1166 pkgs either way) and its comment falsely claims it excludes react/react-dom/scheduler, which are still in the production tree",
+      "better-sqlite3 is a production dependency requiring prebuild-install||node-gyp; the image has python3 but no make/g++, so an unreachable prebuild host fails the build. Production is Postgres-only - move it to devDependencies."
+    ]
+  },
+  "digests": {
+    "repaired_this_pass": {
+      "src/middleware/iamMiddleware.ts": "ea4e0df3049f25c5f6179e59b9b487ce904ecb84232f1511b99ca0b18136f044",
+      "src/middleware/iamMiddleware.test.ts": "13891264867c9caa302d1d813e7cc53dafe9c91e6f3e11ad911adb673171e892",
+      "src/services/dashboardService.ts": "89e7d16c8b3c874fe861dee1d3abed463f0500e93964ce67a437aff851b31030",
+      "src/runtime/falcoHandler.ts": "899d8c43011d7433110181097665e5dad603ccb514240e8464cd1326c97f4196",
+      "src/queues/redisConnection.ts": "8865f928c9b61a3124280f781148c8bcfe3d1917270263e583b845004b6185f1"
+    },
+    "security_gate_files": {
+      "src/services/cosignService.ts": "03d4a7f7176e2341e9d937dcfbf607a518a0c9358edbe3a47e6fdc4a8a3ea9e8",
+      "src/services/provenanceService.ts": "4095b35c14d72e2ac1d7b98f92a819f9e18c3a3c37ca4e513ac0b4b8d46416ee",
+      "src/deploy/deployService.ts": "d6fea0445048c388099f3c0b431b78de08ec1d6f7bad99a6acd61415aab852f0",
+      "src/services/pipelineService.ts": "a203068a87b479e797fe62b1a6e758e0c1e9bd8a55e7829b44d202798ea1448a",
+      "src/utils/toolCheck.ts": "600449df33f18bd69d0e515b1dedec1cd2e371398e693ae4dfbfbfbfd14a02e9",
+      "src/routes/k8sAdmission.ts": "1617875f179cffb1f61135b6a0d6724fe4a8ee4ed6d5f2c197225f2f9169682b",
+      "src/utils/tamperAuditLogger.ts": "6bd9a8833a51bc0534295adf2f105f22fd287d4e9068ba7e065a8438b338d838",
+      "src/services/metrics.ts": "9fc1ad64585c307239ca4d81bfe1bb88a9f28b0b8752939dd576949d3cb8216f"
+    },
+    "build_config": {
+      "tsconfig.json": "7688363035b9eb02f0b78b769aaa0c66124ea9f34214c87761526daf4d2b1d17",
+      "jest.config.js": "369faed21172ecb3892b71308c1b5bff82612d8b4e0c853e950f06637f5d96ac",
+      "package.json": "676c63c592244fee2a0408f72f701baec997aca46deb93cfbe88cb40e51a39d5",
+      "package-lock.json": "1094fd8b47174c87cf00dbb0d97181a9b6db95dc47c50501dfba82e3c47e04c3",
+      "Dockerfile": "635af2eced96e3ddc30525957da60ec3113ac38952bb31b753c65c23cb942a6b"
+    },
+    "audit_report": {
+      "AUDIT_2026-08-03.md": "799def02093941de569c713a5ed615ec8ca544c67ecea34b4a298ee43a869fd8"
+    }
+  },
+  "audit_scope_note": "Sections 0-4 audited against 0c0c070. Section 5 (addendum) audited against 9bb8673, the terminal command surface, which landed mid-audit. Digests below are recomputed against the working tree at manifest generation time."
+}
