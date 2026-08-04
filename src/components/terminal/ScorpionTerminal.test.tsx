@@ -202,6 +202,58 @@ describe('splitting and tabs', () => {
     });
 });
 
+describe('domain verbs', () => {
+    /**
+     * The verbs themselves are tested in backend/src/services/terminal/
+     * domainVerbs.test.ts, against the real service layer and its tenancy
+     * checks. What matters here is that the pane renders multi-line, aligned
+     * output faithfully — including the blank lines the verbs use as separators,
+     * which a naive renderer would collapse.
+     */
+    it('renders gate status output line for line', async () => {
+        const user = userEvent.setup();
+        respondWith([
+            'repo:      repo1',
+            'verdict:   BLOCKED',
+            'score:     40% (minimum 80%)',
+            'blockers:  1',
+            '',
+            'top blockers (showing 1):',
+            '  CRITICAL RCE in parser (left-pad)',
+        ]);
+        render(<ScorpionTerminal />);
+
+        await user.type(promptInput(), 'gate status repo1{Enter}');
+
+        expect(await screen.findByText(/verdict:\s+BLOCKED/)).toBeInTheDocument();
+        expect(screen.getByText(/CRITICAL RCE in parser/)).toBeInTheDocument();
+    });
+
+    it('renders a pipeline table without mangling its column padding', async () => {
+        const user = userEvent.setup();
+        respondWith([
+            'RUN                   REPO                  STATUS      COMMIT',
+            'run-1                 repo1                 success     abcdef12',
+        ]);
+        render(<ScorpionTerminal />);
+
+        await user.type(promptInput(), 'pipeline ls{Enter}');
+
+        expect(await screen.findByText(/run-1\s+repo1\s+success\s+abcdef12/)).toBeInTheDocument();
+    });
+
+    it('shows a role denial from provenance show as an error, not as output', async () => {
+        const user = userEvent.setup();
+        respondWith([], false, 403, "'provenance' requires role admin — you have 'user'");
+        render(<ScorpionTerminal />);
+
+        await user.type(promptInput(), 'provenance show sha256:abc{Enter}');
+
+        const line = await screen.findByText(/requires role admin/);
+        expect(line).toHaveStyle({ color: 'var(--accent-danger, #f87171)' });
+    });
+});
+
 describe('recent command picker', () => {
     it('opens from the toolbar and lists what this pane has run', async () => {
         const user = userEvent.setup();

@@ -5,8 +5,10 @@ import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { logger } from '../services/logger';
 import { dispatch, listCommands, CommandError, type TerminalContext } from '../services/terminal/commands';
 import { registerBuiltins } from '../services/terminal/builtins';
+import { registerDomainVerbs } from '../services/terminal/domainVerbs';
 
 registerBuiltins();
+registerDomainVerbs();
 
 const router = Router();
 
