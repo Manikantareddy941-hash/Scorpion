@@ -41,14 +41,31 @@ export const resolveIamStatements = async (req: Request, userId: string, resourc
                 try {
                     return typeof teamDoc.policy === 'string' ? JSON.parse(teamDoc.policy) : teamDoc.policy;
                 } catch {
-                    return ['admin', 'owner'].includes(userRole) ? ADMIN_IAM_POLICY : DEFAULT_IAM_POLICY;
+                    // A policy document that EXISTS but cannot be parsed is an
+                    // unjudgeable authorization context, not an absent one.
+                    // Falling through to the role default here meant a corrupt
+                    // or tampered policy blob resolved to ADMIN_IAM_POLICY for
+                    // any admin/owner — so the stricter a team's real policy
+                    // was, the more a malformed one granted. Deny instead: the
+                    // caller cannot be authorized against a policy nobody can
+                    // read.
+                    throw new IamPolicyUnreadableError(activeTeamId);
                 }
             }
             return ['admin', 'owner'].includes(userRole) ? ADMIN_IAM_POLICY : DEFAULT_IAM_POLICY;
         } catch (err) {
             if (err instanceof IamNotATeamMemberError) throw err;
-            logger.warn(`[IAM Middleware] Failed to retrieve team policy for ${activeTeamId}:`, (err as Error).message);
-            return DEFAULT_IAM_POLICY;
+            if (err instanceof IamPolicyUnreadableError) throw err;
+            // Reaching the policy store failed (Appwrite down, network, quota).
+            // This used to return DEFAULT_IAM_POLICY, which is still a GRANT —
+            // an outage silently re-authorized every request against a policy
+            // set nobody had consulted, and said so at warn level. A check that
+            // could not be performed is not a check that passed.
+            logger.error(
+                `[IAM Middleware] Could not retrieve team policy for ${activeTeamId} — denying (fail-closed):`,
+                (err as Error).message,
+            );
+            throw new IamPolicyUnavailableError(activeTeamId, (err as Error).message);
         }
     }
 
@@ -84,6 +101,25 @@ class IamNotATeamMemberError extends Error {
 }
 
 /**
+ * The team's policy document was retrieved but is not parseable. Distinct from
+ * IamPolicyUnavailableError on purpose: this one means "fix the data", the other
+ * means "fix the policy store". Both deny; conflating them would send an
+ * operator to the wrong system.
+ */
+export class IamPolicyUnreadableError extends Error {
+    constructor(public teamId: string) {
+        super(`Team ${teamId} has a policy document that could not be parsed — authorization denied`);
+    }
+}
+
+/** The policy store could not be reached at all, so no policy could be applied. */
+export class IamPolicyUnavailableError extends Error {
+    constructor(public teamId: string, public cause: string) {
+        super(`Team ${teamId} policy could not be retrieved (${cause}) — authorization denied`);
+    }
+}
+
+/**
  * Express middleware to evaluate AWS-style IAM access controls
  */
 export const checkPermission = (action: string) => {
@@ -103,6 +139,25 @@ export const checkPermission = (action: string) => {
             } catch (err) {
                 if (err instanceof IamNotATeamMemberError) {
                     return res.status(403).json({ error: `Forbidden: User is not a member of the requested battalion '${err.teamId}'` });
+                }
+                // Both remaining cases are denials, but they are different
+                // incidents and get different codes so the response itself tells
+                // an operator which system to go and fix.
+                if (err instanceof IamPolicyUnreadableError) {
+                    logger.error(`[IAM Middleware] Denied '${action}' — unparseable policy for team ${err.teamId}`, {
+                        userId: user.$id, action, resourceId, teamId: err.teamId,
+                    });
+                    return res.status(403).json({
+                        error: `Forbidden: the policy for battalion '${err.teamId}' could not be read, so no permission could be granted`,
+                    });
+                }
+                if (err instanceof IamPolicyUnavailableError) {
+                    logger.error(`[IAM Middleware] Denied '${action}' — policy store unreachable for team ${err.teamId}`, {
+                        userId: user.$id, action, resourceId, teamId: err.teamId, cause: err.cause,
+                    });
+                    return res.status(503).json({
+                        error: 'Authorization is temporarily unavailable: the policy store could not be reached. The request was denied rather than allowed.',
+                    });
                 }
                 throw err;
             }

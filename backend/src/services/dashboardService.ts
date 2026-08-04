@@ -31,6 +31,24 @@ import {
 
 const dashboardCache = new Map<string, { data: SecurityDashboardStats; timestamp: number }>();
 const CACHE_TTL = 60 * 1000; // 60 seconds
+// The TTL only decides whether an entry is *served*; it never removed one. Every
+// distinct userId that ever hit the dashboard kept a full stats object resident
+// for the process lifetime, so the ceiling was "all users who have ever logged
+// in" rather than "users active in the last minute". Bounded + swept on write.
+const CACHE_MAX_ENTRIES = 500;
+
+function rememberDashboard(userId: string, data: SecurityDashboardStats, now: number = Date.now()): void {
+  for (const [key, entry] of dashboardCache) {
+    if (now - entry.timestamp >= CACHE_TTL) dashboardCache.delete(key);
+  }
+  // Insertion order is oldest-first, so the first key is the coldest write.
+  while (dashboardCache.size >= CACHE_MAX_ENTRIES) {
+    const oldest = dashboardCache.keys().next().value;
+    if (oldest === undefined) break;
+    dashboardCache.delete(oldest);
+  }
+  dashboardCache.set(userId, { data, timestamp: now });
+}
 
 const emptySeverity = (): SeverityCounts => ({ critical: 0, high: 0, medium: 0, low: 0 });
 const emptyTypeCounts = (): TypeCounts => ({ secret: 0, dependency: 0, sast: 0, docker: 0, iac: 0 });
@@ -233,7 +251,7 @@ export const dashboardService = {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    dashboardCache.set(userId, { data: stats, timestamp: Date.now() });
+    rememberDashboard(userId, stats);
 
     return stats;
   },
