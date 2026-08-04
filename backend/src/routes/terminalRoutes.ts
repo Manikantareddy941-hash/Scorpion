@@ -135,6 +135,13 @@ const RAW_ECHO_LIMIT = 512;
 /**
  * Writes one entry to the tamper-evident ledger. Throws on failure — callers decide
  * whether that is fatal, which is what makes fail-closed possible for mutating verbs.
+ *
+ * `{ required: true }` is what makes that sentence true rather than aspirational.
+ * Without it, logSecureAuditEvent catches everything internally and resolves, so this
+ * function could not throw, `recordAudit`'s catch was unreachable, and a mutating
+ * verb's "refuse if the write fails" path could never fire. The fatality decision
+ * lives in the choice of wrapper — writeAudit propagates, recordAudit swallows — so
+ * this call always asks to be told about failure and lets the caller judge it.
  */
 async function writeAudit(
     ctx: TerminalContext,
@@ -159,6 +166,7 @@ async function writeAudit(
             // the whole forensic value of the record in that case.
             ...(rawFallback !== undefined ? { raw: rawFallback.slice(0, RAW_ECHO_LIMIT) } : {}),
         }),
+        { required: true },
     );
 }
 

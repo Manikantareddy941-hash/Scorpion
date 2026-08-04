@@ -33,14 +33,54 @@ export async function ensureAuditLogsV2Collection() {
 ensureAuditLogsV2Collection();
 
 /**
+ * Raised only when a caller passed `{ required: true }` and the ledger write could
+ * not be completed. Callers that omit the flag never see this.
+ */
+export class AuditWriteFailedError extends Error {
+  constructor(readonly action: string, readonly cause: string) {
+    super(`Audit ledger write for '${action}' failed and this event is required: ${cause}`);
+    this.name = 'AuditWriteFailedError';
+  }
+}
+
+export interface AuditOptions {
+  /**
+   * Set on events that record a SECURITY DECISION — something granted, denied,
+   * blocked or overridden. A required write that fails throws, and the caller is
+   * expected to refuse the operation rather than perform an unlogged privileged
+   * action.
+   *
+   * Omit it for observability events (scan progress, alarm clears). Those stay
+   * best-effort: an unreachable ledger should not halt a DAST run, and it must
+   * never halt break-glass, which is the thing you need working during an outage.
+   */
+  required?: boolean;
+}
+
+/**
  * Logs a high-risk security action to the tamper-proof cryptographic audit ledger.
+ *
+ * FAILURE SEMANTICS — read before adding a call site.
+ *
+ * This function used to swallow every error and return undefined, with no `throw`
+ * anywhere in the file. That made it impossible for any caller to fail closed on a
+ * missing audit entry: `deployService`'s `.catch()` and the terminal's `try/catch`
+ * were both unreachable code guarding a promise that never rejected. The terminal's
+ * instruction to "make this fail-closed the moment a mutating verb is registered"
+ * could not have been carried out by editing the caller — the capability did not
+ * exist here.
+ *
+ * It does now, and only when asked for. Default behaviour is unchanged, so the
+ * existing best-effort call sites keep their semantics without being touched.
  */
 export async function logSecureAuditEvent(
   actor: string,
   action: 'BREAK_GLASS_BYPASS' | 'ALARM_CLEAR' | string,
   repoId: string,
-  details: string
+  details: string,
+  options: AuditOptions = {}
 ) {
+  const required = options.required === true;
   try {
     await ensureAuditLogsV2Collection();
 
@@ -58,6 +98,17 @@ export async function logSecureAuditEvent(
         previousHash = lastLogs.documents[0].tamper_hash || 'GENESIS_HASH';
       }
     } catch (fetchErr) {
+      // Falling through to GENESIS_HASH writes a block chained to nothing — a
+      // fork in the ledger that is indistinguishable from tampering to anyone
+      // verifying it later. Tolerable for a best-effort event; not for one whose
+      // whole purpose is to be evidence. A required event that cannot be chained
+      // has not been recorded, whatever ends up in the collection.
+      if (required) {
+        throw new AuditWriteFailedError(
+          action,
+          `could not read the previous ledger block to chain to (${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)})`,
+        );
+      }
       logger.error('[Secure Audit Log] Failed to fetch last audit log to chain hash:', fetchErr);
     }
 
@@ -81,6 +132,13 @@ export async function logSecureAuditEvent(
     logger.info(`[Secure Audit Log] Ledger block successfully chained & persisted: ${doc.$id} (Hash: ${tamper_hash.substring(0, 10)}...)`);
     return doc;
   } catch (err: any) {
+    // Already the right shape (thrown by the chaining branch above) — do not
+    // re-wrap it and lose the specific cause.
+    if (err instanceof AuditWriteFailedError) throw err;
+
     logger.error('[Secure Audit Log Error]', err.message);
+    if (required) {
+      throw new AuditWriteFailedError(action, err instanceof Error ? err.message : String(err));
+    }
   }
 }
