@@ -1,6 +1,17 @@
 global:
   scrape_interval: 15s
 
+# Loaded relative to --config.file, so this resolves to /etc/prometheus/ inside
+# the container. docker-compose.loki.yml mounts the file to that path.
+#
+# NOTE: there is no `alerting:` block here because this stack runs no
+# Alertmanager. Rules in prometheus.rules.yml therefore EVALUATE and show as
+# firing at :9090/alerts, but nothing routes them to a person. Add an
+# Alertmanager and an `alerting.alertmanagers` entry before treating any
+# severity: page label as if it pages.
+rule_files:
+  - 'prometheus.rules.yml'
+
 scrape_configs:
   - job_name: 'scorpion-backend'
     static_configs:

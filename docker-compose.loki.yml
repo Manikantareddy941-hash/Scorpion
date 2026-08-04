@@ -26,6 +26,11 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      # rule_files in prometheus.yml resolves relative to --config.file, so the
+      # rules must land in the same directory. Without this mount Prometheus
+      # fails to start rather than starting without alerts, which is the right
+      # failure: a missing rule file should not look like a quiet system.
+      - ./prometheus.rules.yml:/etc/prometheus/prometheus.rules.yml
     networks:
       - scorpion-net
     command:

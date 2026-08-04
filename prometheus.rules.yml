@@ -1,0 +1,64 @@
+# Alerting rules for the Scorpion backend.
+#
+# READ THIS BEFORE TRUSTING IT TO WAKE ANYONE UP.
+#
+# docker-compose.loki.yml runs Prometheus with no Alertmanager. These rules will
+# evaluate, and a firing alert is visible at http://localhost:9090/alerts — but
+# nothing routes it to a human. Until an Alertmanager is added and referenced
+# from prometheus.yml's `alerting:` block, this file makes conditions VISIBLE,
+# not PAGED. Treat the severity labels below as intent, not as behaviour.
+#
+# The rules are deliberately few. Every metric in services/metrics.ts could carry
+# a threshold, but a threshold guessed without knowing the normal rate produces a
+# pager that gets muted, and a muted pager is worse than no rule — it reads as
+# coverage. Only conditions with an unambiguous correct value are here. Add more
+# when you have baselines, not before.
+
+groups:
+  - name: scorpion-supply-chain
+    rules:
+      # Set at boot by cosignService.probeSigningReadiness. It is 1 in two
+      # distinct situations, and both are release-stopping:
+      #
+      #   1. Signing is configured (COSIGN_KEY_PATH set) but unusable — cosign
+      #      missing, key unreadable. signBlobContent throws instead of returning
+      #      null, so EVERY build that attempts to sign fails outright.
+      #
+      #   2. REQUIRE_IMAGE_SIGNATURE is set with no COSIGN_PUB_KEY_PATH. Nothing
+      #      about the key configuration is wrong on its own, which is exactly
+      #      why it needs an alert: every production deploy is blocked by a gate
+      #      that has no key to verify with, and the first symptom is a release
+      #      that will not ship.
+      #
+      # Gauge, not counter: this is a state decided at boot, and it self-clears
+      # on the restart that follows a fix.
+      - alert: ScorpionSigningConfigBroken
+        expr: max by (instance) (scorpion_signing_config_broken) == 1
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "Signing configured but unusable on {{ $labels.instance }}"
+          description: >-
+            scorpion_signing_config_broken has been 1 for 10 minutes. Either signing
+            is configured and the signer is broken (every signing build will FAIL),
+            or REQUIRE_IMAGE_SIGNATURE is set without COSIGN_PUB_KEY_PATH (every
+            production deploy will be BLOCKED). Check the [Cosign] line in the
+            backend's boot log — it names which. Neither condition degrades
+            silently; both stop releases.
+
+      # `for: 10m` matches the alert above so a single restart does not fire both.
+      # Uses the scrape's own `up` series, so it works even when the app cannot
+      # serve /metrics at all — the case a metric-based rule would miss entirely.
+      - alert: ScorpionBackendDown
+        expr: up{job="scorpion-backend"} == 0
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "Scorpion backend has not been scrapeable for 10 minutes"
+          description: >-
+            Prometheus cannot reach {{ $labels.instance }}/metrics. While this is
+            firing, every other rule in this file is silent by definition — absent
+            series do not evaluate — so treat this as invalidating the rest of the
+            alerting surface, not just as one service being down.
