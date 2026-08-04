@@ -1,4 +1,4 @@
-import { Databases } from 'node-appwrite';
+import { Databases, Query } from 'node-appwrite';
 
 /**
  * Classifies an Appwrite provisioning error as benign or real.
@@ -19,6 +19,17 @@ export function isConflict(raw: unknown): boolean {
   return err.code === 409 || Boolean(err.type?.includes('already_exists'));
 }
 
+/**
+ * Read well past Appwrite's default page size.
+ *
+ * listAttributes returns 25 rows unless told otherwise, and several collections
+ * here are already larger than that. Reading the default page made this helper
+ * answer "no such attribute" for attributes that plainly exist — so an
+ * idempotent migration reported [ERR] on a re-run instead of [=] skip, which is
+ * exactly the signal this helper was written to suppress.
+ */
+const PAGE_LIMIT = 200;
+
 export async function attributeExists(
   databases: Databases,
   dbId: string,
@@ -26,7 +37,12 @@ export async function attributeExists(
   key: string,
 ): Promise<boolean> {
   try {
-    const list = await databases.listAttributes(dbId, collectionId);
+    const list = await databases.listAttributes(dbId, collectionId, [Query.limit(PAGE_LIMIT)]);
+    // A collection past the limit would give a partial view, and a partial view
+    // cannot prove absence. Say so rather than reporting a confident false.
+    if (list.total > PAGE_LIMIT) {
+      throw new Error(`collection ${collectionId} has ${list.total} attributes, beyond the ${PAGE_LIMIT} read here`);
+    }
     return list.attributes.some((a) => (a as { key: string }).key === key);
   } catch {
     return false;

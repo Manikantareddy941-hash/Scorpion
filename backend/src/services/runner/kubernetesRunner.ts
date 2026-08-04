@@ -264,6 +264,17 @@ export class KubernetesRunner implements RunnerProvider {
       ? verifyAndScrub(tool, framed.body, canary.marker)
       : framed.body;
 
-    return { stdout, stderr, exitCode: outcome.exitCode };
+    return {
+      stdout, stderr, exitCode: outcome.exitCode,
+      provenance: {
+        tool,
+        image: image.pinned,
+        digest: image.digest,
+        // Absent for tools that carry no database — there is nothing to date,
+        // and a placeholder would make an unpinned tool look freshly baked.
+        ...(isBaked(tool) ? { dbBuiltAt: image.builtAt.toISOString() } : {}),
+        freshness: image.freshness,
+      },
+    };
   }
 }

@@ -1,0 +1,149 @@
+// backend/src/scripts/migrate_scan_provenance.ts
+//
+// Adds provenance columns to `scans`: what each verdict was produced BY.
+//
+// "Clean" is not a durable statement. It means "clean against the signatures
+// these scanners held at that moment". Without recording which images ran and
+// how old their databases were, no past scan can be re-interpreted when a CVE
+// lands — you cannot answer "was that release scanned against CVE-2026-X?"
+// after the fact, and the honest answer today is "unknown".
+//
+// Two columns rather than the single `scannerDigest` originally sketched: a
+// scan runs up to six tools with six different images, so one digest column
+// would have to pick one arbitrarily and would be actively misleading about the
+// other five.
+//
+//   scannerProvenance — JSON array, one entry per tool that reported
+//   dbBuiltAt        — the OLDEST database among them, because a verdict is
+//                      only as current as its weakest contributor. Sortable and
+//                      filterable, which the JSON blob is not.
+//
+// Both are OPTIONAL. The docker and binary runners have no pinned image and no
+// baked database, so their scans leave these absent — which is the truthful
+// record, rather than a placeholder that would read as a pinned, dated scan.
+//
+// Run (from backend/):
+//   npm run build && node dist/backend/src/scripts/migrate_scan_provenance.js
+//
+// Idempotent: an existing attribute is reported as a skip, not an error.
+import * as dotenv from 'dotenv';
+import path from 'path';
+
+// Must load before ../lib/appwrite, which reads process.env at import time.
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+import { Query } from 'node-appwrite';
+import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { classifyAttributeFailure } from './lib/migrationErrors';
+
+/** Well above any collection here, and asserted against `total` rather than assumed. */
+const ATTRIBUTE_PAGE_LIMIT = 200;
+
+const REQUIRED = ['APPWRITE_ENDPOINT', 'APPWRITE_PROJECT_ID', 'APPWRITE_API_KEY', 'APPWRITE_DATABASE_ID'];
+const missingEnv = REQUIRED.filter((k) => !process.env[k]);
+if (missingEnv.length > 0) {
+  console.error(`[FATAL] missing env var(s): ${missingEnv.join(', ')} — run this from backend/`);
+  process.exit(1);
+}
+
+const COLLECTION = COLLECTIONS.SCANS;
+
+const ATTRIBUTES: { key: string; size: number; note: string }[] = [
+  {
+    key: 'scannerProvenance',
+    // Six entries of ~200 bytes, with headroom. serializeProvenance() truncates
+    // to this same ceiling rather than letting an oversize write fail the whole
+    // scan record — losing the findings to save the metadata about them would
+    // be the wrong trade.
+    size: 4096,
+    note: 'per-tool image digest + database age, JSON',
+  },
+  {
+    key: 'dbBuiltAt',
+    size: 64,
+    note: 'oldest scanner database in the scan, ISO 8601',
+  },
+];
+
+/**
+ * Reads the collection once before touching anything.
+ *
+ * Two reasons. It turns "does this attribute already exist" into a fact rather
+ * than something inferred from the text of a failure. And it separates a
+ * PROJECT-level problem — paused for inactivity, wrong endpoint, revoked key —
+ * from an attribute-level one. Without it, one paused project reports as N
+ * identical attribute errors, and the operator reads a list of things to debug
+ * when there is exactly one thing to fix.
+ */
+async function existingAttributeKeys(): Promise<Set<string>> {
+  try {
+    // listAttributes pages at 25 by default, and `scans` already holds more
+    // than that. Without an explicit limit an existing attribute past the first
+    // page reads as absent, and this preflight would confidently try to create
+    // something that is already there. Verified the hard way: the first
+    // read-back of this very migration reported both new attributes missing.
+    const list = await databases.listAttributes(DB_ID, COLLECTION, [Query.limit(ATTRIBUTE_PAGE_LIMIT)]);
+    if (list.total > ATTRIBUTE_PAGE_LIMIT) {
+      throw new Error(
+        `collection has ${list.total} attributes, more than the ${ATTRIBUTE_PAGE_LIMIT} read here — raise the limit rather than trusting a partial view`,
+      );
+    }
+    return new Set(list.attributes.map((a) => (a as { key: string }).key));
+  } catch (err) {
+    const message = (err as Error).message;
+    console.error(`[FATAL] cannot read collection "${COLLECTION}" — nothing was changed.`);
+    console.error(`        ${message}`);
+    if (/paused/i.test(message)) {
+      console.error('        Restore the project from the Appwrite console, then re-run this script.');
+    }
+    process.exit(1);
+  }
+}
+
+async function run(): Promise<void> {
+  console.log(`Provisioning provenance attributes on "${COLLECTION}" in ${DB_ID}\n`);
+
+  const existing = await existingAttributeKeys();
+
+  let failed = 0;
+  const created: string[] = [];
+
+  for (const attr of ATTRIBUTES) {
+    if (existing.has(attr.key)) {
+      console.log(`  [=] skip (exists): ${attr.key}`);
+      continue;
+    }
+    try {
+      // Optional, and no default. A default would stamp every historical scan
+      // with a value implying it was pinned and dated when it was not.
+      await databases.createStringAttribute(DB_ID, COLLECTION, attr.key, attr.size, false);
+      created.push(attr.key);
+      console.log(`  [+] created ${attr.key} (${attr.size}) — ${attr.note}`);
+    } catch (err) {
+      const verdict = await classifyAttributeFailure(databases, DB_ID, COLLECTION, attr.key, err);
+      if (verdict === 'skip') {
+        console.log(`  [=] skip (exists): ${attr.key}`);
+      } else {
+        failed += 1;
+        console.error(`  [ERR] ${attr.key}: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  console.log('');
+  if (failed > 0) {
+    console.error(`FAILED — ${failed} attribute(s) could not be provisioned.`);
+    process.exit(1);
+  }
+
+  console.log(created.length > 0
+    ? `Done. Created: ${created.join(', ')}.`
+    : 'Done. Nothing to do — both attributes were already present.');
+  console.log('Existing scans keep both fields empty; only scans run after the');
+  console.log('Kubernetes runner is enabled will carry provenance.');
+}
+
+run().catch((err) => {
+  console.error('[FATAL]', err);
+  process.exit(1);
+});

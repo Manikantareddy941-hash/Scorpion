@@ -22,6 +22,14 @@ export interface ToolResult {
   stdout: string;
   stderr: string;
   exitCode: number | null;
+  /**
+   * What produced this result — image digest and database age.
+   *
+   * Only the Kubernetes runner sets it; docker and binary runs have no pinned
+   * image and no baked database to date. Optional rather than required so a
+   * verdict is never blocked on metadata about itself.
+   */
+  provenance?: import('./provenance').ToolProvenance;
 }
 
 export interface RunnerProvider {

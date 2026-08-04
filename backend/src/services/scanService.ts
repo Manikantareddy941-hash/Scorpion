@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { notifyScanCompletion } from './notificationService';
 import { assertScannersUsable, orchestrateScan, ScanOptions, ScanResult } from './scan/orchestrator';
 import { collectRepoStats, assertScanTargetUsable } from './scan/repoStats';
+import { oldestDatabase, serializeProvenance } from './runner/provenance';
 import { normalizeSemgrep, normalizeTrivy, normalizeGitleaks, normalizeCheckov, normalizeBandit, normalizeHadolint } from '../scanners/normalizer';
 import { evaluateQualityGate } from './qualityGateService';
 import { deduplicateFindings } from '../deduplication';
@@ -561,9 +562,24 @@ const dedupedIssues = deduplicateFindings(issues);
 
         // 1️⃣2️⃣ Finalize scan record
         const completedAt = new Date().toISOString();
+        // What this verdict was produced by. "Clean" means "clean against the
+        // signatures these scanners held at that moment", and without recording
+        // which images and how old their databases were, no past scan can ever
+        // be re-interpreted when a CVE lands.
+        const provenanceEntries = rawResults
+            .map(r => r.provenance)
+            .filter((p): p is NonNullable<typeof p> => Boolean(p));
+        const scannerProvenance = provenanceEntries.length > 0 ? serializeProvenance(provenanceEntries) : undefined;
+        const dbBuiltAt = oldestDatabase(provenanceEntries);
+
         const scanCompletePayload = {
             status: 'completed',
             completedAt,
+            // Written only when a runner actually reported it, so the docker and
+            // binary paths leave the fields absent rather than writing a
+            // placeholder that would read as a pinned, dated scan.
+            ...(scannerProvenance ? { scannerProvenance } : {}),
+            ...(dbBuiltAt ? { dbBuiltAt } : {}),
             criticalCount,
             highCount,
             mediumCount,
