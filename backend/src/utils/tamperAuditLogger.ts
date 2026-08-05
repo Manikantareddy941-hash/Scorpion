@@ -56,9 +56,13 @@ export async function ensureSequenceAttribute(): Promise<void> {
     logger.info('[Audit Logs Setup] added `sequence` attribute to audit_logs_v2 — waiting for it to become available.');
     await new Promise(resolve => setTimeout(resolve, 3000));
   } catch (err: any) {
+    // node-appwrite's AppwriteException carries { code: number, type: string } and
+    // extends Error, so `message` is ALWAYS set. An earlier `message ?? type`
+    // fallback therefore never reached `type` — the attribute_already_exists branch
+    // was unreachable. Both fields are searched.
     const alreadyExists =
       err?.code === 409 ||
-      /already exists|attribute_already_exists/i.test(String(err?.message ?? err?.type ?? ''));
+      /already exists|attribute_already_exists/i.test(`${err?.message ?? ''} ${err?.type ?? ''}`);
     if (!alreadyExists) {
       logger.error('[Audit Logs Setup] could not ensure `sequence` attribute on audit_logs_v2:', err?.message ?? err);
       return; // leave unmemoised so the next write retries

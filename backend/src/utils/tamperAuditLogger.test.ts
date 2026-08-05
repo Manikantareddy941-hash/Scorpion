@@ -200,6 +200,16 @@ describe('ensureSequenceAttribute', () => {
         expect(mockIntAttr).toHaveBeenCalledTimes(2);
     });
 
+    it('recognises "already exists" via type when code is absent', async () => {
+        // AppwriteException always has a message, so a `message ?? type` fallback
+        // could never reach type. Real Appwrite sends type=attribute_already_exists;
+        // a proxy or older SDK may omit the numeric code.
+        mockIntAttr.mockRejectedValue({ message: 'Bad request', type: 'attribute_already_exists' });
+        await ensureSequenceAttribute();
+        await ensureSequenceAttribute();
+        expect(mockIntAttr).toHaveBeenCalledTimes(1); // memoised = treated as success
+    });
+
     it('creates the attribute as optional, never required', async () => {
         // A required attribute would reject every legacy row on read-modify paths
         // and force a back-fill of an append-only ledger.
