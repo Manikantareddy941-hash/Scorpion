@@ -62,11 +62,19 @@ export interface TerminalCommand {
     handler: (args: readonly string[], ctx: TerminalContext) => Promise<readonly string[]>;
 }
 
-/** Thrown for anything the caller did wrong. Carries an HTTP-ish status for the route to map. */
+/**
+ * Thrown for anything the caller did wrong. Carries an HTTP-ish status for the route to map.
+ *
+ * 429 is in the union for verbs that are expensive enough to need their own
+ * cooldown on top of the route's rate limit — the limiter caps HTTP traffic, but a
+ * per-user cooldown is a property of the verb and has to be enforced where the verb
+ * runs. Keeping the set closed means a handler cannot invent a status the route has
+ * never been asked to map.
+ */
 export class CommandError extends Error {
     constructor(
         message: string,
-        readonly status: 400 | 403 | 404 = 400,
+        readonly status: 400 | 403 | 404 | 429 = 400,
         /**
          * The verb, when the failure happened after it resolved (role denial,
          * too many arguments). Absent for an unknown verb, where there is nothing
