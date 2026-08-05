@@ -29,7 +29,7 @@ const Teams = lazy(() => import('./pages/Teams'));
 const Alerts = lazy(() => import('./pages/Alerts'));
 const Reports = lazy(() => import('./pages/Reports'));
 const Governance = lazy(() => import('./pages/Governance'));
-const ScorpionTerminal = lazy(() => import('./components/ScorpionTerminal'));
+const ScorpionTerminal = lazy(() => import('./components/terminal/ScorpionTerminal'));
 const Repositories = lazy(() => import('./pages/Repositories'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ScanResults = lazy(() => import('./pages/ScanResults'));
