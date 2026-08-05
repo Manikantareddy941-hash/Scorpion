@@ -19,7 +19,9 @@ const anchorReport = (over = {}) => ({
 });
 
 const full = (db = {}, anchor = {}): FullAuditReport => ({
-    db: dbReport(db) as any, anchor: anchorReport(anchor) as any, timestamp: '2026-08-04T00:00:00.000Z',
+    db: dbReport(db) as unknown as FullAuditReport['db'],
+    anchor: anchorReport(anchor) as unknown as FullAuditReport['anchor'],
+    timestamp: '2026-08-04T00:00:00.000Z',
 });
 
 beforeEach(() => jest.clearAllMocks());

@@ -182,7 +182,9 @@ describe('verifyAuditChain paging', () => {
         // examined a prefix of it — the scan-that-examined-nothing failure.
         const rows = goodChain(250);
         mockList.mockImplementation((_db, _c, queries) => {
-            const offset = queries.find((q: any) => 'offset' in q)?.offset ?? 0;
+            const isOffset = (q: unknown): q is { offset: number } =>
+                typeof q === 'object' && q !== null && 'offset' in q;
+            const offset = queries.find(isOffset)?.offset ?? 0;
             return Promise.resolve({ documents: rows.slice(offset, offset + 100) });
         });
 

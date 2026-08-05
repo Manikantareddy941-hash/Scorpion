@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 afterAll(() => { process.env = originalEnv; });
 
-const mockFetch = (impl: any) => {
+const mockFetch = (impl: (...args: unknown[]) => unknown) => {
     global.fetch = jest.fn(impl) as unknown as typeof fetch;
 };
 
