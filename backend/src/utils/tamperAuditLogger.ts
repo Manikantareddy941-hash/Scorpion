@@ -1,6 +1,7 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import crypto from 'crypto';
 import { logger } from '../services/logger';
+import { anchorLedgerTip } from './auditAnchor';
 
 // Helper to ensure the secure audit log collection exists
 export async function ensureAuditLogsV2Collection() {
@@ -27,6 +28,48 @@ export async function ensureAuditLogsV2Collection() {
       }
     }
   }
+}
+
+/**
+ * `sequence` was added after audit_logs_v2 already existed in deployed
+ * environments, so it cannot live only in the collection-creation path above —
+ * that branch never runs again once the collection exists. Appwrite rejects a
+ * createDocument carrying an attribute the collection does not declare, and with
+ * `{ required: true }` that rejection becomes a REFUSED break-glass. So the
+ * attribute is ensured separately, idempotently, and before the first write.
+ *
+ * Memoised per process rather than per call: ensureAuditLogsV2Collection already
+ * costs one API round trip on every audit write, and this would double it.
+ * The flag is only set on success, so a transient failure is retried on the next
+ * write instead of being latched for the process lifetime — the same reasoning
+ * that removed the negative caching from toolCheck.resolveToolCommand.
+ */
+let sequenceAttributeEnsured = false;
+
+export async function ensureSequenceAttribute(): Promise<void> {
+  if (sequenceAttributeEnsured) return;
+  try {
+    // Optional (required=false): rows written before this migration have no
+    // sequence, and back-filling them would rewrite history in an append-only
+    // ledger — which is precisely the thing the ledger exists to make visible.
+    await databases.createIntegerAttribute(DB_ID, 'audit_logs_v2', 'sequence', false);
+    logger.info('[Audit Logs Setup] added `sequence` attribute to audit_logs_v2 — waiting for it to become available.');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  } catch (err: any) {
+    const alreadyExists =
+      err?.code === 409 ||
+      /already exists|attribute_already_exists/i.test(String(err?.message ?? err?.type ?? ''));
+    if (!alreadyExists) {
+      logger.error('[Audit Logs Setup] could not ensure `sequence` attribute on audit_logs_v2:', err?.message ?? err);
+      return; // leave unmemoised so the next write retries
+    }
+  }
+  sequenceAttributeEnsured = true;
+}
+
+/** Test seam — the memo is process-global and would leak between suites. */
+export function __resetSequenceAttributeMemo(): void {
+  sequenceAttributeEnsured = false;
 }
 
 // Automatically check collection on start
@@ -83,12 +126,22 @@ export async function logSecureAuditEvent(
   const required = options.required === true;
   try {
     await ensureAuditLogsV2Collection();
+    await ensureSequenceAttribute();
 
     const timestamp = new Date().toISOString();
     const repo_id = repoId || 'system';
 
-    // 1. Fetch the last log to chain the SHA-256 hash
+    // 1. Fetch the last log to chain the SHA-256 hash and continue the sequence.
+    //
+    // NO LOCK, DELIBERATELY. Two concurrent writes can both read tip N and both
+    // write N+1. That fork is not prevented — it is made DETECTABLE: the verifier
+    // sees two rows claiming the same position and flags it. Prevention would mean
+    // serialising every append behind Redis, which puts break-glass — the thing
+    // you reach for during an outage — behind a service that may be part of the
+    // outage. Detectability is the actual requirement of an audit log; exclusivity
+    // is not.
     let previousHash = 'GENESIS_HASH';
+    let previousSequence: number | undefined;
     try {
       const lastLogs = await databases.listDocuments(DB_ID, 'audit_logs_v2', [
         Query.orderDesc('$createdAt'),
@@ -96,6 +149,8 @@ export async function logSecureAuditEvent(
       ]);
       if (lastLogs.total > 0) {
         previousHash = lastLogs.documents[0].tamper_hash || 'GENESIS_HASH';
+        const raw = lastLogs.documents[0].sequence;
+        previousSequence = typeof raw === 'number' ? raw : undefined;
       }
     } catch (fetchErr) {
       // Falling through to GENESIS_HASH writes a block chained to nothing — a
@@ -112,24 +167,47 @@ export async function logSecureAuditEvent(
       logger.error('[Secure Audit Log] Failed to fetch last audit log to chain hash:', fetchErr);
     }
 
-    // 2. Build current payload block
-    const payloadBlock = `${actor}|${action}|${repo_id}|${timestamp}|${details}`;
+    // 2. Position in the chain. A legacy row (written before this attribute
+    //    existed) yields undefined, so the first sequenced entry after the
+    //    migration boundary starts at 0. The verifier sees position 0 appearing
+    //    mid-chain and reads it as exactly that boundary — not as a gap.
+    const sequence = (previousSequence ?? -1) + 1;
 
-    // 3. Compute chained SHA-256 hash
+    // 3. Build current payload block.
+    //
+    //    `sequence` is INSIDE the hash. Outside it, an attacker holding
+    //    APPWRITE_API_KEY could renumber rows at will and every hash would still
+    //    verify, which would make the fork and gap detection this change exists
+    //    for purely decorative. Being inside the hash also means the payload
+    //    format differs across the migration boundary — the verifier selects the
+    //    format by whether the row carries a sequence, and rows on either side
+    //    still chain to each other correctly because previousHash is unaffected.
+    const payloadBlock = `${sequence}|${actor}|${action}|${repo_id}|${timestamp}|${details}`;
+
+    // 4. Compute chained SHA-256 hash
     const hashInput = `${previousHash}|${payloadBlock}`;
     const tamper_hash = crypto.createHash('sha256').update(hashInput).digest('hex');
 
-    // 4. Ingest secure log document
+    // 5. Ingest secure log document
     const doc = await databases.createDocument(DB_ID, 'audit_logs_v2', ID.unique(), {
       actor,
       action,
       repo_id,
       timestamp,
       details,
-      tamper_hash
+      tamper_hash,
+      sequence
     });
 
     logger.info(`[Secure Audit Log] Ledger block successfully chained & persisted: ${doc.$id} (Hash: ${tamper_hash.substring(0, 10)}...)`);
+
+    // Ship the tip off-box, AFTER the row is durable. Without this the chain is
+    // self-referential: anyone holding APPWRITE_API_KEY can delete a row and
+    // recompute every hash after it, and the result verifies cleanly. See
+    // utils/auditAnchor for why Loki specifically, and for what this still does
+    // not give you until the verifier exists.
+    anchorLedgerTip({ recordId: doc.$id, tamperHash: tamper_hash, action, timestamp, sequence });
+
     return doc;
   } catch (err: any) {
     // Already the right shape (thrown by the chaining branch above) — do not
