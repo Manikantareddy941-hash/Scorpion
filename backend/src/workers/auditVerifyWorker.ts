@@ -80,9 +80,28 @@ async function dispatch(alert: SystemAlert): Promise<void> {
     }
 }
 
-/** Ops-side notification for "the check could not be performed", never for "the check failed". */
+/**
+ * Ops-side notification for "the check could not be performed", never for "the
+ * check failed".
+ *
+ * ANCHOR_UNAVAILABLE covers THREE situations and only one is an incident:
+ *
+ *   Loki never configured   -> lokiConfigured false. A deployment fact, permanent
+ *                              on dev and staging. Logged once at startup.
+ *   No sequenced rows yet   -> lokiConfigured true, but `checks` is EMPTY because
+ *                              there were no samples to check. True of a fresh
+ *                              install, and of any ledger still entirely
+ *                              pre-sequencing. Nothing is wrong and nothing is
+ *                              actionable — paging here would fire every 15
+ *                              minutes on a brand-new deployment, telling ops to
+ *                              go and check a Loki that is working perfectly.
+ *   Loki unreachable        -> lokiConfigured true AND `checks` populated, one per
+ *                              sample that could not be resolved. The real outage.
+ */
 async function reportAnchorGap(anchor: AnchorVerificationReport, tier: string): Promise<void> {
-    if (anchor.status !== 'ANCHOR_UNAVAILABLE' || !anchor.lokiConfigured) return;
+    if (anchor.status !== 'ANCHOR_UNAVAILABLE') return;
+    if (!anchor.lokiConfigured) return;
+    if (anchor.checks.length === 0) return;
 
     await dispatch({
         channel: 'ops',

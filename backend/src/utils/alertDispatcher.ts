@@ -74,6 +74,44 @@ export interface SystemAlertResult {
 /** Bounded so a hung webhook cannot stall a worker holding a queue lock. */
 const SYSTEM_ALERT_TIMEOUT_MS = 10_000;
 
+/**
+ * One retry, because the caller's cadence is not a substitute for it.
+ *
+ * The 15-minute tail pass would re-detect and re-alert, so a dropped alert there
+ * self-heals. The daily full walk would not: it is the only pass that sees a
+ * retroactive rewrite of old history, and a single transient webhook failure
+ * would bury that finding for 24 hours. Two attempts, briefly spaced — enough for
+ * a blip, not so many that a genuinely dead endpoint holds the worker open.
+ */
+const SYSTEM_ALERT_ATTEMPTS = 2;
+const SYSTEM_ALERT_RETRY_DELAY_MS = 1_000;
+
+/**
+ * Posts with one retry, reporting success rather than throwing.
+ *
+ * Only `err.message` is ever logged, never the error object or the URL. A Slack
+ * webhook URL carries its secret in the path, so logging the axios config would
+ * write a live credential into the log stream. Do not "improve" this to log the
+ * whole error.
+ */
+async function deliver(label: string, send: () => Promise<unknown>): Promise<boolean> {
+    for (let attempt = 1; attempt <= SYSTEM_ALERT_ATTEMPTS; attempt++) {
+        try {
+            await send();
+            return true;
+        } catch (err) {
+            logger.error(
+                `[System Alert] ${label} delivery failed (attempt ${attempt}/${SYSTEM_ALERT_ATTEMPTS}):`,
+                err instanceof Error ? err.message : String(err),
+            );
+            if (attempt < SYSTEM_ALERT_ATTEMPTS) {
+                await new Promise((resolve) => setTimeout(resolve, SYSTEM_ALERT_RETRY_DELAY_MS));
+            }
+        }
+    }
+    return false;
+}
+
 function destinationsFor(channel: SystemAlertChannel) {
     const prefix = channel === 'security' ? 'SECURITY_ALERT' : 'OPS_ALERT';
     return {
@@ -97,42 +135,34 @@ export async function sendSystemAlert(alert: SystemAlert): Promise<SystemAlertRe
     const configured = [slack, pagerduty].filter(Boolean).length;
     let delivered = 0;
 
-    if (slack) {
-        try {
-            await axios.post(slack, {
-                blocks: [{
-                    type: 'section',
-                    text: {
-                        type: 'mrkdwn',
-                        text: `*[${alert.channel.toUpperCase()}] ${alert.title}*\n${alert.detail}`,
-                    },
-                }],
-            }, { timeout: SYSTEM_ALERT_TIMEOUT_MS });
-            delivered += 1;
-        } catch (err) {
-            logger.error('[System Alert] Slack delivery failed:', err instanceof Error ? err.message : err);
-        }
+    // Each destination is attempted independently, so one dead endpoint cannot
+    // suppress the other.
+    if (slack && await deliver('Slack', () => axios.post(slack, {
+        blocks: [{
+            type: 'section',
+            text: {
+                type: 'mrkdwn',
+                text: `*[${alert.channel.toUpperCase()}] ${alert.title}*\n${alert.detail}`,
+            },
+        }],
+    }, { timeout: SYSTEM_ALERT_TIMEOUT_MS }))) {
+        delivered += 1;
     }
 
-    if (pagerduty) {
-        try {
-            await axios.post('https://events.pagerduty.com/v2/enqueue', {
-                routing_key: pagerduty,
-                event_action: 'trigger',
-                dedup_key: alert.dedupKey,
-                payload: {
-                    summary: alert.title,
-                    // A security-channel alert is always critical: the only thing
-                    // routed here is evidence the audit trail itself changed.
-                    severity: alert.channel === 'security' ? 'critical' : 'warning',
-                    source: 'scorpion',
-                    custom_details: { detail: alert.detail },
-                },
-            }, { timeout: SYSTEM_ALERT_TIMEOUT_MS });
-            delivered += 1;
-        } catch (err) {
-            logger.error('[System Alert] PagerDuty delivery failed:', err instanceof Error ? err.message : err);
-        }
+    if (pagerduty && await deliver('PagerDuty', () => axios.post('https://events.pagerduty.com/v2/enqueue', {
+        routing_key: pagerduty,
+        event_action: 'trigger',
+        dedup_key: alert.dedupKey,
+        payload: {
+            summary: alert.title,
+            // A security-channel alert is always critical: the only thing routed
+            // here is evidence the audit trail itself changed.
+            severity: alert.channel === 'security' ? 'critical' : 'warning',
+            source: 'scorpion',
+            custom_details: { detail: alert.detail },
+        },
+    }, { timeout: SYSTEM_ALERT_TIMEOUT_MS }))) {
+        delivered += 1;
     }
 
     return { delivered, configured };

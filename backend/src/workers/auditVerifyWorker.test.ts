@@ -125,13 +125,33 @@ describe('security channel', () => {
 
 describe('ops channel', () => {
     it('fires when Loki is configured but unreachable', async () => {
+        // Unreachable Loki still produces one check per sample — that populated
+        // list is what distinguishes an outage from having nothing to check.
+        mockAnchorCheck.mockResolvedValue({
+            status: 'ANCHOR_UNAVAILABLE', verified: false, lokiConfigured: true, checked: 0,
+            checks: [
+                { status: 'ANCHOR_UNAVAILABLE', sequence: 998, recordId: 'r1', dbHash: 'a', detail: 'Loki query failed' },
+                { status: 'ANCHOR_UNAVAILABLE', sequence: 999, recordId: 'r2', dbHash: 'b', detail: 'Loki query failed' },
+            ],
+        });
+
+        await processAuditVerification(job('tail'));
+
+        expect(channelsAlerted()).toEqual(['ops']);
+    });
+
+    it('stays silent when there were simply no sequenced rows to check', async () => {
+        // A fresh install, or a ledger still entirely pre-sequencing, yields
+        // ANCHOR_UNAVAILABLE with lokiConfigured true and an EMPTY checks list.
+        // Nothing is wrong. Alerting here would page ops every 15 minutes on a
+        // brand-new deployment, telling them to go and check a Loki that is fine.
         mockAnchorCheck.mockResolvedValue({
             status: 'ANCHOR_UNAVAILABLE', verified: false, lokiConfigured: true, checked: 0, checks: [],
         });
 
         await processAuditVerification(job('tail'));
 
-        expect(channelsAlerted()).toEqual(['ops']);
+        expect(mockAlert).not.toHaveBeenCalled();
     });
 
     it('stays silent when Loki was never configured at all', async () => {
