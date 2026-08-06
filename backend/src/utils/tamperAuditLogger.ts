@@ -68,7 +68,23 @@ export async function ensureSequenceAttribute(): Promise<void> {
     // the attribute is present afterwards, the create was redundant. That is the
     // only form of this check that cannot be defeated by an error message we did
     // not anticipate.
-    const verdict = await classifyAttributeFailure(databases, DB_ID, 'audit_logs_v2', 'sequence', err);
+    //
+    // classifyAttributeFailure THROWS when it cannot tell — Appwrite unreachable,
+    // or a collection too wide to read in one page. That must not escape into the
+    // audit write path: this runs on the way to logSecureAuditEvent, and with
+    // `{ required: true }` a throw here would refuse the caller's command. A
+    // verification we could not perform is a reason to retry, not to refuse.
+    let verdict: 'skip' | 'error';
+    try {
+      verdict = await classifyAttributeFailure(databases, DB_ID, 'audit_logs_v2', 'sequence', err);
+    } catch (probeErr) {
+      logger.error(
+        '[Audit Logs Setup] could not verify whether `sequence` exists after a failed create:',
+        probeErr instanceof Error ? probeErr.message : probeErr,
+      );
+      return; // unmemoised — retried on the next write, once Appwrite answers again
+    }
+
     if (verdict === 'error') {
       logger.error('[Audit Logs Setup] could not ensure `sequence` attribute on audit_logs_v2:', err?.message ?? err);
       return; // leave unmemoised so the next write retries
