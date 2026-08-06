@@ -4,6 +4,9 @@ jest.mock('../lib/appwrite', () => ({
         createCollection: jest.fn(),
         createStringAttribute: jest.fn(),
         createIntegerAttribute: jest.fn().mockRejectedValue({ code: 409, message: 'attribute already exists' }),
+        // Used by classifyAttributeFailure to resolve an ambiguous create failure
+        // against reality rather than parsing its message.
+        listAttributes: jest.fn().mockResolvedValue({ total: 0, attributes: [] }),
         listDocuments: jest.fn(),
         createDocument: jest.fn(),
     },
@@ -208,6 +211,35 @@ describe('ensureSequenceAttribute', () => {
         await ensureSequenceAttribute();
         await ensureSequenceAttribute();
         expect(mockIntAttr).toHaveBeenCalledTimes(1); // memoised = treated as success
+    });
+
+    it('treats a row-size-budget error as already-existing when the attribute IS there', async () => {
+        // The case that defeats any message/code check, documented in
+        // scripts/lib/migrationErrors from having hit it: Appwrite validates the
+        // collection's row-size budget BEFORE checking for a duplicate, so a
+        // re-create can report "maximum number or size of attributes has been
+        // reached" rather than a conflict. Pattern-matching would call that a real
+        // failure, never memoise, and re-issue createIntegerAttribute on EVERY
+        // audit write from then on.
+        mockIntAttr.mockRejectedValue({ code: 400, message: 'maximum number or size of attributes has been reached' });
+        (databases.listAttributes as jest.Mock).mockResolvedValue({ total: 1, attributes: [{ key: 'sequence' }] });
+
+        await ensureSequenceAttribute();
+        await ensureSequenceAttribute();
+
+        expect(mockIntAttr).toHaveBeenCalledTimes(1); // memoised — resolved against reality
+    });
+
+    it('still reports a genuine failure when the attribute is NOT there afterwards', async () => {
+        // Same unrecognised error shape, opposite ground truth. This must stay an
+        // error, or the reality check would launder every failure into a skip.
+        mockIntAttr.mockRejectedValue({ code: 400, message: 'maximum number or size of attributes has been reached' });
+        (databases.listAttributes as jest.Mock).mockResolvedValue({ total: 0, attributes: [] });
+
+        await ensureSequenceAttribute();
+        await ensureSequenceAttribute();
+
+        expect(mockIntAttr).toHaveBeenCalledTimes(2); // unmemoised — retried
     });
 
     it('creates the attribute as optional, never required', async () => {
