@@ -85,6 +85,7 @@ import fs from 'fs';
 import { createNodeMiddleware } from "@octokit/webhooks";
 import githubWebhooks from "./github/webhookHandler";
 import { initScanWorker } from './workers/scanWorker';
+import { initAuditVerifyWorker } from './workers/auditVerifyWorker';
 import { initScanQueueWorker } from './queues/scanQueueWorker';
 import { initReportQueueWorker } from './queues/reportQueueWorker';
 import { reportQueue } from './queues/reportQueue';
@@ -441,6 +442,10 @@ import { initUptimeScheduler } from './services/monitorService';
 initScheduler();
 initReportScheduler();
 initScanWorker();
+// Consumes the schedules initScheduler() just registered. Without this the jobs
+// would be created on time and never processed — and no alerts would look
+// exactly like a clean ledger.
+initAuditVerifyWorker();
 const scanQueueWorker = initScanQueueWorker();
 const dastQueueWorker = initDastQueueWorker();
 const nucleiQueueWorker = initNucleiQueueWorker();

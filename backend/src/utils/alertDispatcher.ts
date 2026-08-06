@@ -34,6 +34,110 @@ const SEVERITY_COLORS: Record<string, number> = {
     'low': 65280
 };
 
+/**
+ * Platform-level alerting, as opposed to per-tenant finding alerts.
+ *
+ * WHY THIS DOES NOT REUSE sendFindingAlert's ROUTING
+ *
+ * That function resolves destinations from the `integrations` document belonging
+ * to a userId. A scheduled worker has no user. Borrowing some admin's row would
+ * tie infrastructure alerting to a record that can be edited or deleted by the
+ * person least likely to notice they had silenced the ledger alarm. These
+ * destinations come from the environment instead, alongside every other
+ * deployment secret.
+ *
+ * TWO CHANNELS, ON PURPOSE
+ *
+ * 'security' is for evidence the audit ledger was modified — it should reach
+ * whoever responds to an intrusion. 'ops' is for the infrastructure being unable
+ * to answer, such as Loki unreachable, which is a different job on a different
+ * rota. Routing both to one destination is how the security signal gets buried
+ * under the operational noise.
+ */
+export type SystemAlertChannel = 'security' | 'ops';
+
+export interface SystemAlert {
+    channel: SystemAlertChannel;
+    title: string;
+    detail: string;
+    /** Groups a recurring condition into one incident rather than one per run. */
+    dedupKey?: string;
+}
+
+export interface SystemAlertResult {
+    /** Destinations that accepted the alert. */
+    delivered: number;
+    /** Destinations configured for this channel. Zero means nobody was told. */
+    configured: number;
+}
+
+/** Bounded so a hung webhook cannot stall a worker holding a queue lock. */
+const SYSTEM_ALERT_TIMEOUT_MS = 10_000;
+
+function destinationsFor(channel: SystemAlertChannel) {
+    const prefix = channel === 'security' ? 'SECURITY_ALERT' : 'OPS_ALERT';
+    return {
+        slack: process.env[`${prefix}_SLACK_WEBHOOK`],
+        pagerduty: process.env[`${prefix}_PAGERDUTY_KEY`],
+    };
+}
+
+/**
+ * Returns what actually happened rather than resolving silently.
+ *
+ * `configured: 0` is the case worth caring about: an alert with nowhere to go is
+ * indistinguishable from no alert, and a caller that ignores this result has
+ * built a tamper alarm with the wires cut. Callers are expected to log it.
+ *
+ * Individual transport failures are caught per destination so one dead webhook
+ * cannot suppress the others, but they are reflected in `delivered`.
+ */
+export async function sendSystemAlert(alert: SystemAlert): Promise<SystemAlertResult> {
+    const { slack, pagerduty } = destinationsFor(alert.channel);
+    const configured = [slack, pagerduty].filter(Boolean).length;
+    let delivered = 0;
+
+    if (slack) {
+        try {
+            await axios.post(slack, {
+                blocks: [{
+                    type: 'section',
+                    text: {
+                        type: 'mrkdwn',
+                        text: `*[${alert.channel.toUpperCase()}] ${alert.title}*\n${alert.detail}`,
+                    },
+                }],
+            }, { timeout: SYSTEM_ALERT_TIMEOUT_MS });
+            delivered += 1;
+        } catch (err) {
+            logger.error('[System Alert] Slack delivery failed:', err instanceof Error ? err.message : err);
+        }
+    }
+
+    if (pagerduty) {
+        try {
+            await axios.post('https://events.pagerduty.com/v2/enqueue', {
+                routing_key: pagerduty,
+                event_action: 'trigger',
+                dedup_key: alert.dedupKey,
+                payload: {
+                    summary: alert.title,
+                    // A security-channel alert is always critical: the only thing
+                    // routed here is evidence the audit trail itself changed.
+                    severity: alert.channel === 'security' ? 'critical' : 'warning',
+                    source: 'scorpion',
+                    custom_details: { detail: alert.detail },
+                },
+            }, { timeout: SYSTEM_ALERT_TIMEOUT_MS });
+            delivered += 1;
+        } catch (err) {
+            logger.error('[System Alert] PagerDuty delivery failed:', err instanceof Error ? err.message : err);
+        }
+    }
+
+    return { delivered, configured };
+}
+
 export async function sendFindingAlert(finding: FindingDocument, userId: string) {
     try {
         // 1. Fetch user's integration prefs

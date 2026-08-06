@@ -180,7 +180,11 @@ function unavailable(samples: readonly ChainSample[], detail: string, lokiConfig
  * omission.
  */
 export async function verifyAnchorIntegrity(
-    dbReport: VerificationReport,
+    // Only `samples` is ever read, so this accepts a tail report as readily as a
+    // full one. Narrowing the parameter to what is actually used means the
+    // scheduled tail pass can cross-check anchors without either report type
+    // having to pretend to be the other.
+    dbReport: Pick<VerificationReport, 'samples'>,
     now: number = Date.now(),
 ): Promise<AnchorVerificationReport> {
     const samples = dbReport.samples;

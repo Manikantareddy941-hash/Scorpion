@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
 import { scanQueue } from './queues/scanQueue';
+import { auditQueue } from './queues/auditQueue';
 import { logger } from './services/logger';
 
 /**
@@ -48,6 +49,36 @@ export const reconcileScanSchedules = async (): Promise<void> => {
     }
 };
 
+/**
+ * Audit ledger verification, on a fixed schedule rather than reconciled from the
+ * database: these are not per-repo, and there is no configuration that could turn
+ * them off. A control the operator can disable through the UI is one that will be
+ * found disabled after the incident.
+ *
+ * Both use a fixed scheduler id, so every replica upserting the same schedule
+ * converges on one entry instead of N. Combined with `concurrency: 1` on the
+ * worker, that means one verification runs at a time regardless of how the
+ * deployment is scaled.
+ */
+const AUDIT_TAIL_SCHEDULER_ID = 'audit-verify-tail';
+const AUDIT_FULL_SCHEDULER_ID = 'audit-verify-full';
+
+export const reconcileAuditSchedules = async (): Promise<void> => {
+    await auditQueue.upsertJobScheduler(
+        AUDIT_TAIL_SCHEDULER_ID,
+        { pattern: '*/15 * * * *' },
+        { name: 'verify', data: { tier: 'tail' } },
+    );
+
+    // 02:00 — off-peak for the O(N) walk, which is the one pass whose cost grows
+    // with the ledger.
+    await auditQueue.upsertJobScheduler(
+        AUDIT_FULL_SCHEDULER_ID,
+        { pattern: '0 2 * * *' },
+        { name: 'verify', data: { tier: 'full' } },
+    );
+};
+
 export const initScheduler = () => {
     logger.info('[Scheduler] Initializing scan schedule reconciler...');
     cron.schedule('* * * * *', () => {
@@ -55,4 +86,14 @@ export const initScheduler = () => {
             logger.error('[Scheduler] Error reconciling scan schedules:', error)
         );
     });
+
+    // Registered once at boot, not on the minute tick: the patterns are constant,
+    // so re-upserting them every 60 seconds would be churn with no effect.
+    reconcileAuditSchedules()
+        .then(() => logger.info('[Scheduler] Audit verification scheduled (tail */15m, full daily 02:00)'))
+        .catch(error =>
+            // Loud, because the failure mode is silent: no schedule means no
+            // verification, and nothing else would ever mention it again.
+            logger.error('[Scheduler] FAILED to schedule audit verification — the ledger will NOT be checked:', error)
+        );
 };
