@@ -5,7 +5,7 @@ import { verifyAuditTail, type VerificationError, type TailVerificationReport } 
 import { verifyAnchorIntegrity, type AnchorVerificationReport } from '../utils/auditAnchorVerifier';
 import { runFullAuditVerification, isTamperSuspected, type FullAuditReport } from '../utils/auditOrchestrator';
 import { sendSystemAlert, configuredSinks, type SystemAlertPayload } from '../utils/systemAlert';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Runs ledger verification on a schedule and pages a human when it fails.
@@ -252,7 +252,7 @@ export function initAuditVerifyWorker(): Worker<AuditVerifyJobData> {
         // A failed verification is not a clean ledger. Logged at error so an absent
         // "complete" line is never mistaken for silence meaning success.
         //
-        // The reason goes in the METADATA OBJECT, not a second positional argument.
+        // The cause goes in the METADATA OBJECT, not a second positional argument.
         // logger.ts composes winston.format.json() without winston.format.splat(),
         // so a trailing string argument is held on a Symbol key and never
         // serialised: `logger.error(msg, err.message)` prints the prefix and stops
@@ -260,12 +260,17 @@ export function initAuditVerifyWorker(): Worker<AuditVerifyJobData> {
         // check threw rather than never ran, and it was reaching stdout with the
         // cause removed.
         //
-        // `event` matches the convention every other structured log here follows,
-        // so the failure is greppable by name instead of by message substring.
+        // errorContext owns the error shape for the whole backend, so this line also
+        // picks up cause-chain unwrapping and the production stack rule for free.
+        //
+        // `event` stays lower_snake_case to match the five other structured logs in
+        // this file. The uppercase convention introduced with errorContext applies to
+        // the sites it converted; harmonising the two namespaces is its own change,
+        // not a rider on this one.
         logger.error('[AuditVerifier] verification failed', {
             event: 'audit_verification_failed',
             tier: job?.data.tier ?? 'unknown',
-            reason: err?.message ?? String(err),
+            ...errorContext(err),
         });
     });
 
