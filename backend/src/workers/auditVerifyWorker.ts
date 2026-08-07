@@ -5,7 +5,7 @@ import { verifyAuditTail, type VerificationError, type TailVerificationReport } 
 import { verifyAnchorIntegrity, type AnchorVerificationReport } from '../utils/auditAnchorVerifier';
 import { runFullAuditVerification, isTamperSuspected, type FullAuditReport } from '../utils/auditOrchestrator';
 import { sendSystemAlert, configuredSinks, type SystemAlertPayload } from '../utils/systemAlert';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Runs ledger verification on a schedule and pages a human when it fails.
@@ -165,6 +165,16 @@ async function runTail(): Promise<void> {
     const db = await verifyAuditTail();
     const anchor = await verifyAnchorIntegrity(db);
 
+    // anchorChecked and anchorConfigured are logged alongside anchorStatus because
+    // the status alone cannot be actioned. ANCHOR_UNAVAILABLE covers a fresh ledger
+    // with nothing sequenced yet (checked 0, configured true) and a deployment where
+    // no anchor store was ever set (checked 0, configured false) — same status, and
+    // opposite responses. Without these two fields the reader of the log has to
+    // guess which one they are looking at.
+    //
+    // They also make "the check ran" separable from "the job ran". A completed pass
+    // with anchorChecked 0 has queried nothing off-box, and reading that as a clean
+    // rollout is the counterfeit health signal this subsystem exists to prevent.
     logger.info('[AuditVerifier] tail pass complete', {
         event: 'audit_verify_tail',
         rowsChecked: db.rowsChecked,
@@ -172,6 +182,15 @@ async function runTail(): Promise<void> {
         latestSequence: db.latestSequence,
         errors: db.errors.length,
         anchorStatus: anchor.status,
+        anchorChecked: anchor.checked,
+        anchorConfigured: anchor.lokiConfigured,
+        // Positions that were sampled but could not be resolved. This is what
+        // separates a fresh ledger (nothing sampled, so 0) from an anchor store
+        // that was asked and did not answer (one entry per sample). Both report
+        // checked 0, so without this the two are indistinguishable from the log
+        // and only tellable apart by whether a WARN alert happened to be
+        // delivered — which depends on a sink being configured at all.
+        anchorUnresolved: anchor.checks.length,
     });
 
     await dispatch(tailAlerts(db, anchor));
@@ -186,6 +205,12 @@ async function runFull(): Promise<void> {
         chainValid: report.db.isValid,
         latestSequence: report.db.latestSequence,
         anchorStatus: report.anchor.status,
+        // Same reason as the tail pass: chainValid true with anchorChecked 0 means
+        // the chain agrees with itself and was compared to nothing outside the
+        // database it lives in.
+        anchorChecked: report.anchor.checked,
+        anchorConfigured: report.anchor.lokiConfigured,
+        anchorUnresolved: report.anchor.checks.length,
     });
 
     await dispatch(fullAlerts(report));
@@ -226,7 +251,27 @@ export function initAuditVerifyWorker(): Worker<AuditVerifyJobData> {
     worker.on('failed', (job, err) => {
         // A failed verification is not a clean ledger. Logged at error so an absent
         // "complete" line is never mistaken for silence meaning success.
-        logger.error(`[AuditVerifier] ${job?.data.tier ?? 'unknown'} verification failed:`, err?.message ?? err);
+        //
+        // The cause goes in the METADATA OBJECT, not a second positional argument.
+        // logger.ts composes winston.format.json() without winston.format.splat(),
+        // so a trailing string argument is held on a Symbol key and never
+        // serialised: `logger.error(msg, err.message)` prints the prefix and stops
+        // at the colon. This line is the only evidence that a scheduled integrity
+        // check threw rather than never ran, and it was reaching stdout with the
+        // cause removed.
+        //
+        // errorContext owns the error shape for the whole backend, so this line also
+        // picks up cause-chain unwrapping and the production stack rule for free.
+        //
+        // `event` stays lower_snake_case to match the five other structured logs in
+        // this file. The uppercase convention introduced with errorContext applies to
+        // the sites it converted; harmonising the two namespaces is its own change,
+        // not a rider on this one.
+        logger.error('[AuditVerifier] verification failed', {
+            event: 'audit_verification_failed',
+            tier: job?.data.tier ?? 'unknown',
+            ...errorContext(err),
+        });
     });
 
     reportAlertSinks();
