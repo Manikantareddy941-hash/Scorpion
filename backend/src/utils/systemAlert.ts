@@ -79,17 +79,32 @@ async function deliver(label: string, send: () => Promise<unknown>): Promise<boo
 }
 
 /**
+ * Names of the sinks that are actually configured.
+ *
+ * NAMES ONLY, never values. A Slack webhook carries its secret in the URL and a
+ * PagerDuty routing key is a credential; this is written to the boot log, which
+ * on this deployment ships to the same Loki that stores the audit anchors.
+ *
+ * This is the single place that knows which environment variables map to which
+ * sink, so a sink added later cannot appear in delivery while staying invisible
+ * at boot — the two would disagree, and the boot log is what an operator trusts.
+ */
+export function configuredSinks(): string[] {
+    return [
+        process.env.SYSTEM_ALERT_SLACK_WEBHOOK ? 'Slack' : null,
+        process.env.SYSTEM_ALERT_PAGERDUTY_KEY ? 'PagerDuty' : null,
+        process.env.SYSTEM_ALERT_WEBHOOK_URL ? 'webhook' : null,
+    ].filter((s): s is string => s !== null);
+}
+
+/**
  * True when at least one sink is configured.
  *
  * Exported so callers can refuse to report success on a path that would deliver
  * nowhere — "no recipient configured" must never read as "alert sent".
  */
 export function systemAlertConfigured(): boolean {
-    return Boolean(
-        process.env.SYSTEM_ALERT_WEBHOOK_URL ||
-        process.env.SYSTEM_ALERT_PAGERDUTY_KEY ||
-        process.env.SYSTEM_ALERT_SLACK_WEBHOOK,
-    );
+    return configuredSinks().length > 0;
 }
 
 /**

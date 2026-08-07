@@ -13,18 +13,24 @@ jest.mock('../utils/auditOrchestrator', () => ({
     ...jest.requireActual('../utils/auditOrchestrator'),
     runFullAuditVerification: jest.fn(),
 }));
-jest.mock('../utils/systemAlert', () => ({ sendSystemAlert: jest.fn() }));
+// configuredSinks stays REAL: it reads the environment, which is exactly what
+// the boot log is supposed to report. A stubbed one would assert the mock.
+jest.mock('../utils/systemAlert', () => ({
+    ...jest.requireActual('../utils/systemAlert'),
+    sendSystemAlert: jest.fn(),
+}));
 jest.mock('../services/logger', () => ({
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 import { Job } from 'bullmq';
-import { processAuditVerification } from './auditVerifyWorker';
+import { processAuditVerification, initAuditVerifyWorker, __resetAuditVerifyWorkerForTests } from './auditVerifyWorker';
 import { verifyAuditTail } from '../utils/auditVerifier';
 import { verifyAnchorIntegrity } from '../utils/auditAnchorVerifier';
 import { runFullAuditVerification } from '../utils/auditOrchestrator';
 import { sendSystemAlert } from '../utils/systemAlert';
 import { logger } from '../services/logger';
+const mockInfo = () => logger.info as jest.Mock;
 import type { AuditVerifyJobData } from '../queues/auditQueue';
 
 const mockTail = verifyAuditTail as jest.Mock;
@@ -259,5 +265,52 @@ describe('undeliverable alerts', () => {
 
         const events = mockError.mock.calls.map((c) => c[1]?.event);
         expect(events).not.toContain('audit_alert_undeliverable');
+    });
+});
+
+describe('boot-time alert sink visibility', () => {
+    const SLACK = 'https://hooks.slack.com/services/T0/B0/xoxb-secret-path';
+    const alertEnv = ['SYSTEM_ALERT_SLACK_WEBHOOK', 'SYSTEM_ALERT_PAGERDUTY_KEY', 'SYSTEM_ALERT_WEBHOOK_URL'];
+
+    beforeEach(() => {
+        __resetAuditVerifyWorkerForTests();
+        alertEnv.forEach((k) => delete process.env[k]);
+    });
+    afterAll(() => alertEnv.forEach((k) => delete process.env[k]));
+
+    it('names the configured sinks at boot', async () => {
+        // Without this the configuration is only observable at the moment an alert
+        // is needed — the worst moment to discover it is wrong.
+        process.env.SYSTEM_ALERT_SLACK_WEBHOOK = SLACK;
+        process.env.SYSTEM_ALERT_PAGERDUTY_KEY = 'pd-key';
+
+        initAuditVerifyWorker();
+
+        const line = mockInfo().mock.calls.find((c) => /alert sinks configured/.test(String(c[0])));
+        expect(line).toBeDefined();
+        expect(String(line?.[0])).toContain('Slack, PagerDuty');
+        expect(line?.[1]).toMatchObject({ event: 'audit_alert_sinks_configured' });
+    });
+
+    it('logs an ERROR when no sink is configured, not silence', async () => {
+        // audit_alert_undeliverable only fires when an alert is attempted, so on a
+        // healthy ledger it never appears — its absence proves nothing about the
+        // configuration. This is the signal that does.
+        initAuditVerifyWorker();
+
+        const events = mockError.mock.calls.map((c) => c[1]?.event);
+        expect(events).toContain('audit_alert_sinks_unconfigured');
+    });
+
+    it('never writes a sink secret into the boot log', async () => {
+        // The boot log ships to the same Loki that stores the audit anchors.
+        process.env.SYSTEM_ALERT_SLACK_WEBHOOK = SLACK;
+        process.env.SYSTEM_ALERT_PAGERDUTY_KEY = 'pd-routing-key-secret';
+
+        initAuditVerifyWorker();
+
+        const written = JSON.stringify([...mockInfo().mock.calls, ...mockError.mock.calls]);
+        expect(written).not.toContain('xoxb-secret-path');
+        expect(written).not.toContain('pd-routing-key-secret');
     });
 });
