@@ -12,7 +12,7 @@ import os from 'os';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { resolveToolCommand } from '../utils/toolCheck';
-import { logger, errorContext } from './logger';
+import { logger, errorContext, errorMessage } from './logger';
 
 const execFileAsync = promisify(execFile);
 const OPA_TIMEOUT_MS = 10_000;
@@ -71,12 +71,12 @@ export const evaluatePolicy = async (
         const denyReasons: string[] = Array.isArray(decision.deny) ? decision.deny : [];
 
         return { allow: decision.allow === true, denyReasons };
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[OPA] policy evaluation failed', {
             event: 'OPA_EVALUATION_FAILED',
             ...errorContext(err),
         });
-        throw new Error(`OPA evaluation failed: ${err.message}`);
+        throw new Error(`OPA evaluation failed: ${errorMessage(err)}`);
     } finally {
         await fs.unlink(inputPath).catch(() => {});
         if (options.regoCode) {

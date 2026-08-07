@@ -1,4 +1,5 @@
 import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { errorMessage } from './logger';
 
 const tracer = trace.getTracer('scorpion');
 
@@ -12,9 +13,11 @@ export async function withSpan<T>(
       const result = await fn();
       span.setStatus({ code: SpanStatusCode.OK });
       return result;
-    } catch (err: any) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
-      span.recordException(err);
+    } catch (err) {
+      span.setStatus({ code: SpanStatusCode.ERROR, message: errorMessage(err) });
+      // recordException takes OTel's `Exception` union, not `unknown`. An Error
+      // satisfies it directly; anything else is recorded as its message string.
+      span.recordException(err instanceof Error ? err : errorMessage(err));
       throw err;
     } finally {
       span.end();

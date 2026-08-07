@@ -7,6 +7,7 @@ import { exec } from "child_process";
 import * as path from "path";
 import { promisify } from "util";
 import { deduplicateFindings } from "../deduplication";
+import { errorMessage } from '../services/logger';
 
 const execAsync = promisify(exec);
 
@@ -42,13 +43,13 @@ async function main() {
   let rawStdout: string;
   try {
     rawStdout = await runScannerContainer(image, args, sampleRepo);
-  } catch (err: any) {
-    if (err.message && err.message.includes('docker')) {
+  } catch (err) {
+    if (errorMessage(err) && errorMessage(err).includes('docker')) {
       console.warn('Docker not found – using mock data for validation');
       // Minimal mock Trivy JSON structure with empty Results
       rawStdout = JSON.stringify({ Results: [] });
     } else {
-      console.error('Error executing Docker container:', err.message);
+      console.error('Error executing Docker container:', errorMessage(err));
       process.exit(1);
     }
   }

@@ -7,6 +7,7 @@ import { dockerRunnerService } from './dockerRunnerService';
 import { Databases, ID } from 'node-appwrite';
 import fs from 'fs';
 import path from 'path';
+import { errorMessage } from './logger';
 
 export class ContainerizedTrivyService {
   public async runTrivyScan(runId: string, workspacePath: string, logger: any, databases: Databases): Promise<number> {
@@ -74,8 +75,8 @@ export class ContainerizedTrivyService {
 
       logger.log(`[Security] Scan resolved. Found ${issueCount} CRITICAL/HIGH vulnerabilities saved to dashboard.`);
       return issueCount;
-    } catch (err: any) {
-      logger.log(`[Security Error] Scanner runtime failed: ${err.message}`);
+    } catch (err) {
+      logger.log(`[Security Error] Scanner runtime failed: ${errorMessage(err)}`);
       return 0;
     } finally {
       if (fs.existsSync(hostReportPath)) fs.unlinkSync(hostReportPath);

@@ -4,6 +4,7 @@ import axios from 'axios';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 import { databases, DB_ID } from '../lib/appwrite';
+import { errorMessage } from '../services/logger';
 
 async function run() {
   const repoId = '69c15671002e0d7166dd';
@@ -35,14 +36,14 @@ async function run() {
             console.log('\n=== PIPELINE RUN LOGS ===');
             console.log(logsRes.data);
             console.log('=========================\n');
-          } catch (e: any) {
-            console.error('Failed to fetch logs:', e.message);
+          } catch (e) {
+            console.error('Failed to fetch logs:', errorMessage(e));
           }
 
           process.exit(runDoc.status === 'success' ? 0 : 1);
         }
-      } catch (err: any) {
-        console.error('Error fetching run doc:', err.message);
+      } catch (err) {
+        console.error('Error fetching run doc:', errorMessage(err));
       }
     }, 3000);
 

@@ -1,6 +1,6 @@
 import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { sendSlackNotification } from './slackService';
-import { logger, errorContext } from './logger';
+import { logger, errorContext, errorMessage } from './logger';
 import axios from 'axios';
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
@@ -30,9 +30,9 @@ export async function checkDeploymentUptime(deployment: any) {
     if (res.status >= 200 && res.status < 400) {
       isUp = true;
     }
-  } catch (err: any) {
+  } catch (err) {
     latency = Date.now() - startTime;
-    logger.warn(`[MonitorService] Health check failed for ${url}: ${err.message}`);
+    logger.warn(`[MonitorService] Health check failed for ${url}: ${errorMessage(err)}`);
   }
 
   const status = isUp ? 'up' : 'down';

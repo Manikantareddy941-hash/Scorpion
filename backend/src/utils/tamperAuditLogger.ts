@@ -1,6 +1,6 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import crypto from 'crypto';
-import { logger, errorContext } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import { anchorLedgerTip } from './auditAnchor';
 import { classifyAttributeFailure } from '../scripts/lib/migrationErrors';
 
@@ -56,7 +56,7 @@ export async function ensureSequenceAttribute(): Promise<void> {
     await databases.createIntegerAttribute(DB_ID, 'audit_logs_v2', 'sequence', false);
     logger.info('[Audit Logs Setup] added `sequence` attribute to audit_logs_v2 — waiting for it to become available.');
     await new Promise(resolve => setTimeout(resolve, 3000));
-  } catch (err: any) {
+  } catch (err) {
     // Do NOT pattern-match the error text. scripts/lib/migrationErrors documents
     // why, from having hit it: Appwrite validates the collection's row-size budget
     // BEFORE checking whether the attribute already exists, so a re-create can
@@ -86,7 +86,10 @@ export async function ensureSequenceAttribute(): Promise<void> {
     }
 
     if (verdict === 'error') {
-      logger.error('[Audit Logs Setup] could not ensure `sequence` attribute on audit_logs_v2:', err?.message ?? err);
+      logger.error('[Audit Logs Setup] could not ensure `sequence` attribute on audit_logs_v2', {
+        event: 'AUDIT_SEQUENCE_ATTRIBUTE_UNAVAILABLE',
+        ...errorContext(err),
+      });
       return; // leave unmemoised so the next write retries
     }
   }
@@ -235,7 +238,7 @@ export async function logSecureAuditEvent(
     anchorLedgerTip({ recordId: doc.$id, tamperHash: tamper_hash, action, timestamp, sequence });
 
     return doc;
-  } catch (err: any) {
+  } catch (err) {
     // Already the right shape (thrown by the chaining branch above) — do not
     // re-wrap it and lose the specific cause.
     if (err instanceof AuditWriteFailedError) throw err;
@@ -245,7 +248,7 @@ export async function logSecureAuditEvent(
         ...errorContext(err),
     });
     if (required) {
-      throw new AuditWriteFailedError(action, err instanceof Error ? err.message : String(err));
+      throw new AuditWriteFailedError(action, errorMessage(err));
     }
   }
 }

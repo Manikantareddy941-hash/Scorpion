@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from './logger';
+import { logger, errorMessage } from './logger';
 
 interface Finding {
     vulnerability_id?: string;
@@ -56,8 +56,8 @@ export class AlertService {
                     content: i === 0 ? `🚨 **SCORPION Security Alert** | Scan completed for **${repoName}** with ${findings.length} findings.` : null,
                     embeds: chunk
                 });
-            } catch (error: any) {
-                logger.error(`Failed to send Discord alert: ${error.message}`);
+            } catch (error) {
+                logger.error(`Failed to send Discord alert: ${errorMessage(error)}`);
             }
         }
     }
@@ -132,8 +132,8 @@ export class AlertService {
 
         try {
             await axios.post(webhookUrl, { blocks });
-        } catch (error: any) {
-            logger.error(`Failed to send Slack alert: ${error.message}`);
+        } catch (error) {
+            logger.error(`Failed to send Slack alert: ${errorMessage(error)}`);
         }
     }
 }

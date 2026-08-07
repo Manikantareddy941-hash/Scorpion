@@ -1,6 +1,6 @@
 import { cloneRepo } from '../utils/git';
 import { runScanPipeline } from '../scanners/pipeline';
-import { logger, errorContext } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
@@ -182,7 +182,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
           } else {
             logs += `Provenance attestation skipped (signing not configured).\n`;
           }
-        } catch (signErr: any) {
+        } catch (signErr) {
           // A failed signature is not the same class of event as the rest of this
           // block. If the pipeline was configured to sign and the signer broke,
           // the build fails: an unsigned image from a host that intended to sign
@@ -201,7 +201,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
               imageRef: imageName,
               ...errorContext(signErr),
             });
-            logs += `Image signing failed: ${signErr.message}\n`;
+            logs += `Image signing failed: ${errorMessage(signErr)}\n`;
             throw Object.assign(signErr, { logs });
           }
 
@@ -213,7 +213,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
             imageRef: imageName,
             ...errorContext(signErr),
           });
-          logs += `Image provenance step failed: ${signErr.message}\n`;
+          logs += `Image provenance step failed: ${errorMessage(signErr)}\n`;
         }
       } else if (buildTool === 'gradle') {
         const res1 = await execWithLogs('./gradlew build -x test', tempDir, pipelineId, logs);
