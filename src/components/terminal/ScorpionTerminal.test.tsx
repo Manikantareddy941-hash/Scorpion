@@ -18,11 +18,13 @@ const mockFetch = vi.fn();
 
 /** Default: every command succeeds with one echoed line. */
 function respondWith(lines: string[], ok = true, status = 200, error?: string) {
-    mockFetch.mockResolvedValue({
-        ok,
-        status,
-        json: async () => (ok ? { lines } : { error }),
-    });
+    const body = JSON.stringify(ok ? { lines } : { error });
+    mockFetch.mockResolvedValue({ ok, status, text: async () => body });
+}
+
+/** A body the terminal route never produces — i.e. something in front of it answered. */
+function respondRaw(status: number, body: string) {
+    mockFetch.mockResolvedValue({ ok: status < 400, status, text: async () => body });
 }
 
 beforeEach(() => {
@@ -97,7 +99,38 @@ describe('running a command', () => {
 
         await user.type(promptInput(), 'help{Enter}');
 
-        expect(await screen.findByText(/error: connection refused/)).toBeInTheDocument();
+        expect(await screen.findByText(/could not reach \/api\/terminal\/exec — connection refused/)).toBeInTheDocument();
+        expect(screen.getByText(/did not run and was not audited/)).toBeInTheDocument();
+    });
+
+    /**
+     * The reported bug: nginx answers 502 with an HTML page when the backend
+     * container is down. Parsing that as JSON yielded `{}` and the pane printed a
+     * bare "Request failed (502)" — true, useless, and indistinguishable from the
+     * route rejecting the command.
+     */
+    it('names the transport when a proxy answers instead of the route', async () => {
+        const user = userEvent.setup();
+        respondRaw(502, '<html><head><title>502 Bad Gateway</title></head><body><h1>502 Bad Gateway</h1></body></html>');
+        render(<ScorpionTerminal />);
+
+        await user.type(promptInput(), 'git clone x{Enter}');
+
+        expect(await screen.findByText(/the audited backend never answered \(HTTP 502\)/)).toBeInTheDocument();
+        expect(screen.getByText(/did not run and was not audited/)).toBeInTheDocument();
+        expect(screen.getByText(/upstream: 502 Bad Gateway/)).toBeInTheDocument();
+        expect(screen.queryByText(/Request failed/)).not.toBeInTheDocument();
+    });
+
+    /** A 200 carrying index.html means /api was never proxied — still a transport fault. */
+    it('treats a non-JSON 200 as a transport fault rather than empty output', async () => {
+        const user = userEvent.setup();
+        respondRaw(200, '<!doctype html><html><body><div id="root"></div></body></html>');
+        render(<ScorpionTerminal />);
+
+        await user.type(promptInput(), 'help{Enter}');
+
+        expect(await screen.findByText(/the audited backend never answered \(HTTP 200\)/)).toBeInTheDocument();
     });
 
     it('ignores a blank submission', async () => {
@@ -107,6 +140,68 @@ describe('running a command', () => {
         await user.type(promptInput(), '   {Enter}');
 
         expect(mockFetch).not.toHaveBeenCalled();
+    });
+});
+
+describe('shell profile selector', () => {
+    it('offers the audited shell alongside the native profiles', () => {
+        render(<ScorpionTerminal />);
+        const selector = screen.getByLabelText('Terminal profile');
+
+        expect(within(selector).getByRole('option', { name: 'Scorpion Audited Shell' })).toBeInTheDocument();
+        ['Git Bash', 'PowerShell', 'Command Prompt', 'Bash / WSL'].forEach((label) => {
+            expect(within(selector).getByRole('option', { name: label })).toBeInTheDocument();
+        });
+    });
+
+    it('opens another audited tab when the audited profile is chosen', async () => {
+        const user = userEvent.setup();
+        render(<ScorpionTerminal />);
+        expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+
+        await user.selectOptions(screen.getByLabelText('Terminal profile'), 'scorpion');
+
+        expect(screen.getAllByRole('tab')).toHaveLength(2);
+    });
+
+    /**
+     * The selector is a launcher, not a state display. If it retained the last choice,
+     * re-picking that profile would fire no change event and the entry would be dead.
+     */
+    it('returns to the placeholder so any profile can be picked twice', async () => {
+        const user = userEvent.setup();
+        render(<ScorpionTerminal />);
+        const selector = screen.getByLabelText('Terminal profile');
+
+        await user.selectOptions(selector, 'scorpion');
+        await user.selectOptions(selector, 'scorpion');
+
+        expect(screen.getAllByRole('tab')).toHaveLength(3);
+    });
+
+    /**
+     * A browser cannot spawn PowerShell, so the honest behaviour is to hand off and
+     * say so. Silently doing nothing, or printing a fake prompt, would both read as
+     * "the native shell is running here" — which is exactly what must not be implied
+     * on a surface whose whole value is that everything on it is audited.
+     */
+    it('deep-links a native profile to the extension and states it is unaudited', async () => {
+        const user = userEvent.setup();
+        const navigated: string[] = [];
+        // jsdom refuses to navigate to a custom scheme; capture the assignment instead.
+        Object.defineProperty(window, 'location', {
+            configurable: true,
+            value: { set href(url: string) { navigated.push(url); } },
+        });
+        render(<ScorpionTerminal />);
+
+        await user.selectOptions(screen.getByLabelText('Terminal profile'), 'scorpion.gitbash');
+
+        expect(navigated).toEqual(['vscode://scorpion.scorpion-security/terminal?profile=scorpion.gitbash']);
+        expect(await screen.findByText(/Opening Git Bash in VS Code/)).toBeInTheDocument();
+        expect(screen.getByText(/not through the audit ledger/)).toBeInTheDocument();
+        // The handoff must not be mistaken for a new local session.
+        expect(screen.getAllByLabelText('Terminal command input')).toHaveLength(1);
     });
 });
 
@@ -131,6 +226,23 @@ describe('history recall', () => {
 });
 
 describe('clear', () => {
+    /** The offline fallback: clearing changes no server state, so it must not need the backend. */
+    it('services a typed `clear` locally, without a request', async () => {
+        const user = userEvent.setup();
+        respondWith(['some output']);
+        render(<ScorpionTerminal />);
+
+        await user.type(promptInput(), 'help{Enter}');
+        expect(await screen.findByText('some output')).toBeInTheDocument();
+        mockFetch.mockClear();
+
+        await user.type(promptInput(), 'clear{Enter}');
+
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(screen.queryByText('some output')).not.toBeInTheDocument();
+        expect(screen.getByText(/command history retained/i)).toBeInTheDocument();
+    });
+
     it('clears the screen but keeps history recallable', async () => {
         const user = userEvent.setup();
         respondWith(['some output']);

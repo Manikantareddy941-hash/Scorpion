@@ -6,6 +6,66 @@ import { scanWorkspace } from './commands/scanWorkspace';
 import { fixWithAI } from './commands/fixWithAI';
 import { scanFileForSecrets, isGitleaksAvailable } from './localGitleaks';
 import { installPreCommitHook, uninstallPreCommitHook, isPreCommitHookInstalled } from './preCommitHook';
+import { SHELL_PROFILES, shellPathFor } from './shellProfiles';
+
+/**
+ * Contributes Git Bash / PowerShell / CMD / WSL to the terminal profile picker.
+ *
+ * A profile whose shell is not installed still opens a terminal — VS Code falls back
+ * to the user's configured default shell when shellPath is omitted. A dead menu entry
+ * would be the worse outcome; the warning says which shell was missing.
+ */
+function terminalOptionsFor(profile: (typeof SHELL_PROFILES)[number]): vscode.TerminalOptions {
+  const resolved = shellPathFor(profile);
+  if (resolved.fellBack) {
+    vscode.window.showWarningMessage(
+      `SCORPION: ${profile.name} is not installed - opening your default shell instead.`
+    );
+  }
+  return {
+    name: resolved.name,
+    shellPath: resolved.shellPath,
+    shellArgs: resolved.shellArgs ? [...resolved.shellArgs] : undefined,
+  };
+}
+
+function registerShellProfiles(context: vscode.ExtensionContext) {
+  for (const profile of SHELL_PROFILES) {
+    context.subscriptions.push(
+      vscode.window.registerTerminalProfileProvider(profile.id, {
+        provideTerminalProfile: () => new vscode.TerminalProfile(terminalOptionsFor(profile)),
+      })
+    );
+  }
+}
+
+/**
+ * Handles vscode://scorpion.scorpion-security/terminal?profile=<id>, which is how the
+ * Scorpion web terminal's profile selector reaches a real shell. The web page cannot
+ * spawn a process; this can, because it is already the operator's own machine.
+ *
+ * An unknown or absent profile id opens nothing. The id is only ever used to look up a
+ * row in SHELL_PROFILES - it is never treated as a path or an argument, so a crafted
+ * link cannot choose what gets executed.
+ */
+function registerUriHandler(context: vscode.ExtensionContext) {
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      handleUri: (uri: vscode.Uri) => {
+        if (uri.path !== '/terminal') {
+          return;
+        }
+        const requested = new URLSearchParams(uri.query).get('profile');
+        const profile = SHELL_PROFILES.find(p => p.id === requested);
+        if (!profile) {
+          vscode.window.showWarningMessage(`SCORPION: unknown terminal profile '${requested ?? ''}'.`);
+          return;
+        }
+        vscode.window.createTerminal(terminalOptionsFor(profile)).show();
+      },
+    })
+  );
+}
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('SCORPION Security extension is now active');
@@ -17,6 +77,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register sidebar
   vscode.window.registerTreeDataProvider('scorpion.findings', sidebarProvider);
+
+  registerShellProfiles(context);
+  registerUriHandler(context);
 
   // Register commands
   context.subscriptions.push(
