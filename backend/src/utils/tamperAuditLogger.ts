@@ -2,6 +2,7 @@ import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import crypto from 'crypto';
 import { logger } from '../services/logger';
 import { anchorLedgerTip } from './auditAnchor';
+import { classifyAttributeFailure } from '../scripts/lib/migrationErrors';
 
 // Helper to ensure the secure audit log collection exists
 export async function ensureAuditLogsV2Collection() {
@@ -56,14 +57,35 @@ export async function ensureSequenceAttribute(): Promise<void> {
     logger.info('[Audit Logs Setup] added `sequence` attribute to audit_logs_v2 — waiting for it to become available.');
     await new Promise(resolve => setTimeout(resolve, 3000));
   } catch (err: any) {
-    // node-appwrite's AppwriteException carries { code: number, type: string } and
-    // extends Error, so `message` is ALWAYS set. An earlier `message ?? type`
-    // fallback therefore never reached `type` — the attribute_already_exists branch
-    // was unreachable. Both fields are searched.
-    const alreadyExists =
-      err?.code === 409 ||
-      /already exists|attribute_already_exists/i.test(`${err?.message ?? ''} ${err?.type ?? ''}`);
-    if (!alreadyExists) {
+    // Do NOT pattern-match the error text. scripts/lib/migrationErrors documents
+    // why, from having hit it: Appwrite validates the collection's row-size budget
+    // BEFORE checking whether the attribute already exists, so a re-create can
+    // report "maximum number or size of attributes has been reached" instead of a
+    // conflict. A message/code check treats that as a real failure, never memoises,
+    // and re-issues createIntegerAttribute on EVERY audit write thereafter.
+    //
+    // classifyAttributeFailure resolves the question against reality instead: if
+    // the attribute is present afterwards, the create was redundant. That is the
+    // only form of this check that cannot be defeated by an error message we did
+    // not anticipate.
+    //
+    // classifyAttributeFailure THROWS when it cannot tell — Appwrite unreachable,
+    // or a collection too wide to read in one page. That must not escape into the
+    // audit write path: this runs on the way to logSecureAuditEvent, and with
+    // `{ required: true }` a throw here would refuse the caller's command. A
+    // verification we could not perform is a reason to retry, not to refuse.
+    let verdict: 'skip' | 'error';
+    try {
+      verdict = await classifyAttributeFailure(databases, DB_ID, 'audit_logs_v2', 'sequence', err);
+    } catch (probeErr) {
+      logger.error(
+        '[Audit Logs Setup] could not verify whether `sequence` exists after a failed create:',
+        probeErr instanceof Error ? probeErr.message : probeErr,
+      );
+      return; // unmemoised — retried on the next write, once Appwrite answers again
+    }
+
+    if (verdict === 'error') {
       logger.error('[Audit Logs Setup] could not ensure `sequence` attribute on audit_logs_v2:', err?.message ?? err);
       return; // leave unmemoised so the next write retries
     }
