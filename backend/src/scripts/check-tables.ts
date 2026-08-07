@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { errorMessage } from '../services/logger';
 
 async function checkTables() {
     console.log('Checking Appwrite collections...');
@@ -20,8 +21,8 @@ async function checkTables() {
         const vulnerabilities = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, []);
         console.log('Vulnerabilities found:', vulnerabilities.total);
 
-    } catch (err: any) {
-        console.error('Error checking Appwrite collections:', err.message);
+    } catch (err) {
+        console.error('Error checking Appwrite collections:', errorMessage(err));
     }
 }
 

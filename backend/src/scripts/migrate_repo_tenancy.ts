@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { databases, DB_ID } from '../lib/appwrite';
+import { errorMessage } from '../services/logger';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -39,8 +40,8 @@ async function migrate() {
         // getAIAggregates/getAITrends scope results to the calling user.
         await addAttribute('ai_metrics', 'userId');
         process.exit(0);
-    } catch (err: any) {
-        console.error('Migration failed:', err.message);
+    } catch (err) {
+        console.error('Migration failed:', errorMessage(err));
         process.exit(1);
     }
 }

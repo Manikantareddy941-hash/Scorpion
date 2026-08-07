@@ -2,6 +2,7 @@ import Docker from 'dockerode';
 import { Writable } from 'stream';
 import path from 'path';
 import { IsolationOptions, buildHostConfig, resolveUser, timeoutMs } from './runner/hostConfig';
+import { errorMessage } from './logger';
 
 export interface RunnerOptions extends IsolationOptions {
   image: string;         // Container image name (e.g., 'node:18-alpine')
@@ -103,8 +104,8 @@ export class DockerRunnerService {
       logger.log(`[DockerRunner] Payload processing completed with industrial status code: ${exitCode}`);
       return { exitCode };
 
-    } catch (error: any) {
-      logger.log(`[DockerRunner] Severe pipeline execution failure context: ${error.message}`);
+    } catch (error) {
+      logger.log(`[DockerRunner] Severe pipeline execution failure context: ${errorMessage(error)}`);
       throw error;
     } finally {
       if (container) {
@@ -112,8 +113,8 @@ export class DockerRunnerService {
           // force: a killed container is still "running" to the daemon for a moment.
           await container.remove({ force: true });
           logger.log(`[DockerRunner] Infrastructure environment torn down cleanly.`);
-        } catch (cleanupError: any) {
-          logger.log(`[DockerRunner] Warning: Post-run container teardown structural latency: ${cleanupError.message}`);
+        } catch (cleanupError) {
+          logger.log(`[DockerRunner] Warning: Post-run container teardown structural latency: ${errorMessage(cleanupError)}`);
         }
       }
     }

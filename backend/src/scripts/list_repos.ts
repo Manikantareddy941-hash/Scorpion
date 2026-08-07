@@ -3,6 +3,7 @@ import path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
+import { errorMessage } from '../services/logger';
 
 async function run() {
   try {
@@ -11,8 +12,8 @@ async function run() {
     for (const r of repos.documents) {
       console.log(`- ID: ${r.$id}, Name: ${r.name}, URL: ${r.url}, local_path: ${r.local_path}`);
     }
-  } catch (err: any) {
-    console.error('Error listing repos:', err.message);
+  } catch (err) {
+    console.error('Error listing repos:', errorMessage(err));
   }
 }
 

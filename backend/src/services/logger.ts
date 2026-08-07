@@ -46,9 +46,24 @@ export interface ErrorContext {
  *
  * Callers add their own domain fields alongside; this owns only the error shape.
  */
+/**
+ * The message of a caught value, whatever it turned out to be.
+ *
+ * A `catch` binding is `unknown`, and `throw 'string'` / `Promise.reject(undefined)`
+ * both reach these blocks through third-party libraries. This is the single narrowing
+ * step for the string form, so call sites that only want text — an interpolated log
+ * line, a rethrown message, a `last_error` column — do not each hand-roll
+ * `x instanceof Error ? x.message : String(x)` and get it subtly different.
+ *
+ * Use errorContext instead when the destination is a structured log payload.
+ */
+export function errorMessage(err: unknown): string {
+    return err instanceof Error ? err.message : String(err);
+}
+
 export function errorContext(err: unknown): ErrorContext {
     if (!(err instanceof Error)) {
-        return { error: String(err) };
+        return { error: errorMessage(err) };
     }
     // `Error.cause` is ES2022 and this project compiles against es2016, so the field
     // is absent from the `Error` type while being present at runtime on every

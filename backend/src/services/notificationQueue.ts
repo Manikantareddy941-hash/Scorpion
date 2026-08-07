@@ -1,7 +1,7 @@
 import { sendScanCompletionEmail, sendCriticalAlertEmail } from './emailService';
 import { sendSlackWebhook, sendDiscordWebhook } from './webhookService';
 import { databases, DB_ID, COLLECTIONS, ID, users } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorMessage } from './logger';
 
 export const enqueueNotification = async (payload: {
     user_id: string;
@@ -66,14 +66,14 @@ export const processNotification = async (id: string) => {
             } else {
                 throw new Error(errorMsg || 'Failed to send');
             }
-        } catch (err: any) {
+        } catch (err) {
             const retryCount = (notification.retry_count || 0) + 1;
             const status = retryCount > 3 ? 'failed' : 'pending';
 
             await databases.updateDocument(DB_ID, COLLECTIONS.NOTIFICATIONS, id, {
                 status,
                 retry_count: retryCount,
-                last_error: err.message
+                last_error: errorMessage(err)
             });
 
             if (status === 'pending') {

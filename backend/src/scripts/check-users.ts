@@ -1,4 +1,5 @@
 import { users } from '../lib/appwrite';
+import { errorMessage } from '../services/logger';
 
 async function checkUsers() {
     try {
@@ -7,8 +8,8 @@ async function checkUsers() {
         userList.users.forEach(u => {
             console.log(`- ${u.email} (${u.$id})`);
         });
-    } catch (err: any) {
-        console.error('Error listing users:', err.message);
+    } catch (err) {
+        console.error('Error listing users:', errorMessage(err));
     }
 }
 

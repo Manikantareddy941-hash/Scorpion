@@ -32,7 +32,7 @@ export async function logAuditEvent(
                 timestamp: new Date().toISOString()
             }
         );
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[Audit Log] write failed', {
             event: 'AUDIT_LOG_WRITE_FAILED',
             ...errorContext(err),

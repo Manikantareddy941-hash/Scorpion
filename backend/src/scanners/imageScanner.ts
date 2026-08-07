@@ -24,7 +24,7 @@ export async function scanImage(image: string): Promise<ImageScanResult> {
     ) ?? [];
 
     return { vulnerabilities, raw: result };
-  } catch (error: any) {
+  } catch (error) {
     logger.error(`[Image Scanner] Failed to scan image ${image}:`, error);
     throw error;
   }

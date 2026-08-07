@@ -57,7 +57,7 @@ export const getDynamicPolicy = async (repoId: string): Promise<PolicyConfig> =>
         regoCode: typeof doc.regoCode === 'string' ? doc.regoCode : undefined
       };
     }
-  } catch (err: any) {
+  } catch (err) {
     logger.warn('[Policy Engine] failed to load dynamic policy', {
         event: 'POLICY_LOAD_FAILED',
         repoId,

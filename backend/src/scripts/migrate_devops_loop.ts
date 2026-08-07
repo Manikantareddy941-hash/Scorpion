@@ -16,7 +16,7 @@ async function ensureCollection(id: string, name: string) {
   try {
     await databases.getCollection(DB_ID, id);
     console.log(`[INFO] Collection "${name}" (${id}) already exists.`);
-  } catch (err: any) {
+  } catch (err) {
     console.log(`[INFO] Creating collection "${name}" (${id})...`);
     // standard user permissions
     const permissions = [

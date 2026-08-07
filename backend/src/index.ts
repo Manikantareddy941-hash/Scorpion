@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 import { initScheduler } from './scheduler';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
-import { logger } from './services/logger';
+import { logger, errorMessage } from './services/logger';
 import { redactUrl } from './utils/redactUrl';
 import { requestLogger } from './middleware/requestLogger';
 
@@ -179,7 +179,7 @@ import { signingConfigBroken } from './services/metrics';
                 logger.info(`✅ [Recovery] No stalled scans found.`);
             }
         }
-    } catch (err: any) {
+    } catch (err) {
         logger.error('❌ [Recovery] Failed to run crash recovery:', err);
     }
 })();
@@ -410,8 +410,8 @@ app.post('/api/metrics', async (req: Request, res: Response) => {
             timestamp: new Date().toISOString()
         });
         res.status(201).json(doc);
-    } catch (err: any) {
-        res.status(500).json({ error: 'Failed to record metrics', details: err.message });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to record metrics', details: errorMessage(err) });
     }
 });
 
@@ -430,8 +430,8 @@ app.post('/api/logs', async (req: Request, res: Response) => {
             details: JSON.stringify({ log, level, repoId })
         });
         res.status(201).json(doc);
-    } catch (err: any) {
-        res.status(500).json({ error: 'Failed to record log', details: err.message });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to record log', details: errorMessage(err) });
     }
 });
 

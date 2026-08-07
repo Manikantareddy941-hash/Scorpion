@@ -15,7 +15,7 @@ import os from 'os';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { resolveToolCommand } from '../utils/toolCheck';
-import { logger, errorContext } from './logger';
+import { logger, errorContext, errorMessage } from './logger';
 
 const execFileAsync = promisify(execFile);
 const COSIGN_TIMEOUT_MS = 30_000;
@@ -183,7 +183,7 @@ export const signBlobContent = async (content: string): Promise<{ signature: str
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return { signature: stdout.trim(), publicKeyPath: process.env.COSIGN_PUB_KEY_PATH };
-    } catch (err: any) {
+    } catch (err) {
         // Bad key, wrong passphrase, timeout, unwritable tmpdir. The signature
         // the caller asked for does not exist, and saying so quietly produced an
         // unsigned artifact indistinguishable from one nobody meant to sign.
@@ -193,7 +193,7 @@ export const signBlobContent = async (content: string): Promise<{ signature: str
             // passphrase diagnostics, and argv names COSIGN_KEY_PATH.
             ...errorContext(err),
         });
-        throw new CosignSigningError(`cosign sign-blob failed: ${err?.message ?? String(err)}`);
+        throw new CosignSigningError(`cosign sign-blob failed: ${errorMessage(err)}`);
     } finally {
         await fs.unlink(blobFile).catch(() => {});
     }
@@ -233,7 +233,7 @@ export const verifyBlobContent = async (content: string, signature: string): Pro
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return true;
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[Cosign] signature verification failed', {
             event: 'COSIGN_VERIFY_FAILED',
             subject: 'blob',
@@ -286,7 +286,7 @@ export const verifyImageSignature = async (imageRef: string): Promise<boolean> =
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return true;
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[Cosign] signature verification failed', {
             event: 'COSIGN_VERIFY_FAILED',
             subject: 'image',

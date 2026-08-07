@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from './logger';
+import { logger, errorMessage } from './logger';
 
 export interface WebhookPayload {
     text: string;
@@ -10,9 +10,9 @@ export const sendSlackWebhook = async (url: string, payload: WebhookPayload) => 
     try {
         await axios.post(url, payload);
         return { success: true };
-    } catch (error: any) {
-        logger.error(`[WebhookService] Slack failed: ${error.message}`);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error(`[WebhookService] Slack failed: ${errorMessage(error)}`);
+        return { success: false, error: errorMessage(error) };
     }
 };
 
@@ -21,9 +21,9 @@ export const sendDiscordWebhook = async (url: string, payload: WebhookPayload) =
         // Discord uses a slightly different format but often accepts Slack's
         await axios.post(url, payload);
         return { success: true };
-    } catch (error: any) {
-        logger.error(`[WebhookService] Discord failed: ${error.message}`);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error(`[WebhookService] Discord failed: ${errorMessage(error)}`);
+        return { success: false, error: errorMessage(error) };
     }
 };
 

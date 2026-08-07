@@ -1,6 +1,6 @@
 import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { sendSlackNotification } from './slackService';
-import { logger, errorContext } from './logger';
+import { logger, errorContext, errorMessage } from './logger';
 import axios from 'axios';
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
@@ -30,9 +30,9 @@ export async function checkDeploymentUptime(deployment: any) {
     if (res.status >= 200 && res.status < 400) {
       isUp = true;
     }
-  } catch (err: any) {
+  } catch (err) {
     latency = Date.now() - startTime;
-    logger.warn(`[MonitorService] Health check failed for ${url}: ${err.message}`);
+    logger.warn(`[MonitorService] Health check failed for ${url}: ${errorMessage(err)}`);
   }
 
   const status = isUp ? 'up' : 'down';
@@ -111,13 +111,13 @@ export async function checkDeploymentUptime(deployment: any) {
           status,
           lastUpdated: new Date().toISOString()
         });
-      } catch (e: any) {
+      } catch (e) {
         logger.error(`[MonitorService] Failed to clear stale down status:`, e);
       }
     }
 
     previousStatus.set(key, status);
-  } catch (err: any) {
+  } catch (err) {
     logger.error(`[MonitorService] Error recording health check:`, err);
   }
 }
@@ -146,7 +146,7 @@ export async function runUptimeMonitor() {
     for (const deployment of uniqueDeployments.values()) {
       await checkDeploymentUptime(deployment);
     }
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[MonitorService] uptime monitor run failed', {
         event: 'UPTIME_MONITOR_FAILED',
         ...errorContext(err),

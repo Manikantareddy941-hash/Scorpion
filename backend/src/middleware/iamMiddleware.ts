@@ -172,7 +172,7 @@ export const checkPermission = (action: string) => {
             }
 
             next();
-        } catch (err: any) {
+        } catch (err) {
             logger.error('[IAM Middleware] Enforcement failure:', err);
             return res.status(500).json({ error: 'Internal policy enforcement failure' });
         }

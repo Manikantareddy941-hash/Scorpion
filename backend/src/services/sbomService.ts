@@ -69,7 +69,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
 
         return content; // Raw CSV string
 
-    } catch (err: any) {
+    } catch (err) {
         // Cleanup on error
         if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
         const outputPath = `${tempDir}_out.${format}`;
