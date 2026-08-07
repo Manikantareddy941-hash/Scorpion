@@ -4,7 +4,12 @@ import { evaluatePolicy as evaluateOpaPolicy } from '../services/opaService';
 
 jest.mock('../services/policyService');
 jest.mock('../services/opaService');
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 
 const mockGetPolicy = getDynamicPolicy as jest.MockedFunction<typeof getDynamicPolicy>;
 const mockOpa = evaluateOpaPolicy as jest.MockedFunction<typeof evaluateOpaPolicy>;

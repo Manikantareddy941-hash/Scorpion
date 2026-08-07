@@ -22,7 +22,12 @@ jest.mock('../lib/appwrite', () => ({
     equal: (f: string, v: unknown) => ({ equal: [f, v] }),
   },
 }));
-jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 
 import { getUserEffectiveRole, hasRequiredRole, logRbacAction } from './rbacService';
 import { databases } from '../lib/appwrite';

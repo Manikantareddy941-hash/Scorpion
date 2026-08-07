@@ -3,7 +3,12 @@ jest.mock('@kubernetes/client-node', () => ({}));
 // kubernetesJobRunner, which this adapter imports for its default dispatcher —
 // every test here injects a stub instead.
 jest.mock('archiver', () => ({ TarArchive: class {} }));
-jest.mock('../logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('../logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 jest.mock('../../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./scannerImage', () => ({ resolveScannerImage: jest.fn() }));
 

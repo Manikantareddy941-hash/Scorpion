@@ -13,7 +13,12 @@ jest.mock('../queues/soarQueue', () => ({ enqueueSoarAction: jest.fn() }));
 jest.mock('../middleware/requireRole', () => ({
   requireRole: () => (_req: Request, _res: unknown, next: () => void) => next(),
 }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 
 import soarRoutes from './soarRoutes';
 import { soarRepository } from '../repositories/soarRepository';

@@ -1,6 +1,6 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import crypto from 'crypto';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { anchorLedgerTip } from './auditAnchor';
 import { classifyAttributeFailure } from '../scripts/lib/migrationErrors';
 
@@ -240,7 +240,10 @@ export async function logSecureAuditEvent(
     // re-wrap it and lose the specific cause.
     if (err instanceof AuditWriteFailedError) throw err;
 
-    logger.error('[Secure Audit Log Error]', err.message);
+    logger.error('[Secure Audit Log] write failed', {
+        event: 'SECURE_AUDIT_LOG_WRITE_FAILED',
+        ...errorContext(err),
+    });
     if (required) {
       throw new AuditWriteFailedError(action, err instanceof Error ? err.message : String(err));
     }

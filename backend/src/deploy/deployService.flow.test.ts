@@ -19,7 +19,12 @@ jest.mock('../repositories/deployRepository', () => ({
 jest.mock('../services/incidentService', () => ({ createIncident: jest.fn() }));
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
 jest.mock('../services/cosignService', () => ({ verifyImageDigest: jest.fn() }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 // Mocked so the signature gate's audit write is assertable rather than merely
 // swallowed by its .catch(). The real logger chains hashes into Appwrite.
 jest.mock('../utils/tamperAuditLogger', () => ({ logSecureAuditEvent: jest.fn().mockResolvedValue(undefined) }));

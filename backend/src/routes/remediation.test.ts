@@ -1,5 +1,10 @@
 jest.mock('../middleware/rateLimiters', () => ({ aiLimiter: (_req: unknown, _res: unknown, next: () => void) => next() }));
-jest.mock('../services/logger', () => ({ logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
+}));
 jest.mock('../services/tenancyService', () => ({ canAccessResource: jest.fn().mockResolvedValue(true) }));
 jest.mock('../lib/appwrite', () => ({
   databases: { listDocuments: jest.fn(), getDocument: jest.fn(), updateDocument: jest.fn() },

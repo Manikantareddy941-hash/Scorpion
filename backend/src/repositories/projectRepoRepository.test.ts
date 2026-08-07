@@ -4,7 +4,12 @@ jest.mock('../lib/appwrite', () => ({
   Query: { equal: (f: string, v: unknown) => ({ equal: [f, v] }), limit: (n: number) => ({ limit: n }) },
   ID: { unique: (() => { let n = 0; return () => `id-${n++}`; })() },
 }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 
 import { databases } from '../lib/appwrite';
 import { projectRepoRepository as repo } from './projectRepoRepository';

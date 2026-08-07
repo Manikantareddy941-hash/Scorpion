@@ -1,5 +1,5 @@
 import IORedis from 'ioredis';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Redis is not a cache here — it is the transport for every queue in
@@ -38,5 +38,12 @@ export const redisConnection = new IORedis(REDIS_URL, {
 });
 
 redisConnection.on('error', (err) => {
-    logger.error('[Redis] Connection error:', err.message);
+    logger.error('[Redis] connection error', {
+        event: 'REDIS_CONNECTION_ERROR',
+        // Host and port come from the client's parsed options, never from
+        // REDIS_URL — that string can embed credentials.
+        host: redisConnection.options?.host,
+        port: redisConnection.options?.port,
+        ...errorContext(err),
+    });
 });

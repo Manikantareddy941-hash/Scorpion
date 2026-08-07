@@ -12,7 +12,12 @@ jest.mock('../lib/appwrite', () => ({
     limit: (n: number) => ({ limit: n }),
   },
 }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 // Pin the storage facade to its legacy Appwrite path — this suite asserts on
 // databases.* calls; the Postgres path is covered by pg/posturePgRepository.test.ts.
 jest.mock('../db/pool', () => ({ isPostgresEnabled: () => false, getPool: jest.fn(), closePool: jest.fn() }));

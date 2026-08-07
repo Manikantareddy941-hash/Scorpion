@@ -1,6 +1,6 @@
 import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { sendSlackNotification } from './slackService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import axios from 'axios';
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
@@ -147,7 +147,10 @@ export async function runUptimeMonitor() {
       await checkDeploymentUptime(deployment);
     }
   } catch (err: any) {
-    logger.error(`[MonitorService] Failed to run uptime monitor:`, err.message);
+    logger.error('[MonitorService] uptime monitor run failed', {
+        event: 'UPTIME_MONITOR_FAILED',
+        ...errorContext(err),
+    });
   }
 }
 

@@ -6,7 +6,7 @@ import { verifyUser } from '../middleware/auth';
 import { enqueueScan } from '../queues/scanQueue';
 import { canAccessResource } from '../services/tenancyService';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -66,7 +66,11 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Authenticate
 
         // Trigger scan in background via the scan queue
         enqueueScan(repo_id, {}, scanId).catch(err => {
-            logger.error(`[ScanRoutes] Failed to enqueue scan for scanId=${scanId}:`, err.message);
+            logger.error('[ScanRoutes] failed to enqueue scan', {
+            event: 'SCAN_ENQUEUE_FAILED',
+            scanId,
+            ...errorContext(err),
+        });
         });
 
         res.json({ scanId, message: 'Scan triggered successfully', status: 'pending' });

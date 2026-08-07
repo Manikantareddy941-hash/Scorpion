@@ -5,7 +5,12 @@
  */
 
 jest.mock('child_process', () => ({ spawnSync: jest.fn() }));
-jest.mock('../services/logger', () => ({ logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
+}));
 
 import { spawnSync } from 'child_process';
 

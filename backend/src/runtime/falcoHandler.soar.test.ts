@@ -15,7 +15,12 @@ jest.mock('../services/tracing', () => ({ withSpan: (_n: string, _a: unknown, fn
 jest.mock('../services/incidentService', () => ({ createIncident: jest.fn() }));
 jest.mock('../services/auditService', () => ({ auditLog: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 jest.mock('../repositories/soarRepository', () => ({
   soarRepository: { listPlaybooks: jest.fn(), createAction: jest.fn() },
 }));

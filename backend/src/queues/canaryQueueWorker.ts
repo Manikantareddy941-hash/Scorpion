@@ -2,7 +2,7 @@ import { Worker } from 'bullmq';
 import { redisConnection } from './redisConnection';
 import { CANARY_QUEUE_NAME } from './canaryQueue';
 import { runCanaryTick, CanaryWorkerPayload } from '../gitops/canaryService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 let canaryWorker: Worker<CanaryWorkerPayload> | null = null;
 
@@ -20,7 +20,13 @@ export const initCanaryQueueWorker = () => {
     );
 
     canaryWorker.on('failed', (job, err) => {
-        logger.error(`[CanaryQueue] Job ${job?.id} failed:`, err.message);
+        logger.error('[CanaryQueue] job failed', {
+            event: 'WORKER_JOB_FAILED',
+            queue: CANARY_QUEUE_NAME,
+            jobId: job?.id,
+            attemptsMade: job?.attemptsMade,
+            ...errorContext(err),
+        });
     });
 
     logger.info('[CanaryQueue] Worker initialized.');

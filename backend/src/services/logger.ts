@@ -10,6 +10,75 @@ const consoleFormat = isProduction
   ? winston.format.json()
   : winston.format.prettyPrint();
 
+/**
+ * The fields every failure log carries. Nothing else from the error is emitted —
+ * see errorContext for why that restriction is load-bearing.
+ */
+export interface ErrorContext {
+    error: string;
+    cause?: string;
+    stack?: string;
+}
+
+/**
+ * Normalises a caught value into the structured failure payload.
+ *
+ * THIS EXISTS BECAUSE OF A SILENT BUG. This logger is composed with
+ * `winston.format.json()` and no `winston.format.splat()`, so a trailing *string*
+ * argument is parked on `Symbol(splat)` and never serialised:
+ *
+ *     logger.error('msg', err.message)  ->  {"level":"error","message":"msg"}
+ *     logger.error('msg', { error })    ->  {"level":"error","message":"msg","error":"boom"}
+ *
+ * Every failure log in this codebase used the first form. The line reached stdout
+ * as a prefix ending in a colon, with the cause removed — which reads as a logged
+ * failure while carrying none of the information a responder needs.
+ *
+ * (An `Error` *instance* as the second argument does survive; winston special-cases
+ * it. Only the `.message` / `String(err)` form is swallowed.)
+ *
+ * WHAT IS DELIBERATELY NOT INCLUDED: the error object itself, and any of its
+ * transport-specific properties. An axios rejection carries `err.config` — which
+ * holds the Slack/Discord webhook URL (the token is in the path) and the
+ * `Authorization: GenieKey ...` header. Spreading a caught error into a log payload
+ * would publish those to stdout and to Loki. Only message, cause and stack cross
+ * this boundary, and each is reduced to a string here rather than passed through.
+ *
+ * Callers add their own domain fields alongside; this owns only the error shape.
+ */
+export function errorContext(err: unknown): ErrorContext {
+    if (!(err instanceof Error)) {
+        return { error: String(err) };
+    }
+    // `Error.cause` is ES2022 and this project compiles against es2016, so the field
+    // is absent from the `Error` type while being present at runtime on every
+    // supported Node version. Read through a narrow type rather than widening the
+    // whole backend's compile target for one property.
+    const cause = (err as Error & { cause?: unknown }).cause;
+    return {
+        error: err.message,
+        // Very often an Error. JSON.stringify of an Error is `{}` — message and stack
+        // are non-enumerable — so an un-reduced cause would log as an empty object
+        // and read as "no cause was recorded".
+        ...(cause !== undefined ? { cause: describeCause(cause) } : {}),
+        // Stacks name filesystem paths and internal module layout, so they stay out
+        // of production logs. Read at call time, not module load: NODE_ENV is set
+        // per-process and tests change it after import.
+        ...(process.env.NODE_ENV !== 'production' && err.stack ? { stack: err.stack } : {}),
+    };
+}
+
+function describeCause(cause: unknown): string {
+    if (cause instanceof Error) return `${cause.name}: ${cause.message}`;
+    if (typeof cause === 'string') return cause;
+    try {
+        // Circular structures throw; a cause is not worth failing a log line over.
+        return JSON.stringify(cause) ?? String(cause);
+    } catch {
+        return String(cause);
+    }
+}
+
 export const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),

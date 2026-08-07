@@ -1,6 +1,6 @@
 import { cloneRepo } from '../utils/git';
 import { runScanPipeline } from '../scanners/pipeline';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
@@ -196,7 +196,11 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
           // its own accumulator, and losing the build transcript here would hide
           // why the pipeline stopped.
           if (signErr instanceof CosignSigningError) {
-            logger.error(`[BuildService] Image signing failed for ${imageName} — failing the build:`, signErr.message);
+            logger.error('[BuildService] image signing failed — failing the build', {
+              event: 'BUILD_SIGNING_FAILED',
+              imageRef: imageName,
+              ...errorContext(signErr),
+            });
             logs += `Image signing failed: ${signErr.message}\n`;
             throw Object.assign(signErr, { logs });
           }
@@ -204,7 +208,11 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
           // Everything else this block does is best-effort: reading the digest,
           // resolving the commit, writing provenance to Redis. A Redis blip is
           // not a reason to fail a build that produced a correctly signed image.
-          logger.warn(`[BuildService] Image provenance step failed for ${imageName}:`, signErr.message);
+          logger.warn('[BuildService] image provenance step failed', {
+            event: 'BUILD_PROVENANCE_FAILED',
+            imageRef: imageName,
+            ...errorContext(signErr),
+          });
           logs += `Image provenance step failed: ${signErr.message}\n`;
         }
       } else if (buildTool === 'gradle') {

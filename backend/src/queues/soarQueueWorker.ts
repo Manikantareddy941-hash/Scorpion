@@ -4,7 +4,7 @@ import { SOAR_QUEUE_NAME, SoarJobPayload } from './soarQueue';
 import { soarRepository } from '../repositories/soarRepository';
 import { executeSoarAction, createK8sPodActions, K8sPodActions } from '../soar/soarActions';
 import { createIncident } from '../services/incidentService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /** Exported for unit tests; the worker below is the production entry. */
 export async function processSoarJob(
@@ -80,7 +80,13 @@ export const initSoarQueueWorker = () => {
   );
 
   soarWorker.on('failed', (job, err) => {
-    logger.error(`[SoarQueue] Job ${job?.id} failed:`, err.message);
+    logger.error('[SoarQueue] job failed', {
+        event: 'WORKER_JOB_FAILED',
+        queue: SOAR_QUEUE_NAME,
+        jobId: job?.id,
+        attemptsMade: job?.attemptsMade,
+        ...errorContext(err),
+    });
   });
 
   logger.info('[SoarQueue] Worker initialized.');

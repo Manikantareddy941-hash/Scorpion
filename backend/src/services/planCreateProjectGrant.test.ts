@@ -8,7 +8,12 @@ jest.mock('../authz/backfill', () => ({
   grantAdmin: jest.fn(),
   emptyTally: () => ({ projects: 0, granted: 0, existing: 0, unowned: [] }),
 }));
-jest.mock('./logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } }));
+jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
+    logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
 
 import { planService } from './planService';
 import { planRepository } from '../repositories/planRepository';

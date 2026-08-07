@@ -1,7 +1,12 @@
 jest.mock('../middleware/auth', () => ({ verifyUser: (req: { user?: { $id: string } }, _res: unknown, next: () => void) => { req.user = { $id: 'u1' }; next(); } }));
 jest.mock('../services/tenancyService', () => ({ canAccessResource: jest.fn().mockResolvedValue(true) }));
 jest.mock('../utils/auditLogger', () => ({ logAuditEvent: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../services/logger', () => ({ logger: { error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { error: jest.fn() },
+}));
 jest.mock('../lib/appwrite', () => ({
   databases: { getDocument: jest.fn(), updateDocument: jest.fn() },
   DB_ID: 'db',

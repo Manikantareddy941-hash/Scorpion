@@ -31,7 +31,12 @@ jest.mock('../lib/appwrite', () => ({
 jest.mock('./scanService', () => ({ triggerScan: jest.fn() }));
 jest.mock('../routes/gateRoutes', () => ({ checkReleaseGate: jest.fn() }));
 jest.mock('../deploy/deployService', () => ({ triggerDeploy: jest.fn() }));
-jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 jest.mock('./dockerRunnerService', () => ({ dockerRunnerService: { runInContainer: jest.fn() } }));
 jest.mock('./sshService', () => ({ sshService: { executeDeployment: jest.fn() } }));
 jest.mock('./containerizedTrivyService', () => ({ containerizedTrivyService: { runTrivyScan: jest.fn() } }));

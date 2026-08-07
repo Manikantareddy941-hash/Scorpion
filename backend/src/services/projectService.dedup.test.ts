@@ -21,7 +21,12 @@ jest.mock('../lib/appwrite', () => ({
   },
 }));
 jest.mock('../queues/scanQueue', () => ({ enqueueScan: jest.fn() }));
-jest.mock('./logger', () => ({ logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn() } }));
+jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
+    logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn() },
+}));
 
 import { importRepoToProject } from './projectService';
 import { databases } from '../lib/appwrite';

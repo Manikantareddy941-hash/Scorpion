@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Databases, Query, Models } from 'node-appwrite';
 import client, { DB_ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const databases = new Databases(client);
 
@@ -77,7 +77,13 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                 });
                 logger.info(`[Alert] Discord notification sent for ${finding.title}`);
             } catch (err: any) {
-                logger.error(`[Alert Error] Discord:`, err.message);
+                logger.error('[Alert] sink dispatch failed', {
+                    event: 'ALERT_DISPATCH_FAILED',
+                    sink: 'discord',
+                    // No axios config here: it holds the webhook URL (the token is in
+                    // the path) and the OpsGenie Authorization header.
+                    ...errorContext(err),
+                });
             }
         }
 
@@ -95,7 +101,11 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                 });
                 logger.info(`[Alert] Slack notification sent for ${finding.title}`);
             } catch (err: any) {
-                logger.error(`[Alert Error] Slack:`, err.message);
+                logger.error('[Alert] sink dispatch failed', {
+                    event: 'ALERT_DISPATCH_FAILED',
+                    sink: 'slack',
+                    ...errorContext(err),
+                });
             }
         }
 
@@ -125,7 +135,11 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                 });
                 logger.info(`[Alert] PagerDuty event triggered for ${finding.title}`);
             } catch (err: any) {
-                logger.error(`[Alert Error] PagerDuty:`, err.message);
+                logger.error('[Alert] sink dispatch failed', {
+                    event: 'ALERT_DISPATCH_FAILED',
+                    sink: 'pagerduty',
+                    ...errorContext(err),
+                });
             }
         }
 
@@ -150,11 +164,18 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                 });
                 logger.info(`[Alert] OpsGenie alert created for ${finding.title}`);
             } catch (err: any) {
-                logger.error(`[Alert Error] OpsGenie:`, err.message);
+                logger.error('[Alert] sink dispatch failed', {
+                    event: 'ALERT_DISPATCH_FAILED',
+                    sink: 'opsgenie',
+                    ...errorContext(err),
+                });
             }
         }
 
     } catch (err: any) {
-        logger.error(`[Alert Dispatcher Error]`, err.message);
+        logger.error('[Alert] dispatcher failed', {
+            event: 'ALERT_DISPATCH_ERROR',
+            ...errorContext(err),
+        });
     }
 }
