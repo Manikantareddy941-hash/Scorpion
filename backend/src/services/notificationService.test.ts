@@ -16,7 +16,12 @@ jest.mock('../lib/appwrite', () => ({
     limit: (n: number) => ({ limit: n }),
   },
 }));
-jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 
 import { sendSecurityAlert, notifyPolicyFailure, checkOverdueTasks, notifyScanCompletion } from './notificationService';
 import { databases } from '../lib/appwrite';
@@ -101,7 +106,18 @@ describe('sendSecurityAlert', () => {
 
     await expect(sendSecurityAlert(baseEvent)).resolves.toBeUndefined();
     await flush();
-    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Slack dispatch'), 'ECONNREFUSED');
+    // Asserted on the metadata object, not on a second positional argument. The
+    // previous form checked that 'ECONNREFUSED' was *passed to* logger.error — which
+    // it was, and which winston then dropped on the floor for want of format.splat().
+    // The test passed for the entire period the cause was missing from the logs.
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('dispatch aborted or failed'),
+      expect.objectContaining({
+        event_name: 'NOTIFICATION_DISPATCH_FAILED',
+        channel: 'slack',
+        error: 'ECONNREFUSED',
+      }),
+    );
   });
 });
 

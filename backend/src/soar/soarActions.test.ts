@@ -1,6 +1,11 @@
 jest.mock('../services/slackService', () => ({ sendSlackNotification: jest.fn() }));
 jest.mock('../services/auditService', () => ({ auditLog: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 jest.mock('../lib/appwrite', () => ({
   databases: { listDocuments: jest.fn().mockResolvedValue({ total: 0, documents: [] }) },
   DB_ID: 'test-db',

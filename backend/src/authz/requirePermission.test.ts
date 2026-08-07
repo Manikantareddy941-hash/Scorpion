@@ -6,7 +6,12 @@ jest.mock('../repositories/planRepository', () => ({
   planRepository: { getIssueProjectId: jest.fn(), getSprintProjectId: jest.fn() },
 }));
 jest.mock('../services/planService', () => ({ assertLegacyProjectAccess: jest.fn() }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
 
 import { Response } from 'express';
 import { evaluate } from './authorizationService';

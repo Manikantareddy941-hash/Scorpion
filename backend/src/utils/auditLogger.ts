@@ -1,5 +1,5 @@
 import { databases, DB_ID, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Logs a security event to the audit trail
@@ -33,6 +33,9 @@ export async function logAuditEvent(
             }
         );
     } catch (err: any) {
-        logger.error('[Audit Log Error]', err.message);
+        logger.error('[Audit Log] write failed', {
+            event: 'AUDIT_LOG_WRITE_FAILED',
+            ...errorContext(err),
+        });
     }
 }

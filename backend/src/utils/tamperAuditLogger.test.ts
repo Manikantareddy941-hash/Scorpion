@@ -14,7 +14,12 @@ jest.mock('../lib/appwrite', () => ({
     ID: { unique: () => 'doc-1' },
     Query: { orderDesc: (f: string) => ({ orderDesc: f }), limit: (n: number) => ({ limit: n }) },
 }));
-jest.mock('../services/logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 
 import { databases } from '../lib/appwrite';
 import { anchorLedgerTip } from './auditAnchor';

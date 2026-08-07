@@ -22,6 +22,9 @@ jest.mock('./emailService', () => ({
     sendAiReportEmail: jest.fn().mockResolvedValue(undefined)
 }));
 jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
 }));
 jest.mock('marked', () => ({

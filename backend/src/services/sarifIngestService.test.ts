@@ -7,7 +7,12 @@ jest.mock('../lib/appwrite', () => ({
 }));
 jest.mock('./scanService', () => ({ ingestVulnerabilitiesDelta: jest.fn().mockResolvedValue({ uniqueIncoming: [] }) }));
 jest.mock('./securityRequirementsService', () => ({ securityRequirementsService: { fanOutCorrelation: jest.fn().mockResolvedValue([]) } }));
-jest.mock('./logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('./logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('./logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 
 import { databases } from '../lib/appwrite';
 import { ingestVulnerabilitiesDelta } from './scanService';

@@ -1,6 +1,6 @@
 import { notifyPolicyFailure } from './notificationService';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 export interface PolicyConfig {
   minSecurityScore: number;
@@ -58,7 +58,11 @@ export const getDynamicPolicy = async (repoId: string): Promise<PolicyConfig> =>
       };
     }
   } catch (err: any) {
-    logger.warn(`[Policy Engine] Failed to load dynamic policy for ${repoId}:`, err.message);
+    logger.warn('[Policy Engine] failed to load dynamic policy', {
+        event: 'POLICY_LOAD_FAILED',
+        repoId,
+        ...errorContext(err),
+    });
   }
 
   // Cache policy entry

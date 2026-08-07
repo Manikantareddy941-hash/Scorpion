@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 export interface SecurityEvent {
   type: 'threat' | 'gate_blocked';
@@ -27,7 +27,11 @@ export async function sendSecurityAlert(event: SecurityEvent) {
       }
     }
   } catch (err: any) {
-    logger.warn(`[Notification Router] Failed to resolve repo name for ${event.repo_id}:`, err.message);
+    logger.warn('[Notification Router] failed to resolve repo name', {
+      event_name: 'NOTIFICATION_REPO_LOOKUP_FAILED',
+      repoId: event.repo_id,
+      ...errorContext(err),
+    });
   }
 
   // 1. Structure Slack Block Kit Payload
@@ -114,7 +118,11 @@ export async function sendSecurityAlert(event: SecurityEvent) {
       })
       .catch(err => {
         clearTimeout(timeout);
-        logger.error('[Notification Router] Slack dispatch aborted or failed:', err.message);
+        logger.error('[Notification Router] dispatch aborted or failed', {
+          event_name: 'NOTIFICATION_DISPATCH_FAILED',
+          channel: 'slack',
+          ...errorContext(err),
+        });
       });
   } else {
     logger.info('[Notification Router] SLACK_WEBHOOK_URL not configured. Skipping Slack dispatch.');
@@ -136,7 +144,11 @@ export async function sendSecurityAlert(event: SecurityEvent) {
       })
       .catch(err => {
         clearTimeout(timeout);
-        logger.error('[Notification Router] Discord dispatch aborted or failed:', err.message);
+        logger.error('[Notification Router] dispatch aborted or failed', {
+          event_name: 'NOTIFICATION_DISPATCH_FAILED',
+          channel: 'discord',
+          ...errorContext(err),
+        });
       });
   } else {
     logger.info('[Notification Router] DISCORD_WEBHOOK_URL not configured. Skipping Discord dispatch.');
@@ -154,7 +166,10 @@ export async function checkOverdueTasks() {
     const overdue = response.documents.filter(doc => doc.due_date && new Date(doc.due_date) < new Date());
     logger.info(`[Notification Router] Found ${overdue.length} overdue tasks.`);
   } catch (err: any) {
-    logger.error('[Notification Router] Failed to check overdue tasks:', err.message);
+    logger.error('[Notification Router] failed to check overdue tasks', {
+      event_name: 'OVERDUE_TASK_CHECK_FAILED',
+      ...errorContext(err),
+    });
   }
 }
 

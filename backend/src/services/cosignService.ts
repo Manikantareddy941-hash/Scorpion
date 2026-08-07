@@ -15,7 +15,7 @@ import os from 'os';
 import path from 'path';
 import { randomBytes } from 'crypto';
 import { resolveToolCommand } from '../utils/toolCheck';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const execFileAsync = promisify(execFile);
 const COSIGN_TIMEOUT_MS = 30_000;
@@ -187,7 +187,12 @@ export const signBlobContent = async (content: string): Promise<{ signature: str
         // Bad key, wrong passphrase, timeout, unwritable tmpdir. The signature
         // the caller asked for does not exist, and saying so quietly produced an
         // unsigned artifact indistinguishable from one nobody meant to sign.
-        logger.error('[Cosign] Failed to sign blob:', err.message);
+        logger.error('[Cosign] blob signing failed', {
+            event: 'COSIGN_SIGN_FAILED',
+            // Deliberately no stderr and no argv: cosign's stderr carries key and
+            // passphrase diagnostics, and argv names COSIGN_KEY_PATH.
+            ...errorContext(err),
+        });
         throw new CosignSigningError(`cosign sign-blob failed: ${err?.message ?? String(err)}`);
     } finally {
         await fs.unlink(blobFile).catch(() => {});
@@ -229,7 +234,11 @@ export const verifyBlobContent = async (content: string, signature: string): Pro
         );
         return true;
     } catch (err: any) {
-        logger.error('[Cosign] Blob signature verification failed:', err.message);
+        logger.error('[Cosign] signature verification failed', {
+            event: 'COSIGN_VERIFY_FAILED',
+            subject: 'blob',
+            ...errorContext(err),
+        });
         return false;
     } finally {
         await fs.unlink(blobFile).catch(() => {});
@@ -278,7 +287,12 @@ export const verifyImageSignature = async (imageRef: string): Promise<boolean> =
         );
         return true;
     } catch (err: any) {
-        logger.error('[Cosign] Image signature verification failed:', err.message);
+        logger.error('[Cosign] signature verification failed', {
+            event: 'COSIGN_VERIFY_FAILED',
+            subject: 'image',
+            imageRef,
+            ...errorContext(err),
+        });
         return false;
     }
 };

@@ -2,7 +2,12 @@
  * Scanner output parsers: real-shaped JSON in, normalized findings out, and
  * malformed output always degrades to [] instead of crashing ingestion.
  */
-jest.mock('../logger', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
+jest.mock('../logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 
 import {
   parseSemgrep, parseGitleaks, parseTrivy, parseCheckov, parseBandit, parseHadolint,

@@ -5,7 +5,12 @@ import * as cosign from '../services/cosignService';
 jest.mock('../services/imageStore');
 jest.mock('../services/cosignService');
 jest.mock('../repositories/gateRulesRepository', () => ({ gateRulesRepository: {} }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 
 const mockGetSig = store.getSignature as jest.MockedFunction<typeof store.getSignature>;
 const mockVerify = cosign.verifyImageDigest as jest.MockedFunction<typeof cosign.verifyImageDigest>;

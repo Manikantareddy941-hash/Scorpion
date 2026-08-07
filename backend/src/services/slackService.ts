@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 export const sendSlackNotification = async (webhookUrl: string, payload: any) => {
     try {
@@ -69,7 +69,10 @@ export const sendSlackNotification = async (webhookUrl: string, payload: any) =>
         const response = await axios.post(webhookUrl, slackPayload);
         return response.data;
     } catch (error: any) {
-        logger.error('[SlackService] Error sending notification:', error.message);
+        logger.error('[SlackService] failed to send notification', {
+            event: 'SLACK_NOTIFY_FAILED',
+            ...errorContext(error),
+        });
         throw error;
     }
 };

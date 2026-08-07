@@ -6,7 +6,12 @@ jest.mock('../services/imageStore', () => ({
   getSignature: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../services/cosignService', () => ({ verifyImageDigest: jest.fn() }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
+}));
 jest.mock('../repositories/gateRulesRepository', () => ({
   gateRulesRepository: { get: jest.fn() },
 }));

@@ -1,6 +1,11 @@
 jest.mock('../lib/paginate', () => ({ fetchAllDocuments: jest.fn() }));
 jest.mock('../services/tenancyService', () => ({ listTeamIdsForUser: jest.fn() }));
-jest.mock('../services/logger', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } }));
+jest.mock('../services/logger', () => ({
+    // Spread rather than replace: this module also exports errorContext,
+    // and a factory that returns only `logger` makes it undefined at runtime.
+    ...jest.requireActual('../services/logger'),
+    logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
 
 import { fetchAllDocuments } from '../lib/paginate';
 import { listTeamIdsForUser } from '../services/tenancyService';
