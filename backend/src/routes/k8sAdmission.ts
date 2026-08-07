@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import * as assert from 'assert';
-import { logger } from '../services/logger';
+import { logger, errorMessage } from '../services/logger';
 import { getScan, getSignature, type Tenant } from '../services/imageStore';
 import { isPostgresEnabled } from '../db/pool';
 import { ciTokenRepository } from '../repositories/pg/ciTokenRepository';
@@ -95,10 +95,6 @@ const GATE_TIMEOUT_MS = 2000;
 // deployment via env.
 const SYSTEM_USER_ID = process.env.K8S_GATE_RULES_USER_ID || 'system';
 
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** Reject if the wrapped promise has not settled within `ms`. Timer is cleared
  *  on settle so a resolved read never leaks a dangling handle. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -140,7 +136,7 @@ async function loadRulesOrFailClosed(env: GateEnv): Promise<GateRule[]> {
     if (env === 'prod') throw err;
     logger.warn('[k8s-admission] gate rules unavailable, using built-in defaults', {
       env,
-      error: toMessage(err),
+      error: errorMessage(err),
     });
     return DEFAULT_RULES;
   }
@@ -280,7 +276,7 @@ export async function checkImageSignature(
       ? { status: 'ready', reason: 'signature verified' }
       : { status: 'blocked', reason: 'image signature verification failed (tampered or substituted)' };
   } catch (err) {
-    return { status: 'blocked', reason: `cannot verify image signature: ${toMessage(err)}` };
+    return { status: 'blocked', reason: `cannot verify image signature: ${errorMessage(err)}` };
   }
 }
 
@@ -363,7 +359,7 @@ router.post(['/k8s-admission', '/k8s-admission/:token'], async (req: Request, re
   } catch (err) {
     // Prod fail-closed: gate rules could not be loaded within budget → block.
     const reason = 'gate rules unavailable — fail-closed in prod';
-    logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start, error: toMessage(err) });
+    logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start, error: errorMessage(err) });
     return res.status(200).json(admissionResponse(uid, false, reason));
   }
 
@@ -377,12 +373,12 @@ router.post(['/k8s-admission', '/k8s-admission/:token'], async (req: Request, re
   } catch (err) {
     if (env === 'prod') {
       const reason = 'pod-security config unavailable — fail-closed in prod';
-      logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start, error: toMessage(err) });
+      logDecision({ decision: 'deny', reason, uid, namespace, env, durationMs: Date.now() - start, error: errorMessage(err) });
       return res.status(200).json(admissionResponse(uid, false, reason));
     }
     logger.warn('[k8s-admission] pod-security config unavailable, using built-in defaults', {
       env,
-      error: toMessage(err),
+      error: errorMessage(err),
     });
     podConfig = DEFAULT_POD_SECURITY_CONFIG;
   }

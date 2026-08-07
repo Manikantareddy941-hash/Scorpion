@@ -4,12 +4,8 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { sendOtpEmail } from '../services/emailService';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import { recordSecurityEvent } from '../monitor/securityEventSource';
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
-}
 
 const router = express.Router();
 
@@ -45,7 +41,7 @@ router.post('/request-reset', async (req: Request, res: Response) => {
                 userId = userList.users[0].$id;
             }
         } catch (err: unknown) {
-            logger.warn('[Auth] Appwrite error checking user existence:', errorMessage(err));
+            logger.warn('[Auth] Appwrite error checking user existence', errorContext(err));
             // In dev mode, assume user exists to allow testing
             if (process.env.NODE_ENV !== 'production') {
                 userExists = true;
@@ -85,7 +81,7 @@ router.post('/request-reset', async (req: Request, res: Response) => {
                 });
             }
         } catch (dbError: unknown) {
-            logger.warn('[Auth] Database operation failed:', errorMessage(dbError));
+            logger.warn('[Auth] Database operation failed', errorContext(dbError));
             if (process.env.NODE_ENV === 'production') throw dbError;
         }
 
@@ -93,7 +89,7 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         try {
             await sendOtpEmail(email, otp);
         } catch (emailError: unknown) {
-            logger.error('[Auth] Email sending failed:', errorMessage(emailError));
+            logger.error('[Auth] Email sending failed', errorContext(emailError));
             if (process.env.NODE_ENV === 'production') throw emailError;
             logger.info(`[DEV-OTP] Password reset OTP for ${email}: ${otp}`);
         }
@@ -148,7 +144,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         try {
             await databases.deleteDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, reset.$id);
         } catch (delErr: unknown) {
-            logger.warn('[Auth] Failed to delete consumed reset record:', errorMessage(delErr));
+            logger.warn('[Auth] Failed to delete consumed reset record', errorContext(delErr));
         }
 
         // Generate temporary reset token

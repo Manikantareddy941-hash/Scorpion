@@ -2,14 +2,10 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query, users } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
-import { logger } from '../services/logger';
+import { logger, errorMessage } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();

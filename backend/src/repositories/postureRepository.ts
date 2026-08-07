@@ -1,6 +1,6 @@
 import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import type { PostureFinding } from '../posture/postureChecks';
 import { isPostgresEnabled } from '../db/pool';
 import { posturePgRepository } from './pg/posturePgRepository';
@@ -16,10 +16,6 @@ export interface NamespaceSnapshot {
 
 interface SnapshotWire { namespace: string; score: number; findings: string; updatedAt: string }
 
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** null for malformed rows (bad findings JSON) — skip the row, keep siblings. */
 function fromDoc(doc: Models.Document): NamespaceSnapshot | null {
   const w = doc as unknown as SnapshotWire & Models.Document;
@@ -31,7 +27,7 @@ function fromDoc(doc: Models.Document): NamespaceSnapshot | null {
       updatedAt: w.updatedAt,
     };
   } catch (err) {
-    logger.warn(`[PostureRepository] skipping snapshot ${doc.$id}: ${toMessage(err)}`);
+    logger.warn(`[PostureRepository] skipping snapshot ${doc.$id}: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -58,7 +54,7 @@ const legacyPostureRepository = {
           await databases.createDocument(DB_ID, COLLECTION, ID.unique(), payload);
         }
       } catch (err) {
-        logger.error(`[PostureRepository] save for '${ns.namespace}' failed:`, toMessage(err));
+        logger.error(`[PostureRepository] save for '${ns.namespace}' failed`, errorContext(err));
         throw err;
       }
     }
@@ -72,7 +68,7 @@ const legacyPostureRepository = {
       ]);
       return list.documents.map(fromDoc).filter((s): s is NamespaceSnapshot => s !== null);
     } catch (err) {
-      logger.warn('[PostureRepository] list failed:', toMessage(err));
+      logger.warn('[PostureRepository] list failed', errorContext(err));
       return [];
     }
   },

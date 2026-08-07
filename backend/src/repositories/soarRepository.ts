@@ -1,6 +1,6 @@
 import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import type { Playbook, SoarActionType } from '../soar/playbookMatcher';
 import { isPostgresEnabled } from '../db/pool';
 // soarPgRepository imports SoarActionRecord/SoarActionStatus back from this
@@ -35,10 +35,6 @@ export interface SoarActionRecord {
 interface PlaybookWire { name: string; enabled: boolean; trigger: string; actions: string }
 type ActionWire = Omit<SoarActionRecord, 'id'>;
 
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** null for malformed rows (bad trigger/actions JSON) — skip the row, keep siblings. */
 function playbookFromDoc(doc: Models.Document): Playbook | null {
   const w = doc as unknown as PlaybookWire & Models.Document;
@@ -51,7 +47,7 @@ function playbookFromDoc(doc: Models.Document): Playbook | null {
       actions: JSON.parse(w.actions) as Playbook['actions'],
     };
   } catch (err) {
-    logger.warn(`[SoarRepository] skipping playbook ${doc.$id}: ${toMessage(err)}`);
+    logger.warn(`[SoarRepository] skipping playbook ${doc.$id}: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -86,7 +82,7 @@ const legacySoarRepository = {
       const list = await databases.listDocuments(DB_ID, PLAYBOOKS, [Query.limit(100)]);
       return list.documents.map(playbookFromDoc).filter((p): p is Playbook => p !== null);
     } catch (err) {
-      logger.warn('[SoarRepository] playbook load failed:', toMessage(err));
+      logger.warn('[SoarRepository] playbook load failed', errorContext(err));
       return [];
     }
   },
@@ -103,7 +99,7 @@ const legacySoarRepository = {
       });
       return { ...p, id: doc.$id };
     } catch (err) {
-      logger.error('[SoarRepository] createPlaybook failed:', toMessage(err));
+      logger.error('[SoarRepository] createPlaybook failed', errorContext(err));
       throw err;
     }
   },
@@ -117,7 +113,7 @@ const legacySoarRepository = {
     try {
       await databases.updateDocument(DB_ID, PLAYBOOKS, id, patch);
     } catch (err) {
-      logger.error('[SoarRepository] updatePlaybook failed:', toMessage(err));
+      logger.error('[SoarRepository] updatePlaybook failed', errorContext(err));
       throw err;
     }
   },
@@ -128,7 +124,7 @@ const legacySoarRepository = {
       const doc = await databases.createDocument(DB_ID, ACTIONS, ID.unique(), { ...a, createdAt });
       return { ...a, id: doc.$id, createdAt };
     } catch (err) {
-      logger.error('[SoarRepository] createAction failed:', toMessage(err));
+      logger.error('[SoarRepository] createAction failed', errorContext(err));
       throw err;
     }
   },
@@ -138,7 +134,7 @@ const legacySoarRepository = {
       return actionFromDoc(await databases.getDocument(DB_ID, ACTIONS, id));
     } catch (err) {
       // Logged so an Appwrite outage is distinguishable from a clean not-found.
-      logger.warn('[SoarRepository] getAction failed:', toMessage(err));
+      logger.warn('[SoarRepository] getAction failed', errorContext(err));
       return null;
     }
   },
@@ -151,7 +147,7 @@ const legacySoarRepository = {
       const list = await databases.listDocuments(DB_ID, ACTIONS, queries);
       return list.documents.map(actionFromDoc);
     } catch (err) {
-      logger.warn('[SoarRepository] action list failed:', toMessage(err));
+      logger.warn('[SoarRepository] action list failed', errorContext(err));
       return [];
     }
   },
@@ -168,7 +164,7 @@ const legacySoarRepository = {
         ...extra,
       });
     } catch (err) {
-      logger.error('[SoarRepository] setActionStatus failed:', toMessage(err));
+      logger.error('[SoarRepository] setActionStatus failed', errorContext(err));
       throw err;
     }
   },
@@ -186,7 +182,7 @@ const legacySoarRepository = {
         return { id: d.$id, playbookName: w.playbookName || '', createdAt: w.createdAt, result: w.result ?? undefined };
       });
     } catch (err) {
-      logger.error('[SoarRepository] listEvidenceForIncident failed:', toMessage(err));
+      logger.error('[SoarRepository] listEvidenceForIncident failed', errorContext(err));
       return [];
     }
   },

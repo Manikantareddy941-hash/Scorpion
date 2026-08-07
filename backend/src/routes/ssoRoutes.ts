@@ -6,7 +6,7 @@ import {
     provisionSsoUser,
     issueSessionToken
 } from '../services/oidcService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Enterprise SSO (generic OIDC). GET /login sends the browser to the IdP;
@@ -55,7 +55,7 @@ router.get('/login', async (req: Request, res: Response) => {
         res.cookie(VERIFIER_COOKIE, codeVerifier, cookieOptions);
         res.redirect(url);
     } catch (err) {
-        logger.error('[SSO] Failed to start login:', err instanceof Error ? err.message : err);
+        logger.error('[SSO] Failed to start login', errorContext(err));
         res.status(502).json({ error: 'Failed to reach the identity provider' });
     }
 });
@@ -90,7 +90,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         // as the Appwrite OAuth flow). Token is single-use and short-lived.
         res.redirect(`${frontend}/auth/callback?userId=${encodeURIComponent(token.userId)}&secret=${encodeURIComponent(token.secret)}`);
     } catch (err) {
-        logger.error('[SSO] Callback failed:', err instanceof Error ? err.message : err);
+        logger.error('[SSO] Callback failed', errorContext(err));
         res.redirect(`${frontend}/login?error=sso_failed`);
     }
 });

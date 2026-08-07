@@ -66,7 +66,16 @@ describe('runPostureScan', () => {
     };
     repo.saveSnapshot.mockRejectedValue(new Error('appwrite down'));
     await expect(runPostureScan(reader)).resolves.toBeUndefined();
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('save failed'), 'appwrite down');
+    // Asserted on the metadata object, not a second positional argument. The
+    // previous form checked that 'appwrite down' was passed to logger.warn —
+    // which it was, and which winston then discarded for want of
+    // format.splat(). This test passed for the whole time the reason was
+    // absent from every log line. objectContaining, because errorContext also
+    // attaches `stack` outside production and jest does not set NODE_ENV=production.
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('save failed'),
+      expect.objectContaining({ error: 'appwrite down' }),
+    );
     expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining('scanned'));
   });
 });

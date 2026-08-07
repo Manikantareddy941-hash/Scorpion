@@ -1,6 +1,6 @@
 import { VulnerablePackage } from './reachabilityService';
 import { redisConnection } from '../queues/redisConnection';
-import { logger } from './logger';
+import { logger, errorMessage } from './logger';
 
 /**
  * Image digest → findings store. Written by the CI ingest endpoint, read by the
@@ -54,8 +54,6 @@ const SIG_PREFIX = 'sig:';
 const fallback = new Map<string, Entry>();
 
 const redisReady = (): boolean => redisConnection.status === 'ready';
-const toMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
-
 export async function putScan(
   tenant: Tenant,
   digest: string,
@@ -73,7 +71,7 @@ export async function putScan(
       await redisConnection.set(SIG_PREFIX + key, signature, 'PX', TTL_MS);
     }
   } catch (err) {
-    logger.warn('[imageStore] redis put failed — kept local fallback', { digest, error: toMessage(err) });
+    logger.warn('[imageStore] redis put failed — kept local fallback', { digest, error: errorMessage(err) });
   }
 }
 
@@ -90,7 +88,7 @@ export async function getSignature(tenant: Tenant, digest: string, now: number =
       const raw = await redisConnection.get(SIG_PREFIX + key);
       if (raw !== null) return raw;
     } catch (err) {
-      logger.warn('[imageStore] redis sig get failed — serving local fallback', { digest, error: toMessage(err) });
+      logger.warn('[imageStore] redis sig get failed — serving local fallback', { digest, error: errorMessage(err) });
     }
   }
   const entry = fallback.get(key);
@@ -120,7 +118,7 @@ export async function putProvenance(tenant: Tenant, digest: string, provenanceJs
   try {
     await redisConnection.set(PROV_PREFIX + key, provenanceJson, 'PX', TTL_MS);
   } catch (err) {
-    logger.warn('[imageStore] redis provenance put failed — kept local fallback', { digest, error: toMessage(err) });
+    logger.warn('[imageStore] redis provenance put failed — kept local fallback', { digest, error: errorMessage(err) });
   }
 }
 
@@ -131,7 +129,7 @@ export async function getProvenance(tenant: Tenant, digest: string, now: number 
       const raw = await redisConnection.get(PROV_PREFIX + key);
       if (raw !== null) return raw;
     } catch (err) {
-      logger.warn('[imageStore] redis provenance get failed — serving local fallback', { digest, error: toMessage(err) });
+      logger.warn('[imageStore] redis provenance get failed — serving local fallback', { digest, error: errorMessage(err) });
     }
   }
   const entry = provFallback.get(key);
@@ -147,7 +145,7 @@ export async function getScan(tenant: Tenant, digest: string, now: number = Date
       if (raw !== null) return JSON.parse(raw) as VulnerablePackage[];
       // Redis up but key absent: fall through to local in case a Redis write failed.
     } catch (err) {
-      logger.warn('[imageStore] redis get failed — serving local fallback', { digest, error: toMessage(err) });
+      logger.warn('[imageStore] redis get failed — serving local fallback', { digest, error: errorMessage(err) });
     }
   }
   return getLocal(key, now);

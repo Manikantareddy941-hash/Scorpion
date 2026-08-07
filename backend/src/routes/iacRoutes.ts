@@ -16,7 +16,7 @@ import {
     listRuns,
 } from '../services/iacService';
 import { createProfile, listProfiles, deleteProfile } from '../services/iacCredentials';
-import { logger } from '../services/logger';
+import { logger, errorMessage } from '../services/logger';
 
 // 256 KB of HCL is a very large config; anything bigger is abuse or a mistake.
 const MAX_CONFIG_BYTES = 256 * 1024;
@@ -43,10 +43,6 @@ const configSchema = z.object({
 });
 
 const idSchema = z.string().uuid();
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
-}
 
 /** Maps iacService error codes to HTTP responses; anything else is a 500. */
 function handleServiceError(err: unknown, res: Response): void {

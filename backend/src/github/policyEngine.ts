@@ -1,6 +1,6 @@
 import { getDynamicPolicy } from '../services/policyService';
 import { evaluatePolicy as evaluateOpaPolicy } from '../services/opaService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 export interface PolicyConfig {
   blockOn: {
@@ -77,7 +77,7 @@ export async function evaluatePolicyForRepo(
   try {
     repoPolicy = await getDynamicPolicy(repoId);
   } catch (err) {
-    logger.warn(`[Policy] Per-repo policy load failed for ${repoId}, using baseline only:`, err instanceof Error ? err.message : err);
+    logger.warn(`[Policy] Per-repo policy load failed for ${repoId}, using baseline only`, errorContext(err));
     return { ...base, denyReasons };
   }
 
@@ -101,7 +101,7 @@ export async function evaluatePolicyForRepo(
         denyReasons.push(...opa.denyReasons);
       }
     } catch (err) {
-      logger.warn(`[Policy] Custom Rego evaluation skipped for ${repoId}:`, err instanceof Error ? err.message : err);
+      logger.warn(`[Policy] Custom Rego evaluation skipped for ${repoId}`, errorContext(err));
     }
   }
 

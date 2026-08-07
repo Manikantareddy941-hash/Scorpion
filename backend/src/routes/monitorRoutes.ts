@@ -4,14 +4,10 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { telemetryBuffer } from '../services/metrics';
 import { resolveOwnershipScope } from '../services/tenancyService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();
@@ -138,7 +134,7 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
             }
         });
     } catch (err: unknown) {
-        logger.error('[Monitor API Error]', errorMessage(err));
+        logger.error('[Monitor API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

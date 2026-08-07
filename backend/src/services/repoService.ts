@@ -11,7 +11,7 @@ import { cleanupWorkspace } from './ingestionService';
 import { randomBytes } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { ScanStatusResponse, TriggerScanInput } from '../types/repo.types';
 
 export const repoService = {
@@ -133,7 +133,7 @@ export const repoService = {
         logger.info(`[RepoService] Starting scan for ${repoFullName} at ${workDir}`);
         await runScanPipeline({ localPath: workDir });
       } catch (err) {
-        logger.error(`[RepoService] External scan failed for ${repoFullName}:`, err instanceof Error ? err.message : err);
+        logger.error(`[RepoService] External scan failed for ${repoFullName}`, errorContext(err));
       } finally {
         await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
       }
@@ -181,7 +181,7 @@ export const repoService = {
 
     // Fire and forget — do NOT await
     enqueueScan(repoId, options, scanId).catch(err => {
-      logger.error(`[RepoService] Failed to enqueue scan for scanId=${scanId}:`, err instanceof Error ? err.message : err);
+      logger.error(`[RepoService] Failed to enqueue scan for scanId=${scanId}`, errorContext(err));
     });
 
     return { scanId };

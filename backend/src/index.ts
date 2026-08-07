@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 import { initScheduler } from './scheduler';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from './lib/appwrite';
 import { Models, Client as AppwriteClient, Account as AppwriteAccount } from 'node-appwrite';
-import { logger, errorMessage } from './services/logger';
+import { logger, errorMessage, errorContext } from './services/logger';
 import { redactUrl } from './utils/redactUrl';
 import { requestLogger } from './middleware/requestLogger';
 
@@ -145,7 +145,7 @@ import { signingConfigBroken } from './services/metrics';
     await probeSigningReadiness()
         .then((readiness) => signingConfigBroken.set(readiness === 'degraded' ? 1 : 0))
         .catch((err: unknown) =>
-            logger.warn('[Cosign] Signing readiness probe failed to run', err instanceof Error ? err.message : String(err)),
+            logger.warn('[Cosign] Signing readiness probe failed to run', errorContext(err)),
         );
 
     // --- Recovery Mechanism ---
@@ -468,7 +468,7 @@ let postureTimer: NodeJS.Timeout | undefined;
 try {
   postureTimer = startPostureScanner();
 } catch (err) {
-  logger.warn('[Startup] posture scanner initialization failed:', err instanceof Error ? err.message : String(err));
+  logger.warn('[Startup] posture scanner initialization failed', errorContext(err));
 }
 // Periodically replays repo JSON fallback buffers back into Appwrite on recovery.
 startFallbackReplayer();

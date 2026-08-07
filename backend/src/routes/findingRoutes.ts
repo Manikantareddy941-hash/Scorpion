@@ -4,14 +4,10 @@ import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { logAuditEvent } from '../utils/auditLogger';
 import { canAccessResource } from '../services/tenancyService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();
@@ -73,7 +69,7 @@ router.get('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response) 
         if (!loaded) return res.status(404).json({ error: 'Finding not found' });
         res.json(loaded);
     } catch (err: unknown) {
-        logger.error('[Finding API Error]', errorMessage(err));
+        logger.error('[Finding API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -126,7 +122,7 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
 
         res.json(updatedFinding);
     } catch (err: unknown) {
-        logger.error('[Finding API Error]', errorMessage(err));
+        logger.error('[Finding API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

@@ -12,10 +12,6 @@ interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
 }
 
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
-}
-
 const router = Router();
 
 // Trigger immediate scan for a repo
@@ -75,7 +71,7 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Authenticate
 
         res.json({ scanId, message: 'Scan triggered successfully', status: 'pending' });
     } catch (err: unknown) {
-        logger.error('[Scan Trigger Error]', errorMessage(err));
+        logger.error('[Scan Trigger Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

@@ -7,7 +7,7 @@ import {
   CanaryAccessError,
   CanaryStateError,
 } from '../gitops/canaryService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string };
@@ -47,10 +47,6 @@ function serializeCanary(doc: CanaryDocument) {
   };
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Unknown error';
-}
-
 const router = Router();
 
 // POST /api/canary — start a canary analysis
@@ -67,7 +63,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     const { canaryId } = await startCanary({ ...parsed.data, userId });
     res.status(202).json({ canaryId, status: 'running' });
   } catch (err) {
-    logger.error('[Canary API] start failed:', errorMessage(err));
+    logger.error('[Canary API] start failed', errorContext(err));
     res.status(500).json({ error: 'Failed to start canary analysis' });
   }
 });
@@ -85,7 +81,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     ]);
     res.json({ canaries: (list.documents as unknown as CanaryDocument[]).map(serializeCanary) });
   } catch (err) {
-    logger.error('[Canary API] list failed:', errorMessage(err));
+    logger.error('[Canary API] list failed', errorContext(err));
     res.status(500).json({ error: 'Failed to list canaries' });
   }
 });
@@ -117,7 +113,7 @@ router.post('/:id/abort', async (req: AuthenticatedRequest, res: Response) => {
   } catch (err) {
     if (err instanceof CanaryAccessError) return res.status(403).json({ error: err.message });
     if (err instanceof CanaryStateError) return res.status(409).json({ error: err.message });
-    logger.error('[Canary API] abort failed:', errorMessage(err));
+    logger.error('[Canary API] abort failed', errorContext(err));
     res.status(500).json({ error: 'Failed to abort canary' });
   }
 });

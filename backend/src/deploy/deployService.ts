@@ -8,7 +8,7 @@ import { securityRequirementsService } from '../services/securityRequirementsSer
 import { gateService } from '../services/gateService';
 import { gateRunRepository } from '../repositories/gateRunRepository';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 
@@ -254,7 +254,7 @@ export async function triggerDeploy(
         'IMAGE_SIGNATURE_MISSING',
         repoId,
         `Deployment ${deploymentId} of ${imageTag} to ${environment} blocked: ${detail}`,
-      ).catch(err => logger.warn('[DeployService] failed to audit unsigned-image block', err instanceof Error ? err.message : err));
+      ).catch(err => logger.warn('[DeployService] failed to audit unsigned-image block', errorContext(err)));
 
       return { deploymentId, status: 'failed', reason: 'Image signature required but not present' };
     }
@@ -300,7 +300,7 @@ export async function triggerDeploy(
           refuted ? 'IMAGE_SIGNATURE_REFUTED' : 'IMAGE_SIGNATURE_UNVERIFIABLE',
           repoId,
           `Deployment ${deploymentId} of ${imageTag} to ${environment} blocked: ${detail}`,
-        ).catch(err => logger.warn('[DeployService] failed to audit signature gate block', err instanceof Error ? err.message : err));
+        ).catch(err => logger.warn('[DeployService] failed to audit signature gate block', errorContext(err)));
 
         return { deploymentId, status: 'failed', reason };
       }
@@ -333,7 +333,7 @@ export async function triggerDeploy(
         status: isHardBlock ? 'blocked' : 'overridden',
         violations: compliance.violations,
         createdAt: new Date().toISOString(),
-      }).catch(err => logger.warn('[DeployService] failed to record deploy gate run', err instanceof Error ? err.message : err));
+      }).catch(err => logger.warn('[DeployService] failed to record deploy gate run', errorContext(err)));
 
       // Stamp the release-node state so /api/gates/state is the single source of
       // truth the panel already shows: a hard block leaves it BLOCKED; a break-
@@ -341,7 +341,7 @@ export async function triggerDeploy(
       // security). Best-effort; a state-write failure never gates the deploy.
       if (environment === 'production') {
         gateService.stampReleaseVerdict(isHardBlock ? 'BLOCKED' : 'OVERRIDDEN')
-          .catch(err => logger.warn('[DeployService] failed to stamp release verdict', err instanceof Error ? err.message : err));
+          .catch(err => logger.warn('[DeployService] failed to stamp release verdict', errorContext(err)));
       }
 
       if (isHardBlock) {

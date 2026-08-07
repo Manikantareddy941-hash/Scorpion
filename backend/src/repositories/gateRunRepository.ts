@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { ComplianceViolation } from '../services/securityRequirementsService';
 
 /**
@@ -54,7 +54,7 @@ async function handleQuery<T>(appwriteCall: () => Promise<T>, mockCall: () => Pr
   try {
     return await appwriteCall();
   } catch (err) {
-    logger.warn('[GateRunRepository] Appwrite operation failed, using local JSON fallback:', err instanceof Error ? err.message : String(err));
+    logger.warn('[GateRunRepository] Appwrite operation failed, using local JSON fallback', errorContext(err));
     return await mockCall();
   }
 }

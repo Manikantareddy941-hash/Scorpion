@@ -5,17 +5,13 @@ import simpleGit from 'simple-git';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import { aiLimiter } from '../middleware/rateLimiters';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();
@@ -148,7 +144,7 @@ router.post('/create-pr', aiLimiter, async (req: AuthenticatedRequest, res: Resp
       }).catch((err: unknown) => {
         // The PR exists either way; failing the request here would tell the
         // caller the remediation failed when it did not.
-        logger.error('[SCORPION] Failed to record PR on finding:', errorMessage(err));
+        logger.error('[SCORPION] Failed to record PR on finding', errorContext(err));
       });
     }
 

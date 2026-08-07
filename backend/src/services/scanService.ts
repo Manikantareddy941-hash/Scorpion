@@ -14,7 +14,7 @@ import { enrichIssues } from './enrichmentService';
 import * as path from 'path';
 import * as fs from 'fs';
 import crypto from 'crypto';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { HadolintRawOutput, IngestableIssue, RepoWithScanStats, ScanRawResults, ScanTriggerOptions } from '../types/scan.types';
 
 /**
@@ -226,7 +226,7 @@ export const ingestVulnerabilitiesDelta = async (
         try {
             issuesToInsert = await enrichIssues(newOrModifiedIssues);
         } catch (enrichErr) {
-            logger.warn('[Delta Ingestion] Enrichment failed, ingesting unenriched findings:', enrichErr instanceof Error ? enrichErr.message : enrichErr);
+            logger.warn('[Delta Ingestion] Enrichment failed, ingesting unenriched findings', errorContext(enrichErr));
         }
 
         // 5. Batch writes using parallel execution (using Promise.all on chunks to limit concurrent connections)
@@ -279,7 +279,7 @@ export const ingestVulnerabilitiesDelta = async (
                     });
                     logger.info(`[Delta Ingestion] Marked vulnerability ${doc.$id} as RESOLVED.`);
                 } catch (updateErr) {
-                    logger.error(`[Delta Ingestion] Failed to update resolved document status:`, updateErr instanceof Error ? updateErr.message : updateErr);
+                    logger.error(`[Delta Ingestion] Failed to update resolved document status`, errorContext(updateErr));
                 }
             }));
         }
@@ -291,7 +291,7 @@ export const ingestVulnerabilitiesDelta = async (
         // findings (228 vs 171 on the first verified run).
         return { uniqueIncoming: [...incomingHashMap.values()] };
     } catch (err) {
-        logger.error(`[Delta Ingestion Error] Failed to compute or ingest scan deltas:`, err instanceof Error ? err.message : err);
+        logger.error(`[Delta Ingestion Error] Failed to compute or ingest scan deltas`, errorContext(err));
         
         // Fallback: if delta logic fails, fallback to standard insertion so telemetry is never lost
         logger.info(`[Delta Ingestion] Falling back to standard bulk creation...`);
@@ -306,7 +306,7 @@ export const ingestVulnerabilitiesDelta = async (
                     toStoredFinding(issue, repoId, scanId), ownerDocPerms,
                 );
             } catch (fallbackErr) {
-                logger.error(`[Delta Ingestion Fallback] Save failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+                logger.error(`[Delta Ingestion Fallback] Save failed`, errorContext(fallbackErr));
             }
         }
         return { uniqueIncoming: issues };

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { generateNetworkPolicies } from '../netpol/networkPolicyGenerator';
 import { openNetpolPr } from '../netpol/netpolPr';
 import { requireRole } from '../middleware/requireRole';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 const generateSchema = z.object({
   namespace: z.string().min(1).max(63).regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/),
@@ -18,10 +18,6 @@ const generateSchema = z.object({
   message: 'repo is required when createPr is true',
   path: ['repo'],
 });
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Unknown error';
-}
 
 const router = Router();
 router.use(requireRole('admin', 'security'));
@@ -61,7 +57,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       return res.json({ yaml, prError: msg });
     }
   } catch (err) {
-    logger.error('[NetPol API] generate failed:', errorMessage(err));
+    logger.error('[NetPol API] generate failed', errorContext(err));
     return res.status(500).json({ error: 'Failed to generate network policies' });
   }
 });

@@ -1,7 +1,7 @@
 import { driftRepository } from '../repositories/driftRepository';
 import { gateRulesRepository } from '../repositories/gateRulesRepository';
 import { podSecurityRepository } from '../repositories/podSecurityRepository';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Background reconciler for the repositories' local JSON fallback buffers.
@@ -37,8 +37,8 @@ async function tick(): Promise<void> {
     }
   } catch (err) {
     logger.warn(
-      '[FallbackReplayer] Replay tick failed:',
-      err instanceof Error ? err.message : String(err),
+      '[FallbackReplayer] Replay tick failed',
+      errorContext(err),
     );
   } finally {
     ticking = false;

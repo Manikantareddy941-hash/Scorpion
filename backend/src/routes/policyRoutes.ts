@@ -4,14 +4,10 @@ import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { evaluatePolicy, isOpaAvailable } from '../services/opaService';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'unknown error';
 }
 
 // Appwrite SDK errors carry a numeric `.code` (e.g. 404) that isn't part of the
@@ -38,7 +34,7 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
         );
         res.json(response.documents);
     } catch (err) {
-        logger.error('[Policy API Error]', errorMessage(err));
+        logger.error('[Policy API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -62,7 +58,7 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
         );
         res.json(policy);
     } catch (err) {
-        logger.error('[Policy Create Error]', errorMessage(err));
+        logger.error('[Policy Create Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -91,7 +87,7 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
         );
         res.json(policy);
     } catch (err) {
-        logger.error('[Policy Update Error]', errorMessage(err));
+        logger.error('[Policy Update Error]', errorContext(err));
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -111,7 +107,7 @@ router.delete('/:id', verifyUser, async (req: AuthenticatedRequest, res: Respons
         await databases.deleteDocument(DB_ID, 'policies', id);
         res.json({ message: 'Policy deleted' });
     } catch (err) {
-        logger.error('[Policy Delete Error]', errorMessage(err));
+        logger.error('[Policy Delete Error]', errorContext(err));
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -143,7 +139,7 @@ router.post('/:id/evaluate', verifyUser, validateBody(evaluateSchema), async (re
 
         res.json(evaluation);
     } catch (err) {
-        logger.error('[Policy Evaluate Error]', errorMessage(err));
+        logger.error('[Policy Evaluate Error]', errorContext(err));
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(502).json({ error: 'Policy evaluation failed', details: errorMessage(err) });
     }

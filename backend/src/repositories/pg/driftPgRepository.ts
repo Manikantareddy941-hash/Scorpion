@@ -1,5 +1,5 @@
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import type { DriftAnomaly } from '../../workers/driftMonitor';
 import {
   bufferRecord, clampLimit, flushBuffer, readMock, selectFallback, toMessage, toRecord,
@@ -74,7 +74,7 @@ export const driftPgRepository = {
       await insert(record);
       return record;
     } catch (err) {
-      logger.warn('[DriftPgRepository] Postgres write failed, using local JSON fallback:', toMessage(err));
+      logger.warn('[DriftPgRepository] Postgres write failed, using local JSON fallback', errorContext(err));
       await bufferRecord(record);
       return record;
     }
@@ -102,7 +102,7 @@ export const driftPgRepository = {
       );
       return (res.rows as DriftRow[]).map(fromRow);
     } catch (err) {
-      logger.warn('[DriftPgRepository] Postgres read failed, using local JSON fallback:', toMessage(err));
+      logger.warn('[DriftPgRepository] Postgres read failed, using local JSON fallback', errorContext(err));
       return selectFallback(await readMock(), opts, limit);
     }
   },

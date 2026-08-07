@@ -41,8 +41,8 @@ export async function processSoarJob(
       await soarRepository.setActionStatus(action.id, 'executed', { result: outcome.result });
     } catch (err) {
       logger.error(
-        `[SOAR] action ${action.id} executed but status write failed; record may still read 'approved':`,
-        err instanceof Error ? err.message : String(err),
+        `[SOAR] action ${action.id} executed but status write failed; record may still read 'approved'`,
+        errorContext(err),
       );
     }
     return;
@@ -63,8 +63,8 @@ export async function processSoarJob(
     });
   } catch (err) {
     logger.error(
-      `[SOAR] action ${action.id} failed but incident creation also failed:`,
-      err instanceof Error ? err.message : String(err),
+      `[SOAR] action ${action.id} failed but incident creation also failed`,
+      errorContext(err),
     );
   }
   await soarRepository.setActionStatus(action.id, 'failed', { error: outcome.error });

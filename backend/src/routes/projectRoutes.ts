@@ -1,5 +1,6 @@
 import { Router, Response, Request } from 'express';
 import { Models } from 'node-appwrite';
+import { errorMessage } from '../services/logger';
 
 import {
     createProject,
@@ -11,11 +12,6 @@ import {
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
-}
-
-function errorMessage(err: unknown): string {
-    if (typeof err === 'string') return err;
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();

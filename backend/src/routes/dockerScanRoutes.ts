@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { sendFindingAlert, FindingDocument } from '../utils/alertDispatcher';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -20,10 +20,6 @@ interface TrivyVulnerability {
     FixedVersion?: string;
     VulnerabilityID: string;
     Severity?: string;
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();
@@ -117,7 +113,7 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Authenticated
         res.json(stats);
 
     } catch (err: unknown) {
-        logger.error('[Docker API Error]', errorMessage(err));
+        logger.error('[Docker API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

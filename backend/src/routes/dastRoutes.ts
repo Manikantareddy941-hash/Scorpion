@@ -3,17 +3,13 @@ import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueDastScan } from '../queues/dastQueue';
 import { assertSafeScanTarget } from '../utils/ssrfGuard';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 const VALID_SCAN_MODES = ['spider', 'active', 'passive'] as const;
 type ScanMode = (typeof VALID_SCAN_MODES)[number];
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 function errorCode(err: unknown): number | undefined {
@@ -74,7 +70,7 @@ router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response
         res.json({ scanId, status: 'started' });
 
     } catch (err: unknown) {
-        logger.error('[DAST API Error]', errorMessage(err));
+        logger.error('[DAST API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -95,7 +91,7 @@ router.get('/dast/:scanId/status', verifyUser, async (req: AuthenticatedRequest,
         });
     } catch (err: unknown) {
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Scan not found' });
-        logger.error('[DAST API Status Error]', errorMessage(err));
+        logger.error('[DAST API Status Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

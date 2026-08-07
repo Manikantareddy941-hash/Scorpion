@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { soarRepository, SoarActionStatus } from '../repositories/soarRepository';
 import { enqueueSoarAction } from '../queues/soarQueue';
 import { requireRole } from '../middleware/requireRole';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; email?: string };
@@ -26,10 +26,6 @@ const playbookSchema = z.object({
 
 const actionStatusSchema = z.enum(['pending', 'approved', 'rejected', 'executed', 'failed']);
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Unknown error';
-}
-
 const router = Router();
 
 // Runtime response controls are sensitive — same RBAC posture as driftRoutes.
@@ -39,7 +35,7 @@ router.get('/playbooks', async (_req: Request, res: Response) => {
   try {
     res.json({ playbooks: await soarRepository.listPlaybooks() });
   } catch (err) {
-    logger.error('[SOAR API] list playbooks failed:', errorMessage(err));
+    logger.error('[SOAR API] list playbooks failed', errorContext(err));
     res.status(500).json({ error: 'Failed to list playbooks' });
   }
 });
@@ -53,7 +49,7 @@ router.post('/playbooks', async (req: Request, res: Response) => {
     const playbook = await soarRepository.createPlaybook(parsed.data);
     res.status(201).json({ playbook });
   } catch (err) {
-    logger.error('[SOAR API] create playbook failed:', errorMessage(err));
+    logger.error('[SOAR API] create playbook failed', errorContext(err));
     res.status(500).json({ error: 'Failed to create playbook' });
   }
 });
@@ -67,7 +63,7 @@ router.patch('/playbooks/:id', async (req: Request<Record<string, string>>, res:
     await soarRepository.updatePlaybook(req.params.id, parsed.data);
     res.json({ status: 'updated' });
   } catch (err) {
-    logger.error('[SOAR API] update playbook failed:', errorMessage(err));
+    logger.error('[SOAR API] update playbook failed', errorContext(err));
     res.status(500).json({ error: 'Failed to update playbook' });
   }
 });
@@ -79,7 +75,7 @@ router.get('/actions', async (req: Request, res: Response) => {
     const actions = await soarRepository.listActions(status?.data as SoarActionStatus | undefined);
     res.json({ actions });
   } catch (err) {
-    logger.error('[SOAR API] list actions failed:', errorMessage(err));
+    logger.error('[SOAR API] list actions failed', errorContext(err));
     res.status(500).json({ error: 'Failed to list actions' });
   }
 });
@@ -108,14 +104,14 @@ async function resolveAction(
 
 router.post('/actions/:id/approve', (req: AuthenticatedRequest, res: Response) => {
   resolveAction(req, res, 'approved').catch((err) => {
-    logger.error('[SOAR API] approve failed:', errorMessage(err));
+    logger.error('[SOAR API] approve failed', errorContext(err));
     res.status(500).json({ error: 'Failed to approve action' });
   });
 });
 
 router.post('/actions/:id/reject', (req: AuthenticatedRequest, res: Response) => {
   resolveAction(req, res, 'rejected').catch((err) => {
-    logger.error('[SOAR API] reject failed:', errorMessage(err));
+    logger.error('[SOAR API] reject failed', errorContext(err));
     res.status(500).json({ error: 'Failed to reject action' });
   });
 });
