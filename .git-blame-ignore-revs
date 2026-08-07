@@ -1,0 +1,19 @@
+# Commits that touched formatting only, and should not own a line in `git blame`.
+#
+# GitHub's blame view reads this file automatically. Locally it does nothing
+# until you opt in, once per clone:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Only add a commit here if it changed no behaviour. The test is mechanical: the
+# commit must be empty under `git show --ignore-cr-at-eol <sha>` (for line-ending
+# changes) or `git show -w <sha>` (for whitespace). A commit that also moved code
+# does not belong here — blame would then skip a real change, which is worse than
+# the noise this file exists to remove. Full 40-character SHAs only; git rejects
+# abbreviated ones.
+
+# chore: normalize TypeScript and JSON to LF and pin it in .gitattributes
+# 74 files, ~14,700 lines, all \r\n -> \n. Verified content-free:
+#   git show --ignore-cr-at-eol dc6da36f4e59c289db7877bd9c7208e7884995f1
+# reports .gitattributes and nothing else.
+dc6da36f4e59c289db7877bd9c7208e7884995f1
