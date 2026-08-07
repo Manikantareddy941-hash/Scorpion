@@ -71,7 +71,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
     repoUrl = repoDoc.url;
     repoName = repoDoc.name || repoId;
     logs += `Fetched repo: ${repoUrl}\n`;
-  } catch (err: any) {
+  } catch (err) {
     logger.error(`[BuildService] Failed to fetch repo ${repoId}`, err);
     throw new Error(`Failed to find repository with ID ${repoId}`);
   }
@@ -88,7 +88,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
       startedAt: startTimeIso,
       logs
     });
-  } catch (err: any) {
+  } catch (err) {
     logger.error(`[BuildService] Failed to create pipeline document`, err);
     throw err;
   }

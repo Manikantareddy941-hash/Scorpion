@@ -179,7 +179,7 @@ import { signingConfigBroken } from './services/metrics';
                 logger.info(`✅ [Recovery] No stalled scans found.`);
             }
         }
-    } catch (err: any) {
+    } catch (err) {
         logger.error('❌ [Recovery] Failed to run crash recovery:', err);
     }
 })();

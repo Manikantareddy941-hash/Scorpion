@@ -133,7 +133,7 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
       }
     }
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error(`[ArgoCD Handler] Error processing sync:`, error);
   }
 }

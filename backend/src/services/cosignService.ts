@@ -233,7 +233,7 @@ export const verifyBlobContent = async (content: string, signature: string): Pro
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return true;
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[Cosign] signature verification failed', {
             event: 'COSIGN_VERIFY_FAILED',
             subject: 'blob',
@@ -286,7 +286,7 @@ export const verifyImageSignature = async (imageRef: string): Promise<boolean> =
             { timeout: COSIGN_TIMEOUT_MS }
         );
         return true;
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[Cosign] signature verification failed', {
             event: 'COSIGN_VERIFY_FAILED',
             subject: 'image',

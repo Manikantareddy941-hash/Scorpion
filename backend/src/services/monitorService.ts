@@ -111,13 +111,13 @@ export async function checkDeploymentUptime(deployment: any) {
           status,
           lastUpdated: new Date().toISOString()
         });
-      } catch (e: any) {
+      } catch (e) {
         logger.error(`[MonitorService] Failed to clear stale down status:`, e);
       }
     }
 
     previousStatus.set(key, status);
-  } catch (err: any) {
+  } catch (err) {
     logger.error(`[MonitorService] Error recording health check:`, err);
   }
 }
@@ -146,7 +146,7 @@ export async function runUptimeMonitor() {
     for (const deployment of uniqueDeployments.values()) {
       await checkDeploymentUptime(deployment);
     }
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[MonitorService] uptime monitor run failed', {
         event: 'UPTIME_MONITOR_FAILED',
         ...errorContext(err),

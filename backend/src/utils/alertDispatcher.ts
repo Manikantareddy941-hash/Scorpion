@@ -76,7 +76,7 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                     }]
                 });
                 logger.info(`[Alert] Discord notification sent for ${finding.title}`);
-            } catch (err: any) {
+            } catch (err) {
                 logger.error('[Alert] sink dispatch failed', {
                     event: 'ALERT_DISPATCH_FAILED',
                     sink: 'discord',
@@ -100,7 +100,7 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                     }]
                 });
                 logger.info(`[Alert] Slack notification sent for ${finding.title}`);
-            } catch (err: any) {
+            } catch (err) {
                 logger.error('[Alert] sink dispatch failed', {
                     event: 'ALERT_DISPATCH_FAILED',
                     sink: 'slack',
@@ -134,7 +134,7 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                     }
                 });
                 logger.info(`[Alert] PagerDuty event triggered for ${finding.title}`);
-            } catch (err: any) {
+            } catch (err) {
                 logger.error('[Alert] sink dispatch failed', {
                     event: 'ALERT_DISPATCH_FAILED',
                     sink: 'pagerduty',
@@ -163,7 +163,7 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
                     }
                 });
                 logger.info(`[Alert] OpsGenie alert created for ${finding.title}`);
-            } catch (err: any) {
+            } catch (err) {
                 logger.error('[Alert] sink dispatch failed', {
                     event: 'ALERT_DISPATCH_FAILED',
                     sink: 'opsgenie',
@@ -172,7 +172,7 @@ export async function sendFindingAlert(finding: FindingDocument, userId: string)
             }
         }
 
-    } catch (err: any) {
+    } catch (err) {
         logger.error('[Alert] dispatcher failed', {
             event: 'ALERT_DISPATCH_ERROR',
             ...errorContext(err),

@@ -83,7 +83,7 @@ export async function triggerRollback(options: RollbackOptions) {
 
     logger.info(`[Rollback] Created PR #${pr.data.number}: ${pr.data.html_url}`);
     return pr.data;
-  } catch (error: any) {
+  } catch (error) {
     logger.error(`[Rollback] Failed to trigger rollback for ${options.app}:`, error);
     throw error;
   }

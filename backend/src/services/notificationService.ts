@@ -26,7 +26,7 @@ export async function sendSecurityAlert(event: SecurityEvent) {
         repoName = repoDoc.name;
       }
     }
-  } catch (err: any) {
+  } catch (err) {
     logger.warn('[Notification Router] failed to resolve repo name', {
       event_name: 'NOTIFICATION_REPO_LOOKUP_FAILED',
       repoId: event.repo_id,
@@ -165,7 +165,7 @@ export async function checkOverdueTasks() {
     ]);
     const overdue = response.documents.filter(doc => doc.due_date && new Date(doc.due_date) < new Date());
     logger.info(`[Notification Router] Found ${overdue.length} overdue tasks.`);
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[Notification Router] failed to check overdue tasks', {
       event_name: 'OVERDUE_TASK_CHECK_FAILED',
       ...errorContext(err),
