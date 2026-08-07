@@ -1,47 +1,26 @@
 import { Worker, Job } from 'bullmq';
 import { redisConnection } from '../queues/redisConnection';
 import { AUDIT_QUEUE_NAME, type AuditVerifyJobData } from '../queues/auditQueue';
-import { verifyAuditTail, type VerificationError } from '../utils/auditVerifier';
+import { verifyAuditTail, type VerificationError, type TailVerificationReport } from '../utils/auditVerifier';
 import { verifyAnchorIntegrity, type AnchorVerificationReport } from '../utils/auditAnchorVerifier';
-import { runFullAuditVerification, isTamperSuspected } from '../utils/auditOrchestrator';
-import { sendSystemAlert, type SystemAlert } from '../utils/alertDispatcher';
+import { runFullAuditVerification, isTamperSuspected, type FullAuditReport } from '../utils/auditOrchestrator';
+import { sendSystemAlert, type SystemAlertPayload } from '../utils/systemAlert';
 import { logger } from '../services/logger';
 
 /**
- * Runs ledger verification on a schedule and routes the outcome to whoever needs
- * to act on it.
+ * Runs ledger verification on a schedule and pages a human when it fails.
  *
- * The verb `audit verify` and GET /api/audit/verify both require somebody to ask.
- * Tampering does not announce itself, so a control that only answers when
- * questioned is not a control — it is a report. This worker is what makes the
- * hash chain load-bearing rather than decorative.
+ * WHY THIS EXISTS. Everything before it was passive. verifyAuditChain and
+ * `audit verify` both require somebody to ask, and tampering does not announce
+ * itself — a control that only answers when questioned is a report, not a
+ * control. This is what makes the hash chain load-bearing.
  */
 
-/**
- * An unconfigured Loki is a deployment fact, not an incident.
- *
- * ANCHOR_UNAVAILABLE fires both when Loki is unreachable and when it was never
- * configured at all. On a dev or staging box the second is permanent, so alerting
- * on the status alone would page the ops rota forever — and a rota that mutes one
- * alert learns to mute the channel. Stated once, at startup, and then excluded
- * from alerting for the life of the process.
- */
-const lokiConfigured = Boolean(process.env.LOKI_QUERY_URL || process.env.LOKI_URL);
+/** Bounded: a badly broken ledger could otherwise put thousands of entries in a pager payload. */
+const MAX_DETAIL_ENTRIES = 20;
 
-if (!lokiConfigured) {
-    logger.info(
-        '[AuditVerifier] External anchor verification disabled: LOKI_URL not configured. ' +
-        'Chain walks will still run, but nothing cross-checks them against off-box anchors, ' +
-        'so a rewrite by anyone holding the database credential would go undetected.',
-        { event: 'audit_anchor_verification_disabled' },
-    );
-}
-
-/** Bounded so one pathological run cannot fill the log with the whole ledger. */
-const MAX_ERRORS_IN_ALERT = 5;
-
-function describeErrors(errors: readonly VerificationError[]): string {
-    const shown = errors.slice(0, MAX_ERRORS_IN_ALERT).map((e) => {
+function summariseErrors(errors: readonly VerificationError[]): string {
+    const shown = errors.slice(0, 5).map((e) => {
         const at = e.sequence !== undefined ? `seq ${e.sequence}` : 'unsequenced';
         return `${e.kind} at ${at} (${e.recordId})`;
     });
@@ -50,78 +29,141 @@ function describeErrors(errors: readonly VerificationError[]): string {
 }
 
 /**
- * Sends and reports whether anyone actually received it.
+ * Ops-side alerting for "the cross-check could not be performed", never for "the
+ * cross-check failed".
  *
- * `configured: 0` means the alert went nowhere. That is worse than a failed
- * delivery, because nothing retries and nothing errors — it is a tamper alarm
- * with the wires cut, and the only way it becomes visible is if someone logs it
- * here.
+ * ANCHOR_UNAVAILABLE covers THREE situations and they are not the same incident:
+ *
+ *   configured but unreachable  -> lokiConfigured true, `checks` POPULATED (one per
+ *                                  sample that could not be resolved). Temporary,
+ *                                  and worth a WARN.
+ *   nothing to check            -> lokiConfigured true, `checks` EMPTY. True of a
+ *                                  fresh install and of any ledger still entirely
+ *                                  pre-sequencing. Nothing is wrong; alerting here
+ *                                  pages every 15 minutes on a new deployment,
+ *                                  telling ops to check a Loki that is answering
+ *                                  perfectly.
+ *   never configured            -> lokiConfigured false. Worse than unreachable in
+ *                                  PRODUCTION, because the cross-check has never run
+ *                                  and never will. On a dev box it is expected and
+ *                                  must not page.
  */
-async function dispatch(alert: SystemAlert): Promise<void> {
-    const { delivered, configured } = await sendSystemAlert(alert);
+function anchorGapAlerts(anchor: AnchorVerificationReport, rowsChecked: number): SystemAlertPayload[] {
+    if (anchor.status !== 'ANCHOR_UNAVAILABLE') return [];
 
-    if (configured === 0) {
-        logger.error(
-            `[AuditVerifier] ${alert.channel} alert had NO configured destination — nobody was told`,
-            {
-                event: 'audit_alert_undeliverable',
-                channel: alert.channel,
-                title: alert.title,
-                hint: `set ${alert.channel === 'security' ? 'SECURITY_ALERT' : 'OPS_ALERT'}_SLACK_WEBHOOK or _PAGERDUTY_KEY`,
-            },
-        );
-        return;
+    if (anchor.lokiConfigured) {
+        if (anchor.checks.length === 0) return [];
+        return [{
+            level: 'WARN',
+            title: 'Audit Anchor Store Unreachable',
+            message:
+                'An anchor store is configured but did not answer. Until it does, a rewrite by a holder ' +
+                'of the database credential cannot be detected.',
+            details: { anchorStatus: anchor.status, rowsChecked, unresolved: anchor.checks.length },
+        }];
     }
 
-    if (delivered === 0) {
-        logger.error('[AuditVerifier] every configured destination rejected the alert', {
-            event: 'audit_alert_delivery_failed', channel: alert.channel, configured,
+    // Read at call time, not at module load: a value captured on import cannot be
+    // exercised by a test, and an untested production-only branch is one nobody
+    // finds out about until production.
+    if (process.env.NODE_ENV === 'production') {
+        return [{
+            level: 'WARN',
+            title: 'Audit Anchor Store Not Configured',
+            message:
+                'No anchor store is configured in production, so the audit ledger has never been ' +
+                'cross-checked against anything outside the database it lives in.',
+            details: { rowsChecked },
+        }];
+    }
+
+    return [];
+}
+
+/** Alerts for the bounded 15-minute pass. */
+function tailAlerts(db: TailVerificationReport, anchor: AnchorVerificationReport): SystemAlertPayload[] {
+    const alerts: SystemAlertPayload[] = [];
+
+    // Note what is NOT asserted: a tail cannot say the ledger is intact, only that
+    // this window is self-consistent. There is no isValid to read.
+    if (db.errors.length > 0 || anchor.status === 'ANCHOR_MISMATCH') {
+        alerts.push({
+            level: 'CRITICAL',
+            title: 'Audit Ledger Tamper Evidence',
+            message:
+                `Verified the last ${db.rowsChecked} rows. ${summariseErrors(db.errors)}` +
+                (anchor.status === 'ANCHOR_MISMATCH'
+                    ? ' A sampled position hashes differently in the ledger than in the anchor written when the event occurred.'
+                    : '') +
+                ' This window alone cannot rule out older tampering; the daily full walk covers that.',
+            details: {
+                scope: 'tail',
+                rowsChecked: db.rowsChecked,
+                windowFrom: db.windowFrom,
+                latestSequence: db.latestSequence,
+                anchorStatus: anchor.status,
+                errors: db.errors.slice(0, MAX_DETAIL_ENTRIES),
+                mismatches: anchor.checks.filter((c) => c.status === 'ANCHOR_MISMATCH').slice(0, MAX_DETAIL_ENTRIES),
+            },
         });
     }
+
+    return [...alerts, ...anchorGapAlerts(anchor, db.rowsChecked)];
+}
+
+/** Alerts for the daily walk from genesis. */
+function fullAlerts(report: FullAuditReport): SystemAlertPayload[] {
+    const alerts: SystemAlertPayload[] = [];
+
+    if (isTamperSuspected(report)) {
+        alerts.push({
+            level: 'CRITICAL',
+            title: 'Audit Ledger Tamper Evidence',
+            message:
+                `Walked ${report.db.rowsChecked} rows from genesis. ${summariseErrors(report.db.errors)}` +
+                (report.anchor.status === 'ANCHOR_MISMATCH'
+                    ? ' At least one sampled position disagrees with its off-box anchor, which requires database write access to produce.'
+                    : '') +
+                ' Treat the audit trail as untrustworthy until explained.',
+            details: {
+                scope: 'full',
+                dbValid: report.db.isValid,
+                anchorStatus: report.anchor.status,
+                rowsChecked: report.db.rowsChecked,
+                latestSequence: report.db.latestSequence,
+                errors: report.db.errors.slice(0, MAX_DETAIL_ENTRIES),
+                mismatches: report.anchor.checks.filter((c) => c.status === 'ANCHOR_MISMATCH').slice(0, MAX_DETAIL_ENTRIES),
+            },
+        });
+    }
+
+    return [...alerts, ...anchorGapAlerts(report.anchor, report.db.rowsChecked)];
 }
 
 /**
- * Ops-side notification for "the check could not be performed", never for "the
- * check failed".
+ * Sends and records whether anyone actually received it.
  *
- * ANCHOR_UNAVAILABLE covers THREE situations and only one is an incident:
- *
- *   Loki never configured   -> lokiConfigured false. A deployment fact, permanent
- *                              on dev and staging. Logged once at startup.
- *   No sequenced rows yet   -> lokiConfigured true, but `checks` is EMPTY because
- *                              there were no samples to check. True of a fresh
- *                              install, and of any ledger still entirely
- *                              pre-sequencing. Nothing is wrong and nothing is
- *                              actionable — paging here would fire every 15
- *                              minutes on a brand-new deployment, telling ops to
- *                              go and check a Loki that is working perfectly.
- *   Loki unreachable        -> lokiConfigured true AND `checks` populated, one per
- *                              sample that could not be resolved. The real outage.
+ * sendSystemAlert returns a delivered count rather than throwing, and zero means
+ * the alert reached the application log and nothing else. Nothing retries past
+ * that point and nothing errors, so this line is the only way a tamper alarm with
+ * the wires cut becomes visible.
  */
-async function reportAnchorGap(anchor: AnchorVerificationReport, tier: string): Promise<void> {
-    if (anchor.status !== 'ANCHOR_UNAVAILABLE') return;
-    if (!anchor.lokiConfigured) return;
-    if (anchor.checks.length === 0) return;
-
-    await dispatch({
-        channel: 'ops',
-        title: 'Audit anchor cross-check unavailable',
-        detail:
-            `The ${tier} verification could not reach the off-box anchors. The chain was walked, but ` +
-            'nothing independent confirmed it, so a rewrite by anyone with database write access ' +
-            'would not have been visible. Check Loki reachability.',
-        // One incident for the outage rather than one per run.
-        dedupKey: 'scorpion-audit-anchors-unavailable',
-    });
+async function dispatch(alerts: readonly SystemAlertPayload[]): Promise<void> {
+    for (const alert of alerts) {
+        const delivered = await sendSystemAlert(alert);
+        if (delivered === 0) {
+            logger.error('[AuditVerifier] alert reached no sink', {
+                event: 'audit_alert_undeliverable',
+                level: alert.level,
+                title: alert.title,
+            });
+        }
+    }
 }
 
 async function runTail(): Promise<void> {
     const db = await verifyAuditTail();
     const anchor = await verifyAnchorIntegrity(db);
-
-    // Note what is NOT asserted here: the tail cannot say the ledger is intact,
-    // only that this window is self-consistent. There is no isValid to read.
-    const tampered = db.errors.length > 0 || anchor.status === 'ANCHOR_MISMATCH';
 
     logger.info('[AuditVerifier] tail pass complete', {
         event: 'audit_verify_tail',
@@ -132,22 +174,7 @@ async function runTail(): Promise<void> {
         anchorStatus: anchor.status,
     });
 
-    if (tampered) {
-        await dispatch({
-            channel: 'security',
-            title: 'Audit ledger tamper evidence (recent window)',
-            detail:
-                `Verified the last ${db.rowsChecked} rows. ` +
-                (db.errors.length > 0 ? `Chain problems: ${describeErrors(db.errors)}. ` : '') +
-                (anchor.status === 'ANCHOR_MISMATCH'
-                    ? 'A sampled position hashes differently in the ledger than in the anchor written when the event occurred — the row changed after the fact. '
-                    : '') +
-                'This window alone cannot rule out older tampering; the daily full walk covers that.',
-            dedupKey: 'scorpion-audit-tamper',
-        });
-    }
-
-    await reportAnchorGap(anchor, 'tail');
+    await dispatch(tailAlerts(db, anchor));
 }
 
 async function runFull(): Promise<void> {
@@ -161,22 +188,7 @@ async function runFull(): Promise<void> {
         anchorStatus: report.anchor.status,
     });
 
-    if (isTamperSuspected(report)) {
-        await dispatch({
-            channel: 'security',
-            title: 'Audit ledger tamper evidence (full walk)',
-            detail:
-                `Walked ${report.db.rowsChecked} rows from genesis. ` +
-                (report.db.errors.length > 0 ? `Chain problems: ${describeErrors(report.db.errors)}. ` : '') +
-                (report.anchor.status === 'ANCHOR_MISMATCH'
-                    ? 'At least one sampled position disagrees with its off-box anchor, which requires database write access to produce. '
-                    : '') +
-                'Treat the audit trail as untrustworthy until explained.',
-            dedupKey: 'scorpion-audit-tamper',
-        });
-    }
-
-    await reportAnchorGap(report.anchor, 'full');
+    await dispatch(fullAlerts(report));
 }
 
 export async function processAuditVerification(job: Job<AuditVerifyJobData>): Promise<void> {

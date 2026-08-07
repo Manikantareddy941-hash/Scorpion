@@ -66,7 +66,11 @@ const AUDIT_FULL_SCHEDULER_ID = 'audit-verify-full';
 export const reconcileAuditSchedules = async (): Promise<void> => {
     await auditQueue.upsertJobScheduler(
         AUDIT_TAIL_SCHEDULER_ID,
-        { pattern: '*/15 * * * *' },
+        // Explicit UTC: BullMQ resolves a cron pattern against the host timezone,
+        // so an unpinned schedule drifts when a replica runs in a different zone
+        // and shifts again across DST. An integrity check that quietly moves by an
+        // hour twice a year is a check nobody can reason about.
+        { pattern: '*/15 * * * *', tz: 'Etc/UTC' },
         { name: 'verify', data: { tier: 'tail' } },
     );
 
@@ -74,7 +78,7 @@ export const reconcileAuditSchedules = async (): Promise<void> => {
     // with the ledger.
     await auditQueue.upsertJobScheduler(
         AUDIT_FULL_SCHEDULER_ID,
-        { pattern: '0 2 * * *' },
+        { pattern: '0 2 * * *', tz: 'Etc/UTC' },
         { name: 'verify', data: { tier: 'full' } },
     );
 };
