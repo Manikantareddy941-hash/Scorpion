@@ -17,3 +17,17 @@ package-lock.json text eol=lf
 # leaks into the executed command the same way.
 Dockerfile text eol=lf
 *.Dockerfile text eol=lf
+
+# TypeScript and JSON, for the same reason as the lockfile above: any tool that
+# writes these files with native line endings — a codegen script, an editor on a
+# fresh clone, an agent appending to a file — turns a 50-line change into a
+# whole-file diff nobody can review.
+#
+# Unlike the lockfile, this is NOT free: 71 files were stored CRLF in the index
+# when this landed (35 .tsx, 32 .ts, 4 .json), so the commit adding these rules
+# also renormalizes them. Doing both at once is the point — adding the rules
+# alone would leave those rewrites to surface one at a time inside unrelated
+# feature PRs, which is the churn this is meant to stop.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
