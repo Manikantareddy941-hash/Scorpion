@@ -125,24 +125,40 @@ function hashOf(predecessor: string, row: LedgerRow): string {
 }
 
 /**
+ * What the row before `rows[0]` was, when verifying a slice rather than the whole
+ * ledger. Absent means the slice starts at the genesis of the chain.
+ */
+export interface ChainSeed {
+    /** tamper_hash of the row immediately preceding the slice. */
+    hash: string;
+    /** Its position, so a gap at the slice boundary is still caught. */
+    sequence?: number;
+}
+
+/**
  * Verifies an already-loaded, ascending-order run of rows.
  *
  * Separated from fetching so it is testable without a database, and so a caller
  * holding rows from elsewhere (a backup, an export) can check those instead.
+ *
+ * `seed` exists for tail verification. Without it the walk assumes `rows[0]`
+ * chains to GENESIS, which is true only for a full walk — handing a mid-ledger
+ * slice to the unseeded form reports its first row as BROKEN_LINK every time,
+ * turning a healthy chain into a false tamper alert.
  */
-export function verifyChain(rows: readonly LedgerRow[]): VerificationReport {
+export function verifyChain(rows: readonly LedgerRow[], seed?: ChainSeed): VerificationReport {
     const errors: VerificationError[] = [];
     let legacyRows = 0;
     let latestSequence: number | undefined;
 
     // Hash of the row immediately before the current one, positionally.
-    let previousRowHash = 'GENESIS_HASH';
+    let previousRowHash = seed?.hash ?? 'GENESIS_HASH';
     // Hash the current *cohort* chained to. Rows sharing a position all chained to
     // the same predecessor, so a fork must be validated against that — not against
     // its sibling. Validating positionally would report the second writer as
     // BROKEN_LINK, mislabelling a benign race as tampering.
-    let cohortPredecessor = 'GENESIS_HASH';
-    let previousSequence: number | undefined;
+    let cohortPredecessor = seed?.hash ?? 'GENESIS_HASH';
+    let previousSequence: number | undefined = seed?.sequence;
 
     for (const row of rows) {
         const sequence = typeof row.sequence === 'number' ? row.sequence : undefined;
@@ -217,6 +233,86 @@ export function verifyChain(rows: readonly LedgerRow[]): VerificationReport {
  * it — the same failure as a scan that reports no findings after examining no
  * files. A short page is the only stop condition.
  */
+/**
+ * The result of checking only the recent end of the ledger.
+ *
+ * DELIBERATELY NOT A VerificationReport, and deliberately WITHOUT an `isValid`
+ * boolean.
+ *
+ * A tail walk can prove the links inside its window hold. It cannot prove the
+ * ledger is intact: an attacker who rewrote old history and recomputed every hash
+ * forward produces a tail that verifies perfectly. Returning the full-walk shape
+ * would let a caller — or a dashboard six months from now — read `isValid: true`
+ * from a 1000-row window and conclude the whole chain is sound. Making the type
+ * different means that mistake cannot be made silently; the compiler asks.
+ *
+ * What this IS good for: catching tampering promptly, and cross-checking fresh
+ * positions against the off-box anchors while they are still within Loki
+ * retention. The full walk (verifyAuditChain) remains the only thing that can
+ * speak about the ledger as a whole.
+ */
+export interface TailVerificationReport {
+    scope: 'tail';
+    /** Rows actually verified — excludes the predecessor row used only as a seed. */
+    rowsChecked: number;
+    /** Lowest position in the verified window. */
+    windowFrom?: number;
+    /** Highest position seen, i.e. the chain tip. */
+    latestSequence?: number;
+    legacyRows: number;
+    errors: VerificationError[];
+    samples: ChainSample[];
+}
+
+/** How many rows the 15-minute pass examines. */
+export const TAIL_WINDOW = 1000;
+
+/**
+ * Verifies the most recent `windowSize` rows.
+ *
+ * Fetches one row MORE than the window: the extra oldest row is not itself
+ * verified — its own hash cannot be checked without ITS predecessor — but its
+ * tamper_hash and sequence seed the walk, so the first row of the real window is
+ * validated against what actually precedes it rather than against GENESIS.
+ *
+ * Cost is bounded by windowSize regardless of ledger size. That is the entire
+ * point: the full walk is O(N) against a collection that only grows, which is not
+ * something to run every fifteen minutes.
+ */
+export async function verifyAuditTail(windowSize: number = TAIL_WINDOW): Promise<TailVerificationReport> {
+    const page = await databases.listDocuments(DB_ID, COLLECTION, [
+        Query.orderDesc('$createdAt'),
+        Query.limit(windowSize + 1),
+    ]);
+
+    // Appwrite returned newest-first; the walk needs oldest-first.
+    const descending = page.documents as unknown as LedgerRow[];
+    const ascending = [...descending].reverse();
+
+    // A short page means we reached the start of the ledger, so there is no
+    // predecessor to seed from and rows[0] genuinely chains to GENESIS.
+    const reachedGenesis = ascending.length <= windowSize;
+    const seedRow = reachedGenesis ? undefined : ascending[0];
+    const window = reachedGenesis ? ascending : ascending.slice(1);
+
+    const report = verifyChain(
+        window,
+        seedRow ? { hash: seedRow.tamper_hash, sequence: seedRow.sequence } : undefined,
+    );
+
+    // isValid is dropped on purpose — see the type's comment. Everything else is
+    // carried through unchanged so the caller sees the same evidence.
+    return {
+        scope: 'tail',
+        rowsChecked: report.rowsChecked,
+        windowFrom: window.find((r) => typeof r.sequence === 'number')?.sequence,
+        latestSequence: report.latestSequence,
+        legacyRows: report.legacyRows,
+        errors: report.errors,
+        samples: report.samples,
+    };
+}
+
 export async function verifyAuditChain(): Promise<VerificationReport> {
     const rows: LedgerRow[] = [];
 
