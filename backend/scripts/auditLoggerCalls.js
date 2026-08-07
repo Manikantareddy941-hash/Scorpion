@@ -1,0 +1,159 @@
+#!/usr/bin/env node
+/**
+ * Finds logger calls that pass a second positional argument winston will discard.
+ *
+ * WHY THIS EXISTS
+ *
+ * services/logger.ts composes winston.format.json() (and prettyPrint() outside
+ * production) WITHOUT winston.format.splat(). A second positional argument is
+ * therefore held on a Symbol key and never serialised:
+ *
+ *     logger.error('[X] failed:', err.message)
+ *     -> {"level":"error","message":"[X] failed:"}
+ *
+ * The reason is gone. The call site looks correct, the test asserting the
+ * argument was "passed to" the logger passes, and the log line says nothing.
+ * Adding format.splat() does NOT fix this — with no %s placeholder winston
+ * Object.assigns the string into meta and it spreads one key per character:
+ *
+ *     {"0":"t","1":"h","2":"e",...}
+ *
+ * So the fix is per-site: pass an object, normally `errorContext(err)`.
+ *
+ * WHY AN AST WALK AND NOT A REGEX
+ *
+ * A line-based scan cannot see a call split across lines, and there are such
+ * calls in this repo. It also cannot tell `errorContext(err)` (correct) from
+ * `err` (wrong), because both are "a second argument that isn't an object
+ * literal" on the line. Both mistakes push the count in the wrong direction:
+ * the first understates the work, the second reports finished work as pending.
+ *
+ * A SITE IS ACCEPTABLE WHEN arguments[1] IS:
+ *   - an object literal            logger.error('msg', { event: 'x', ...errorContext(err) })
+ *   - a call to errorContext(...)  logger.error('msg', errorContext(err))
+ * Anything else is reported, including a bare `err`. Passing a raw Error is the
+ * worst of the variants: it is dropped today, and "fixing" it by spreading the
+ * error yields `{}`, because message and stack are non-enumerable.
+ *
+ * USAGE
+ *   node scripts/auditLoggerCalls.js            summary
+ *   node scripts/auditLoggerCalls.js --list     every offending site
+ *   node scripts/auditLoggerCalls.js --max=186  ratchet: exit 1 above the baseline
+ *
+ * Ratchet, not cliff: --max lets CI hold the line while the conversion lands
+ * incrementally. Lower the number as the count drops; the pass is finished at
+ * --max=0.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+const BACKEND = path.resolve(__dirname, '..');
+const SRC = path.join(BACKEND, 'src');
+const ts = require(path.join(BACKEND, 'node_modules', 'typescript'));
+
+const LEVELS = new Set(['error', 'warn', 'info', 'debug']);
+
+const args = process.argv.slice(2);
+const wantList = args.includes('--list');
+const maxArg = args.find((a) => a.startsWith('--max='));
+const max = maxArg ? Number(maxArg.slice('--max='.length)) : null;
+
+/** Test files are excluded: an assertion may legitimately reference either form. */
+function sourceFiles(dir, out = []) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            if (!/node_modules|dist|\.git/.test(p)) sourceFiles(p, out);
+        } else if (p.endsWith('.ts') && !p.endsWith('.test.ts')) {
+            out.push(p);
+        }
+    }
+    return out;
+}
+
+function isAcceptable(node) {
+    if (ts.isObjectLiteralExpression(node)) return true;
+    return (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'errorContext'
+    );
+}
+
+const offenders = [];
+const helpers = [];
+
+for (const file of sourceFiles(SRC)) {
+    const sf = ts.createSourceFile(
+        file,
+        fs.readFileSync(file, 'utf8'),
+        ts.ScriptTarget.ES2016,
+        /* setParentNodes */ true,
+    );
+    const lineOf = (node) => sf.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+    const rel = path.relative(BACKEND, file).replace(/\\/g, '/');
+
+    (function visit(node) {
+        // Local re-declarations of the helpers logger.ts already exports.
+        const helperName = /^(toMessage|errorMessage)$/;
+        if (ts.isFunctionDeclaration(node) && node.name && helperName.test(node.name.text)) {
+            helpers.push({ file: rel, name: node.name.text, line: lineOf(node) });
+        }
+        if (
+            ts.isVariableDeclaration(node) &&
+            ts.isIdentifier(node.name) &&
+            helperName.test(node.name.text) &&
+            node.initializer &&
+            (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+        ) {
+            helpers.push({ file: rel, name: node.name.text, line: lineOf(node) });
+        }
+
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+            const target = node.expression.expression;
+            const level = node.expression.name.text;
+            if (
+                ts.isIdentifier(target) &&
+                target.text === 'logger' &&
+                LEVELS.has(level) &&
+                node.arguments.length > 1 &&
+                !isAcceptable(node.arguments[1])
+            ) {
+                offenders.push({
+                    file: rel,
+                    line: lineOf(node),
+                    level,
+                    arg: node.arguments[1].getText().replace(/\s+/g, ' ').slice(0, 60),
+                });
+            }
+        }
+        ts.forEachChild(node, visit);
+    })(sf);
+}
+
+const byLevel = offenders.reduce((acc, o) => ({ ...acc, [o.level]: (acc[o.level] || 0) + 1 }), {});
+const fileCount = new Set(offenders.map((o) => o.file)).size;
+
+console.log(`logger sites dropping their second argument: ${offenders.length} across ${fileCount} files`);
+console.log(`  by level: ${JSON.stringify(byLevel)}`);
+console.log(`local toMessage/errorMessage declarations: ${helpers.length} (logger.ts exports both)`);
+
+if (wantList) {
+    console.log('');
+    for (const o of offenders.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
+        console.log(`${o.file}:${o.line} [${o.level}] arg2=${o.arg}`);
+    }
+}
+
+if (max !== null) {
+    if (Number.isNaN(max)) {
+        console.error('--max requires a number');
+        process.exit(2);
+    }
+    if (offenders.length > max) {
+        console.error(`\nFAIL: ${offenders.length} sites exceeds the baseline of ${max}.`);
+        process.exit(1);
+    }
+    console.log(`\nOK: at or below the baseline of ${max}.`);
+}
