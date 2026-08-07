@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { redisConnection } from '../queues/redisConnection';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Distributed lease lock (SET NX PX + compare-and-delete release) so mutually
@@ -43,6 +43,6 @@ export async function releaseLock(handle: LockHandle): Promise<void> {
     await redisConnection.eval(RELEASE_SCRIPT, 1, handle.key, handle.token);
   } catch (err) {
     // Lease TTL is the backstop: an unreleasable lock frees itself.
-    logger.warn(`[RedisLock] Release failed for ${handle.key}:`, err instanceof Error ? err.message : err);
+    logger.warn(`[RedisLock] Release failed for ${handle.key}`, errorContext(err));
   }
 }

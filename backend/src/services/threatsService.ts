@@ -2,7 +2,7 @@ import { threatsRepository } from '../repositories/threatsRepository';
 import { sendSecurityAlert } from './notificationService';
 import { isFalcoRuleBlocked } from './policyService';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { FalcoEvent, ThreatStatus } from '../types/threats.types';
 
 // Best-effort correlation of a Falco event's container image to one of our
@@ -78,7 +78,7 @@ export const threatsService = {
         await threatsRepository.setMonitorNodeStatus('compromised');
         logger.info('[Threats] Updated monitor node state to compromised.');
       } catch (stateErr) {
-        logger.error('[Threats] Failed to update pipeline_state collection:', stateErr instanceof Error ? stateErr.message : stateErr);
+        logger.error('[Threats] Failed to update pipeline_state collection', errorContext(stateErr));
       }
     }
 

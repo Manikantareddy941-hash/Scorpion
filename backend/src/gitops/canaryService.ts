@@ -9,7 +9,7 @@ import {
 import { enqueueCanaryCheck } from '../queues/canaryQueue';
 import { createIncident } from '../services/incidentService';
 import { auditLog } from '../services/auditService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Flagger-style canary analysis controller. Scorpion is the analysis/decision
@@ -123,7 +123,7 @@ export async function runCanaryTick(canaryId: string, tick: number): Promise<voi
         criticalCount: 0,
       });
     } catch (err) {
-      logger.error('[Canary] rollback PR failed:', err instanceof Error ? err.message : String(err));
+      logger.error('[Canary] rollback PR failed', errorContext(err));
     }
     await createIncident({
       title: `Canary rolled back: ${doc.app}`,

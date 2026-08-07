@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { PodSecurityConfig, DEFAULT_POD_SECURITY_CONFIG } from '../services/podSecurityService';
 import { isPostgresEnabled } from '../db/pool';
 import { podSecurityPgRepository } from './pg/podSecurityPgRepository';
@@ -21,10 +21,6 @@ async function readMock(): Promise<Record<string, PodSecurityConfig>> {
 async function writeMock(db: Record<string, PodSecurityConfig>): Promise<void> {
   await fs.mkdir(path.dirname(MOCK_DB_PATH), { recursive: true });
   await fs.writeFile(MOCK_DB_PATH, JSON.stringify(db, null, 2), 'utf-8');
-}
-
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 // In-process mutex serializing read-modify-write on the fallback file — same
@@ -69,7 +65,7 @@ const legacyPodSecurityRepository = {
       if (list.total === 0) return DEFAULT_POD_SECURITY_CONFIG;
       return JSON.parse(list.documents[0].config as string) as PodSecurityConfig;
     } catch (err) {
-      logger.warn('[PodSecurityRepository] Appwrite read failed, using local JSON fallback:', toMessage(err));
+      logger.warn('[PodSecurityRepository] Appwrite read failed, using local JSON fallback', errorContext(err));
       const db = await readMock();
       return db[userId] ?? DEFAULT_POD_SECURITY_CONFIG;
     }
@@ -80,7 +76,7 @@ const legacyPodSecurityRepository = {
       await persistConfig(userId, config);
       return config;
     } catch (err) {
-      logger.warn('[PodSecurityRepository] Appwrite write failed, using local JSON fallback:', toMessage(err));
+      logger.warn('[PodSecurityRepository] Appwrite write failed, using local JSON fallback', errorContext(err));
       await withLock(async () => {
         const db = await readMock();
         db[userId] = config;

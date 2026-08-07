@@ -1,5 +1,5 @@
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import { FALCO_TEMPLATES } from '../../runtime/falcoRuleCatalog';
 import type { ManagedFalcoRule } from '../../runtime/falcoRuleCatalog';
 import { newId } from './docTable';
@@ -18,10 +18,6 @@ interface RuleRow {
   severity_override: string | null;
   suppressed: boolean;
   enabled: boolean;
-}
-
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 /** null for malformed rows (unknown template) — skipping means no suppression,
@@ -50,7 +46,7 @@ export const falcoRulePgRepository = {
       );
       return (result.rows as RuleRow[]).map(fromRow).filter((r): r is ManagedFalcoRule => r !== null);
     } catch (err) {
-      logger.warn('[FalcoRulePgRepository] load failed:', toMessage(err));
+      logger.warn('[FalcoRulePgRepository] load failed', errorContext(err));
       return [];
     }
   },
@@ -65,7 +61,7 @@ export const falcoRulePgRepository = {
       );
       return { ...r, id };
     } catch (err) {
-      logger.error('[FalcoRulePgRepository] createRule failed:', toMessage(err));
+      logger.error('[FalcoRulePgRepository] createRule failed', errorContext(err));
       throw err;
     }
   },
@@ -85,7 +81,7 @@ export const falcoRulePgRepository = {
     try {
       await getPool().query(`UPDATE falco_rules SET ${sets.join(', ')} WHERE id = $1`, [id, ...values]);
     } catch (err) {
-      logger.error('[FalcoRulePgRepository] updateRule failed:', toMessage(err));
+      logger.error('[FalcoRulePgRepository] updateRule failed', errorContext(err));
       throw err;
     }
   },

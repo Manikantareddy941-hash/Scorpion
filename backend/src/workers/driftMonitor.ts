@@ -1,6 +1,6 @@
 import * as k8s from '@kubernetes/client-node';
 import * as assert from 'assert';
-import { logger } from '../services/logger';
+import { logger, errorMessage } from '../services/logger';
 import { gateRulesRepository, GateRule } from '../repositories/gateRulesRepository';
 import { driftRepository } from '../repositories/driftRepository';
 import { getScan } from '../services/imageStore';
@@ -89,10 +89,6 @@ const redisReady = (): boolean => redisConnection.status === 'ready';
 // same convention as the admission webhook so both gate on identical rules.
 const SYSTEM_USER_ID = process.env.K8S_GATE_RULES_USER_ID || 'system';
 
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /**
  * Normalize a container-status imageID into a `repo@sha256:...` ref that
  * imageDigest()/resolveSignal() understand. K8s emits several shapes:
@@ -120,7 +116,7 @@ function logAnomaly(anomaly: DriftAnomaly): void {
 function persistAnomaly(anomaly: DriftAnomaly): void {
   logAnomaly(anomaly);
   void driftRepository.save(anomaly).catch((err: unknown) => {
-    logger.error('[DriftMonitor] failed to persist drift anomaly', { event: 'runtime-drift-error', error: toMessage(err) });
+    logger.error('[DriftMonitor] failed to persist drift anomaly', { event: 'runtime-drift-error', error: errorMessage(err) });
   });
 }
 
@@ -208,7 +204,7 @@ export class DriftMonitor {
       const rules = await this.loadRules();
       for (const container of containers) await this.inspect(container, rules);
     } catch (err) {
-      logger.error('[DriftMonitor] poll failed', { event: 'runtime-drift-error', error: toMessage(err) });
+      logger.error('[DriftMonitor] poll failed', { event: 'runtime-drift-error', error: errorMessage(err) });
     } finally {
       this.polling = false;
     }
@@ -264,7 +260,7 @@ export class DriftMonitor {
         const v = await redisConnection.get(LAST_DIGEST_PREFIX + key);
         if (v !== null) return v;
       } catch (err) {
-        logger.warn('[DriftMonitor] redis get lastDigest failed — using local mirror', { key, error: toMessage(err) });
+        logger.warn('[DriftMonitor] redis get lastDigest failed — using local mirror', { key, error: errorMessage(err) });
       }
     }
     return this.lastDigest.get(key);
@@ -278,7 +274,7 @@ export class DriftMonitor {
     try {
       await redisConnection.set(LAST_DIGEST_PREFIX + key, digest, 'PX', LAST_DIGEST_TTL_MS);
     } catch (err) {
-      logger.warn('[DriftMonitor] redis set lastDigest failed — kept local mirror', { key, error: toMessage(err) });
+      logger.warn('[DriftMonitor] redis set lastDigest failed — kept local mirror', { key, error: errorMessage(err) });
     }
   }
 }
@@ -292,7 +288,7 @@ export function startDriftMonitor(): DriftMonitor | undefined {
   try {
     lister = new KubePodLister();
   } catch (err) {
-    logger.warn('[DriftMonitor] no kube config — runtime drift monitoring disabled', { error: toMessage(err) });
+    logger.warn('[DriftMonitor] no kube config — runtime drift monitoring disabled', { error: errorMessage(err) });
     return undefined;
   }
   const monitor = new DriftMonitor({ lister });

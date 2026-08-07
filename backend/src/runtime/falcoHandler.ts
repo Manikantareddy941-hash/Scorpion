@@ -5,7 +5,7 @@ import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
 import { auditLog } from '../services/auditService';
 import { sendSlackNotification } from '../services/slackService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { matchPlaybooks, normalizePriority } from '../soar/playbookMatcher';
 import { soarRepository } from '../repositories/soarRepository';
 import { enqueueSoarAction } from '../queues/soarQueue';
@@ -40,7 +40,7 @@ async function resolveRepoIdByDigest(digest: string): Promise<string> {
     const repoId = builds.documents[0]?.repoId;
     return typeof repoId === 'string' ? repoId : '';
   } catch (err) {
-    logger.warn('[Falco Handler] digest->repo lookup failed (name route retained):', err instanceof Error ? err.message : err);
+    logger.warn('[Falco Handler] digest->repo lookup failed (name route retained)', errorContext(err));
     return '';
   }
 }

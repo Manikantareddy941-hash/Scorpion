@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { falcoRuleRepository } from '../repositories/falcoRuleRepository';
 import { renderFalcoRules, FALCO_TEMPLATES, SAFE_PARAM } from '../runtime/falcoRuleCatalog';
 import { requireRole } from '../middleware/requireRole';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const prioritySchema = z.enum(['Emergency', 'Alert', 'Critical', 'Error', 'Warning', 'Notice', 'Informational', 'Debug']);
 
@@ -24,10 +24,6 @@ const ruleSchema = z.object({
   enabled: z.boolean(),
 });
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Unknown error';
-}
-
 const router = Router();
 router.use(requireRole('admin', 'security'));
 
@@ -36,7 +32,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const rules = await falcoRuleRepository.listRules();
     res.json({ rules, templates: FALCO_TEMPLATES });
   } catch (err) {
-    logger.error('[FalcoRules API] list failed:', errorMessage(err));
+    logger.error('[FalcoRules API] list failed', errorContext(err));
     res.status(500).json({ error: 'Failed to list rules' });
   }
 });
@@ -46,7 +42,7 @@ router.get('/export', async (_req: Request, res: Response) => {
     const rules = await falcoRuleRepository.listRules();
     res.type('text/yaml').send(renderFalcoRules(rules));
   } catch (err) {
-    logger.error('[FalcoRules API] export failed:', errorMessage(err));
+    logger.error('[FalcoRules API] export failed', errorContext(err));
     res.status(500).json({ error: 'Failed to render rules' });
   }
 });
@@ -60,7 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
     const rule = await falcoRuleRepository.createRule(parsed.data);
     res.status(201).json({ rule });
   } catch (err) {
-    logger.error('[FalcoRules API] create failed:', errorMessage(err));
+    logger.error('[FalcoRules API] create failed', errorContext(err));
     res.status(500).json({ error: 'Failed to create rule' });
   }
 });
@@ -74,7 +70,7 @@ router.patch('/:id', async (req: Request<Record<string, string>>, res: Response)
     await falcoRuleRepository.updateRule(req.params.id, parsed.data);
     res.json({ status: 'updated' });
   } catch (err) {
-    logger.error('[FalcoRules API] update failed:', errorMessage(err));
+    logger.error('[FalcoRules API] update failed', errorContext(err));
     res.status(500).json({ error: 'Failed to update rule' });
   }
 });

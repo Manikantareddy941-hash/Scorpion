@@ -79,8 +79,8 @@ export async function ensureSequenceAttribute(): Promise<void> {
       verdict = await classifyAttributeFailure(databases, DB_ID, 'audit_logs_v2', 'sequence', err);
     } catch (probeErr) {
       logger.error(
-        '[Audit Logs Setup] could not verify whether `sequence` exists after a failed create:',
-        probeErr instanceof Error ? probeErr.message : probeErr,
+        '[Audit Logs Setup] could not verify whether `sequence` exists after a failed create',
+        errorContext(probeErr),
       );
       return; // unmemoised — retried on the next write, once Appwrite answers again
     }

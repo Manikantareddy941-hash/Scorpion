@@ -3,7 +3,7 @@ import { TenantAccessError } from '../services/tenancyService';
 import { repoService } from '../services/repoService';
 import { validateBody } from '../middleware/validate';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { AuthenticatedRequest, addRepoSchema, bulkConnectSchema, externalScanSchema, triggerScanSchema } from '../types/repo.types';
 import { getEffectivePolicy } from '../services/policyService';
 import { hasRequiredRole } from '../services/rbacService';
@@ -90,7 +90,7 @@ router.post('/bulk-connect', validateBody(bulkConnectSchema), async (req: Authen
             } catch (error: unknown) {
                 if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
                 failed.push(url);
-                logger.warn(`[RepoRoutes] Bulk-connect failed for ${url}:`, error instanceof Error ? error.message : error);
+                logger.warn(`[RepoRoutes] Bulk-connect failed for ${url}`, errorContext(error));
             }
         }
 
@@ -111,7 +111,7 @@ router.get('/external', async (req: AuthenticatedRequest, res: Response) => {
         const repos = await repoService.listExternalRepos(provider, token);
         res.json({ repos });
     } catch (error) {
-        logger.error(`[RepoRoutes] Failed to list ${provider} repos:`, error instanceof Error ? error.message : error);
+        logger.error(`[RepoRoutes] Failed to list ${provider} repos`, errorContext(error));
         res.status(500).json({ error: `Failed to list ${provider} repositories` });
     }
 });

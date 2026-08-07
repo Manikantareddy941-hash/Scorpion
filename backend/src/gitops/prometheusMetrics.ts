@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Canary metric source: queries the Monitor stack's Prometheus for the app's
@@ -35,7 +35,7 @@ async function queryScalar(baseUrl: string, query: string): Promise<number | nul
     const num = Number(raw);
     return Number.isFinite(num) ? num : null;
   } catch (err) {
-    logger.warn('[PrometheusMetrics] query failed:', err instanceof Error ? err.message : String(err));
+    logger.warn('[PrometheusMetrics] query failed', errorContext(err));
     return null;
   }
 }

@@ -1,7 +1,7 @@
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { sendSlackNotification } from '../services/slackService';
 import { auditLog } from '../services/auditService';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import type { SoarActionRecord } from '../repositories/soarRepository';
 
 export const QUARANTINE_LABEL = 'scorpion-quarantine';
@@ -87,10 +87,6 @@ export interface SoarExecutionDeps {
 
 type ExecutionResult = { ok: true; result: string } | { ok: false; error: string };
 
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 async function slackEscalate(action: SoarActionRecord, ownerUserId: string): Promise<string> {
   // Scoped to the incident owner, same convention as falcoHandler — an
   // unscoped list here would broadcast the incident to every tenant's webhook.
@@ -129,7 +125,7 @@ export async function executeSoarAction(
             const podJson = await deps.k8s.getPodJson(action.namespace, action.podName);
             podSpec = JSON.parse(podJson);
           } catch (e) {
-            podSpec = toMessage(e);
+            podSpec = errorMessage(e);
           }
         }
         let event: unknown = null;
@@ -170,8 +166,8 @@ export async function executeSoarAction(
       }
     }
   } catch (err) {
-    logger.error(`[SOAR] action ${action.actionType} failed:`, toMessage(err));
-    return { ok: false, error: toMessage(err) };
+    logger.error(`[SOAR] action ${action.actionType} failed`, errorContext(err));
+    return { ok: false, error: errorMessage(err) };
   } finally {
     await auditLog({
       action: `soar.${action.actionType}` as const,

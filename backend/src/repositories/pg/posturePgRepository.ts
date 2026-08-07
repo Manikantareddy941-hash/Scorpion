@@ -1,5 +1,5 @@
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import type { PostureFinding } from '../../posture/postureChecks';
 import type { NamespaceSnapshot } from '../postureRepository';
 
@@ -10,10 +10,6 @@ interface SnapshotRow {
   score: number;
   findings: unknown;
   updated_at: Date;
-}
-
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 export const posturePgRepository = {
@@ -32,7 +28,7 @@ export const posturePgRepository = {
           [ns.namespace, ns.score, JSON.stringify(ns.findings), updatedAt]
         );
       } catch (err) {
-        logger.error(`[PosturePgRepository] save for '${ns.namespace}' failed:`, toMessage(err));
+        logger.error(`[PosturePgRepository] save for '${ns.namespace}' failed`, errorContext(err));
         throw err;
       }
     }
@@ -51,7 +47,7 @@ export const posturePgRepository = {
         updatedAt: row.updated_at.toISOString(),
       }));
     } catch (err) {
-      logger.warn('[PosturePgRepository] list failed:', toMessage(err));
+      logger.warn('[PosturePgRepository] list failed', errorContext(err));
       return [];
     }
   },

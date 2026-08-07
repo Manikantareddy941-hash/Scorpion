@@ -3,14 +3,10 @@ import { databases, DB_ID, ID, COLLECTIONS } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { enqueueNucleiScan } from '../queues/nucleiQueue';
 import { assertSafeScanTarget } from '../utils/ssrfGuard';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 function errorCode(err: unknown): number | undefined {
@@ -65,7 +61,7 @@ router.post('/nuclei', verifyUser, async (req: AuthenticatedRequest, res: Respon
         res.json({ scanId, status: 'started' });
 
     } catch (err: unknown) {
-        logger.error('[Nuclei API Error]', errorMessage(err));
+        logger.error('[Nuclei API Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -86,7 +82,7 @@ router.get('/nuclei/:scanId/status', verifyUser, async (req: AuthenticatedReques
         });
     } catch (err: unknown) {
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Scan not found' });
-        logger.error('[Nuclei API Status Error]', errorMessage(err));
+        logger.error('[Nuclei API Status Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error' });
     }
 });

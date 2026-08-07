@@ -1,5 +1,5 @@
 import * as k8s from '@kubernetes/client-node';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import {
   ClusterSnapshot, PodPosture, runPostureChecks, scoreNamespace,
 } from '../posture/postureChecks';
@@ -11,10 +11,6 @@ export interface ClusterReader {
 }
 
 const DEFAULT_INTERVAL_MS = Number(process.env.POSTURE_SCAN_INTERVAL_MS) || 300_000;
-
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 /** Maps a raw V1Pod to the pure check input. Exported for unit testing. */
 export function podToPosture(pod: k8s.V1Pod): PodPosture {
@@ -79,8 +75,7 @@ export async function runPostureScan(reader: ClusterReader): Promise<void> {
   try {
     snapshot = await reader.readSnapshot();
   } catch (err) {
-    logger.warn('[PostureScanner] cluster read failed, skipping tick:',
-      toMessage(err));
+    logger.warn('[PostureScanner] cluster read failed, skipping tick', errorContext(err));
     return;
   }
   const findings = runPostureChecks(snapshot);
@@ -91,7 +86,7 @@ export async function runPostureScan(reader: ClusterReader): Promise<void> {
   try {
     await postureRepository.saveSnapshot(grouped);
   } catch (err) {
-    logger.warn('[PostureScanner] snapshot save failed, tick lost:', toMessage(err));
+    logger.warn('[PostureScanner] snapshot save failed, tick lost', errorContext(err));
     return;
   }
   logger.info(`[PostureScanner] scanned ${snapshot.namespaces.length} namespace(s), ${findings.length} finding(s)`);
@@ -101,8 +96,16 @@ export function startPostureScanner(reader: ClusterReader = createClusterReader(
   logger.info(`[PostureScanner] starting, interval ${DEFAULT_INTERVAL_MS}ms`);
   // Fire one tick immediately so the UI isn't empty for the first interval
   // after every boot; non-blocking, same catch as the interval below.
-  void runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed:', err));
+  // These two were already surviving: winston special-cases an Error *instance*
+  // as a second argument, appending its message and lifting `stack`. The change
+  // is for uniformity, not to fix a drop — every other failure log in this file
+  // now carries the same shape, and `catch (err)` gives `unknown`, which the
+  // Error-instance path cannot be relied on to receive.
+  //
+  // Note this is the one case where spreading would be wrong: `...err` yields
+  // nothing, because message and stack are non-enumerable.
+  void runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed', errorContext(err)));
   return setInterval(() => {
-    runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed:', err));
+    runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed', errorContext(err)));
   }, DEFAULT_INTERVAL_MS);
 }

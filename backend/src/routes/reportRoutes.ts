@@ -9,14 +9,10 @@ import { generateSecuritySummary } from '../services/aiService';
 import { canAccessResource, resolveOwnershipScope } from '../services/tenancyService';
 import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from '../services/reportingService';
 import { PassThrough } from 'stream';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
-}
-
-function errorMessage(err: unknown): string {
-    return err instanceof Error ? err.message : 'Unknown error';
 }
 
 const router = Router();
@@ -77,7 +73,7 @@ router.get('/ai-summary', verifyUser, async (req: AuthenticatedRequest, res: Res
             clearTimeout(timeoutHandle);
         }
     } catch (err: unknown) {
-        logger.error('[AI Summary Error]', errorMessage(err));
+        logger.error('[AI Summary Error]', errorContext(err));
         const fallback = "### ⚠️ AI Analysis Engine temporarily unreachable\n\n*The security mesh analysis timed out or encountered a network bridge interruption.*\n\n**Action Required**:\n1. Please check your network connectivity.\n2. Verify the Gemini API key status in your environment configuration.\n3. Try refreshing the briefing in a few moments.\n\n*Manual telemetry indicates system health remains within normal operational parameters.*";
         res.status(200).json({ summary: fallback });
     }

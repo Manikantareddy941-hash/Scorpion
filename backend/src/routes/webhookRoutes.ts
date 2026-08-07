@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { webhookIngestService } from '../services/webhookIngestService';
 import {
   githubAppInstallSchema,
@@ -114,7 +114,7 @@ router.post('/gitlab', async (req: Request, res: Response) => {
             case 'ok': return res.json({ message: `Triggered ${result.runs.length} pipeline run(s)`, runs: result.runs });
         }
     } catch (err) {
-        logger.error('[GitLab Webhook Error]', err instanceof Error ? err.message : err);
+        logger.error('[GitLab Webhook Error]', errorContext(err));
         res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
     }
 });

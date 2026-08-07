@@ -8,7 +8,7 @@ import { logAuditEvent } from '../utils/auditLogger';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
 import { canAccessResource } from './tenancyService';
 import { analyzeReachablePackages } from './reachabilityService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { GateBlocker, GateResult, PipelineGateStatus } from '../types/gate.types';
 
 // SCA reachability filter: drop blockers for packages first-party code never
@@ -64,7 +64,7 @@ async function filterByReachability(repoId: string, blockers: GateBlocker[]): Pr
       return reachable.has(pkg);
     });
   } catch (err) {
-    logger.warn(`[Gate] Reachability filter skipped for ${repoId}:`, err instanceof Error ? err.message : err);
+    logger.warn(`[Gate] Reachability filter skipped for ${repoId}`, errorContext(err));
     return blockers; // fail-secure on any analysis error
   }
 }
@@ -123,7 +123,7 @@ export async function checkReleaseGate(repoId: string): Promise<GateResult> {
         regoDenyReasons = opaResult.denyReasons;
       }
     } catch (err) {
-      logger.warn(`[Gate] Custom Rego policy evaluation skipped for ${repoId}:`, err instanceof Error ? err.message : err);
+      logger.warn(`[Gate] Custom Rego policy evaluation skipped for ${repoId}`, errorContext(err));
     }
   }
 

@@ -1,6 +1,6 @@
 import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 import { FALCO_TEMPLATES } from '../runtime/falcoRuleCatalog';
 import type { ManagedFalcoRule } from '../runtime/falcoRuleCatalog';
 import { isPostgresEnabled } from '../db/pool';
@@ -15,10 +15,6 @@ interface RuleWire {
   severityOverride?: ManagedFalcoRule['severityOverride'] | null;
   suppressed: boolean;
   enabled: boolean;
-}
-
-function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 /** null for malformed rows (unknown template / bad params JSON) — skipped
@@ -40,7 +36,7 @@ function fromDoc(doc: Models.Document): ManagedFalcoRule | null {
       enabled: w.enabled,
     };
   } catch (err) {
-    logger.warn(`[FalcoRuleRepository] skipping rule ${doc.$id}: ${toMessage(err)}`);
+    logger.warn(`[FalcoRuleRepository] skipping rule ${doc.$id}: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -52,7 +48,7 @@ const legacyFalcoRuleRepository = {
       const list = await databases.listDocuments(DB_ID, COLLECTION, [Query.limit(200)]);
       return list.documents.map(fromDoc).filter((r): r is ManagedFalcoRule => r !== null);
     } catch (err) {
-      logger.warn('[FalcoRuleRepository] load failed:', toMessage(err));
+      logger.warn('[FalcoRuleRepository] load failed', errorContext(err));
       return [];
     }
   },
@@ -71,7 +67,7 @@ const legacyFalcoRuleRepository = {
       });
       return { ...r, id: doc.$id };
     } catch (err) {
-      logger.error('[FalcoRuleRepository] createRule failed:', toMessage(err));
+      logger.error('[FalcoRuleRepository] createRule failed', errorContext(err));
       throw err;
     }
   },
@@ -87,7 +83,7 @@ const legacyFalcoRuleRepository = {
     try {
       await databases.updateDocument(DB_ID, COLLECTION, id, patch);
     } catch (err) {
-      logger.error('[FalcoRuleRepository] updateRule failed:', toMessage(err));
+      logger.error('[FalcoRuleRepository] updateRule failed', errorContext(err));
       throw err;
     }
   },

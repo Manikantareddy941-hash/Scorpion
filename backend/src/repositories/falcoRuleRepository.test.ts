@@ -6,7 +6,14 @@ jest.mock('../lib/appwrite');
 // Pin the storage facade to its legacy Appwrite path — this suite asserts on
 // databases.* calls; the Postgres path is covered by pg/falcoRulePgRepository.test.ts.
 jest.mock('../db/pool', () => ({ isPostgresEnabled: () => false, getPool: jest.fn(), closePool: jest.fn() }));
-jest.mock('../services/logger');
+// Not a bare automock. Automocking turns every export into a jest.fn() returning
+// undefined, including errorContext — and the call sites pass its result straight in
+// as the log metadata, so the assertion below would receive `undefined` rather than
+// the payload. Only `logger` itself needs faking.
+jest.mock('../services/logger', () => ({
+    ...jest.requireActual('../services/logger'),
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 
 describe('falcoRuleRepository', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -74,9 +81,13 @@ describe('falcoRuleRepository', () => {
       const rules = await falcoRuleRepository.listRules();
 
       expect(rules).toEqual([]);
+      // The value stays pinned: this assertion exists because the old form
+      // certified that 'DB error' reached a logger that silently dropped it.
+      // objectContaining absorbs the `stack` key errorContext adds outside
+      // production, without weakening the check on the message itself.
       expect(logger.warn).toHaveBeenCalledWith(
-        '[FalcoRuleRepository] load failed:',
-        'DB error'
+        '[FalcoRuleRepository] load failed',
+        expect.objectContaining({ error: 'DB error' })
       );
     });
   });

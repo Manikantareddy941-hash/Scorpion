@@ -1,6 +1,6 @@
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
 import type { Models } from 'node-appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { GateSeverity } from './gateRulesRepository';
 import type { DriftAnomaly } from '../workers/driftMonitor';
 import { isPostgresEnabled } from '../db/pool';
@@ -99,7 +99,7 @@ const legacyDriftRepository = {
       await insert(record);
       return record;
     } catch (err) {
-      logger.warn('[DriftRepository] Appwrite write failed, using local JSON fallback:', toMessage(err));
+      logger.warn('[DriftRepository] Appwrite write failed, using local JSON fallback', errorContext(err));
       await bufferRecord(record);
       return record;
     }
@@ -128,7 +128,7 @@ const legacyDriftRepository = {
       const list = await databases.listDocuments(DB_ID, COLLECTION, queries);
       return list.documents.map(fromDoc);
     } catch (err) {
-      logger.warn('[DriftRepository] Appwrite read failed, using local JSON fallback:', toMessage(err));
+      logger.warn('[DriftRepository] Appwrite read failed, using local JSON fallback', errorContext(err));
       return selectFallback(await readMock(), opts, limit);
     }
   },

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { JiraConfig, JiraSyncResult, Ticket } from '../../../shared/types';
 import { ticketsRepository } from '../repositories/ticketsRepository';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const { getTicket, updateTicket, listTickets } = ticketsRepository;
 
@@ -198,7 +198,13 @@ export async function pushTicketToJira(ticketId: string): Promise<JiraSyncResult
 
     return { ok: true, jiraKey, jiraId };
   } catch (err: any) {
-    logger.error('Error syncing to Jira:', err?.response?.data || err.message);
+    logger.error('Error syncing to Jira', {
+      // The Jira error body is an object and survived winston on its own; the
+      // `.message` fallback did not. Both are recorded now, so a transport
+      // failure and a rejected payload no longer look the same in the log.
+      jiraResponse: err?.response?.data,
+      ...errorContext(err),
+    });
     const errorMsg = err?.response?.data?.errorMessages?.join(', ') || 
                      JSON.stringify(err?.response?.data?.errors) || 
                      err.message;
@@ -247,7 +253,13 @@ async function transitionJiraIssue(jiraKey: string, targetStatus: Ticket['status
       logger.warn(`Jira transition for status "${targetStatus}" (Mapped: "${targetTransitionName}") not found on issue ${jiraKey}.`);
     }
   } catch (err: any) {
-    logger.error(`Failed to transition Jira issue ${jiraKey}:`, err?.response?.data || err.message);
+    logger.error(`Failed to transition Jira issue ${jiraKey}`, {
+      // The Jira error body is an object and survived winston on its own; the
+      // `.message` fallback did not. Both are recorded now, so a transport
+      // failure and a rejected payload no longer look the same in the log.
+      jiraResponse: err?.response?.data,
+      ...errorContext(err),
+    });
   }
 }
 
@@ -295,7 +307,13 @@ export async function pullFromJira(jiraKey: string): Promise<{ ok: boolean; tick
 
     return { ok: true, ticket: updated };
   } catch (err: any) {
-    logger.error(`Error pulling from Jira for ${jiraKey}:`, err?.response?.data || err.message);
+    logger.error(`Error pulling from Jira for ${jiraKey}`, {
+      // The Jira error body is an object and survived winston on its own; the
+      // `.message` fallback did not. Both are recorded now, so a transport
+      // failure and a rejected payload no longer look the same in the log.
+      jiraResponse: err?.response?.data,
+      ...errorContext(err),
+    });
     const errorMsg = err?.response?.data?.errorMessages?.join(', ') || err.message;
     return { ok: false, error: errorMsg };
   }
@@ -314,7 +332,13 @@ export async function testConnection(): Promise<{ ok: boolean; projectName?: str
     const response = await jiraRequest('GET', `/rest/api/3/project/${projectKey}`);
     return { ok: true, projectName: response.name };
   } catch (err: any) {
-    logger.error('Jira Connection Test Failed:', err?.response?.data || err.message);
+    logger.error('Jira Connection Test Failed', {
+      // The Jira error body is an object and survived winston on its own; the
+      // `.message` fallback did not. Both are recorded now, so a transport
+      // failure and a rejected payload no longer look the same in the log.
+      jiraResponse: err?.response?.data,
+      ...errorContext(err),
+    });
     const errorMsg = err?.response?.data?.errorMessages?.join(', ') || 
                      JSON.stringify(err?.response?.data?.errors) || 
                      err.message;

@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { planRepository } from '../repositories/planRepository';
 import { AutomationRule, Issue, Sprint } from '../types/plan.types';
 import { sendSecurityAlert } from './notificationService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 /**
  * Automation engine for the Plan module. Executes stored automation rules when
@@ -98,7 +98,7 @@ export async function runAutomation(projectId: string, event: string, ctx: Autom
       }
     }
   } catch (err) {
-    logger.error('[Automation] Engine failure:', err instanceof Error ? err.message : err);
+    logger.error('[Automation] Engine failure', errorContext(err));
   }
 }
 
@@ -125,7 +125,7 @@ export async function writeSprintSnapshot(projectId: string, sprint: Sprint, spr
       closedAt: new Date().toISOString(),
     });
   } catch (err) {
-    logger.error('[SprintSnapshot] Failed to snapshot sprint velocity:', err instanceof Error ? err.message : err);
+    logger.error('[SprintSnapshot] Failed to snapshot sprint velocity', errorContext(err));
   }
 }
 
@@ -146,7 +146,7 @@ export async function rollUnfinishedToBacklog(sprintId: string): Promise<number>
       }
     }
   } catch (err) {
-    logger.error('[Sprint] Failed to roll unfinished issues to backlog:', err instanceof Error ? err.message : err);
+    logger.error('[Sprint] Failed to roll unfinished issues to backlog', errorContext(err));
   }
   return moved;
 }

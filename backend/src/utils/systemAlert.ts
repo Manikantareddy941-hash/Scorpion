@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Alerts about the platform itself, not about a customer's findings.
@@ -67,8 +67,8 @@ async function deliver(label: string, send: () => Promise<unknown>): Promise<boo
             return true;
         } catch (err) {
             logger.error(
-                `[SystemAlert] ${label} delivery failed (attempt ${attempt}/${SINK_ATTEMPTS}):`,
-                err instanceof Error ? err.message : String(err),
+                `[SystemAlert] ${label} delivery failed (attempt ${attempt}/${SINK_ATTEMPTS})`,
+                errorContext(err),
             );
             if (attempt < SINK_ATTEMPTS) {
                 await new Promise((resolve) => setTimeout(resolve, SINK_RETRY_DELAY_MS));

@@ -1,4 +1,4 @@
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { IngestableIssue } from '../types/scan.types';
 
 /**
@@ -56,10 +56,7 @@ export async function fetchEpssScores(cveIds: string[]): Promise<Map<string, Eps
         });
       }
     } catch (err) {
-      logger.warn(
-        '[Enrichment] EPSS fetch failed, findings in this batch stay unscored:',
-        err instanceof Error ? err.message : err
-      );
+      logger.warn('[Enrichment] EPSS fetch failed, findings in this batch stay unscored', errorContext(err));
     }
   }
   return scores;
@@ -81,10 +78,7 @@ export async function loadKevCatalog(): Promise<Set<string>> {
     kevCache = { cveIds, fetchedAt: Date.now() };
     return cveIds;
   } catch (err) {
-    logger.warn(
-      '[Enrichment] KEV feed fetch failed, serving stale/empty catalog:',
-      err instanceof Error ? err.message : err
-    );
+    logger.warn('[Enrichment] KEV feed fetch failed, serving stale/empty catalog', errorContext(err));
     return kevCache?.cveIds ?? new Set();
   }
 }

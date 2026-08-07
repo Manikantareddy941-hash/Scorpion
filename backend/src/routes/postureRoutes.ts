@@ -1,11 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { postureRepository } from '../repositories/postureRepository';
 import { requireRole } from '../middleware/requireRole';
-import { logger } from '../services/logger';
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Unknown error';
-}
+import { logger, errorContext } from '../services/logger';
 
 const router = Router();
 
@@ -18,7 +14,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const data = await postureRepository.listSnapshots();
     res.json({ success: true, data, meta: { total: data.length } });
   } catch (err) {
-    logger.error('[Posture API] list snapshots failed:', errorMessage(err));
+    logger.error('[Posture API] list snapshots failed', errorContext(err));
     res.status(500).json({ error: 'Failed to list posture snapshots' });
   }
 });

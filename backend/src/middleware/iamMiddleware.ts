@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { evaluateIAM, DEFAULT_IAM_POLICY, ADMIN_IAM_POLICY, IAMStatement } from '../services/policyService';
-import { logger } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 export interface IAMRequest extends Request {
     user?: {
@@ -62,10 +62,10 @@ export const resolveIamStatements = async (req: Request, userId: string, resourc
             // set nobody had consulted, and said so at warn level. A check that
             // could not be performed is not a check that passed.
             logger.error(
-                `[IAM Middleware] Could not retrieve team policy for ${activeTeamId} — denying (fail-closed):`,
-                (err as Error).message,
+                `[IAM Middleware] Could not retrieve team policy for ${activeTeamId} — denying (fail-closed)`,
+                errorContext(err),
             );
-            throw new IamPolicyUnavailableError(activeTeamId, (err as Error).message);
+            throw new IamPolicyUnavailableError(activeTeamId, errorMessage(err));
         }
     }
 
