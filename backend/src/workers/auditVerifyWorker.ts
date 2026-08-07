@@ -4,7 +4,7 @@ import { AUDIT_QUEUE_NAME, type AuditVerifyJobData } from '../queues/auditQueue'
 import { verifyAuditTail, type VerificationError, type TailVerificationReport } from '../utils/auditVerifier';
 import { verifyAnchorIntegrity, type AnchorVerificationReport } from '../utils/auditAnchorVerifier';
 import { runFullAuditVerification, isTamperSuspected, type FullAuditReport } from '../utils/auditOrchestrator';
-import { sendSystemAlert, type SystemAlertPayload } from '../utils/systemAlert';
+import { sendSystemAlert, configuredSinks, type SystemAlertPayload } from '../utils/systemAlert';
 import { logger } from '../services/logger';
 
 /**
@@ -229,6 +229,47 @@ export function initAuditVerifyWorker(): Worker<AuditVerifyJobData> {
         logger.error(`[AuditVerifier] ${job?.data.tier ?? 'unknown'} verification failed:`, err?.message ?? err);
     });
 
+    reportAlertSinks();
+
     logger.info('[AuditVerifier] worker started (tail + full ledger verification)');
     return worker;
+}
+
+/**
+ * States at boot which alert sinks are bound.
+ *
+ * WHY THIS IS NOT REDUNDANT WITH audit_alert_undeliverable.
+ *
+ * That event is emitted from dispatch(), which only runs when there is actually
+ * something to report. On a healthy ledger it never fires — so its absence says
+ * nothing about whether the sinks are wired, and reading "no undeliverable
+ * errors" as "alerting works" is the same false-positive this subsystem exists to
+ * eliminate. The configuration is only observable at the moment an alert is
+ * needed, which is the worst moment to discover it is wrong.
+ *
+ * Emitting it at boot makes the answer available before it matters. Names only,
+ * never values.
+ */
+function reportAlertSinks(): void {
+    const sinks = configuredSinks();
+
+    if (sinks.length === 0) {
+        logger.error(
+            '[AuditVerifier] NO alert sink is configured — tamper evidence will reach the application ' +
+            'log and nothing else. Set SYSTEM_ALERT_SLACK_WEBHOOK, SYSTEM_ALERT_PAGERDUTY_KEY or ' +
+            'SYSTEM_ALERT_WEBHOOK_URL.',
+            { event: 'audit_alert_sinks_unconfigured' },
+        );
+        return;
+    }
+
+    logger.info(`[AuditVerifier] alert sinks configured: ${sinks.join(', ')}`, {
+        event: 'audit_alert_sinks_configured',
+        sinks,
+    });
+}
+
+/** Test seam — the worker handle is module-global and would leak between suites. */
+export function __resetAuditVerifyWorkerForTests(): void {
+    worker = null;
 }
