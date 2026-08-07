@@ -3,14 +3,17 @@ import { Terminal as TerminalIcon, Plus, SplitSquareHorizontal, Eraser, External
 import { useTerminalSession } from './useTerminalSession';
 import { TerminalPane } from './TerminalPane';
 import { RecentCommands } from './RecentCommands';
+import { SHELL_PROFILES, SCORPION_PROFILE_ID, findProfile, vscodeTerminalUri } from './shellProfiles';
 
 /**
  * Scorpion Terminal — tabs, split panes, and the toolbar.
  *
- * This is an IDE-shaped client over a fixed verb registry. It has no shell
- * profiles because there is no shell: the backend tokenises input and looks the
- * first token up in a Map, so "switch to PowerShell" has nothing to switch to.
- * See backend/src/services/terminal/commands.ts.
+ * This is an IDE-shaped client over a fixed verb registry, not a shell: the backend
+ * tokenises input and looks the first token up in a Map. The profile selector is
+ * therefore a *host* selector, not a shell switch — the audited profile runs here,
+ * and native profiles are handed to the SCORPION VS Code extension, which is the
+ * only party in this system that can legitimately spawn a process on your machine.
+ * See ./shellProfiles.ts for why that boundary is where it is.
  */
 
 export default function ScorpionTerminal() {
@@ -25,6 +28,29 @@ export default function ScorpionTerminal() {
         color: 'var(--text-secondary)',
         border: '1px solid var(--border-subtle)',
         background: 'var(--bg-secondary)',
+    };
+
+    /**
+     * A native profile cannot open in this tab, so say what happened rather than
+     * appearing to have spawned something. The audit line is not decoration: a shell
+     * opened this way is genuinely outside the ledger, and an operator reading the
+     * chain later needs to know that gap is expected.
+     */
+    const launchProfile = (profileId: string) => {
+        if (profileId === SCORPION_PROFILE_ID) {
+            session.addTab();
+            return;
+        }
+        const profile = findProfile(profileId);
+        if (!profile || !activePane) return;
+
+        window.location.href = vscodeTerminalUri(profile.id);
+        session.notify(activePane.id, [
+            `Opening ${profile.label} in VS Code via the SCORPION extension.`,
+            '  It runs on your machine with your privileges — not on the control plane,',
+            '  and not through the audit ledger. Nothing you type there is recorded here.',
+            '  If no terminal appears, install the SCORPION extension and reload VS Code.',
+        ]);
     };
 
     return (
@@ -42,6 +68,33 @@ export default function ScorpionTerminal() {
                 </span>
 
                 <div className="flex items-center gap-1 ml-auto">
+                    {/*
+                      * A plain <select>: keyboard- and screen-reader-correct for free, and it
+                      * renders as the platform's own menu. A custom popover here would be ~150
+                      * lines re-implementing what the element already does.
+                      *
+                      * It is pinned to a placeholder rather than to the chosen profile, which
+                      * makes it a launcher instead of a state display. Two reasons, both bugs
+                      * found the other way round: pinning it to the active profile means
+                      * re-picking that profile fires no change event and the entry is dead;
+                      * and leaving a native profile displayed after a handoff would imply this
+                      * pane is a Git Bash session when it is still the audited shell.
+                      */}
+                    <select
+                        aria-label="Terminal profile"
+                        title="Open a terminal profile"
+                        value=""
+                        onChange={(e) => launchProfile(e.target.value)}
+                        className="px-2 py-1 rounded text-xs"
+                        style={toolbarButton}
+                    >
+                        <option value="" disabled>Profile…</option>
+                        {SHELL_PROFILES.map((profile) => (
+                            <option key={profile.id} value={profile.id} title={profile.description}>
+                                {profile.label}
+                            </option>
+                        ))}
+                    </select>
                     <button type="button" onClick={session.addTab} title="New Terminal" aria-label="New terminal"
                         className="flex items-center gap-1 px-2 py-1 rounded text-xs" style={toolbarButton}>
                         <Plus size={12} /> New

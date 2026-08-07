@@ -3,6 +3,8 @@
   "displayName": "SCORPION Security",
   "description": "AI-powered security scanning and remediation",
   "version": "0.0.1",
+  "// publisher": "Required for the vscode://scorpion.scorpion-security/... URI authority the web terminal deep-links to. Must stay in sync with EXTENSION_URI_AUTHORITY in src/components/terminal/shellProfiles.ts.",
+  "publisher": "scorpion",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -10,7 +12,8 @@
     "Security"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onUri"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -32,6 +35,32 @@
         "title": "SCORPION: Uninstall Pre-Commit Hook"
       }
     ],
+    "terminal": {
+      "profiles": [
+        {
+          "id": "scorpion.gitbash",
+          "title": "SCORPION: Git Bash",
+          "icon": "$(terminal-bash)",
+          "when": "isWindows"
+        },
+        {
+          "id": "scorpion.powershell",
+          "title": "SCORPION: PowerShell",
+          "icon": "$(terminal-powershell)"
+        },
+        {
+          "id": "scorpion.cmd",
+          "title": "SCORPION: Command Prompt",
+          "icon": "$(terminal-cmd)",
+          "when": "isWindows"
+        },
+        {
+          "id": "scorpion.bash",
+          "title": "SCORPION: Bash",
+          "icon": "$(terminal-bash)"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {

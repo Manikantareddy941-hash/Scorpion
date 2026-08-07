@@ -13,6 +13,35 @@ import { MAX_SCROLLBACK, newPane, newTab, type Entry, type PaneState, type TabSt
 /** Monotonic across all panes; anchors command-boundary scrolling. */
 let nextCommandId = 1;
 
+/**
+ * Serviced in the client rather than over the wire. Clearing the screen changes no
+ * server state and needs no audit record, so it is the one thing that must keep
+ * working when the audited backend is unreachable.
+ */
+const LOCAL_ONLY = 'clear';
+
+/** How much of a proxy's error page to echo. Enough to identify it, not to fill the pane. */
+const UPSTREAM_SNIPPET = 160;
+
+/**
+ * A response body that is not JSON did not come from /api/terminal/exec — the route
+ * only ever answers JSON. Something in front of it answered instead: nginx with a 502
+ * because the backend container is down, the dev proxy with a 500, or the SPA fallback
+ * with index.html because /api was never proxied at all.
+ *
+ * `Request failed (502)` hid all of that behind a number. An operator needs to know the
+ * command never reached the audit ledger, and which hop to go look at.
+ */
+function transportTrace(status: number, body: string): readonly Entry[] {
+    const snippet = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, UPSTREAM_SNIPPET);
+    return [
+        { kind: 'error', text: `error: the audited backend never answered (HTTP ${status}).` },
+        { kind: 'error', text: '  a proxy replied instead of /api/terminal/exec — the command did not run and was not audited.' },
+        ...(snippet ? [{ kind: 'error' as const, text: `  upstream: ${snippet}` }] : []),
+        { kind: 'notice', text: '  check the backend on :3001 (docker compose ps backend), then re-run.' },
+    ];
+}
+
 export function useTerminalSession() {
     const { getJWT } = useAuth();
 
@@ -36,13 +65,28 @@ export function useTerminalSession() {
         patchPane(paneId, (p) => ({ ...p, entries: [...p.entries, ...next].slice(-MAX_SCROLLBACK) }));
     }, [patchPane]);
 
+    /** Clears the screen, not the history — matches every real terminal's `clear`. */
+    const clearPane = useCallback((paneId: string) => {
+        patchPane(paneId, (p) => ({
+            ...p,
+            entries: [{ kind: 'notice', text: 'Screen cleared — command history retained.' }, { kind: 'output', text: '' }],
+        }));
+    }, [patchPane]);
+
     /** The only network call in the terminal; every keyboard feature is local. */
     const run = useCallback(async (paneId: string, command: string) => {
         const commandId = nextCommandId;
         nextCommandId += 1;
 
         append(paneId, [{ kind: 'input', text: command, commandId }]);
-        patchPane(paneId, (p) => ({ ...p, busy: true, history: [...p.history, command] }));
+        patchPane(paneId, (p) => ({ ...p, history: [...p.history, command] }));
+
+        if (command.trim() === LOCAL_ONLY) {
+            clearPane(paneId);
+            return;
+        }
+
+        patchPane(paneId, (p) => ({ ...p, busy: true }));
 
         try {
             const token = await getJWT();
@@ -51,8 +95,22 @@ export function useTerminalSession() {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ command }),
             });
-            const payload = await res.json().catch(() => ({}));
 
+            // Read as text first. Parsing straight to JSON conflated "the route rejected
+            // this command" with "nothing reached the route", and printed the same
+            // unhelpful line for both.
+            const body = await res.text();
+            let payload: { error?: string; lines?: unknown } | null = null;
+            try {
+                payload = JSON.parse(body) as { error?: string; lines?: unknown };
+            } catch {
+                payload = null;
+            }
+
+            if (payload === null) {
+                append(paneId, transportTrace(res.status, body));
+                return;
+            }
             if (!res.ok) {
                 append(paneId, [{ kind: 'error', text: payload.error ?? `Request failed (${res.status})` }]);
                 return;
@@ -61,23 +119,19 @@ export function useTerminalSession() {
             append(paneId, lines.map((text) => ({ kind: 'output' as const, text })));
         } catch (err) {
             // Surfaced rather than swallowed: a terminal that silently drops a
-            // command is worse than one that says it failed.
-            append(paneId, [{
-                kind: 'error',
-                text: err instanceof Error ? `error: ${err.message}` : 'error: request failed',
-            }]);
+            // command is worse than one that says it failed. A throw here means the
+            // request never completed at all — DNS, TLS, or a proxy that closed.
+            append(paneId, [
+                {
+                    kind: 'error',
+                    text: `error: could not reach /api/terminal/exec — ${err instanceof Error ? err.message : 'network failure'}`,
+                },
+                { kind: 'notice', text: '  the command did not run and was not audited. Nothing is queued for retry.' },
+            ]);
         } finally {
             patchPane(paneId, (p) => ({ ...p, busy: false }));
         }
-    }, [append, getJWT, patchPane]);
-
-    /** Clears the screen, not the history — matches every real terminal's `clear`. */
-    const clearPane = useCallback((paneId: string) => {
-        patchPane(paneId, (p) => ({
-            ...p,
-            entries: [{ kind: 'notice', text: 'Screen cleared — command history retained.' }, { kind: 'output', text: '' }],
-        }));
-    }, [patchPane]);
+    }, [append, clearPane, getJWT, patchPane]);
 
     const addTab = useCallback(() => {
         const pane = newPane();
@@ -140,9 +194,14 @@ export function useTerminalSession() {
         tab.paneIds.forEach((paneId) => closePane(tabId, paneId));
     }, [tabs, closePane]);
 
+    /** Prints into a pane without running anything — used to explain out-of-band actions. */
+    const notify = useCallback((paneId: string, lines: readonly string[]) => {
+        append(paneId, lines.map((text) => ({ kind: 'notice' as const, text })));
+    }, [append]);
+
     return {
         panes, tabs, activeTab, activeTabId,
         setActiveTabId, focusPane,
-        run, clearPane, addTab, splitActiveTab, closePane, closeTab,
+        run, clearPane, addTab, splitActiveTab, closePane, closeTab, notify,
     };
 }
