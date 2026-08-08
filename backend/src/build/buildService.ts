@@ -1,7 +1,6 @@
 import { cloneRepo } from '../utils/git';
 import { runScanPipeline } from '../scanners/pipeline';
 import { logger, errorContext, errorMessage } from '../services/logger';
-import { isExecError, isRecord } from '../utils/errorGuards';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
@@ -44,16 +43,11 @@ async function execWithLogs(
     if (stdout) logs += `${stdout}\n`;
     if (stderr) logs += `[stderr]: ${stderr}\n`;
     return { stdout, stderr, logs };
-  } catch (error) {
-    logs += `[ERROR]: ${errorMessage(error)}\n`;
-    if (isExecError(error)) {
-      if (error.stdout) logs += `${error.stdout}\n`;
-      if (error.stderr) logs += `[stderr]: ${error.stderr}\n`;
-    }
-    // Spread needs a proven object. Unchanged otherwise, including the fact that
-    // spreading an Error drops `message` — see the outer handler's JSON.stringify
-    // fallback, which exists because of exactly that.
-    throw { ...(isRecord(error) ? error : {}), logs };
+  } catch (error: any) {
+    logs += `[ERROR]: ${error.message}\n`;
+    if (error.stdout) logs += `${error.stdout}\n`;
+    if (error.stderr) logs += `[stderr]: ${error.stderr}\n`;
+    throw { ...error, logs };
   }
 }
 
@@ -231,14 +225,10 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
       finalStatus = 'success';
       logs += `Build pipeline completed successfully.\n`;
       
-    } catch (error) {
+    } catch (error: any) {
       logger.error(`[BuildService] Build pipeline failed for ${repoId}`, error);
       finalStatus = 'failed';
-      // `message` is read off the value directly rather than via errorMessage(),
-      // which would return '[object Object]' for the plain object rethrown above
-      // and shadow the JSON.stringify fallback that currently surfaces its fields.
-      const detail = isRecord(error) && typeof error.message === 'string' ? error.message : undefined;
-      logs = (isExecError(error) && error.logs) || (logs + `\n[FATAL ERROR]: ${detail || JSON.stringify(error)}\n`);
+      logs = error.logs || (logs + `\n[FATAL ERROR]: ${error.message || JSON.stringify(error)}\n`);
     } finally {
       // 7. Cleanup & Update Final Status
       try {
