@@ -7,6 +7,8 @@
 import { Client, Databases, DatabasesIndexType, OrderBy } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
+import { isAppwriteError } from '../utils/errorGuards';
+import { errorMessage } from '../services/logger';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -76,12 +78,12 @@ async function run() {
     try {
       await databases.createIndex(DATABASE_ID, idx.collection, idx.key, idx.type, idx.attributes, idx.orders);
       console.log(`created: ${idx.collection}.${idx.key} (${idx.attributes.join(',')})`);
-    } catch (err: any) {
+    } catch (err) {
       // 409 = index already exists, 404 = collection/attribute not provisioned yet — skip, don't crash the batch
-      if (err.code === 409) {
+      if (isAppwriteError(err) && err.code === 409) {
         console.log(`skip (exists): ${idx.collection}.${idx.key}`);
       } else {
-        console.error(`failed: ${idx.collection}.${idx.key} — ${err.message}`);
+        console.error(`failed: ${idx.collection}.${idx.key} — ${errorMessage(err)}`);
       }
     }
   }

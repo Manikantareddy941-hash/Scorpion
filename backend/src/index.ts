@@ -292,8 +292,8 @@ const authenticate = async (req: AuthenticatedRequest, res: Response, next: Next
         }
         req.user = user;
         next();
-    } catch (err: any) {
-        if (err?.code === 401) {
+    } catch (err) {
+        if (isAppwriteError(err) && err.code === 401) {
             logger.warn(`[Auth] Rejected expired/invalid token for ${req.method} ${redactUrl(req.originalUrl)} from ${req.ip}`);
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -437,6 +437,7 @@ app.post('/api/logs', async (req: Request, res: Response) => {
 
 import { initReportScheduler } from './services/scheduleService';
 import { initUptimeScheduler } from './services/monitorService';
+import { isAppwriteError } from './utils/errorGuards';
 
 // --- Initialization ---
 initScheduler();
@@ -536,7 +537,7 @@ if (tlsCertPath && tlsKeyPath) {
         // read. Don't silently fall back to HTTP-only — the admission webhook
         // (failurePolicy: Fail) depends on this TLS listener being up, and a
         // half-configured gate is worse than a loud crash.
-        logger.error(`[Backend] TLS requested but cert/key unreadable: ${err instanceof Error ? err.message : String(err)}`);
+        logger.error(`[Backend] TLS requested but cert/key unreadable: ${err instanceof Error ? errorMessage(err) : String(err)}`);
         process.exit(1);
     }
 }
@@ -613,7 +614,7 @@ const gracefulShutdown = async (signal: NodeJS.Signals): Promise<void> => {
         logger.info('[Shutdown] Clean exit');
         process.exit(0);
     } catch (err: unknown) {
-        logger.error(`[Shutdown] Error during shutdown: ${err instanceof Error ? err.message : String(err)}`);
+        logger.error(`[Shutdown] Error during shutdown: ${err instanceof Error ? errorMessage(err) : String(err)}`);
         clearTimeout(forceExit);
         process.exit(1);
     }

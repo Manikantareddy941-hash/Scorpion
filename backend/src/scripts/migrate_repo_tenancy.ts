@@ -3,6 +3,7 @@ dotenv.config();
 
 import { databases, DB_ID } from '../lib/appwrite';
 import { errorMessage } from '../services/logger';
+import { isAppwriteError } from '../utils/errorGuards';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -12,8 +13,8 @@ async function addAttribute(collectionId: string, key: string) {
         await databases.createStringAttribute(DB_ID, collectionId, key, 255, false);
         await delay(1000);
         console.log(`Done. ${key} is now available on the ${collectionId} collection.`);
-    } catch (err: any) {
-        if (err.code === 409) {
+    } catch (err) {
+        if (isAppwriteError(err) && err.code === 409) {
             console.log(`Attribute ${key} already exists on ${collectionId}.`);
             return;
         }

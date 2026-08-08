@@ -2,6 +2,8 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { databases, DB_ID, ID } from '../lib/appwrite';
+import { isAppwriteError } from '../utils/errorGuards';
+import { errorMessage } from '../services/logger';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -12,11 +14,11 @@ async function createAttributeWithRetry(collectionId: string, type: 'string', ke
             await databases.createStringAttribute(DB_ID, collectionId, key, size, required, defaultVal as any, array);
         }
         await delay(1000); // Give appwrite a moment
-    } catch (err: any) {
-        if (err.code === 409) {
+    } catch (err) {
+        if (isAppwriteError(err) && err.code === 409) {
             console.log(`Attribute ${key} already exists in ${collectionId}.`);
         } else {
-            console.error(`Error creating attribute ${key}:`, err.message);
+            console.error(`Error creating attribute ${key}:`, errorMessage(err));
         }
     }
 }
@@ -30,8 +32,8 @@ async function setup() {
             await databases.createCollection(DB_ID, 'teams', 'teams');
             console.log('Created collection: teams');
             await delay(1000);
-        } catch (err: any) {
-            if (err.code === 409) console.log('Collection teams already exists.');
+        } catch (err) {
+            if (isAppwriteError(err) && err.code === 409) console.log('Collection teams already exists.');
             else throw err;
         }
 
@@ -45,8 +47,8 @@ async function setup() {
             await databases.createCollection(DB_ID, 'team_members', 'team_members');
             console.log('Created collection: team_members');
             await delay(1000);
-        } catch (err: any) {
-            if (err.code === 409) console.log('Collection team_members already exists.');
+        } catch (err) {
+            if (isAppwriteError(err) && err.code === 409) console.log('Collection team_members already exists.');
             else throw err;
         }
 
