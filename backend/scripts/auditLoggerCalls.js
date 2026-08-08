@@ -5,8 +5,8 @@
  * WHY THIS EXISTS
  *
  * services/logger.ts composes winston.format.json() (and prettyPrint() outside
- * production) WITHOUT winston.format.splat(). A second positional argument is
- * therefore held on a Symbol key and never serialised:
+ * production) WITHOUT winston.format.splat(). A second positional STRING argument
+ * is therefore held on a Symbol key and never serialised:
  *
  *     logger.error('[X] failed:', err.message)
  *     -> {"level":"error","message":"[X] failed:"}
@@ -31,9 +31,30 @@
  * A SITE IS ACCEPTABLE WHEN arguments[1] IS:
  *   - an object literal            logger.error('msg', { event: 'x', ...errorContext(err) })
  *   - a call to errorContext(...)  logger.error('msg', errorContext(err))
- * Anything else is reported, including a bare `err`. Passing a raw Error is the
- * worst of the variants: it is dropped today, and "fixing" it by spreading the
- * error yields `{}`, because message and stack are non-enumerable.
+ * Anything else is reported, including a bare `err`.
+ *
+ * WHAT A BARE `err` ACTUALLY DOES — measured against this repo's winston 3.19,
+ * because an earlier version of this comment claimed it was dropped and it is not:
+ *
+ *     logger.error('msg', new Error('BOOM'))
+ *     -> {"message":"msg BOOM","stack":"Error: BOOM\n    at ..."}
+ *
+ * winston special-cases an Error INSTANCE: the message is appended and `stack` is
+ * lifted. So a bare `err` holding an Error loses nothing today, and the count this
+ * tool prints is NOT a count of sites losing their cause. Two report as offending
+ * for different reasons, and only one of them is data loss:
+ *
+ *   err.message / toMessage(err)  string  -> DROPPED. Real loss.
+ *   err                           Error   -> survives, but unindexed. Style.
+ *   err                           string  -> DROPPED. Real loss, same as the first.
+ *
+ * This is therefore a CANONICAL-FORM RATCHET, not a data-loss counter. The reason
+ * to convert a surviving bare `err` is that winston flattens it into the `message`
+ * text, so Loki gets no queryable `error` field and no `event` key to index on —
+ * `{ ...errorContext(err) }` is what makes a failure findable rather than readable.
+ *
+ * One thing the old comment had right: do NOT "fix" a bare Error by spreading it.
+ * `{ ...err }` yields `{}`, because message and stack are non-enumerable.
  *
  * USAGE
  *   node scripts/auditLoggerCalls.js            summary
@@ -43,6 +64,15 @@
  * Ratchet, not cliff: --max lets CI hold the line while the conversion lands
  * incrementally. Lower the number as the count drops; the pass is finished at
  * --max=0.
+ *
+ * Read the count as convention debt, not as an outage. The string-argument sites —
+ * the ones that genuinely lost their cause — were swept in #212 and #214 and are
+ * already at zero; a scan for those alone is:
+ *
+ *   grep -rnE "logger\.(error|warn|info)\(.*,\s*\w+(\?)?\.message\s*\)" src --include=*.ts
+ *
+ * What remains here is bare `err` awaiting the errorContext() form. Worth doing for
+ * indexability, not worth paging anyone over.
  */
 
 const fs = require('fs');
@@ -135,7 +165,8 @@ for (const file of sourceFiles(SRC)) {
 const byLevel = offenders.reduce((acc, o) => ({ ...acc, [o.level]: (acc[o.level] || 0) + 1 }), {});
 const fileCount = new Set(offenders.map((o) => o.file)).size;
 
-console.log(`logger sites dropping their second argument: ${offenders.length} across ${fileCount} files`);
+console.log(`logger sites not in canonical errorContext() form: ${offenders.length} across ${fileCount} files`);
+console.log('  (mostly bare `err`, which winston preserves but does not index — see the header)');
 console.log(`  by level: ${JSON.stringify(byLevel)}`);
 console.log(`local toMessage/errorMessage declarations: ${helpers.length} (logger.ts exports both)`);
 
