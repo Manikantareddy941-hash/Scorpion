@@ -217,6 +217,20 @@ jobs:
             }
           '
 
+      # Same ratchet shape as madge above: a baseline that only moves down.
+      #
+      # This one counts logger calls that pass a second positional argument other
+      # than an object literal or errorContext(err). It is a CONVENTION gate, not a
+      # data-loss gate — winston preserves a bare Error, it just flattens it into
+      # the message text so Loki gets no queryable `error` field to index on. The
+      # sites that genuinely lost their cause were string arguments, and those are
+      # already at zero.
+      #
+      # Lower the number as files are converted; the pass is finished at --max=0.
+      - name: Logger Call Convention
+        working-directory: backend
+        run: node scripts/auditLoggerCalls.js --max=177
+
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the
       # production image, so scoping to production deps lets the level stay at
