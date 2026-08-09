@@ -32,10 +32,6 @@ const MAX_LIMIT = 500;
 const SEVERITY_ORDER: GateSeverity[] = ['critical', 'high', 'medium', 'low'];
 const SEVERITY_RANK: Record<GateSeverity, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
-export function toMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** Highest severity actually present in the scan counts; falls back by drift
  *  type when an anomaly carries no per-severity counts (e.g. unscanned image). */
 export function deriveSeverity(anomaly: DriftAnomaly): GateSeverity {

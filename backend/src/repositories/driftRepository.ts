@@ -6,7 +6,7 @@ import type { DriftAnomaly } from '../workers/driftMonitor';
 import { isPostgresEnabled } from '../db/pool';
 import { driftPgRepository } from './pg/driftPgRepository';
 import {
-  bufferRecord, clampLimit, flushBuffer, readMock, selectFallback, toMessage, toRecord,
+  bufferRecord, clampLimit, flushBuffer, readMock, selectFallback, toRecord,
   type DriftRecord, type ListDriftOptions,
 } from './driftShared';
 
