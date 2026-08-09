@@ -30,7 +30,7 @@ router.post('/evaluate', verifyUser, validateBody(repoIdBodySchema), async (req:
     if (!(await assertAccessOr403(req, res, repo_id))) return;
     res.json(await gateService.evaluate(repo_id));
   } catch (err) {
-    logger.error('[Gate Evaluate Error]', errorContext(err));
+    logger.error('[Gate Evaluate Error]', { event: 'GATE_EVALUATE_FAILED', repoId: repo_id, ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
@@ -50,7 +50,9 @@ router.post('/compliance', verifyUser, validateBody(complianceBodySchema), async
       repoId: repo_id, source: 'ci', commitSha: commit_sha, branch,
       status: result.blocked ? 'blocked' : 'passed',
       violations: result.violations, createdAt: new Date().toISOString(),
-    }).catch((err) => logger.warn('[Gate] failed to record gate run', errorContext(err)));
+    }).catch((err) => logger.warn('[Gate] failed to record gate run', {
+      event: 'GATE_RUN_RECORD_FAILED', repoId: repo_id, commitSha: commit_sha, ...errorContext(err),
+    }));
     if (result.blocked) {
       // A degraded block is a different fact from a violation, and saying so
       // saves an operator hunting for violations that do not exist.
@@ -65,7 +67,7 @@ router.post('/compliance', verifyUser, validateBody(complianceBodySchema), async
     }
     res.json({ allowed: true, violations: [] });
   } catch (err) {
-    logger.error('[Gate Compliance Error]', errorContext(err));
+    logger.error('[Gate Compliance Error]', { event: 'GATE_COMPLIANCE_FAILED', repoId: repo_id, ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
@@ -88,7 +90,7 @@ router.post('/deploy', verifyUser, checkPermission('repo:deploy'), validateBody(
 
     res.json({ status: 'success', message: 'Deployment triggered successfully. All release gate validations passed.' });
   } catch (err) {
-    logger.error('[Gate Deploy Error]', errorContext(err));
+    logger.error('[Gate Deploy Error]', { event: 'GATE_DEPLOY_CHECK_FAILED', repoId: repo_id, ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
@@ -103,7 +105,9 @@ router.post('/override', verifyUser, checkPermission('gate:bypass'), validateBod
 
     res.json({ success: true, message: 'Break Glass Override activated. CI/CD Release Gate has been bypassed and unlocked.' });
   } catch (err) {
-    logger.error('[Gate Override Error]', errorContext(err));
+    logger.error('[Gate Override Error]', {
+      event: 'GATE_OVERRIDE_FAILED', repoId: repo_id, actor: req.user?.$id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
@@ -113,7 +117,7 @@ router.get('/state', verifyUser, async (req: AuthenticatedRequest, res: Response
   try {
     res.json(await gateService.getState());
   } catch (err) {
-    logger.error('[GET Gate State Error]', errorContext(err));
+    logger.error('[GET Gate State Error]', { event: 'GATE_STATE_READ_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to fetch gate state', details: err instanceof Error ? err.message : 'unknown error' });
   }
 });
@@ -125,7 +129,7 @@ router.post('/release', verifyUser, validateBody(repoIdBodySchema), async (req: 
     if (!(await assertAccessOr403(req, res, repo_id))) return;
     res.json(await gateService.legacyRelease(repo_id, req.user?.$id || ''));
   } catch (err) {
-    logger.error('[Gate API Error]', errorContext(err));
+    logger.error('[Gate API Error]', { event: 'GATE_RELEASE_FAILED', repoId: repo_id, ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -136,7 +140,7 @@ router.get('/release/:repo_id', verifyUser, async (req: AuthenticatedRequest, re
     if (!(await assertAccessOr403(req, res, repo_id))) return;
     res.json(await checkReleaseGate(repo_id));
   } catch (err) {
-    logger.error('[Gate API Error]', errorContext(err));
+    logger.error('[Gate API Error]', { event: 'GATE_RELEASE_READ_FAILED', repoId: repo_id, ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -145,7 +149,7 @@ router.get('/summary', verifyUser, async (req: AuthenticatedRequest, res: Respon
   try {
     res.json(await gateService.getSummary(req.user?.$id || ''));
   } catch (err) {
-    logger.error('[Gate Summary API Error]', errorContext(err));
+    logger.error('[Gate Summary API Error]', { event: 'GATE_SUMMARY_READ_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

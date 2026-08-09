@@ -34,7 +34,7 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
         );
         res.json(response.documents);
     } catch (err) {
-        logger.error('[Policy API Error]', errorContext(err));
+        logger.error('[Policy API Error]', { event: 'POLICY_LIST_FAILED', userId: req.user?.$id, ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -58,7 +58,7 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
         );
         res.json(policy);
     } catch (err) {
-        logger.error('[Policy Create Error]', errorContext(err));
+        logger.error('[Policy Create Error]', { event: 'POLICY_CREATE_FAILED', userId: req.user?.$id, ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -87,7 +87,7 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
         );
         res.json(policy);
     } catch (err) {
-        logger.error('[Policy Update Error]', errorContext(err));
+        logger.error('[Policy Update Error]', { event: 'POLICY_UPDATE_FAILED', policyId: req.params.id, ...errorContext(err) });
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -107,7 +107,7 @@ router.delete('/:id', verifyUser, async (req: AuthenticatedRequest, res: Respons
         await databases.deleteDocument(DB_ID, 'policies', id);
         res.json({ message: 'Policy deleted' });
     } catch (err) {
-        logger.error('[Policy Delete Error]', errorContext(err));
+        logger.error('[Policy Delete Error]', { event: 'POLICY_DELETE_FAILED', policyId: req.params.id, ...errorContext(err) });
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -139,7 +139,7 @@ router.post('/:id/evaluate', verifyUser, validateBody(evaluateSchema), async (re
 
         res.json(evaluation);
     } catch (err) {
-        logger.error('[Policy Evaluate Error]', errorContext(err));
+        logger.error('[Policy Evaluate Error]', { event: 'POLICY_EVALUATE_FAILED', policyId: req.params.id, ...errorContext(err) });
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
         res.status(502).json({ error: 'Policy evaluation failed', details: errorMessage(err) });
     }
