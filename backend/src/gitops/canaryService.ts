@@ -123,7 +123,11 @@ export async function runCanaryTick(canaryId: string, tick: number): Promise<voi
         criticalCount: 0,
       });
     } catch (err) {
-      logger.error('[Canary] rollback PR failed', errorContext(err));
+      logger.error('[Canary] rollback PR failed', {
+        event: 'CANARY_ROLLBACK_PR_FAILED',
+        app: doc.app, revision: doc.canaryRevision,
+        ...errorContext(err),
+      });
     }
     await createIncident({
       title: `Canary rolled back: ${doc.app}`,

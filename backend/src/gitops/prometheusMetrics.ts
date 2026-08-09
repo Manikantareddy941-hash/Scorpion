@@ -35,7 +35,9 @@ async function queryScalar(baseUrl: string, query: string): Promise<number | nul
     const num = Number(raw);
     return Number.isFinite(num) ? num : null;
   } catch (err) {
-    logger.warn('[PrometheusMetrics] query failed', errorContext(err));
+    // `query` only, never `baseUrl` — a Prometheus endpoint can carry basic-auth
+    // credentials in its URL, and errorContext already withholds axios transport.
+    logger.warn('[PrometheusMetrics] query failed', { event: 'PROM_QUERY_FAILED', query, ...errorContext(err) });
     return null;
   }
 }
