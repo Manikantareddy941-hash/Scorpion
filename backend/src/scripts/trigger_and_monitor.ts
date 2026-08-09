@@ -47,8 +47,11 @@ async function run() {
       }
     }, 3000);
 
-  } catch (err: any) {
-    console.error('Error triggering pipeline:', err.response?.data || err.message);
+  } catch (err) {
+    console.error(
+      'Error triggering pipeline:',
+      (axios.isAxiosError(err) ? err.response?.data : undefined) || errorMessage(err),
+    );
   }
 }
 

@@ -67,3 +67,4 @@ k8s/overlays/dev/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+strix_runs/

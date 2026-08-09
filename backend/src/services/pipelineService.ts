@@ -9,13 +9,14 @@ import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { triggerScan } from './scanService';
 import { checkReleaseGate } from '../routes/gateRoutes';
 import { triggerDeploy } from '../deploy/deployService';
-import { logger } from './logger';
+import { logger, errorMessage } from './logger';
 import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
 import { containerizedTrivyService } from './containerizedTrivyService';
 import { getImageDigest, signImageDigest, CosignSigningError } from './cosignService';
 import { EnvironmentDocument, PipelineRunDocument, StageUpdate } from '../types/pipeline.types';
 import { GateBlocker } from '../types/gate.types';
+import { isAppwriteError } from '../utils/errorGuards';
 
 
 
@@ -371,7 +372,7 @@ export async function runPipeline(runId: string) {
         envDoc = envRes.documents[0];
       }
     } catch (e) {
-      await pipeLogger.log(`[Deploy] Environment lookup error: ${e instanceof Error ? e.message : e}`);
+      await pipeLogger.log(`[Deploy] Environment lookup error: ${e instanceof Error ? errorMessage(e) : e}`);
     }
 
     if (envDoc) {
@@ -425,7 +426,7 @@ export async function runPipeline(runId: string) {
     });
 
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
+    const errorMsg = err instanceof Error ? errorMessage(err) : JSON.stringify(err);
     await pipeLogger.error(`Pipeline run failed: ${errorMsg}`);
 
     // Find active stage
@@ -548,8 +549,8 @@ export async function triggerPipelineRun(
   // 3. Create pipeline run doc
   try {
     await databases.createDocument(DB_ID, 'pipeline_runs', runId, runData);
-  } catch (err: any) {
-    if (!isRetriable || err?.code !== 409) throw err;
+  } catch (err) {
+    if (!isRetriable || !isAppwriteError(err) || err.code !== 409) throw err;
 
     // Lost the atomic create race, or a prior run already occupies this
     // deterministic id. Either way, resolve it deterministically instead of

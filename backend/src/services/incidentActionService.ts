@@ -1,5 +1,6 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { logger } from './logger';
+import { isAppwriteError } from '../utils/errorGuards';
 
 const CRITICAL_SEVERITIES = new Set(['critical']);
 
@@ -8,8 +9,8 @@ export const isCriticalSeverity = (severity: string): boolean => CRITICAL_SEVERI
 async function ensurePipelineStateCollection() {
   try {
     await databases.getCollection(DB_ID, 'pipeline_state');
-  } catch (err: any) {
-    if (err.code === 404 || err.type === 'collection_not_found') {
+  } catch (err) {
+    if (isAppwriteError(err) && (err.code === 404 || err.type === 'collection_not_found')) {
       try {
         await databases.createCollection(DB_ID, 'pipeline_state', 'Pipeline State');
         await databases.createStringAttribute(DB_ID, 'pipeline_state', 'nodeId', 50, true);

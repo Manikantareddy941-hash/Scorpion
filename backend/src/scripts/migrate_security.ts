@@ -2,6 +2,7 @@
 import { Client, Databases } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
+import { isAppwriteError } from '../utils/errorGuards';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -18,8 +19,8 @@ async function run() {
   try {
     await databases.createCollection(DATABASE_ID, COLLECTION_ID, 'Security Vulnerabilities');
     console.log('Collection created.');
-  } catch (err: any) {
-    if (err.code !== 409) process.exit(1);
+  } catch (err) {
+    if (!isAppwriteError(err) || err.code !== 409) process.exit(1);
   }
 
   const attrs = [

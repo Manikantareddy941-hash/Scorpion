@@ -1,6 +1,8 @@
 import { Client, Databases, Permission, Role } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
+import { isAppwriteError } from '../utils/errorGuards';
+import { errorMessage } from '../services/logger';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -36,11 +38,11 @@ async function ensureStringAttribute(colId: string, key: string, size: number, r
   try {
     await databases.createStringAttribute(DB_ID, colId, key, size, required, defaultValue ?? undefined);
     console.log(`[SUCCESS] Attribute "${key}" created in "${colId}".`);
-  } catch (err: any) {
-    if (err.code === 409 || err.type?.includes('already_exists')) {
+  } catch (err) {
+    if (isAppwriteError(err) && (err.code === 409 || err.type?.includes('already_exists'))) {
       console.log(`[INFO] Attribute "${key}" in "${colId}" already exists.`);
     } else {
-      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, err.message);
+      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, errorMessage(err));
     }
   }
 }
@@ -49,11 +51,11 @@ async function ensureBooleanAttribute(colId: string, key: string, required: bool
   try {
     await databases.createBooleanAttribute(DB_ID, colId, key, required, defaultValue ?? undefined);
     console.log(`[SUCCESS] Attribute "${key}" created in "${colId}".`);
-  } catch (err: any) {
-    if (err.code === 409 || err.type?.includes('already_exists')) {
+  } catch (err) {
+    if (isAppwriteError(err) && (err.code === 409 || err.type?.includes('already_exists'))) {
       console.log(`[INFO] Attribute "${key}" in "${colId}" already exists.`);
     } else {
-      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, err.message);
+      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, errorMessage(err));
     }
   }
 }
@@ -62,11 +64,11 @@ async function ensureIntegerAttribute(colId: string, key: string, required: bool
   try {
     await databases.createIntegerAttribute(DB_ID, colId, key, required, min, max, defaultValue ?? undefined);
     console.log(`[SUCCESS] Attribute "${key}" created in "${colId}".`);
-  } catch (err: any) {
-    if (err.code === 409 || err.type?.includes('already_exists')) {
+  } catch (err) {
+    if (isAppwriteError(err) && (err.code === 409 || err.type?.includes('already_exists'))) {
       console.log(`[INFO] Attribute "${key}" in "${colId}" already exists.`);
     } else {
-      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, err.message);
+      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, errorMessage(err));
     }
   }
 }
@@ -75,11 +77,11 @@ async function ensureFloatAttribute(colId: string, key: string, required: boolea
   try {
     await databases.createFloatAttribute(DB_ID, colId, key, required, min, max, defaultValue ?? undefined);
     console.log(`[SUCCESS] Attribute "${key}" created in "${colId}".`);
-  } catch (err: any) {
-    if (err.code === 409 || err.type?.includes('already_exists')) {
+  } catch (err) {
+    if (isAppwriteError(err) && (err.code === 409 || err.type?.includes('already_exists'))) {
       console.log(`[INFO] Attribute "${key}" in "${colId}" already exists.`);
     } else {
-      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, err.message);
+      console.error(`[ERROR] Failed to create attribute "${key}" in "${colId}":`, errorMessage(err));
     }
   }
 }

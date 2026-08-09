@@ -2,6 +2,8 @@
 import { Client, Databases } from 'node-appwrite';
 import dotenv from 'dotenv';
 import path from 'path';
+import { isAppwriteError } from '../utils/errorGuards';
+import { errorMessage } from '../services/logger';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -23,8 +25,8 @@ async function runMigration() {
     // 1. Establish the collection master node
     await databases.createCollection(DATABASE_ID, COLLECTION_ID, 'Target Infrastructure Environments');
     console.log(`[Migration] Collection "${COLLECTION_ID}" established successfully.`);
-  } catch (err: any) {
-    if (err.code === 409) {
+  } catch (err) {
+    if (isAppwriteError(err) && err.code === 409) {
       console.log(`[Migration] Collection "${COLLECTION_ID}" already exists. Syncing structural attributes...`);
     } else {
       console.error(`[Migration Fatal] Collection creation failed:`, err);
@@ -50,11 +52,11 @@ async function runMigration() {
         await databases.createIntegerAttribute(DATABASE_ID, COLLECTION_ID, attr.key, attr.required);
       }
       console.log(`   └─ Created attribute: [${attr.type.toUpperCase()}] -> ${attr.key}`);
-    } catch (attrErr: any) {
-      if (attrErr.code === 409) {
+    } catch (attrErr) {
+      if (isAppwriteError(attrErr) && attrErr.code === 409) {
         console.log(`   └─ Attribute "${attr.key}" verified. Skipping.`);
       } else {
-        console.error(`   └─ Error creating attribute "${attr.key}":`, attrErr.message);
+        console.error(`   └─ Error creating attribute "${attr.key}":`, errorMessage(attrErr));
       }
     }
   }

@@ -3,13 +3,14 @@ import crypto from 'crypto';
 import { logger, errorContext, errorMessage } from '../services/logger';
 import { anchorLedgerTip } from './auditAnchor';
 import { classifyAttributeFailure } from '../scripts/lib/migrationErrors';
+import { isAppwriteError } from '../utils/errorGuards';
 
 // Helper to ensure the secure audit log collection exists
 export async function ensureAuditLogsV2Collection() {
   try {
     await databases.getCollection(DB_ID, 'audit_logs_v2');
-  } catch (err: any) {
-    if (err.code === 404 || err.type === 'collection_not_found') {
+  } catch (err) {
+    if (isAppwriteError(err) && (err.code === 404 || err.type === 'collection_not_found')) {
       logger.info('[Audit Logs Setup] audit_logs_v2 collection not found. Creating it...');
       try {
         await databases.createCollection(DB_ID, 'audit_logs_v2', 'AUDIT_LOGS');

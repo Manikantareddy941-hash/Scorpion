@@ -15,6 +15,11 @@ import { Databases, Query } from 'node-appwrite';
  * afterwards, the create was redundant.
  */
 export function isConflict(raw: unknown): boolean {
+  // Guard before the cast. This runs inside catch blocks, where the value is
+  // whatever was thrown — and reading `.code` off null throws a TypeError from
+  // the error handler itself, turning a benign re-run into a crash with a
+  // stack that points here instead of at the migration that failed.
+  if (typeof raw !== 'object' || raw === null) return false;
   const err = raw as { code?: number; type?: string };
   return err.code === 409 || Boolean(err.type?.includes('already_exists'));
 }

@@ -2,6 +2,7 @@ import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { sendSlackNotification } from './slackService';
 import { logger, errorContext, errorMessage } from './logger';
 import axios from 'axios';
+import { isAppwriteError } from '../utils/errorGuards';
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 
@@ -80,8 +81,8 @@ export async function checkDeploymentUptime(deployment: any) {
           status,
           lastUpdated: new Date().toISOString()
         });
-      } catch (e: any) {
-        if (e.code === 409) {
+      } catch (e) {
+        if (isAppwriteError(e) && e.code === 409) {
           // Update existing status document
           await databases.updateDocument(DB_ID, 'deployment_status', deploymentId, {
             status,
