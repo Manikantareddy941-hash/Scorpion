@@ -166,7 +166,9 @@ export async function executeSoarAction(
       }
     }
   } catch (err) {
-    logger.error(`[SOAR] action ${action.actionType} failed`, errorContext(err));
+    logger.error(`[SOAR] action ${action.actionType} failed`, {
+      event: 'SOAR_ACTION_EXECUTE_FAILED', actionId: action.id, actionType: action.actionType, ...errorContext(err),
+    });
     return { ok: false, error: errorMessage(err) };
   } finally {
     await auditLog({

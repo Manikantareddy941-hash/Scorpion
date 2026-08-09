@@ -72,7 +72,7 @@ export const soarPgRepository = {
         actions: row.actions as Playbook['actions'],
       }));
     } catch (err) {
-      logger.warn('[SoarPgRepository] playbook load failed', errorContext(err));
+      logger.warn('[SoarPgRepository] playbook load failed', { event: 'SOAR_PLAYBOOK_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },
@@ -89,7 +89,7 @@ export const soarPgRepository = {
       );
       return { ...p, id };
     } catch (err) {
-      logger.error('[SoarPgRepository] createPlaybook failed', errorContext(err));
+      logger.error('[SoarPgRepository] createPlaybook failed', { event: 'SOAR_PLAYBOOK_CREATE_FAILED', ...errorContext(err) });
       throw err;
     }
   },
@@ -108,7 +108,9 @@ export const soarPgRepository = {
     try {
       await getPool().query(`UPDATE playbooks SET ${sets.join(', ')} WHERE id = $${values.length}`, values);
     } catch (err) {
-      logger.error('[SoarPgRepository] updatePlaybook failed', errorContext(err));
+      logger.error('[SoarPgRepository] updatePlaybook failed', {
+        event: 'SOAR_PLAYBOOK_UPDATE_FAILED', playbookId: id, ...errorContext(err),
+      });
       throw err;
     }
   },
@@ -129,7 +131,7 @@ export const soarPgRepository = {
       );
       return { ...a, id, createdAt };
     } catch (err) {
-      logger.error('[SoarPgRepository] createAction failed', errorContext(err));
+      logger.error('[SoarPgRepository] createAction failed', { event: 'SOAR_ACTION_CREATE_FAILED', ...errorContext(err) });
       throw err;
     }
   },
@@ -141,7 +143,7 @@ export const soarPgRepository = {
       return actionFromRow(res.rows[0] as ActionRow);
     } catch (err) {
       // Logged so a storage outage is distinguishable from a clean not-found.
-      logger.warn('[SoarPgRepository] getAction failed', errorContext(err));
+      logger.warn('[SoarPgRepository] getAction failed', { event: 'SOAR_ACTION_READ_FAILED', actionId: id, ...errorContext(err) });
       return null;
     }
   },
@@ -157,7 +159,9 @@ export const soarPgRepository = {
         : await getPool().query(`SELECT ${ACTION_COLUMNS} FROM soar_actions ORDER BY created_at DESC LIMIT 100`);
       return (res.rows as ActionRow[]).map(actionFromRow);
     } catch (err) {
-      logger.warn('[SoarPgRepository] action list failed', errorContext(err));
+      logger.warn('[SoarPgRepository] action list failed', {
+        event: 'SOAR_ACTION_LIST_FAILED', statusFilter: status, ...errorContext(err),
+      });
       return [];
     }
   },
@@ -180,7 +184,9 @@ export const soarPgRepository = {
         [id, status, new Date().toISOString(), extra.resolvedBy ?? null, extra.result ?? null, extra.error ?? null]
       );
     } catch (err) {
-      logger.error('[SoarPgRepository] setActionStatus failed', errorContext(err));
+      logger.error('[SoarPgRepository] setActionStatus failed', {
+        event: 'SOAR_ACTION_STATUS_UPDATE_FAILED', actionId: id, targetStatus: status, ...errorContext(err),
+      });
       throw err;
     }
   },
@@ -202,7 +208,9 @@ export const soarPgRepository = {
         result: row.result ?? undefined,
       }));
     } catch (err) {
-      logger.error('[SoarPgRepository] listEvidenceForIncident failed', errorContext(err));
+      logger.error('[SoarPgRepository] listEvidenceForIncident failed', {
+        event: 'SOAR_EVIDENCE_LIST_FAILED', incidentId, ...errorContext(err),
+      });
       return [];
     }
   },
