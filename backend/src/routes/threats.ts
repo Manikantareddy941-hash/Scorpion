@@ -3,15 +3,17 @@ import { verifyUser } from '../middleware/auth';
 import { threatsService } from '../services/threatsService';
 import { logger } from '../services/logger';
 import { AuthenticatedRequest, falcoEventSchema } from '../types/threats.types';
+import { secretMatches } from '../utils/constantTimeCompare';
 
 const router = Router();
 
 // Same shared-secret pattern as routes/falcoRoutes.ts's verifyFalcoSecret
 const verifyFalcoSecret = (req: Request, res: Response, next: NextFunction) => {
   const expected = process.env.FALCO_SECRET;
-  const secret = req.headers['x-falco-secret'];
   // Fails closed: an unconfigured secret must never leave this endpoint open.
-  if (!expected || secret !== expected) {
+  // The `!expected` check stays here rather than inside secretMatches so the
+  // fail-closed decision is visible at the guard, not delegated to a helper.
+  if (!expected || !secretMatches(req.headers['x-falco-secret'], expected)) {
     return res.status(401).json({ error: 'Unauthorized Falco source' });
   }
   next();
