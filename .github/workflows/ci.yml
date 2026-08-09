@@ -229,7 +229,7 @@ jobs:
       # Lower the number as files are converted; the pass is finished at --max=0.
       - name: Logger Call Convention
         working-directory: backend
-        run: node scripts/auditLoggerCalls.js --max=177
+        run: node scripts/auditLoggerCalls.js --max=150
 
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the
