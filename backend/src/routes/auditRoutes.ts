@@ -30,7 +30,9 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
             );
             docs = response.documents;
         } catch (err: unknown) {
-            logger.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy', errorContext(err));
+            logger.warn('[Audit API V2 Warning] audit_logs_v2 not ready, falling back to legacy', {
+                event: 'AUDIT_V2_READ_DEGRADED', ...errorContext(err),
+            });
             // Fallback to legacy audit_logs
             const legacyResponse = await databases.listDocuments(
                 DB_ID,
@@ -151,7 +153,7 @@ router.get('/verify', verifyUser, requireRole('admin', 'security'), auditVerifyL
     } catch (err: unknown) {
         // A thrown error means the verification could not run at all — which is
         // NOT the same as a clean ledger and must never be reported as one.
-        logger.error('[Audit Verify] verification could not run', errorContext(err));
+        logger.error('[Audit Verify] verification could not run', { event: 'AUDIT_VERIFY_FAILED', ...errorContext(err) });
         res.setHeader('X-Audit-Status', 'VERIFICATION_FAILED');
         return res.status(500).json({
             error: 'Audit verification could not be completed',

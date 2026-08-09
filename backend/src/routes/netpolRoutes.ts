@@ -57,7 +57,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       return res.json({ yaml, prError: msg });
     }
   } catch (err) {
-    logger.error('[NetPol API] generate failed', errorContext(err));
+    logger.error('[NetPol API] generate failed', { event: 'NETPOL_GENERATE_FAILED', ...errorContext(err) });
     return res.status(500).json({ error: 'Failed to generate network policies' });
   }
 });

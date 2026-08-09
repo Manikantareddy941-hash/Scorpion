@@ -70,7 +70,7 @@ router.post('/dast', verifyUser, async (req: AuthenticatedRequest, res: Response
         res.json({ scanId, status: 'started' });
 
     } catch (err: unknown) {
-        logger.error('[DAST API Error]', errorContext(err));
+        logger.error('[DAST API Error]', { event: 'DAST_SCAN_START_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -91,7 +91,7 @@ router.get('/dast/:scanId/status', verifyUser, async (req: AuthenticatedRequest,
         });
     } catch (err: unknown) {
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Scan not found' });
-        logger.error('[DAST API Status Error]', errorContext(err));
+        logger.error('[DAST API Status Error]', { event: 'DAST_SCAN_STATUS_READ_FAILED', scanId, ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

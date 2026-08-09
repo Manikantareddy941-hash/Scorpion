@@ -134,7 +134,7 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
             }
         });
     } catch (err: unknown) {
-        logger.error('[Monitor API Error]', errorContext(err));
+        logger.error('[Monitor API Error]', { event: 'MONITOR_OVERVIEW_READ_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

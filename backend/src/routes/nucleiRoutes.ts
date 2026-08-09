@@ -61,7 +61,7 @@ router.post('/nuclei', verifyUser, async (req: AuthenticatedRequest, res: Respon
         res.json({ scanId, status: 'started' });
 
     } catch (err: unknown) {
-        logger.error('[Nuclei API Error]', errorContext(err));
+        logger.error('[Nuclei API Error]', { event: 'NUCLEI_SCAN_START_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -82,7 +82,7 @@ router.get('/nuclei/:scanId/status', verifyUser, async (req: AuthenticatedReques
         });
     } catch (err: unknown) {
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Scan not found' });
-        logger.error('[Nuclei API Status Error]', errorContext(err));
+        logger.error('[Nuclei API Status Error]', { event: 'NUCLEI_SCAN_STATUS_READ_FAILED', scanId, ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

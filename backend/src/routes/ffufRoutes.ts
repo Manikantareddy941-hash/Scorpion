@@ -61,7 +61,7 @@ router.post('/ffuf', verifyUser, async (req: AuthenticatedRequest, res: Response
         res.json({ scanId, status: 'started' });
 
     } catch (err: unknown) {
-        logger.error('[ffuf API Error]', errorContext(err));
+        logger.error('[ffuf API Error]', { event: 'FFUF_SCAN_START_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -82,7 +82,7 @@ router.get('/ffuf/:scanId/status', verifyUser, async (req: AuthenticatedRequest,
         });
     } catch (err: unknown) {
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Scan not found' });
-        logger.error('[ffuf API Status Error]', errorContext(err));
+        logger.error('[ffuf API Status Error]', { event: 'FFUF_SCAN_STATUS_READ_FAILED', scanId, ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

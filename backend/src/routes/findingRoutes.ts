@@ -69,7 +69,9 @@ router.get('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response) 
         if (!loaded) return res.status(404).json({ error: 'Finding not found' });
         res.json(loaded);
     } catch (err: unknown) {
-        logger.error('[Finding API Error]', errorContext(err));
+        logger.error('[Finding API Error]', {
+            event: 'FINDING_READ_FAILED', findingId: req.params.id, ...errorContext(err),
+        });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -122,7 +124,9 @@ router.patch('/:id', verifyUser, async (req: AuthenticatedRequest, res: Response
 
         res.json(updatedFinding);
     } catch (err: unknown) {
-        logger.error('[Finding API Error]', errorContext(err));
+        logger.error('[Finding API Error]', {
+            event: 'FINDING_STATUS_UPDATE_FAILED', findingId: req.params.id, ...errorContext(err),
+        });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
