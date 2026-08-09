@@ -14,7 +14,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const data = await postureRepository.listSnapshots();
     res.json({ success: true, data, meta: { total: data.length } });
   } catch (err) {
-    logger.error('[Posture API] list snapshots failed', errorContext(err));
+    logger.error('[Posture API] list snapshots failed', { event: 'POSTURE_API_LIST_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to list posture snapshots' });
   }
 });

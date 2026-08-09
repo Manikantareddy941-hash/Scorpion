@@ -65,7 +65,9 @@ const legacyPodSecurityRepository = {
       if (list.total === 0) return DEFAULT_POD_SECURITY_CONFIG;
       return JSON.parse(list.documents[0].config as string) as PodSecurityConfig;
     } catch (err) {
-      logger.warn('[PodSecurityRepository] Appwrite read failed, using local JSON fallback', errorContext(err));
+      logger.warn('[PodSecurityRepository] Appwrite read failed, using local JSON fallback', {
+        event: 'POD_SECURITY_CONFIG_READ_FAILED', userId, ...errorContext(err),
+      });
       const db = await readMock();
       return db[userId] ?? DEFAULT_POD_SECURITY_CONFIG;
     }
@@ -76,7 +78,9 @@ const legacyPodSecurityRepository = {
       await persistConfig(userId, config);
       return config;
     } catch (err) {
-      logger.warn('[PodSecurityRepository] Appwrite write failed, using local JSON fallback', errorContext(err));
+      logger.warn('[PodSecurityRepository] Appwrite write failed, using local JSON fallback', {
+        event: 'POD_SECURITY_CONFIG_WRITE_FAILED', userId, ...errorContext(err),
+      });
       await withLock(async () => {
         const db = await readMock();
         db[userId] = config;

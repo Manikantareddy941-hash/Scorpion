@@ -54,7 +54,9 @@ const legacyPostureRepository = {
           await databases.createDocument(DB_ID, COLLECTION, ID.unique(), payload);
         }
       } catch (err) {
-        logger.error(`[PostureRepository] save for '${ns.namespace}' failed`, errorContext(err));
+        logger.error(`[PostureRepository] save for '${ns.namespace}' failed`, {
+          event: 'POSTURE_SNAPSHOT_WRITE_FAILED', namespace: ns.namespace, ...errorContext(err),
+        });
         throw err;
       }
     }
@@ -68,7 +70,7 @@ const legacyPostureRepository = {
       ]);
       return list.documents.map(fromDoc).filter((s): s is NamespaceSnapshot => s !== null);
     } catch (err) {
-      logger.warn('[PostureRepository] list failed', errorContext(err));
+      logger.warn('[PostureRepository] list failed', { event: 'POSTURE_SNAPSHOT_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },
