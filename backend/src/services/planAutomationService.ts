@@ -94,7 +94,9 @@ export async function runAutomation(projectId: string, event: string, ctx: Autom
           projectId, ruleId: rule.$id, trigger: rule.trigger, action: rule.action,
           status: 'error', message, issueId: ctx.issue?.$id, createdAt: now,
         }).catch(() => { /* run history is best-effort */ });
-        logger.error(`[Automation] Rule ${rule.$id} action failed:`, message);
+        logger.error(`[Automation] Rule ${rule.$id} action failed:`, {
+          event: 'AUTOMATION_RULE_ACTION_FAILED', ruleId: rule.$id, projectId, ...errorContext(actionErr),
+        });
       }
     }
   } catch (err) {

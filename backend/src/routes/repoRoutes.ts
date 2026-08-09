@@ -68,7 +68,9 @@ router.get('/github/installations', async (_req: AuthenticatedRequest, res: Resp
         res.json({ repos: await listInstallationRepos() });
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        logger.error('[RepoRoutes] Failed to list GitHub App installation repos:', message);
+        logger.error('[RepoRoutes] Failed to list GitHub App installation repos:', {
+            event: 'REPO_APP_INSTALLATION_LIST_FAILED', ...errorContext(error),
+        });
         const status = message.includes('not configured') ? 503 : 502;
         res.status(status).json({ error: 'Failed to list GitHub App installation repositories' });
     }

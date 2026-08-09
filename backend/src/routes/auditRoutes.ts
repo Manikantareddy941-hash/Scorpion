@@ -53,7 +53,7 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
         res.json(docs);
     } catch (err: unknown) {
         const message = errorMessage(err);
-        logger.error('[Audit API Error]', message, err instanceof Error ? err.stack : undefined);
+        logger.error('[Audit API Error]', { event: 'AUDIT_LIST_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error', message });
     }
 });
@@ -87,7 +87,11 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
     } catch (err: unknown) {
         const message = errorMessage(err);
         const response_ = typeof err === 'object' && err !== null && 'response' in err ? (err as { response?: { message?: string } }).response : undefined;
-        logger.error('[Audit Create Error]', message, response_ || err);
+        logger.error('[Audit Create Error]', {
+            event: 'AUDIT_CREATE_FAILED',
+            ...(response_?.message ? { upstreamMessage: response_.message } : {}),
+            ...errorContext(err),
+        });
         res.status(500).json({
             error: 'Failed to create audit log',
             message,

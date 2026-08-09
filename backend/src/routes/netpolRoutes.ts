@@ -53,7 +53,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     } catch (err) {
       // The artifact is still useful even when the PR fails — return both.
       const msg = errorMessage(err);
-      logger.error('[NetPol API] PR failed:', msg);
+      logger.error('[NetPol API] PR failed:', { event: 'NETPOL_PR_FAILED', ...errorContext(err) });
       return res.json({ yaml, prError: msg });
     }
   } catch (err) {

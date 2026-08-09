@@ -9,7 +9,7 @@ import { databases, COLLECTIONS, DB_ID, ID, Query } from '../lib/appwrite';
 import { triggerScan } from './scanService';
 import { checkReleaseGate } from '../routes/gateRoutes';
 import { triggerDeploy } from '../deploy/deployService';
-import { logger, errorMessage } from './logger';
+import { logger, errorMessage, errorContext } from './logger';
 import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
 import { containerizedTrivyService } from './containerizedTrivyService';
@@ -285,12 +285,16 @@ export async function runPipeline(runId: string) {
         // the resulting unsigned run is indistinguishable downstream from one
         // that never intended to sign — and that one deploys freely.
         if (signErr instanceof CosignSigningError) {
-          logger.error(`[PipelineService] Image signing failed for ${imageTag} — failing the run:`, message);
+          logger.error(`[PipelineService] Image signing failed for ${imageTag} — failing the run:`, {
+            event: 'PIPELINE_SIGNING_FAILED', imageRef: imageTag, ...errorContext(signErr),
+          });
           await pipeLogger.log(`Image signing failed: ${message}`);
           throw signErr;
         }
         // Reading the digest is best-effort; it does not weaken the gate.
-        logger.warn(`[PipelineService] Image digest step failed for ${imageTag}:`, message);
+        logger.warn(`[PipelineService] Image digest step failed for ${imageTag}:`, {
+          event: 'PIPELINE_DIGEST_FAILED', imageRef: imageTag, ...errorContext(signErr),
+        });
         await pipeLogger.log(`Image digest step failed: ${message}`);
       }
     } else if (buildTool === 'gradle') {

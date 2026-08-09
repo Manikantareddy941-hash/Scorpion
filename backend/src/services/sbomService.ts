@@ -25,7 +25,11 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
         let isTemporary = false;
 
         if (repo.url.startsWith('http')) {
-            logger.info('[SBOM] Cloning remote repo:', repo.url);
+            // userinfo stripped: a clone URL can carry `user:token@`, and this line
+            // was never actually emitted before (winston drops a string second arg
+            // without format.splat), so folding it into the message is the point at
+            // which a credential would start reaching the log.
+            logger.info(`[SBOM] Cloning remote repo: ${repo.url.replace(/\/\/[^@/]*@/, '//')}`);
             await execFileAsync('git', ['clone', '--depth', '1', repo.url, tempDir], { timeout: 60000 });
             scanPath = tempDir;
             isTemporary = true;
