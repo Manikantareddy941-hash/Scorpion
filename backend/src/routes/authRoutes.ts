@@ -41,7 +41,11 @@ router.post('/request-reset', async (req: Request, res: Response) => {
                 userId = userList.users[0].$id;
             }
         } catch (err: unknown) {
-            logger.warn('[Auth] Appwrite error checking user existence', errorContext(err));
+            // No `email` on any site in this flow: a password-reset log that names
+            // the address turns the aggregator into the account-enumeration oracle
+            // the handler deliberately avoids being (see the always-success reply
+            // below). Opaque record ids only.
+            logger.warn('[Auth] Appwrite error checking user existence', { event: 'AUTH_USER_LOOKUP_FAILED', ...errorContext(err) });
             // In dev mode, assume user exists to allow testing
             if (process.env.NODE_ENV !== 'production') {
                 userExists = true;
@@ -81,7 +85,7 @@ router.post('/request-reset', async (req: Request, res: Response) => {
                 });
             }
         } catch (dbError: unknown) {
-            logger.warn('[Auth] Database operation failed', errorContext(dbError));
+            logger.warn('[Auth] Database operation failed', { event: 'AUTH_RESET_RECORD_WRITE_FAILED', ...errorContext(dbError) });
             if (process.env.NODE_ENV === 'production') throw dbError;
         }
 
@@ -89,14 +93,14 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         try {
             await sendOtpEmail(email, otp);
         } catch (emailError: unknown) {
-            logger.error('[Auth] Email sending failed', errorContext(emailError));
+            logger.error('[Auth] Email sending failed', { event: 'AUTH_OTP_EMAIL_SEND_FAILED', ...errorContext(emailError) });
             if (process.env.NODE_ENV === 'production') throw emailError;
             logger.info(`[DEV-OTP] Password reset OTP for ${email}: ${otp}`);
         }
 
         res.json({ message: 'If an account exists, an OTP has been sent.' });
     } catch (error: unknown) {
-        logger.error('[Auth] Error in request-reset:', error);
+        logger.error('[Auth] Error in request-reset:', { event: 'AUTH_REQUEST_RESET_FAILED', ...errorContext(error) });
         res.status(500).json({ error: errorMessage(error) || 'Failed to process request' });
     }
 });
@@ -144,7 +148,9 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         try {
             await databases.deleteDocument(DB_ID, COLLECTIONS.PASSWORD_RESETS, reset.$id);
         } catch (delErr: unknown) {
-            logger.warn('[Auth] Failed to delete consumed reset record', errorContext(delErr));
+            logger.warn('[Auth] Failed to delete consumed reset record', {
+                event: 'AUTH_RESET_RECORD_CONSUME_FAILED', resetId: reset.$id, ...errorContext(delErr),
+            });
         }
 
         // Generate temporary reset token
@@ -152,7 +158,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
 
         res.json({ resetToken, message: 'OTP verified successfully' });
     } catch (error: unknown) {
-        logger.error('[Auth] Error in verify-otp:', error);
+        logger.error('[Auth] Error in verify-otp:', { event: 'AUTH_VERIFY_OTP_FAILED', ...errorContext(error) });
         res.status(500).json({ error: errorMessage(error) || 'Failed to verify OTP' });
     }
 });
@@ -188,7 +194,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
         res.json({ message: 'Password updated successfully' });
     } catch (error: unknown) {
-        logger.error('[Auth] Error in reset-password:', error);
+        logger.error('[Auth] Error in reset-password:', { event: 'AUTH_RESET_PASSWORD_FAILED', ...errorContext(error) });
         if (error instanceof Error && error.name === 'JsonWebTokenError') {
             void recordSecurityEvent({
                 type: 'auth_failure', actor: req.body?.email || 'unknown',
