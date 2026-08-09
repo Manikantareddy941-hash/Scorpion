@@ -82,7 +82,7 @@ const legacySoarRepository = {
       const list = await databases.listDocuments(DB_ID, PLAYBOOKS, [Query.limit(100)]);
       return list.documents.map(playbookFromDoc).filter((p): p is Playbook => p !== null);
     } catch (err) {
-      logger.warn('[SoarRepository] playbook load failed', errorContext(err));
+      logger.warn('[SoarRepository] playbook load failed', { event: 'SOAR_PLAYBOOK_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },
@@ -99,7 +99,7 @@ const legacySoarRepository = {
       });
       return { ...p, id: doc.$id };
     } catch (err) {
-      logger.error('[SoarRepository] createPlaybook failed', errorContext(err));
+      logger.error('[SoarRepository] createPlaybook failed', { event: 'SOAR_PLAYBOOK_CREATE_FAILED', ...errorContext(err) });
       throw err;
     }
   },
@@ -113,7 +113,9 @@ const legacySoarRepository = {
     try {
       await databases.updateDocument(DB_ID, PLAYBOOKS, id, patch);
     } catch (err) {
-      logger.error('[SoarRepository] updatePlaybook failed', errorContext(err));
+      logger.error('[SoarRepository] updatePlaybook failed', {
+        event: 'SOAR_PLAYBOOK_UPDATE_FAILED', playbookId: id, ...errorContext(err),
+      });
       throw err;
     }
   },
@@ -124,7 +126,7 @@ const legacySoarRepository = {
       const doc = await databases.createDocument(DB_ID, ACTIONS, ID.unique(), { ...a, createdAt });
       return { ...a, id: doc.$id, createdAt };
     } catch (err) {
-      logger.error('[SoarRepository] createAction failed', errorContext(err));
+      logger.error('[SoarRepository] createAction failed', { event: 'SOAR_ACTION_CREATE_FAILED', ...errorContext(err) });
       throw err;
     }
   },
@@ -134,7 +136,7 @@ const legacySoarRepository = {
       return actionFromDoc(await databases.getDocument(DB_ID, ACTIONS, id));
     } catch (err) {
       // Logged so an Appwrite outage is distinguishable from a clean not-found.
-      logger.warn('[SoarRepository] getAction failed', errorContext(err));
+      logger.warn('[SoarRepository] getAction failed', { event: 'SOAR_ACTION_READ_FAILED', actionId: id, ...errorContext(err) });
       return null;
     }
   },
@@ -147,7 +149,9 @@ const legacySoarRepository = {
       const list = await databases.listDocuments(DB_ID, ACTIONS, queries);
       return list.documents.map(actionFromDoc);
     } catch (err) {
-      logger.warn('[SoarRepository] action list failed', errorContext(err));
+      logger.warn('[SoarRepository] action list failed', {
+        event: 'SOAR_ACTION_LIST_FAILED', statusFilter: status, ...errorContext(err),
+      });
       return [];
     }
   },
@@ -164,7 +168,9 @@ const legacySoarRepository = {
         ...extra,
       });
     } catch (err) {
-      logger.error('[SoarRepository] setActionStatus failed', errorContext(err));
+      logger.error('[SoarRepository] setActionStatus failed', {
+        event: 'SOAR_ACTION_STATUS_UPDATE_FAILED', actionId: id, targetStatus: status, ...errorContext(err),
+      });
       throw err;
     }
   },
@@ -182,7 +188,9 @@ const legacySoarRepository = {
         return { id: d.$id, playbookName: w.playbookName || '', createdAt: w.createdAt, result: w.result ?? undefined };
       });
     } catch (err) {
-      logger.error('[SoarRepository] listEvidenceForIncident failed', errorContext(err));
+      logger.error('[SoarRepository] listEvidenceForIncident failed', {
+        event: 'SOAR_EVIDENCE_LIST_FAILED', incidentId, ...errorContext(err),
+      });
       return [];
     }
   },

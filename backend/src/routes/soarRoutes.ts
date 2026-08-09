@@ -35,7 +35,7 @@ router.get('/playbooks', async (_req: Request, res: Response) => {
   try {
     res.json({ playbooks: await soarRepository.listPlaybooks() });
   } catch (err) {
-    logger.error('[SOAR API] list playbooks failed', errorContext(err));
+    logger.error('[SOAR API] list playbooks failed', { event: 'SOAR_API_PLAYBOOK_LIST_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to list playbooks' });
   }
 });
@@ -49,7 +49,7 @@ router.post('/playbooks', async (req: Request, res: Response) => {
     const playbook = await soarRepository.createPlaybook(parsed.data);
     res.status(201).json({ playbook });
   } catch (err) {
-    logger.error('[SOAR API] create playbook failed', errorContext(err));
+    logger.error('[SOAR API] create playbook failed', { event: 'SOAR_API_PLAYBOOK_CREATE_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to create playbook' });
   }
 });
@@ -63,7 +63,9 @@ router.patch('/playbooks/:id', async (req: Request<Record<string, string>>, res:
     await soarRepository.updatePlaybook(req.params.id, parsed.data);
     res.json({ status: 'updated' });
   } catch (err) {
-    logger.error('[SOAR API] update playbook failed', errorContext(err));
+    logger.error('[SOAR API] update playbook failed', {
+      event: 'SOAR_API_PLAYBOOK_UPDATE_FAILED', playbookId: req.params.id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to update playbook' });
   }
 });
@@ -75,7 +77,9 @@ router.get('/actions', async (req: Request, res: Response) => {
     const actions = await soarRepository.listActions(status?.data as SoarActionStatus | undefined);
     res.json({ actions });
   } catch (err) {
-    logger.error('[SOAR API] list actions failed', errorContext(err));
+    logger.error('[SOAR API] list actions failed', {
+      event: 'SOAR_API_ACTION_LIST_FAILED', statusFilter: status?.data, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to list actions' });
   }
 });
@@ -104,14 +108,18 @@ async function resolveAction(
 
 router.post('/actions/:id/approve', (req: AuthenticatedRequest, res: Response) => {
   resolveAction(req, res, 'approved').catch((err) => {
-    logger.error('[SOAR API] approve failed', errorContext(err));
+    logger.error('[SOAR API] approve failed', {
+      event: 'SOAR_API_ACTION_APPROVE_FAILED', actionId: req.params.id, actor: req.user?.$id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to approve action' });
   });
 });
 
 router.post('/actions/:id/reject', (req: AuthenticatedRequest, res: Response) => {
   resolveAction(req, res, 'rejected').catch((err) => {
-    logger.error('[SOAR API] reject failed', errorContext(err));
+    logger.error('[SOAR API] reject failed', {
+      event: 'SOAR_API_ACTION_REJECT_FAILED', actionId: req.params.id, actor: req.user?.$id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to reject action' });
   });
 });
