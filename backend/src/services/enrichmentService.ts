@@ -56,7 +56,9 @@ export async function fetchEpssScores(cveIds: string[]): Promise<Map<string, Eps
         });
       }
     } catch (err) {
-      logger.warn('[Enrichment] EPSS fetch failed, findings in this batch stay unscored', errorContext(err));
+      logger.warn('[Enrichment] EPSS fetch failed, findings in this batch stay unscored', {
+        event: 'ENRICHMENT_EPSS_FETCH_FAILED', ...errorContext(err),
+      });
     }
   }
   return scores;
@@ -78,7 +80,9 @@ export async function loadKevCatalog(): Promise<Set<string>> {
     kevCache = { cveIds, fetchedAt: Date.now() };
     return cveIds;
   } catch (err) {
-    logger.warn('[Enrichment] KEV feed fetch failed, serving stale/empty catalog', errorContext(err));
+    logger.warn('[Enrichment] KEV feed fetch failed, serving stale/empty catalog', {
+      event: 'ENRICHMENT_KEV_FETCH_FAILED', servedStale: kevCache !== undefined, ...errorContext(err),
+    });
     return kevCache?.cveIds ?? new Set();
   }
 }

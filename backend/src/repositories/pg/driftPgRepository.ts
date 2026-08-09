@@ -74,7 +74,9 @@ export const driftPgRepository = {
       await insert(record);
       return record;
     } catch (err) {
-      logger.warn('[DriftPgRepository] Postgres write failed, using local JSON fallback', errorContext(err));
+      logger.warn('[DriftPgRepository] Postgres write failed, using local JSON fallback', {
+        event: 'DRIFT_WRITE_FAILED', driftType: anomaly.driftType, ...errorContext(err),
+      });
       await bufferRecord(record);
       return record;
     }
@@ -102,7 +104,9 @@ export const driftPgRepository = {
       );
       return (res.rows as DriftRow[]).map(fromRow);
     } catch (err) {
-      logger.warn('[DriftPgRepository] Postgres read failed, using local JSON fallback', errorContext(err));
+      logger.warn('[DriftPgRepository] Postgres read failed, using local JSON fallback', {
+        event: 'DRIFT_READ_FAILED', ...errorContext(err),
+      });
       return selectFallback(await readMock(), opts, limit);
     }
   },

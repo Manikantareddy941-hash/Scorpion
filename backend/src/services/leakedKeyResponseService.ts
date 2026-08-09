@@ -69,6 +69,8 @@ export const respondToLeakedKeys = async (
     } catch (err) {
         // Best-effort, same as freezeReleaseGateForIncident - a failure here
         // must never break the scan that's reporting this finding.
-        logger.error('[Leaked Key Response] Failed', errorContext(err));
+        logger.error('[Leaked Key Response] Failed', {
+            event: 'LEAKED_KEY_RESPONSE_FAILED', repoId, ...errorContext(err),
+        });
     }
 };

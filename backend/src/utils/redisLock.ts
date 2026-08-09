@@ -43,6 +43,11 @@ export async function releaseLock(handle: LockHandle): Promise<void> {
     await redisConnection.eval(RELEASE_SCRIPT, 1, handle.key, handle.token);
   } catch (err) {
     // Lease TTL is the backstop: an unreleasable lock frees itself.
-    logger.warn(`[RedisLock] Release failed for ${handle.key}`, errorContext(err));
+    // `handle.key` only — never `handle.token`, which is the nonce proving
+    // ownership of the lease; logging it would let a reader release someone
+    // else's lock.
+    logger.warn(`[RedisLock] Release failed for ${handle.key}`, {
+      event: 'REDIS_LOCK_RELEASE_FAILED', lockKey: handle.key, ...errorContext(err),
+    });
   }
 }

@@ -64,7 +64,9 @@ async function filterByReachability(repoId: string, blockers: GateBlocker[]): Pr
       return reachable.has(pkg);
     });
   } catch (err) {
-    logger.warn(`[Gate] Reachability filter skipped for ${repoId}`, errorContext(err));
+    logger.warn(`[Gate] Reachability filter skipped for ${repoId}`, {
+      event: 'GATE_REACHABILITY_FILTER_SKIPPED', repoId, ...errorContext(err),
+    });
     return blockers; // fail-secure on any analysis error
   }
 }
@@ -123,7 +125,9 @@ export async function checkReleaseGate(repoId: string): Promise<GateResult> {
         regoDenyReasons = opaResult.denyReasons;
       }
     } catch (err) {
-      logger.warn(`[Gate] Custom Rego policy evaluation skipped for ${repoId}`, errorContext(err));
+      logger.warn(`[Gate] Custom Rego policy evaluation skipped for ${repoId}`, {
+        event: 'GATE_REGO_EVAL_SKIPPED', repoId, ...errorContext(err),
+      });
     }
   }
 

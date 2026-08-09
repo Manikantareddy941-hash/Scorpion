@@ -100,7 +100,7 @@ export async function runAutomation(projectId: string, event: string, ctx: Autom
       }
     }
   } catch (err) {
-    logger.error('[Automation] Engine failure', errorContext(err));
+    logger.error('[Automation] Engine failure', { event: 'AUTOMATION_ENGINE_FAILED', projectId, ...errorContext(err) });
   }
 }
 
@@ -127,7 +127,9 @@ export async function writeSprintSnapshot(projectId: string, sprint: Sprint, spr
       closedAt: new Date().toISOString(),
     });
   } catch (err) {
-    logger.error('[SprintSnapshot] Failed to snapshot sprint velocity', errorContext(err));
+    logger.error('[SprintSnapshot] Failed to snapshot sprint velocity', {
+      event: 'SPRINT_SNAPSHOT_FAILED', projectId, sprintId: sprint.$id, ...errorContext(err),
+    });
   }
 }
 
@@ -148,7 +150,9 @@ export async function rollUnfinishedToBacklog(sprintId: string): Promise<number>
       }
     }
   } catch (err) {
-    logger.error('[Sprint] Failed to roll unfinished issues to backlog', errorContext(err));
+    logger.error('[Sprint] Failed to roll unfinished issues to backlog', {
+      event: 'SPRINT_ROLLOVER_FAILED', sprintId, movedBeforeFailure: moved, ...errorContext(err),
+    });
   }
   return moved;
 }

@@ -145,7 +145,9 @@ import { signingConfigBroken } from './services/metrics';
     await probeSigningReadiness()
         .then((readiness) => signingConfigBroken.set(readiness === 'degraded' ? 1 : 0))
         .catch((err: unknown) =>
-            logger.warn('[Cosign] Signing readiness probe failed to run', errorContext(err)),
+            logger.warn('[Cosign] Signing readiness probe failed to run', {
+                event: 'SIGNING_READINESS_PROBE_FAILED', ...errorContext(err),
+            }),
         );
 
     // --- Recovery Mechanism ---
@@ -469,7 +471,9 @@ let postureTimer: NodeJS.Timeout | undefined;
 try {
   postureTimer = startPostureScanner();
 } catch (err) {
-  logger.warn('[Startup] posture scanner initialization failed', errorContext(err));
+  logger.warn('[Startup] posture scanner initialization failed', {
+    event: 'POSTURE_SCANNER_INIT_FAILED', nodeEnv: process.env.NODE_ENV, ...errorContext(err),
+  });
 }
 // Periodically replays repo JSON fallback buffers back into Appwrite on recovery.
 startFallbackReplayer();
