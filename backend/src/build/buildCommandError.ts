@@ -1,16 +1,22 @@
 /**
- * A failed build step, carrying its transcript and the captured streams.
+ * The error a failed build command throws.
  *
- * THE BUG THIS REPLACES. `execWithLogs` used to rethrow `{ ...error, logs }`. A
- * spread copies only ENUMERABLE own properties, and V8 marks `message` and `stack`
- * non-enumerable — so both were silently discarded at the throw. Nothing failed
- * loudly; the build just reported a JSON blob instead of a reason, and the outer
- * handler grew a `JSON.stringify(error)` fallback to compensate for a message that
- * was already gone.
+ * WHY THIS IS ITS OWN MODULE
  *
- * A real Error subclass keeps `message` and `stack` because it is thrown by
- * reference, and `cause` retains the original rejection so `errorContext` can report
- * both halves of the chain.
+ * buildService.ts imports the scan pipeline, cosign, provenance, the image store
+ * and ../lib/appwrite — which constructs an Appwrite Client at module load. A test
+ * for a plain error class should not drag any of that in, so the class lives here
+ * and both the service and its test import it from one small file with no side
+ * effects.
+ *
+ * WHY IT REPLACES `throw { ...error, logs }`
+ *
+ * Spreading an Error produces an object without `message` or `stack`: V8 marks both
+ * non-enumerable, so they are not copied. The old rethrow therefore destroyed the
+ * reason for the failure, and the downstream handler's `JSON.stringify(error)`
+ * fallback existed precisely to paper over it. Nothing errored; the build simply
+ * reported a blob instead of a cause. Throwing a real Error by reference keeps
+ * `message`, `stack`, `instanceof` and the cause chain intact.
  */
 export class BuildCommandError extends Error {
     public readonly stdout?: string;
@@ -19,7 +25,7 @@ export class BuildCommandError extends Error {
 
     constructor(
         message: string,
-        options: { stdout?: string; stderr?: string; logs?: string; cause?: unknown } = {},
+        options: { stdout?: string; stderr?: string; logs?: string; cause?: unknown },
     ) {
         super(message);
         this.name = 'BuildCommandError';
@@ -27,25 +33,16 @@ export class BuildCommandError extends Error {
         this.stderr = options.stderr;
         this.logs = options.logs;
 
-        // `cause` is ES2022 and this project compiles against es2016, so it is
-        // assigned through a narrow type rather than passed to the two-argument
-        // Error constructor, which does not typecheck here.
+        // `cause` is assigned rather than passed to super(message, { cause }).
+        // The two-argument Error constructor is ES2022 and this project compiles
+        // against es2016, so `ErrorOptions` is absent from the type and the call
+        // fails with TS2554 — while the property works on every Node version this
+        // ships to. Same narrow-type approach errorContext() uses to read it back.
+        //
+        // Assigned only when present, so `'cause' in err` stays false otherwise and
+        // errorContext omits the key rather than logging `cause: undefined`.
         if (options.cause !== undefined) {
             (this as Error & { cause?: unknown }).cause = options.cause;
         }
     }
-}
-
-/**
- * The build transcript attached to a thrown value, from either producer.
- *
- * Deliberately structural rather than `instanceof BuildCommandError`: the image
- * signing path rethrows `Object.assign(signErr, { logs })` on a CosignSigningError,
- * and an instanceof check would drop that transcript — the exact loss the comment on
- * that throw warns against.
- */
-export function attachedLogs(error: unknown): string | undefined {
-    if (!(error instanceof Error)) return undefined;
-    const logs = (error as Error & { logs?: unknown }).logs;
-    return typeof logs === 'string' ? logs : undefined;
 }

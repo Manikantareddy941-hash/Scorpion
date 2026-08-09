@@ -1,11 +1,11 @@
-import { BuildCommandError, attachedLogs } from './buildCommandError';
+import { BuildCommandError } from './buildCommandError';
 import { errorContext } from '../services/logger';
 
 /**
  * The regression under test is a silent one: the old code rethrew
  * `{ ...error, logs }`, and spreading an Error drops `message` and `stack` because
- * V8 marks them non-enumerable. Nothing threw, nothing failed — the build just
- * reported a JSON blob instead of a reason. So these assert on what survives.
+ * V8 marks them non-enumerable. Nothing failed — the build just reported a JSON blob
+ * instead of a reason. So these assert on what survives the throw.
  */
 
 describe('BuildCommandError', () => {
@@ -32,13 +32,14 @@ describe('BuildCommandError', () => {
         expect(build.stack).toContain('BuildCommandError');
     });
 
-    /** The property the old plain-object rethrow did not have. */
-    it('keeps what a spread would have discarded', () => {
-        // What the old code did, shown for contrast: both vanish.
+    /** This is the property the old plain-object throw did not have. */
+    it('survives a spread-and-rethrow losing nothing that matters', () => {
+        // What the old code did, shown for contrast: message and stack vanish.
         const spread = { ...raw };
         expect('message' in spread).toBe(false);
         expect('stack' in spread).toBe(false);
 
+        // The replacement keeps them, because it is thrown by reference as an Error.
         expect(build.message).toBeTruthy();
         expect(build.stack).toBeTruthy();
     });
@@ -47,50 +48,19 @@ describe('BuildCommandError', () => {
         const ctx = errorContext(build);
 
         expect(ctx.error).toBe('Build step failed');
-        // errorContext reduces an Error cause to `${name}: ${message}` so a cause
-        // cannot serialise to `{}` — hence the 'Error: ' prefix.
+        // errorContext reduces an Error cause to `${name}: ${message}` so that a
+        // cause cannot serialise to `{}` — hence the 'Error: ' prefix here.
         expect(ctx.cause).toBe('Error: Child process exited with code 1');
         expect(ctx.stack).toBeDefined();
     });
 
-    it('omits absent fields rather than emitting undefined keys', () => {
-        const bare = new BuildCommandError('no streams captured');
+    it('omits absent fields rather than emitting undefined', () => {
+        const bare = new BuildCommandError('no streams captured', {});
 
         expect(bare.stdout).toBeUndefined();
         expect(bare.stderr).toBeUndefined();
         expect(bare.logs).toBeUndefined();
         expect('cause' in bare).toBe(false);
         expect(errorContext(bare).cause).toBeUndefined();
-    });
-});
-
-describe('attachedLogs', () => {
-    it('reads the transcript off a BuildCommandError', () => {
-        const err = new BuildCommandError('failed', { logs: 'transcript' });
-        expect(attachedLogs(err)).toBe('transcript');
-    });
-
-    /**
-     * The reason this is structural rather than `instanceof BuildCommandError`.
-     * buildService's signing path rethrows `Object.assign(signErr, { logs })` on a
-     * CosignSigningError; an instanceof check would silently drop that transcript.
-     */
-    it('reads the transcript off any Error that had one assigned onto it', () => {
-        const signErr = Object.assign(new Error('cosign sign-blob failed'), {
-            logs: 'Image signing failed: bad key\n',
-        });
-        expect(attachedLogs(signErr)).toBe('Image signing failed: bad key\n');
-    });
-
-    it('returns undefined for an Error with no transcript, and for non-Errors', () => {
-        expect(attachedLogs(new Error('plain'))).toBeUndefined();
-        expect(attachedLogs({ logs: 'not an Error' })).toBeUndefined();
-        expect(attachedLogs('string')).toBeUndefined();
-        expect(attachedLogs(undefined)).toBeUndefined();
-    });
-
-    it('ignores a non-string logs property rather than returning it', () => {
-        const weird = Object.assign(new Error('x'), { logs: { not: 'a string' } });
-        expect(attachedLogs(weird)).toBeUndefined();
     });
 });
