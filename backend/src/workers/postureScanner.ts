@@ -75,7 +75,7 @@ export async function runPostureScan(reader: ClusterReader): Promise<void> {
   try {
     snapshot = await reader.readSnapshot();
   } catch (err) {
-    logger.warn('[PostureScanner] cluster read failed, skipping tick', errorContext(err));
+    logger.warn('[PostureScanner] cluster read failed, skipping tick', { event: 'POSTURE_CLUSTER_READ_FAILED', ...errorContext(err) });
     return;
   }
   const findings = runPostureChecks(snapshot);
@@ -86,7 +86,9 @@ export async function runPostureScan(reader: ClusterReader): Promise<void> {
   try {
     await postureRepository.saveSnapshot(grouped);
   } catch (err) {
-    logger.warn('[PostureScanner] snapshot save failed, tick lost', errorContext(err));
+    logger.warn('[PostureScanner] snapshot save failed, tick lost', {
+      event: 'POSTURE_SNAPSHOT_PERSIST_FAILED', namespaces: grouped.length, ...errorContext(err),
+    });
     return;
   }
   logger.info(`[PostureScanner] scanned ${snapshot.namespaces.length} namespace(s), ${findings.length} finding(s)`);
@@ -104,8 +106,12 @@ export function startPostureScanner(reader: ClusterReader = createClusterReader(
   //
   // Note this is the one case where spreading would be wrong: `...err` yields
   // nothing, because message and stack are non-enumerable.
-  void runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed', errorContext(err)));
+  void runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed', {
+    event: 'POSTURE_SCAN_TICK_FAILED', trigger: 'boot', ...errorContext(err),
+  }));
   return setInterval(() => {
-    runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed', errorContext(err)));
+    runPostureScan(reader).catch((err) => logger.error('[PostureScanner] tick failed', {
+      event: 'POSTURE_SCAN_TICK_FAILED', trigger: 'interval', ...errorContext(err),
+    }));
   }, DEFAULT_INTERVAL_MS);
 }

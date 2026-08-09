@@ -28,7 +28,9 @@ export const posturePgRepository = {
           [ns.namespace, ns.score, JSON.stringify(ns.findings), updatedAt]
         );
       } catch (err) {
-        logger.error(`[PosturePgRepository] save for '${ns.namespace}' failed`, errorContext(err));
+        logger.error(`[PosturePgRepository] save for '${ns.namespace}' failed`, {
+          event: 'POSTURE_SNAPSHOT_WRITE_FAILED', namespace: ns.namespace, ...errorContext(err),
+        });
         throw err;
       }
     }
@@ -47,7 +49,7 @@ export const posturePgRepository = {
         updatedAt: row.updated_at.toISOString(),
       }));
     } catch (err) {
-      logger.warn('[PosturePgRepository] list failed', errorContext(err));
+      logger.warn('[PosturePgRepository] list failed', { event: 'POSTURE_SNAPSHOT_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },
