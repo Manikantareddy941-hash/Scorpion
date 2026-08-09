@@ -2,7 +2,7 @@ import { getPool } from '../../db/pool';
 import { logger, errorContext } from '../../services/logger';
 import type { DriftAnomaly } from '../../workers/driftMonitor';
 import {
-  bufferRecord, clampLimit, flushBuffer, readMock, selectFallback, toMessage, toRecord,
+  bufferRecord, clampLimit, flushBuffer, readMock, selectFallback, toRecord,
   type DriftRecord, type ListDriftOptions,
 } from '../driftShared';
 
