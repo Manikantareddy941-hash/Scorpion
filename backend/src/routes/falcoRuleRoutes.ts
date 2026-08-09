@@ -32,7 +32,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const rules = await falcoRuleRepository.listRules();
     res.json({ rules, templates: FALCO_TEMPLATES });
   } catch (err) {
-    logger.error('[FalcoRules API] list failed', errorContext(err));
+    logger.error('[FalcoRules API] list failed', { event: 'FALCO_RULE_API_LIST_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to list rules' });
   }
 });
@@ -42,7 +42,7 @@ router.get('/export', async (_req: Request, res: Response) => {
     const rules = await falcoRuleRepository.listRules();
     res.type('text/yaml').send(renderFalcoRules(rules));
   } catch (err) {
-    logger.error('[FalcoRules API] export failed', errorContext(err));
+    logger.error('[FalcoRules API] export failed', { event: 'FALCO_RULE_API_EXPORT_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to render rules' });
   }
 });
@@ -56,7 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
     const rule = await falcoRuleRepository.createRule(parsed.data);
     res.status(201).json({ rule });
   } catch (err) {
-    logger.error('[FalcoRules API] create failed', errorContext(err));
+    logger.error('[FalcoRules API] create failed', { event: 'FALCO_RULE_API_CREATE_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to create rule' });
   }
 });
@@ -70,7 +70,9 @@ router.patch('/:id', async (req: Request<Record<string, string>>, res: Response)
     await falcoRuleRepository.updateRule(req.params.id, parsed.data);
     res.json({ status: 'updated' });
   } catch (err) {
-    logger.error('[FalcoRules API] update failed', errorContext(err));
+    logger.error('[FalcoRules API] update failed', {
+      event: 'FALCO_RULE_API_UPDATE_FAILED', ruleId: req.params.id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to update rule' });
   }
 });
