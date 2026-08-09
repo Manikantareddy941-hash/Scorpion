@@ -48,7 +48,7 @@ const legacyFalcoRuleRepository = {
       const list = await databases.listDocuments(DB_ID, COLLECTION, [Query.limit(200)]);
       return list.documents.map(fromDoc).filter((r): r is ManagedFalcoRule => r !== null);
     } catch (err) {
-      logger.warn('[FalcoRuleRepository] load failed', errorContext(err));
+      logger.warn('[FalcoRuleRepository] load failed', { event: 'FALCO_RULE_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },
@@ -67,7 +67,7 @@ const legacyFalcoRuleRepository = {
       });
       return { ...r, id: doc.$id };
     } catch (err) {
-      logger.error('[FalcoRuleRepository] createRule failed', errorContext(err));
+      logger.error('[FalcoRuleRepository] createRule failed', { event: 'FALCO_RULE_CREATE_FAILED', ...errorContext(err) });
       throw err;
     }
   },
@@ -83,7 +83,9 @@ const legacyFalcoRuleRepository = {
     try {
       await databases.updateDocument(DB_ID, COLLECTION, id, patch);
     } catch (err) {
-      logger.error('[FalcoRuleRepository] updateRule failed', errorContext(err));
+      logger.error('[FalcoRuleRepository] updateRule failed', {
+        event: 'FALCO_RULE_UPDATE_FAILED', ruleId: id, ...errorContext(err),
+      });
       throw err;
     }
   },

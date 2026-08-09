@@ -46,7 +46,7 @@ export const falcoRulePgRepository = {
       );
       return (result.rows as RuleRow[]).map(fromRow).filter((r): r is ManagedFalcoRule => r !== null);
     } catch (err) {
-      logger.warn('[FalcoRulePgRepository] load failed', errorContext(err));
+      logger.warn('[FalcoRulePgRepository] load failed', { event: 'FALCO_RULE_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },
@@ -61,7 +61,7 @@ export const falcoRulePgRepository = {
       );
       return { ...r, id };
     } catch (err) {
-      logger.error('[FalcoRulePgRepository] createRule failed', errorContext(err));
+      logger.error('[FalcoRulePgRepository] createRule failed', { event: 'FALCO_RULE_CREATE_FAILED', ...errorContext(err) });
       throw err;
     }
   },
@@ -81,7 +81,9 @@ export const falcoRulePgRepository = {
     try {
       await getPool().query(`UPDATE falco_rules SET ${sets.join(', ')} WHERE id = $1`, [id, ...values]);
     } catch (err) {
-      logger.error('[FalcoRulePgRepository] updateRule failed', errorContext(err));
+      logger.error('[FalcoRulePgRepository] updateRule failed', {
+        event: 'FALCO_RULE_UPDATE_FAILED', ruleId: id, ...errorContext(err),
+      });
       throw err;
     }
   },

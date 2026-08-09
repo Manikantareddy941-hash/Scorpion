@@ -71,7 +71,9 @@ router.post('/trigger', verifyUser, scanTriggerLimiter, async (req: Authenticate
 
         res.json({ scanId, message: 'Scan triggered successfully', status: 'pending' });
     } catch (err: unknown) {
-        logger.error('[Scan Trigger Error]', errorContext(err));
+        logger.error('[Scan Trigger Error]', {
+            event: 'SCAN_TRIGGER_FAILED', repoId: req.body?.repo_id, ...errorContext(err),
+        });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
