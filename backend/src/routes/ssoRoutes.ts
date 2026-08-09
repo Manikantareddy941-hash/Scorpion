@@ -55,7 +55,7 @@ router.get('/login', async (req: Request, res: Response) => {
         res.cookie(VERIFIER_COOKIE, codeVerifier, cookieOptions);
         res.redirect(url);
     } catch (err) {
-        logger.error('[SSO] Failed to start login', errorContext(err));
+        logger.error('[SSO] Failed to start login', { event: 'SSO_LOGIN_START_FAILED', ...errorContext(err) });
         res.status(502).json({ error: 'Failed to reach the identity provider' });
     }
 });
@@ -90,7 +90,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         // as the Appwrite OAuth flow). Token is single-use and short-lived.
         res.redirect(`${frontend}/auth/callback?userId=${encodeURIComponent(token.userId)}&secret=${encodeURIComponent(token.secret)}`);
     } catch (err) {
-        logger.error('[SSO] Callback failed', errorContext(err));
+        logger.error('[SSO] Callback failed', { event: 'SSO_CALLBACK_FAILED', ...errorContext(err) });
         res.redirect(`${frontend}/login?error=sso_failed`);
     }
 });
