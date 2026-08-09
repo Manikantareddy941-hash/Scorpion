@@ -1,7 +1,8 @@
 import { cloneRepo } from '../utils/git';
 import { runScanPipeline } from '../scanners/pipeline';
 import { logger, errorContext, errorMessage } from '../services/logger';
-import { isExecError, isRecord } from '../utils/errorGuards';
+import { isExecError } from '../utils/errorGuards';
+import { BuildCommandError, attachedLogs } from './buildCommandError';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
@@ -50,10 +51,16 @@ async function execWithLogs(
       if (error.stdout) logs += `${error.stdout}\n`;
       if (error.stderr) logs += `[stderr]: ${error.stderr}\n`;
     }
-    // Spread needs a proven object. Unchanged otherwise, including the fact that
-    // spreading an Error drops `message` — see the outer handler's JSON.stringify
-    // fallback, which exists because of exactly that.
-    throw { ...(isRecord(error) ? error : {}), logs };
+    // Thrown by reference as a real Error, not spread into an object literal. The
+    // spread that used to be here copied only enumerable own properties, so
+    // `message` and `stack` were dropped and the failure arrived downstream with
+    // no reason attached.
+    throw new BuildCommandError(`Build command failed: ${command}`, {
+      stdout: isExecError(error) ? error.stdout : undefined,
+      stderr: isExecError(error) ? error.stderr : undefined,
+      logs,
+      cause: error,
+    });
   }
 }
 
@@ -78,7 +85,11 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
     repoName = repoDoc.name || repoId;
     logs += `Fetched repo: ${repoUrl}\n`;
   } catch (err) {
-    logger.error(`[BuildService] Failed to fetch repo ${repoId}`, err);
+    logger.error('[BuildService] failed to fetch repo', {
+      event: 'BUILD_REPO_FETCH_FAILED',
+      repoId,
+      ...errorContext(err),
+    });
     throw new Error(`Failed to find repository with ID ${repoId}`);
   }
 
@@ -95,7 +106,11 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
       logs
     });
   } catch (err) {
-    logger.error(`[BuildService] Failed to create pipeline document`, err);
+    logger.error('[BuildService] failed to create pipeline document', {
+      event: 'BUILD_PIPELINE_CREATE_FAILED',
+      repoId,
+      ...errorContext(err),
+    });
     throw err;
   }
 
@@ -232,20 +247,31 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
       logs += `Build pipeline completed successfully.\n`;
       
     } catch (error) {
-      logger.error(`[BuildService] Build pipeline failed for ${repoId}`, error);
+      logger.error('[BuildService] build pipeline failed', {
+        event: 'BUILD_PIPELINE_FAILED',
+        repoId,
+        pipelineId,
+        ...(error instanceof BuildCommandError
+          ? { stdout: error.stdout, stderr: error.stderr }
+          : {}),
+        ...errorContext(error),
+      });
       finalStatus = 'failed';
-      // `message` is read off the value directly rather than via errorMessage(),
-      // which would return '[object Object]' for the plain object rethrown above
-      // and shadow the JSON.stringify fallback that currently surfaces its fields.
-      const detail = isRecord(error) && typeof error.message === 'string' ? error.message : undefined;
-      logs = (isExecError(error) && error.logs) || (logs + `\n[FATAL ERROR]: ${detail || JSON.stringify(error)}\n`);
+      // No JSON.stringify fallback any more. It existed only because the old
+      // plain-object rethrow had already lost `message`; a real Error keeps it, so
+      // errorMessage() now returns the reason rather than '[object Object]'.
+      logs = attachedLogs(error) || (logs + `\n[FATAL ERROR]: ${errorMessage(error)}\n`);
     } finally {
       // 7. Cleanup & Update Final Status
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
         logs += `Cleaned up workspace.\n`;
       } catch (cleanupErr) {
-        logger.error(`[BuildService] Failed to clean up ${tempDir}`, cleanupErr);
+        logger.error('[BuildService] failed to clean up workspace', {
+          event: 'BUILD_WORKSPACE_CLEANUP_FAILED',
+          tempDir,
+          ...errorContext(cleanupErr),
+        });
       }
 
       const durationSeconds = (Date.now() - startTime) / 1000;
@@ -274,7 +300,11 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
         logger.info(`[BuildService] Pipeline ${pipelineId} finished with status: ${finalStatus}`);
         
       } catch (updateErr) {
-        logger.error(`[BuildService] Failed to update final pipeline status`, updateErr);
+        logger.error('[BuildService] failed to update final pipeline status', {
+          event: 'BUILD_STATUS_UPDATE_FAILED',
+          pipelineId,
+          ...errorContext(updateErr),
+        });
       }
     }
   })();
