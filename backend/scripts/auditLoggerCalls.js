@@ -59,7 +59,7 @@
  * USAGE
  *   node scripts/auditLoggerCalls.js            summary
  *   node scripts/auditLoggerCalls.js --list     every offending site
- *   node scripts/auditLoggerCalls.js --max=156  ratchet: exit 1 above the baseline
+ *   node scripts/auditLoggerCalls.js --max=150  ratchet: exit 1 above the baseline
  *
  * Ratchet, not cliff: --max lets CI hold the line while the conversion lands
  * incrementally. Lower the number as the count drops; the pass is finished at

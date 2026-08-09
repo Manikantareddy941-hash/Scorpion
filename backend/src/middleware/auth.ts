@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Client, Account } from 'node-appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Middleware to verify an Appwrite session JWT.
@@ -67,7 +67,10 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
     next();
 
   } catch (err) {
-    logger.error('Auth Error:', err);
+    logger.error('[Auth] token verification failed', {
+      event: 'AUTH_VERIFY_FAILED',
+      ...errorContext(err),
+    });
     return res.status(401).json({ error: "Unauthorized" });
   }
 };
