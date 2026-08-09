@@ -92,7 +92,9 @@ router.post('/bulk-connect', validateBody(bulkConnectSchema), async (req: Authen
             } catch (error: unknown) {
                 if (error instanceof TenantAccessError) return res.status(403).json({ error: error.message });
                 failed.push(url);
-                logger.warn(`[RepoRoutes] Bulk-connect failed for ${url}`, errorContext(error));
+                logger.warn(`[RepoRoutes] Bulk-connect failed for ${url}`, {
+                    event: 'REPO_BULK_CONNECT_FAILED', ...errorContext(error),
+                });
             }
         }
 
@@ -113,7 +115,9 @@ router.get('/external', async (req: AuthenticatedRequest, res: Response) => {
         const repos = await repoService.listExternalRepos(provider, token);
         res.json({ repos });
     } catch (error) {
-        logger.error(`[RepoRoutes] Failed to list ${provider} repos`, errorContext(error));
+        logger.error(`[RepoRoutes] Failed to list ${provider} repos`, {
+            event: 'REPO_EXTERNAL_LIST_FAILED', provider, ...errorContext(error),
+        });
         res.status(500).json({ error: `Failed to list ${provider} repositories` });
     }
 });

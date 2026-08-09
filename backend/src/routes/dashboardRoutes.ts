@@ -13,7 +13,7 @@ router.get('/security', verifyUser, async (req: AuthenticatedRequest, res: Respo
   try {
     res.json(await dashboardService.getSecurityDashboard(userId));
   } catch (err) {
-    logger.error('[Dashboard API Error]', errorContext(err));
+    logger.error('[Dashboard API Error]', { event: 'DASHBOARD_SECURITY_READ_FAILED', userId, ...errorContext(err) });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -24,7 +24,9 @@ router.get('/posture-breakdown', verifyUser, async (req: AuthenticatedRequest, r
     if (!userId) return res.status(401).json({ error: 'User not found' });
     res.json(await dashboardService.getPostureBreakdown(userId));
   } catch (err) {
-    logger.error('[Posture API Error]', errorContext(err));
+    logger.error('[Posture API Error]', {
+      event: 'DASHBOARD_POSTURE_READ_FAILED', userId: req.user?.$id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -67,7 +69,9 @@ router.get('/metrics', verifyUser, async (req: AuthenticatedRequest, res: Respon
     if (!userId) return res.status(401).json({ error: 'User not found' });
     res.json(await dashboardService.getMetrics(userId));
   } catch (err) {
-    logger.error('[Dashboard Metrics Error]', errorContext(err));
+    logger.error('[Dashboard Metrics Error]', {
+      event: 'DASHBOARD_METRICS_READ_FAILED', userId: req.user?.$id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

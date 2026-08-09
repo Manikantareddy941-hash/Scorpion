@@ -144,7 +144,9 @@ router.post('/create-pr', aiLimiter, async (req: AuthenticatedRequest, res: Resp
       }).catch((err: unknown) => {
         // The PR exists either way; failing the request here would tell the
         // caller the remediation failed when it did not.
-        logger.error('[SCORPION] Failed to record PR on finding', errorContext(err));
+        logger.error('[SCORPION] Failed to record PR on finding', {
+          event: 'REMEDIATION_PR_RECORD_FAILED', findingId, ...errorContext(err),
+        });
       });
     }
 

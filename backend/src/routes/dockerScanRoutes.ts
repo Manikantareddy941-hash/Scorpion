@@ -113,7 +113,7 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Authenticated
         res.json(stats);
 
     } catch (err: unknown) {
-        logger.error('[Docker API Error]', errorContext(err));
+        logger.error('[Docker API Error]', { event: 'DOCKER_SCAN_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

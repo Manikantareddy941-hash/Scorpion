@@ -73,7 +73,7 @@ router.get('/ai-summary', verifyUser, async (req: AuthenticatedRequest, res: Res
             clearTimeout(timeoutHandle);
         }
     } catch (err: unknown) {
-        logger.error('[AI Summary Error]', errorContext(err));
+        logger.error('[AI Summary Error]', { event: 'REPORT_AI_SUMMARY_FAILED', ...errorContext(err) });
         const fallback = "### ⚠️ AI Analysis Engine temporarily unreachable\n\n*The security mesh analysis timed out or encountered a network bridge interruption.*\n\n**Action Required**:\n1. Please check your network connectivity.\n2. Verify the Gemini API key status in your environment configuration.\n3. Try refreshing the briefing in a few moments.\n\n*Manual telemetry indicates system health remains within normal operational parameters.*";
         res.status(200).json({ summary: fallback });
     }
