@@ -59,11 +59,19 @@
  * USAGE
  *   node scripts/auditLoggerCalls.js            summary
  *   node scripts/auditLoggerCalls.js --list     every offending site
- *   node scripts/auditLoggerCalls.js --max=186  ratchet: exit 1 above the baseline
+ *   node scripts/auditLoggerCalls.js --max=177  ratchet: exit 1 above the baseline
  *
  * Ratchet, not cliff: --max lets CI hold the line while the conversion lands
  * incrementally. Lower the number as the count drops; the pass is finished at
  * --max=0.
+ *
+ * SCOPE, so the number is not misread: isAcceptable() treats a bare
+ * `errorContext(err)` call and an object literal as equally acceptable. The
+ * separate migration adding `event:` keys therefore moves sites from one
+ * acceptable form to another and does not move this count at all — 186 -> 177
+ * reflects the bare-`err` sweep in #216, not slices 1-4. Measuring event-key
+ * coverage would mean requiring an object literal that contains an `event`
+ * property, which is a different (and much larger) baseline.
  *
  * Read the count as convention debt, not as an outage. The string-argument sites —
  * the ones that genuinely lost their cause — were swept in #212 and #214 and are
