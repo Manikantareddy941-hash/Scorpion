@@ -59,7 +59,7 @@
  * USAGE
  *   node scripts/auditLoggerCalls.js            summary
  *   node scripts/auditLoggerCalls.js --list     every offending site
- *   node scripts/auditLoggerCalls.js --max=174  ratchet: exit 1 above the baseline
+ *   node scripts/auditLoggerCalls.js --max=156  ratchet: exit 1 above the baseline
  *
  * Ratchet, not cliff: --max lets CI hold the line while the conversion lands
  * incrementally. Lower the number as the count drops; the pass is finished at
@@ -70,19 +70,31 @@
  * separate migration adding `event:` keys therefore moves sites from one
  * acceptable form to another and does not move this count at all. 186 -> 177 was
  * the bare-`err` sweep in #216; 177 -> 174 is the three bare-`error` sites in
- * authRoutes, converted alongside slice 6. Slices 1-5 moved it by zero, exactly
- * as expected. Measuring event-key coverage would mean requiring an object
+ * authRoutes, converted alongside slice 6; 174 -> 156 is the 18 string-argument
+ * sites fixed in #226. Slices 1-5 moved it by zero, exactly as expected.
+ * Measuring event-key coverage would mean requiring an object
  * literal that CONTAINS an `event` property — a different and much larger
  * baseline, and a separate script rather than a change to this one.
  *
- * Read the count as convention debt, not as an outage. The string-argument sites —
- * the ones that genuinely lost their cause — were swept in #212 and #214 and are
- * already at zero; a scan for those alone is:
+ * CORRECTION. This block used to claim the string-argument sites — the ones that
+ * genuinely lose their cause — were at zero after #212/#214. They were not: 18
+ * survived until #226. The claim held only because the grep suggested below
+ * matches `\w+.message` as the argument, and the survivors were all
+ *
+ *     const message = errorMessage(err);
+ *     logger.error('[X]', message);
+ *
+ * where the argument is a plain local. Same drop, different syntax, invisible to
+ * that grep. Trust `--list` over the grep; the AST walk sees the argument's shape
+ * rather than its spelling. The grep is kept only because it is still a fast
+ * first pass:
  *
  *   grep -rnE "logger\.(error|warn|info)\(.*,\s*\w+(\?)?\.message\s*\)" src --include=*.ts
  *
- * What remains here is bare `err` awaiting the errorContext() form. Worth doing for
- * indexability, not worth paging anyone over.
+ * What remains here is bare `err` awaiting the errorContext() form: an Error
+ * instance, which winston does preserve. Worth doing for indexability, not worth
+ * paging anyone over. If `--list` ever shows an arg2 that is not an error-shaped
+ * identifier, that one IS losing its cause and is worth paging over.
  */
 
 const fs = require('fs');

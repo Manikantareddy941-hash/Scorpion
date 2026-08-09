@@ -409,7 +409,10 @@ export const triggerScan = async (
         let isTemporary = false;
 
         if (targetPath.startsWith('http')) {
-            logger.info('[ScanService] Cloning remote repo:', targetPath, 'Branch:', options.branch || 'main');
+            // userinfo stripped — see the note in sbomService: this string was being
+            // dropped, so emitting it is where an embedded token would start landing
+            // in the log.
+            logger.info(`[ScanService] Cloning remote repo: ${targetPath.replace(/\/\/[^@/]*@/, '//')} Branch: ${options.branch || 'main'}`);
             const tempDir = path.join(process.cwd(), 'tmp', `repo_${scanId}`);
             if (!fs.existsSync(path.join(process.cwd(), 'tmp'))) {
                 fs.mkdirSync(path.join(process.cwd(), 'tmp'), { recursive: true });

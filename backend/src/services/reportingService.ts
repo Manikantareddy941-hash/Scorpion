@@ -116,7 +116,11 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
         const vulns = vulnsDocs.items;
 
         // Mandatory Log: Fetched report data
-        logger.info(`[VERIFICATION] Fetched Report Data (Vulns) for Scans ${JSON.stringify(latestScanIds)}:`, JSON.stringify(vulns, null, 2));
+        // Was `JSON.stringify(vulns, null, 2)` as a second argument, which winston
+        // silently dropped. Restoring it verbatim would start pushing a full,
+        // pretty-printed vulnerability dump into the log on every report build —
+        // the count is what this verification line is actually for.
+        logger.info(`[VERIFICATION] Fetched Report Data (Vulns) for Scans ${JSON.stringify(latestScanIds)}`, { vulnCount: vulns.length });
 
         const stats = {
             total_repos: repos.length,

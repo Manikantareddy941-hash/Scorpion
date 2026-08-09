@@ -7,7 +7,7 @@ import { canAccessResource } from '../services/tenancyService';
 import { aiLimiter, scanTriggerLimiter } from '../middleware/rateLimiters';
 import * as fs from 'fs';
 import * as path from 'path';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string; email?: string };
@@ -58,7 +58,7 @@ router.post('/generate', verifyUser, aiLimiter, async (req: AuthenticatedRequest
 
     } catch (err) {
         const message = err instanceof Error ? err.message : 'unknown error';
-        logger.error('[Remediate Generate Error]', message);
+        logger.error('[Remediate Generate Error]', { event: 'REMEDIATE_GENERATE_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Failed to generate patch', details: message });
     }
 });
@@ -152,7 +152,7 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: AuthenticatedR
 
     } catch (err) {
         const message = err instanceof Error ? err.message : 'unknown error';
-        logger.error('[Remediate Apply Error]', message);
+        logger.error('[Remediate Apply Error]', { event: 'REMEDIATE_APPLY_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Failed to apply patch', details: message });
     }
 });
@@ -223,7 +223,7 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Authenticated
 
     } catch (err) {
         const message = err instanceof Error ? err.message : 'unknown error';
-        logger.error('[Remediate Revert Error]', message);
+        logger.error('[Remediate Revert Error]', { event: 'REMEDIATE_REVERT_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Failed to revert patch', details: message });
     }
 });

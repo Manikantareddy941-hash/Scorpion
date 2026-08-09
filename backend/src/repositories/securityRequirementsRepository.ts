@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import {
   ProjectProfile,
   StoredRequirement,
@@ -41,8 +41,9 @@ async function handleQuery<T>(appwriteCall: () => Promise<T>, mockCall: () => Pr
   try {
     return await appwriteCall();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.warn('[SecurityRequirementsRepository] Appwrite operation failed, using local JSON fallback:', message);
+    logger.warn('[SecurityRequirementsRepository] Appwrite operation failed, using local JSON fallback:', {
+      event: 'SECURITY_REQUIREMENTS_STORE_OPERATION_FAILED', ...errorContext(err),
+    });
     return await mockCall();
   }
 }

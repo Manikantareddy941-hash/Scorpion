@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Join between a Plan project and the repositories whose findings it owns
@@ -47,8 +47,9 @@ async function handleQuery<T>(appwriteCall: () => Promise<T>, mockCall: () => Pr
   try {
     return await appwriteCall();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.warn('[ProjectRepoRepository] Appwrite operation failed, using local JSON fallback:', message);
+    logger.warn('[ProjectRepoRepository] Appwrite operation failed, using local JSON fallback:', {
+      event: 'PROJECT_REPO_STORE_OPERATION_FAILED', ...errorContext(err),
+    });
     return await mockCall();
   }
 }

@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import {
   PlanSchema, Project, Epic, Sprint, Issue, Comment, AutomationRule,
   AutomationRun, SprintSnapshot, Worklog, Threat
@@ -95,8 +95,9 @@ async function handleQuery<T>(appwriteCall: () => Promise<T>, mockCall: () => Pr
   try {
     return await appwriteCall();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.warn('[PlanRepository] Appwrite operation failed, using local JSON fallback store:', message);
+    logger.warn('[PlanRepository] Appwrite operation failed, using local JSON fallback store:', {
+      event: 'PLAN_STORE_OPERATION_FAILED', ...errorContext(err),
+    });
     return await mockCall();
   }
 }

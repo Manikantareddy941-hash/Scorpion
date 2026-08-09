@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { validateTools } from '../../utils/toolCheck';
-import { logger } from '../logger';
+import { logger, errorContext } from '../logger';
 import { getRunner } from '../runner';
 import type { ToolProvenance } from '../runner/provenance';
 
@@ -154,7 +154,9 @@ const executeTool = async (toolId: string, userArgs: string[], toolName: ScanRes
     } catch (err) {
         // Failed to start at all (no daemon, missing binary, timeout).
         const message = err instanceof Error ? err.message : String(err);
-        logger.error(`[Orchestrator] ${toolName} execution error:`, message);
+        logger.error(`[Orchestrator] ${toolName} execution error:`, {
+            event: 'SCAN_TOOL_EXECUTION_FAILED', tool: toolName, ...errorContext(err),
+        });
         return { tool: toolName, stdout: '', stderr: message, error: message, status: null, unavailable: true };
     }
 };

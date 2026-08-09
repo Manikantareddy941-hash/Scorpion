@@ -157,7 +157,7 @@ router.post('/create-pr', aiLimiter, async (req: AuthenticatedRequest, res: Resp
 
   } catch (err: unknown) {
     const message = errorMessage(err);
-    logger.error('[SCORPION] PR creation failed:', message);
+    logger.error('[SCORPION] PR creation failed:', { event: 'REMEDIATION_PR_CREATE_FAILED', ...errorContext(err) });
     return res.status(500).json({ error: message });
   } finally {
     // Always clean up the temp clone
