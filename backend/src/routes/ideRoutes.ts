@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
 import { runScanPipeline } from '../scanners/pipeline';
+import { secretMatches } from '../utils/constantTimeCompare';
 import { parseSemgrep, parseGitleaks, parseTrivy } from '../services/scan/parsers';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { deduplicateFindings, NormalizedVulnerability } from '../deduplication';
@@ -15,14 +15,6 @@ function toIDESeverity(severity: string): IDEFinding['severity'] {
 const router = Router();
 
 const LOOPBACK = new Set(['::1', '127.0.0.1', '::ffff:127.0.0.1']);
-
-function secretMatches(provided: unknown, expected: string): boolean {
-  if (typeof provided !== 'string') return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  // timingSafeEqual throws on length mismatch, so compare lengths first.
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 /**
  * Guards the IDE scan endpoint, which reads an arbitrary filesystem path off the

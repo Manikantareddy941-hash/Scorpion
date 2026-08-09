@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { logger, errorContext } from '../services/logger';
 import { webhookIngestService } from '../services/webhookIngestService';
+import { secretMatches } from '../utils/constantTimeCompare';
 import {
   githubAppInstallSchema,
   githubWebhookSchema,
@@ -88,11 +89,12 @@ router.post('/github', async (req: Request, res: Response) => {
  * Standard GitLab Webhook for automated pipeline runs
  */
 router.post('/gitlab', async (req: Request, res: Response) => {
-    const gitlabToken = req.headers['x-gitlab-token'] as string;
     const expectedToken = process.env.GITLAB_WEBHOOK_SECRET;
 
     // Fails closed: an unconfigured secret must never leave this endpoint open.
-    if (!expectedToken || gitlabToken !== expectedToken) {
+    // The `!expectedToken` check stays here rather than inside secretMatches so
+    // the fail-closed decision is visible at the guard, not delegated to a helper.
+    if (!expectedToken || !secretMatches(req.headers['x-gitlab-token'], expectedToken)) {
         return res.status(401).json({ error: 'Invalid GitLab webhook token' });
     }
 
@@ -154,8 +156,9 @@ router.post('/github/app-install', async (req: Request, res: Response) => {
  * CI Test Report Webhook
  */
 router.post('/tests/report', async (req: Request, res: Response) => {
-    const secret = req.headers['x-tests-report-secret'];
-    if (!process.env.TESTS_REPORT_SECRET || secret !== process.env.TESTS_REPORT_SECRET) {
+    const expectedSecret = process.env.TESTS_REPORT_SECRET;
+    // Fails closed: an unconfigured secret must never leave this endpoint open.
+    if (!expectedSecret || !secretMatches(req.headers['x-tests-report-secret'], expectedSecret)) {
         return res.status(401).json({ error: 'Unauthorized test report source' });
     }
 

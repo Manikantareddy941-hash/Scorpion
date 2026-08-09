@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { timingSafeEqual } from 'crypto';
 import { logger } from '../services/logger';
+import { secretMatches } from '../utils/constantTimeCompare';
 import { isPostgresEnabled } from '../db/pool';
 import { ciTokenRepository, type TokenScope } from '../repositories/pg/ciTokenRepository';
 
@@ -46,13 +46,6 @@ const reject = (req: Request, res: Response, reason: string): Response => {
   return res.status(401).json({ error: 'Unauthorized' });
 };
 
-const keysMatch = (provided: string, expected: string): boolean => {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  // timingSafeEqual throws on length mismatch; length itself isn't secret.
-  return a.length === b.length && timingSafeEqual(a, b);
-};
-
 export const requireCiToken = (scope: TokenScope) =>
   async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
     const provided = req.header('x-api-key');
@@ -78,7 +71,7 @@ export const requireCiToken = (scope: TokenScope) =>
       });
       return res.status(503).json({ error: 'Ingest endpoint not configured' });
     }
-    if (!keysMatch(provided, expected)) return reject(req, res, 'invalid_api_key');
+    if (!secretMatches(provided, expected)) return reject(req, res, 'invalid_api_key');
 
     // Legacy shared key: no tenant, so the shared namespace is used.
     req.ciTenant = null;
