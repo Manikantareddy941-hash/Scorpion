@@ -1,13 +1,14 @@
 import { cloneRepo } from '../utils/git';
 import { runScanPipeline } from '../scanners/pipeline';
 import { logger, errorContext, errorMessage } from '../services/logger';
-import { isExecError, isRecord } from '../utils/errorGuards';
 import { buildsTotal, buildDuration } from '../services/metrics';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, ID } from '../lib/appwrite';
 import { getImageDigest, signImageDigest, CosignSigningError } from '../services/cosignService';
 import { attestProvenance } from '../services/provenanceService';
 import { putProvenance } from '../services/imageStore';
+import { isExecError, isRecord } from '../utils/errorGuards';
+import { BuildCommandError } from './buildCommandError';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -44,16 +45,25 @@ async function execWithLogs(
     if (stdout) logs += `${stdout}\n`;
     if (stderr) logs += `[stderr]: ${stderr}\n`;
     return { stdout, stderr, logs };
-  } catch (error) {
+  } catch (error: unknown) {
+    const stdout = isExecError(error) ? String(error.stdout ?? '') : '';
+    const stderr = isExecError(error) ? String(error.stderr ?? '') : '';
+
     logs += `[ERROR]: ${errorMessage(error)}\n`;
-    if (isExecError(error)) {
-      if (error.stdout) logs += `${error.stdout}\n`;
-      if (error.stderr) logs += `[stderr]: ${error.stderr}\n`;
-    }
-    // Spread needs a proven object. Unchanged otherwise, including the fact that
-    // spreading an Error drops `message` — see the outer handler's JSON.stringify
-    // fallback, which exists because of exactly that.
-    throw { ...(isRecord(error) ? error : {}), logs };
+    if (stdout) logs += `${stdout}\n`;
+    if (stderr) logs += `[stderr]: ${stderr}\n`;
+
+    // Was `throw { ...error, logs }`. Spreading an Error yields an object with no
+    // `message` and no `stack` — V8 marks both non-enumerable — so the reason for
+    // the failure was destroyed at the throw and the outer handler's
+    // JSON.stringify fallback existed only to paper over it. A real Error thrown
+    // by reference keeps the message, the stack, instanceof, and the cause.
+    throw new BuildCommandError('Build command execution failed', {
+      stdout,
+      stderr,
+      logs,
+      cause: error,
+    });
   }
 }
 
@@ -78,7 +88,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
     repoName = repoDoc.name || repoId;
     logs += `Fetched repo: ${repoUrl}\n`;
   } catch (err) {
-    logger.error(`[BuildService] Failed to fetch repo ${repoId}`, err);
+    logger.error(`[BuildService] Failed to fetch repo ${repoId}`, { ...errorContext(err) });
     throw new Error(`Failed to find repository with ID ${repoId}`);
   }
 
@@ -95,7 +105,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
       logs
     });
   } catch (err) {
-    logger.error(`[BuildService] Failed to create pipeline document`, err);
+    logger.error(`[BuildService] Failed to create pipeline document`, { ...errorContext(err) });
     throw err;
   }
 
@@ -231,21 +241,58 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
       finalStatus = 'success';
       logs += `Build pipeline completed successfully.\n`;
       
-    } catch (error) {
-      logger.error(`[BuildService] Build pipeline failed for ${repoId}`, error);
+    } catch (error: unknown) {
       finalStatus = 'failed';
-      // `message` is read off the value directly rather than via errorMessage(),
-      // which would return '[object Object]' for the plain object rethrown above
-      // and shadow the JSON.stringify fallback that currently surfaces its fields.
-      const detail = isRecord(error) && typeof error.message === 'string' ? error.message : undefined;
-      logs = (isExecError(error) && error.logs) || (logs + `\n[FATAL ERROR]: ${detail || JSON.stringify(error)}\n`);
+
+      // BuildCommandError first, then the structural fallback: anything thrown
+      // before execWithLogs runs — a clone failure, an Appwrite write, a signing
+      // error — arrives as an ordinary Error with none of these fields.
+      const buildLogs = error instanceof BuildCommandError
+        ? error.logs
+        : isRecord(error) && 'logs' in error
+          ? String(error.logs ?? '')
+          : undefined;
+
+      const stdout = error instanceof BuildCommandError
+        ? error.stdout
+        : isRecord(error) && 'stdout' in error
+          ? String(error.stdout ?? '')
+          : undefined;
+
+      const stderr = error instanceof BuildCommandError
+        ? error.stderr
+        : isRecord(error) && 'stderr' in error
+          ? String(error.stderr ?? '')
+          : undefined;
+
+      // The else branch is load-bearing: `logs` is the transcript persisted on the
+      // pipeline document and read by a human afterwards. Without it a failure with
+      // no captured transcript ends mid-step with no stated reason, even though the
+      // reason still reaches Loki below. errorMessage covers what the old
+      // `error.message || JSON.stringify(error)` covered, and the JSON.stringify arm
+      // is no longer needed now that the throw above is a real Error.
+      if (buildLogs) {
+        logs = buildLogs;
+      } else {
+        logs += `\n[FATAL ERROR]: ${errorMessage(error)}\n`;
+      }
+
+      // `transcript`, not `logs`: the payload key would otherwise read as the same
+      // name as the surrounding variable and the class field while meaning the
+      // captured build output specifically.
+      logger.error(`[BuildService] Build pipeline failed for ${repoId}`, {
+        ...errorContext(error),
+        ...(buildLogs ? { transcript: buildLogs } : {}),
+        ...(stdout ? { stdout } : {}),
+        ...(stderr ? { stderr } : {}),
+      });
     } finally {
       // 7. Cleanup & Update Final Status
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
         logs += `Cleaned up workspace.\n`;
       } catch (cleanupErr) {
-        logger.error(`[BuildService] Failed to clean up ${tempDir}`, cleanupErr);
+        logger.error(`[BuildService] Failed to clean up ${tempDir}`, { ...errorContext(cleanupErr) });
       }
 
       const durationSeconds = (Date.now() - startTime) / 1000;
@@ -274,7 +321,7 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
         logger.info(`[BuildService] Pipeline ${pipelineId} finished with status: ${finalStatus}`);
         
       } catch (updateErr) {
-        logger.error(`[BuildService] Failed to update final pipeline status`, updateErr);
+        logger.error(`[BuildService] Failed to update final pipeline status`, { ...errorContext(updateErr) });
       }
     }
   })();
