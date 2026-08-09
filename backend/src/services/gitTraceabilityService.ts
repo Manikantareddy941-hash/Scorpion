@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query, users } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 export interface GitMetadata {
     commit_hash: string;
@@ -24,7 +24,11 @@ export const linkCommitToScan = async (scanId: string, repoId: string, metadata:
         });
         logger.info(`[GitTraceability] Scan ${scanId} linked to commit ${metadata.commit_hash.substring(0, 7)}`);
     } catch (err) {
-        logger.error(`[GitTraceability] Failed to link commit to scan ${scanId}:`, err);
+        logger.error('[GitTraceability] Failed to link commit to scan', {
+            event: 'GIT_TRACE_LINK_FAILED',
+            scanId,
+            ...errorContext(err),
+        });
         throw err;
     }
 };
@@ -50,7 +54,11 @@ export const getFindingHistory = async (findingId: string) => {
                     email = user.email;
                 }
             } catch (userErr) {
-                logger.warn(`[GitTraceability] Could not fetch user ${doc.user_id} for finding history:`, userErr);
+                logger.warn('[GitTraceability] Could not fetch user for finding history', {
+                    event: 'GIT_TRACE_USER_LOOKUP_FAILED',
+                    userId: doc.user_id,
+                    ...errorContext(userErr),
+                });
             }
             return {
                 ...doc,
@@ -60,7 +68,11 @@ export const getFindingHistory = async (findingId: string) => {
 
         return resolutions;
     } catch (err) {
-        logger.error(`[GitTraceability] Error fetching finding history for ${findingId}:`, err);
+        logger.error('[GitTraceability] Error fetching finding history', {
+            event: 'GIT_TRACE_HISTORY_FAILED',
+            findingId,
+            ...errorContext(err),
+        });
         throw err;
     }
 };
