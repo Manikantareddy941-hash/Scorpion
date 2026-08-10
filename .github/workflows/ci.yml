@@ -239,10 +239,11 @@ jobs:
       # details, jsonwebtoken internals or SMTP hostnames to anyone who can reach
       # the host.
       #
-      # 73 is a MEASURED baseline, not a work queue (94 before the first sweep;
-      # 21 sites cleared in projectRoutes, threatModelRoutes, gateRoutes and
-      # webhookRoutes). It includes two categories that are probably fine and one
-      # that is not:
+      # 52 is a MEASURED baseline, not a work queue. 94 before sweep 1 (-21:
+      # projectRoutes, threatModelRoutes, gateRoutes, webhookRoutes), 73 before
+      # sweep 2 (-21: alerts, buildRoutes, deployRoutes, pipelineRoutes,
+      # autotuneRoutes). It includes two categories that are probably fine and
+      # one that is not:
       #
       #   details: err.message on a 500   the real leak, and the bulk of it
       #   error: err.message on a 403     usually a deliberate authorization
@@ -253,9 +254,14 @@ jobs:
       # The tool cannot tell Zod from Appwrite because both are `.message`, so the
       # baseline is left un-adjusted rather than pre-subtracted. A number nobody
       # can reproduce is worse than one that is honestly too high.
+      #
+      # The floor is roughly 31, not 0: 19 sites of 403 TenantAccessError /
+      # CanaryAccessError text and 12 of 4xx input validation are deliberate and
+      # must survive. Driving this to 0 would break authorization feedback and
+      # Zod messages both.
       - name: Response Error Leak
         working-directory: backend
-        run: node scripts/auditResponseErrorLeaks.js --max=73
+        run: node scripts/auditResponseErrorLeaks.js --max=52
 
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the

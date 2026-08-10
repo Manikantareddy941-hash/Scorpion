@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { autotuneService } from '../services/autotuneService';
 import { autotuneProposalRepository, ProposalStatus } from '../repositories/autotuneProposalRepository';
 import { AuthenticatedRequest } from '../types/plan.types';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Auto-tune proposals.
@@ -29,7 +30,11 @@ router.get('/proposals', async (req: AuthenticatedRequest, res: Response) => {
     res.json(await autotuneProposalRepository.listForUser(userId, status as ProposalStatus | undefined));
   } catch (err) {
     // A truncated queue would hide proposals the operator believes they triaged.
-    res.status(503).json({ error: 'Proposals could not be listed in full', detail: (err as Error).message });
+    // The log carries the cause; the body only has to say the list is partial.
+    logger.error('[Autotune] proposal list failed', {
+      event: 'AUTOTUNE_PROPOSAL_LIST_FAILED', userId, statusFilter: status, ...errorContext(err),
+    });
+    res.status(503).json({ error: 'Proposals could not be listed in full' });
   }
 });
 
@@ -46,7 +51,8 @@ router.post('/scan', async (req: AuthenticatedRequest, res: Response) => {
     const { created, skipped } = await autotuneService.scan(userId);
     res.json({ created, createdCount: created.length, skipped });
   } catch (err) {
-    res.status(503).json({ error: 'Evidence could not be read; no proposals generated', detail: (err as Error).message });
+    logger.error('[Autotune] scan failed', { event: 'AUTOTUNE_SCAN_FAILED', userId, ...errorContext(err) });
+    res.status(503).json({ error: 'Evidence could not be read; no proposals generated' });
   }
 });
 

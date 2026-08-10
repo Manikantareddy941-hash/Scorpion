@@ -4,7 +4,7 @@ import { AlertService } from '../services/alertService';
 import { canAccessResource } from '../services/tenancyService';
 import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
 import { Models } from 'node-appwrite';
-import { errorMessage } from '../services/logger';
+import { logger, errorContext, errorMessage } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -51,7 +51,14 @@ router.post('/test', async (req, res) => {
 
         res.status(200).json({ success: true, message: 'Test alert sent' });
     } catch (error: unknown) {
-        res.status(500).json({ error: errorMessage(error) });
+        // Extra reason to sanitise here: a failed Slack/Discord POST is an axios
+        // rejection whose message can carry the webhook URL, and the token is in
+        // that URL's path. errorContext already withholds transport fields, so
+        // the log is safe; the raw message was not. No webhookUrl correlator.
+        logger.error('[Alerts] test alert failed', {
+            event: 'ALERT_TEST_SEND_FAILED', channel: req.body?.type, ...errorContext(error),
+        });
+        res.status(500).json({ error: 'Failed to send test alert' });
     }
 });
 
@@ -89,7 +96,10 @@ router.post('/notify', async (req: AuthenticatedRequest, res) => {
 
         res.status(200).json({ success: true });
     } catch (error: unknown) {
-        res.status(500).json({ error: errorMessage(error) });
+        logger.error('[Alerts] notify failed', {
+            event: 'ALERT_NOTIFY_FAILED', findingId: req.body?.findingId, channel: req.body?.type, ...errorContext(error),
+        });
+        res.status(500).json({ error: 'Failed to send alert' });
     }
 });
 
@@ -170,7 +180,8 @@ router.post('/batch-notify', async (req: AuthenticatedRequest, res) => {
 
         res.status(200).json({ success: true, count: mappedFindings.length });
     } catch (error: unknown) {
-        res.status(500).json({ error: errorMessage(error) });
+        logger.error('[Alerts] bulk send failed', { event: 'ALERT_BULK_SEND_FAILED', ...errorContext(error) });
+        res.status(500).json({ error: 'Failed to send alerts' });
     }
 });
 
@@ -229,7 +240,10 @@ router.get('/integrations', async (req: AuthenticatedRequest, res) => {
             activeSeverities: doc.activeSeverities || ['critical', 'high'],
         });
     } catch (error: unknown) {
-        res.status(500).json({ error: errorMessage(error) });
+        logger.error('[Alerts] integration read failed', {
+            event: 'ALERT_INTEGRATION_READ_FAILED', userId: req.user?.$id, ...errorContext(error),
+        });
+        res.status(500).json({ error: 'Failed to load alert integrations' });
     }
 });
 
@@ -279,7 +293,10 @@ router.put('/integrations', async (req: AuthenticatedRequest, res) => {
 
         res.json({ success: true, configured: true, id: saved.$id });
     } catch (error: unknown) {
-        res.status(500).json({ error: errorMessage(error) });
+        logger.error('[Alerts] integration save failed', {
+            event: 'ALERT_INTEGRATION_SAVE_FAILED', userId: req.user?.$id, ...errorContext(error),
+        });
+        res.status(500).json({ error: 'Failed to save alert integrations' });
     }
 });
 

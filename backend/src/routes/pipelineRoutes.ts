@@ -5,6 +5,7 @@ import { verifyUser } from '../middleware/auth';
 import { registerSseClient, unregisterSseClient, PipelineLogger, triggerPipelineRun } from '../services/pipelineService';
 import { canAccessResource } from '../services/tenancyService';
 import { PipelineRunDocument } from '../types/pipeline.types';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; email?: string };
@@ -64,7 +65,10 @@ router.get('/runs', verifyUser, async (req: AuthenticatedRequest, res: Response)
     const runs = await databases.listDocuments(DB_ID, 'pipeline_runs', queries);
     res.json(runs);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch pipeline runs', details: err instanceof Error ? err.message : 'unknown error' });
+    logger.error('[Pipelines] run list failed', {
+      event: 'PIPELINE_RUN_LIST_FAILED', userId: req.user?.$id, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to fetch pipeline runs' });
   }
 });
 
@@ -87,7 +91,12 @@ router.get('/run/:runId', verifyUser, async (req: AuthenticatedRequest, res: Res
     }
     res.json(run);
   } catch (err) {
-    res.status(404).json({ error: 'Pipeline run not found', details: err instanceof Error ? err.message : 'unknown error' });
+    // 404 covers both "no such run" and a storage failure, so the log is the
+    // only place those stay distinguishable — it must not be dropped here.
+    logger.warn('[Pipelines] run read failed', {
+      event: 'PIPELINE_RUN_READ_FAILED', runId: req.params.runId, ...errorContext(err),
+    });
+    res.status(404).json({ error: 'Pipeline run not found' });
   }
 });
 
@@ -106,7 +115,10 @@ router.get('/run/:runId/logs', verifyUser, async (req: AuthenticatedRequest, res
     const logs = await pipeLogger.getLogs();
     res.type('text/plain').send(logs);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to retrieve logs', details: err instanceof Error ? err.message : 'unknown error' });
+    logger.error('[Pipelines] log read failed', {
+      event: 'PIPELINE_LOG_READ_FAILED', runId: req.params.runId, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to retrieve logs' });
   }
 });
 
@@ -199,7 +211,10 @@ router.post('/trigger', verifyUser, triggerLimiter, async (req: AuthenticatedReq
       runId
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to trigger pipeline run', details: err instanceof Error ? err.message : 'unknown error' });
+    logger.error('[Pipelines] trigger failed', {
+      event: 'PIPELINE_TRIGGER_FAILED', repoId: req.body?.repoId, branch: req.body?.branch, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to trigger pipeline run' });
   }
 });
 
