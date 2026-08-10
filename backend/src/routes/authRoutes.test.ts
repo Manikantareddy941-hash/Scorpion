@@ -219,3 +219,74 @@ describe('POST /auth/reset-password', () => {
         expect(res.statusCode).toBe(404);
     });
 });
+
+/**
+ * CWE-209 regression guard. These handlers used to answer 500 with
+ * `errorMessage(error)`, putting the raw internal failure — Appwrite messages,
+ * collection names, SMTP detail — on an UNAUTHENTICATED endpoint, and giving a
+ * prober a way to tell one backend failure from another. The cause belongs in
+ * the log line, which still carries it; the body must stay generic.
+ *
+ * Each case asserts the body does not contain the thrown text, not merely that
+ * it equals the expected string — an assertion on equality alone would still
+ * pass if someone appended the detail to the generic message.
+ */
+describe('500 responses do not leak internal error detail', () => {
+    const SECRET_DETAIL = 'Appwrite collection password_resets is missing attribute otp_hash';
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        jest.restoreAllMocks();
+    });
+
+    it('request-reset answers generically when an unexpected failure escapes', async () => {
+        (users.list as jest.Mock).mockResolvedValue({ total: 1, users: [{ $id: 'user-1' }] });
+        // Thrown outside the handler's inner try/catches, so it reaches the outer one.
+        jest.spyOn(bcrypt, 'hash').mockRejectedValue(new Error(SECRET_DETAIL) as never);
+
+        const res = await request(buildApp()).post('/auth/request-reset').send({ email: 'a@b.com' });
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toBe('Failed to process request');
+        expect(JSON.stringify(res.body)).not.toContain(SECRET_DETAIL);
+        expect(JSON.stringify(res.body)).not.toContain('password_resets');
+    });
+
+    it('verify-otp answers generically when the store read throws', async () => {
+        (databases.listDocuments as jest.Mock).mockRejectedValue(new Error(SECRET_DETAIL));
+
+        const res = await request(buildApp())
+            .post('/auth/verify-otp')
+            .send({ email: 'a@b.com', otp: '123456' });
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toBe('Failed to verify OTP');
+        expect(JSON.stringify(res.body)).not.toContain(SECRET_DETAIL);
+    });
+
+    it('reset-password answers generically when the user lookup throws', async () => {
+        const secret = process.env.RESET_TOKEN_SECRET as string;
+        // Secret is read from env, not a hardcoded literal — false positive in a test.
+        // nosemgrep: javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret
+        const resetToken = jwt.sign({ email: 'a@b.com' }, secret, { expiresIn: '5m' });
+        (users.list as jest.Mock).mockRejectedValue(new Error(SECRET_DETAIL));
+
+        const res = await request(buildApp())
+            .post('/auth/reset-password')
+            .send({ resetToken, newPassword: 'NewPass123!' });
+
+        expect(res.statusCode).toBe(500);
+        expect(res.body.error).toBe('Failed to reset password');
+        expect(JSON.stringify(res.body)).not.toContain(SECRET_DETAIL);
+    });
+
+    /** The 401 path is a deliberate exception: it says nothing about internals. */
+    it('still distinguishes an invalid token with a 401, not a generic 500', async () => {
+        const res = await request(buildApp())
+            .post('/auth/reset-password')
+            .send({ resetToken: 'garbage', newPassword: 'NewPass123!' });
+
+        expect(res.statusCode).toBe(401);
+        expect(res.body.error).toBe('Invalid or expired reset token');
+    });
+});
