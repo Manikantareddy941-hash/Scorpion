@@ -31,7 +31,7 @@ router.post('/evaluate', verifyUser, validateBody(repoIdBodySchema), async (req:
     res.json(await gateService.evaluate(repo_id));
   } catch (err) {
     logger.error('[Gate Evaluate Error]', { event: 'GATE_EVALUATE_FAILED', repoId: repo_id, ...errorContext(err) });
-    res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -68,7 +68,7 @@ router.post('/compliance', verifyUser, validateBody(complianceBodySchema), async
     res.json({ allowed: true, violations: [] });
   } catch (err) {
     logger.error('[Gate Compliance Error]', { event: 'GATE_COMPLIANCE_FAILED', repoId: repo_id, ...errorContext(err) });
-    res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -91,7 +91,7 @@ router.post('/deploy', verifyUser, checkPermission('repo:deploy'), validateBody(
     res.json({ status: 'success', message: 'Deployment triggered successfully. All release gate validations passed.' });
   } catch (err) {
     logger.error('[Gate Deploy Error]', { event: 'GATE_DEPLOY_CHECK_FAILED', repoId: repo_id, ...errorContext(err) });
-    res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -108,7 +108,7 @@ router.post('/override', verifyUser, checkPermission('gate:bypass'), validateBod
     logger.error('[Gate Override Error]', {
       event: 'GATE_OVERRIDE_FAILED', repoId: repo_id, actor: req.user?.$id, ...errorContext(err),
     });
-    res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -118,7 +118,7 @@ router.get('/state', verifyUser, async (req: AuthenticatedRequest, res: Response
     res.json(await gateService.getState());
   } catch (err) {
     logger.error('[GET Gate State Error]', { event: 'GATE_STATE_READ_FAILED', ...errorContext(err) });
-    res.status(500).json({ error: 'Failed to fetch gate state', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to fetch gate state' });
   }
 });
 

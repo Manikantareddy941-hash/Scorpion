@@ -117,7 +117,10 @@ router.post('/gitlab', async (req: Request, res: Response) => {
         }
     } catch (err) {
         logger.error('[GitLab Webhook Error]', { event: 'GITLAB_WEBHOOK_FAILED', gitlabEvent: event, ...errorContext(err) });
-        res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+        // Gated only by a shared webhook token, so treat the body as public: a
+        // token that leaks (CI logs, a misconfigured forward) turns `details`
+        // into an internals probe. Cause is above under GITLAB_WEBHOOK_FAILED.
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
