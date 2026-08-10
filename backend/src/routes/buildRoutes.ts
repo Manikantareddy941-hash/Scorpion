@@ -3,6 +3,7 @@ import { startBuild } from '../build/buildService';
 import { auditLog } from '../services/auditService';
 import { databases, COLLECTIONS, DB_ID, Query } from '../lib/appwrite';
 import { assertRepoAccess, resolveOwnershipScope, TenantAccessError } from '../services/tenancyService';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: { $id: string; email?: string };
@@ -44,7 +45,12 @@ router.post('/trigger', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to trigger build', details: err instanceof Error ? err.message : 'unknown error' });
+    // The 403 above keeps its message on purpose: TenantAccessError text is
+    // authorization feedback about the caller's own access, not internals.
+    logger.error('[Builds] trigger failed', {
+      event: 'BUILD_TRIGGER_FAILED', repoId: req.body?.repoId, branch: req.body?.branch, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to trigger build' });
   }
 });
 
@@ -80,7 +86,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     res.json(results);
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to fetch builds', details: err instanceof Error ? err.message : 'unknown error' });
+    logger.error('[Builds] list failed', {
+      event: 'BUILD_LIST_FAILED', userId: req.user?.$id, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to fetch builds' });
   }
 });
 
@@ -96,7 +105,12 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
     res.json(doc);
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(404).json({ error: 'Build not found', details: err instanceof Error ? err.message : 'unknown error' });
+    // 404 covers a genuine miss and a storage failure alike; the log is where
+    // those stay distinguishable.
+    logger.warn('[Builds] read failed', {
+      event: 'BUILD_READ_FAILED', buildId: req.params.id, ...errorContext(err),
+    });
+    res.status(404).json({ error: 'Build not found' });
   }
 });
 
@@ -135,7 +149,10 @@ router.post('/:id/cancel', async (req: AuthenticatedRequest, res) => {
     res.json({ message: 'Build cancelled', build: updated });
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to cancel build', details: err instanceof Error ? err.message : 'unknown error' });
+    logger.error('[Builds] cancel failed', {
+      event: 'BUILD_CANCEL_FAILED', buildId: req.params.id, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to cancel build' });
   }
 });
 
@@ -160,7 +177,10 @@ router.get('/:id/artifacts', async (req: AuthenticatedRequest, res) => {
     res.json(results);
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to fetch artifacts', details: err instanceof Error ? err.message : 'unknown error' });
+    logger.error('[Builds] artifact list failed', {
+      event: 'BUILD_ARTIFACT_LIST_FAILED', buildId: req.params.id, ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Failed to fetch artifacts' });
   }
 });
 
