@@ -11,7 +11,7 @@ import {
   ThreatModel
 } from '../services/threatModelService';
 import { generateStrideThreats } from '../services/threatAiService';
-import { logger, errorMessage } from '../services/logger';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
