@@ -99,7 +99,9 @@ const legacyDriftRepository = {
       await insert(record);
       return record;
     } catch (err) {
-      logger.warn('[DriftRepository] Appwrite write failed, using local JSON fallback', errorContext(err));
+      logger.warn('[DriftRepository] Appwrite write failed, using local JSON fallback', {
+        event: 'DRIFT_WRITE_FAILED', driftType: anomaly.driftType, ...errorContext(err),
+      });
       await bufferRecord(record);
       return record;
     }
@@ -128,7 +130,9 @@ const legacyDriftRepository = {
       const list = await databases.listDocuments(DB_ID, COLLECTION, queries);
       return list.documents.map(fromDoc);
     } catch (err) {
-      logger.warn('[DriftRepository] Appwrite read failed, using local JSON fallback', errorContext(err));
+      logger.warn('[DriftRepository] Appwrite read failed, using local JSON fallback', {
+        event: 'DRIFT_READ_FAILED', ...errorContext(err),
+      });
       return selectFallback(await readMock(), opts, limit);
     }
   },

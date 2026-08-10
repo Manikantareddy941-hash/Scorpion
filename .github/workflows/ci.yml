@@ -133,10 +133,12 @@ jobs:
         working-directory: backend
         # Warning ceiling frozen at the current count (ratchet). Lower it over
         # time; a NEW warning fails CI. See backend/CLAUDE.md 'no any' standard.
+        # 243 -> 169: the ceiling had drifted 74 above the real count, so it was
+        # not holding any line. 169 is `npm run lint` as of this commit.
         # On failure, surface the tail of eslint output as an annotation so it
         # is visible via the checks API without log access.
         run: |
-          npm run lint -- --max-warnings=243 >lint_out.txt 2>&1 || {
+          npm run lint -- --max-warnings=169 >lint_out.txt 2>&1 || {
             echo "::error::LINT-FAIL $(tail -c 800 lint_out.txt | tr '\n' '|')"
             exit 2
           }

@@ -133,7 +133,9 @@ export const repoService = {
         logger.info(`[RepoService] Starting scan for ${repoFullName} at ${workDir}`);
         await runScanPipeline({ localPath: workDir });
       } catch (err) {
-        logger.error(`[RepoService] External scan failed for ${repoFullName}`, errorContext(err));
+        logger.error(`[RepoService] External scan failed for ${repoFullName}`, {
+          event: 'REPO_EXTERNAL_SCAN_FAILED', repoFullName, branch, ...errorContext(err),
+        });
       } finally {
         await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
       }
@@ -181,7 +183,9 @@ export const repoService = {
 
     // Fire and forget — do NOT await
     enqueueScan(repoId, options, scanId).catch(err => {
-      logger.error(`[RepoService] Failed to enqueue scan for scanId=${scanId}`, errorContext(err));
+      logger.error(`[RepoService] Failed to enqueue scan for scanId=${scanId}`, {
+        event: 'REPO_SCAN_ENQUEUE_FAILED', repoId, scanId, ...errorContext(err),
+      });
     });
 
     return { scanId };

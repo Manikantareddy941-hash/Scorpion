@@ -77,7 +77,9 @@ export async function evaluatePolicyForRepo(
   try {
     repoPolicy = await getDynamicPolicy(repoId);
   } catch (err) {
-    logger.warn(`[Policy] Per-repo policy load failed for ${repoId}, using baseline only`, errorContext(err));
+    logger.warn(`[Policy] Per-repo policy load failed for ${repoId}, using baseline only`, {
+      event: 'GITHUB_POLICY_LOAD_FAILED', repoId, ...errorContext(err),
+    });
     return { ...base, denyReasons };
   }
 
@@ -101,7 +103,9 @@ export async function evaluatePolicyForRepo(
         denyReasons.push(...opa.denyReasons);
       }
     } catch (err) {
-      logger.warn(`[Policy] Custom Rego evaluation skipped for ${repoId}`, errorContext(err));
+      logger.warn(`[Policy] Custom Rego evaluation skipped for ${repoId}`, {
+        event: 'GITHUB_POLICY_REGO_EVAL_SKIPPED', repoId, environment, ...errorContext(err),
+      });
     }
   }
 

@@ -96,7 +96,9 @@ const legacyGateRulesRepository = {
         env: doc.env as GateEnv,
       };
     } catch (err) {
-      logger.warn('[GateRulesRepository] Appwrite read failed, using local JSON fallback', errorContext(err));
+      logger.warn('[GateRulesRepository] Appwrite read failed, using local JSON fallback', {
+        event: 'GATE_RULES_READ_FAILED', userId, ...errorContext(err),
+      });
       const db = await readMock();
       return db[userId] ?? DEFAULT_CONFIG;
     }
@@ -107,7 +109,9 @@ const legacyGateRulesRepository = {
       await persistConfig(userId, config);
       return config;
     } catch (err) {
-      logger.warn('[GateRulesRepository] Appwrite write failed, using local JSON fallback', errorContext(err));
+      logger.warn('[GateRulesRepository] Appwrite write failed, using local JSON fallback', {
+        event: 'GATE_RULES_WRITE_FAILED', userId, ...errorContext(err),
+      });
       await withLock(async () => {
         const db = await readMock();
         db[userId] = config;

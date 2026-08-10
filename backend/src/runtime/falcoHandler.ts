@@ -40,7 +40,9 @@ async function resolveRepoIdByDigest(digest: string): Promise<string> {
     const repoId = builds.documents[0]?.repoId;
     return typeof repoId === 'string' ? repoId : '';
   } catch (err) {
-    logger.warn('[Falco Handler] digest->repo lookup failed (name route retained)', errorContext(err));
+    logger.warn('[Falco Handler] digest->repo lookup failed (name route retained)', {
+      event: 'FALCO_DIGEST_REPO_LOOKUP_FAILED', imageDigest: digest, ...errorContext(err),
+    });
     return '';
   }
 }

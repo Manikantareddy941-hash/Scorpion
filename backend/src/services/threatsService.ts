@@ -78,7 +78,9 @@ export const threatsService = {
         await threatsRepository.setMonitorNodeStatus('compromised');
         logger.info('[Threats] Updated monitor node state to compromised.');
       } catch (stateErr) {
-        logger.error('[Threats] Failed to update pipeline_state collection', errorContext(stateErr));
+        logger.error('[Threats] Failed to update pipeline_state collection', {
+          event: 'THREAT_PIPELINE_STATE_UPDATE_FAILED', targetStatus: 'compromised', ...errorContext(stateErr),
+        });
       }
     }
 

@@ -54,7 +54,9 @@ async function handleQuery<T>(appwriteCall: () => Promise<T>, mockCall: () => Pr
   try {
     return await appwriteCall();
   } catch (err) {
-    logger.warn('[GateRunRepository] Appwrite operation failed, using local JSON fallback', errorContext(err));
+    logger.warn('[GateRunRepository] Appwrite operation failed, using local JSON fallback', {
+      event: 'GATE_RUN_STORE_OPERATION_FAILED', ...errorContext(err),
+    });
     return await mockCall();
   }
 }
