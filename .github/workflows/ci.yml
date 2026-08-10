@@ -233,6 +233,28 @@ jobs:
         working-directory: backend
         run: node scripts/auditLoggerCalls.js --max=150
 
+      # CWE-209. Counts internal error text reaching a 4xx/5xx response body:
+      # errorMessage(err), err.message, String(err), or a local const bound to any
+      # of those. On an unauthenticated route that hands Appwrite connection
+      # details, jsonwebtoken internals or SMTP hostnames to anyone who can reach
+      # the host.
+      #
+      # 94 is a MEASURED baseline, not a work queue. It includes two categories
+      # that are probably fine and one that is not:
+      #
+      #   details: err.message on a 500   the real leak, and the bulk of it
+      #   error: err.message on a 403     usually a deliberate authorization
+      #                                   message thrown by our own code
+      #   parsed.error.issues[0].message  Zod validation feedback on a 400 —
+      #                                   the caller's own input, correct to return
+      #
+      # The tool cannot tell Zod from Appwrite because both are `.message`, so the
+      # baseline is left un-adjusted rather than pre-subtracted. A number nobody
+      # can reproduce is worse than one that is honestly too high.
+      - name: Response Error Leak
+        working-directory: backend
+        run: node scripts/auditResponseErrorLeaks.js --max=94
+
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the
       # production image, so scoping to production deps lets the level stay at
