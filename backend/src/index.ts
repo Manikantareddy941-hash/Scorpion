@@ -413,7 +413,7 @@ app.post('/api/metrics', async (req: Request, res: Response) => {
         });
         res.status(201).json(doc);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to record metrics', details: errorMessage(err) });
+        res.status(500).json({ error: 'Failed to record metrics' });
     }
 });
 
@@ -433,7 +433,7 @@ app.post('/api/logs', async (req: Request, res: Response) => {
         });
         res.status(201).json(doc);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to record log', details: errorMessage(err) });
+        res.status(500).json({ error: 'Failed to record log' });
     }
 });
 

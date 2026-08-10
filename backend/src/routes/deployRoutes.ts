@@ -56,7 +56,7 @@ router.post(['/', '/trigger'], async (req: AuthenticatedRequest, res) => {
     });
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to trigger deployment', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to trigger deployment' });
   }
 });
 
@@ -94,7 +94,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     res.json(results);
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to fetch deployments', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to fetch deployments' });
   }
 });
 
@@ -108,7 +108,7 @@ router.get('/environments', async (req: AuthenticatedRequest, res) => {
     const environments = ['dev', 'staging', 'production'];
     res.json({ environments });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch environments', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to fetch environments' });
   }
 });
 
@@ -124,7 +124,7 @@ router.get(['/:id', '/:id/status'], async (req: AuthenticatedRequest, res) => {
     res.json(doc);
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(404).json({ error: 'Deployment not found', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(404).json({ error: 'Deployment not found' });
   }
 });
 
@@ -155,7 +155,7 @@ router.post('/:id/rollback', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err) {
     if (err instanceof TenantAccessError) return res.status(403).json({ error: err.message });
-    res.status(500).json({ error: 'Failed to rollback deployment', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to rollback deployment' });
   }
 });
 

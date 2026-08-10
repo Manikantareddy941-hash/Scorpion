@@ -314,7 +314,7 @@ router.post('/projects/:projectId/threats/ai-generate', requirePermission('threa
     if (result === 'forbidden') return res.status(403).json({ error: 'You do not have access to this project' });
     res.status(201).json(result.data);
   } catch (err: unknown) {
-    res.status(502).json({ error: 'AI threat generation failed', details: err instanceof Error ? err.message : 'Unknown error' });
+    res.status(502).json({ error: 'AI threat generation failed' });
   }
 });
 

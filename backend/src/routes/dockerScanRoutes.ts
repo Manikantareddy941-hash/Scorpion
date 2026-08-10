@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { sendFindingAlert, FindingDocument } from '../utils/alertDispatcher';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
-import { logger, errorContext, errorMessage } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,10 +57,18 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Authenticated
                 image_name
             ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }));
         } catch (scanErr: unknown) {
-            const details = scanErr && typeof scanErr === 'object' && 'stderr' in scanErr
-                ? String((scanErr as { stderr?: unknown }).stderr)
-                : errorMessage(scanErr);
-            return res.status(500).json({ error: "Trivy scan failed", details });
+            // Trivy's stderr is the only useful diagnostic here, and it names
+            // registry hosts, image digests and local paths — so it goes to the
+            // log, not to the caller. Previously it was returned in `details`.
+            logger.error('[DockerScan] Trivy scan failed', {
+                event: 'DOCKER_SCAN_FAILED',
+                imageName: image_name,
+                stderr: scanErr && typeof scanErr === 'object' && 'stderr' in scanErr
+                    ? String((scanErr as { stderr?: unknown }).stderr)
+                    : undefined,
+                ...errorContext(scanErr),
+            });
+            return res.status(500).json({ error: "Trivy scan failed" });
         }
 
         const output = JSON.parse(stdout || '{"Results": []}') as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };

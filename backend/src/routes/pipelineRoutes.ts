@@ -64,7 +64,7 @@ router.get('/runs', verifyUser, async (req: AuthenticatedRequest, res: Response)
     const runs = await databases.listDocuments(DB_ID, 'pipeline_runs', queries);
     res.json(runs);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch pipeline runs', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to fetch pipeline runs' });
   }
 });
 
@@ -87,7 +87,7 @@ router.get('/run/:runId', verifyUser, async (req: AuthenticatedRequest, res: Res
     }
     res.json(run);
   } catch (err) {
-    res.status(404).json({ error: 'Pipeline run not found', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(404).json({ error: 'Pipeline run not found' });
   }
 });
 
@@ -106,7 +106,7 @@ router.get('/run/:runId/logs', verifyUser, async (req: AuthenticatedRequest, res
     const logs = await pipeLogger.getLogs();
     res.type('text/plain').send(logs);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to retrieve logs', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to retrieve logs' });
   }
 });
 
@@ -199,7 +199,7 @@ router.post('/trigger', verifyUser, triggerLimiter, async (req: AuthenticatedReq
       runId
     });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to trigger pipeline run', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to trigger pipeline run' });
   }
 });
 

@@ -253,7 +253,7 @@ jobs:
       # can reproduce is worse than one that is honestly too high.
       - name: Response Error Leak
         working-directory: backend
-        run: node scripts/auditResponseErrorLeaks.js --max=94
+        run: node scripts/auditResponseErrorLeaks.js --max=57
 
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the

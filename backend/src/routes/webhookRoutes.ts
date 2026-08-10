@@ -117,7 +117,7 @@ router.post('/gitlab', async (req: Request, res: Response) => {
         }
     } catch (err) {
         logger.error('[GitLab Webhook Error]', { event: 'GITLAB_WEBHOOK_FAILED', gitlabEvent: event, ...errorContext(err) });
-        res.status(500).json({ error: 'Internal server error', details: err instanceof Error ? err.message : 'unknown error' });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

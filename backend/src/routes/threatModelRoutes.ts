@@ -49,7 +49,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     res.status(201).json(model);
   } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to create threat model:', err);
-    res.status(500).json({ error: 'Failed to create threat model', details: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to create threat model' });
   }
 });
 
@@ -61,7 +61,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     res.json(models);
   } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to list threat models:', err);
-    res.status(500).json({ error: 'Failed to list threat models', details: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to list threat models' });
   }
 });
 
@@ -82,7 +82,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
     res.json(model);
   } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to get threat model:', err);
-    res.status(500).json({ error: 'Failed to get threat model', details: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to get threat model' });
   }
 });
 
@@ -111,7 +111,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     res.json(model);
   } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to update threat model:', err);
-    res.status(500).json({ error: 'Failed to update threat model', details: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to update threat model' });
   }
 });
 
@@ -132,7 +132,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     res.json({ success: true, message: 'Threat model deleted successfully' });
   } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to delete threat model:', err);
-    res.status(500).json({ error: 'Failed to delete threat model', details: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to delete threat model' });
   }
 });
 
@@ -161,7 +161,7 @@ router.post('/:id/analyze', async (req: AuthenticatedRequest, res: Response) => 
     res.json(updatedModel);
   } catch (err: unknown) {
     logger.error('[Threat Model Routes] Failed to analyze threat model:', err);
-    res.status(500).json({ error: 'Failed to analyze threat model', details: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to analyze threat model' });
   }
 });
 
