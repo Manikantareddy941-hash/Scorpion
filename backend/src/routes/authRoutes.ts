@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { sendOtpEmail } from '../services/emailService';
 import { databases, users, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
-import { logger, errorContext, errorMessage } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { recordSecurityEvent } from '../monitor/securityEventSource';
 
 const router = express.Router();
@@ -101,7 +101,12 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         res.json({ message: 'If an account exists, an OTP has been sent.' });
     } catch (error: unknown) {
         logger.error('[Auth] Error in request-reset:', { event: 'AUTH_REQUEST_RESET_FAILED', ...errorContext(error) });
-        res.status(500).json({ error: errorMessage(error) || 'Failed to process request' });
+        // Generic body, deliberately. This endpoint is unauthenticated, so the
+        // response is readable by anyone who can reach it — and errorMessage()
+        // here is whatever Appwrite, jsonwebtoken or nodemailer said, which has
+        // included connection strings, collection ids and SMTP hostnames. The
+        // full cause is in the log line above under AUTH_REQUEST_RESET_FAILED.
+        res.status(500).json({ error: 'An unexpected error occurred processing your request.' });
     }
 });
 
@@ -159,7 +164,9 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
         res.json({ resetToken, message: 'OTP verified successfully' });
     } catch (error: unknown) {
         logger.error('[Auth] Error in verify-otp:', { event: 'AUTH_VERIFY_OTP_FAILED', ...errorContext(error) });
-        res.status(500).json({ error: errorMessage(error) || 'Failed to verify OTP' });
+        // Generic body — unauthenticated endpoint. Cause is logged under
+        // AUTH_VERIFY_OTP_FAILED.
+        res.status(500).json({ error: 'An unexpected error occurred processing your request.' });
     }
 });
 
@@ -203,7 +210,11 @@ router.post('/reset-password', async (req: Request, res: Response) => {
             });
             return res.status(401).json({ error: 'Invalid or expired reset token' });
         }
-        res.status(500).json({ error: errorMessage(error) || 'Failed to reset password' });
+        // Generic body — unauthenticated endpoint. Cause is logged under
+        // AUTH_RESET_PASSWORD_FAILED. The 401 above stays specific because
+        // "invalid or expired reset token" is the caller's own input, not
+        // internal state.
+        res.status(500).json({ error: 'An unexpected error occurred processing your request.' });
     }
 });
 
