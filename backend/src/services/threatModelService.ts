@@ -1,6 +1,6 @@
 import { threatModelRepository, ThreatModelDocument } from '../repositories/threatModelRepository';
 import { auditLog } from './auditService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { ThreatModel, Threat } from '../types/threatModel.types';
 
 export type { ThreatModel, Threat };
@@ -50,7 +50,7 @@ export const createThreatModel = async (
 
     return toThreatModel(document);
   } catch (err) {
-    logger.error('[Threat Model Service] Failed to create threat model:', err);
+    logger.error('[Threat Model Service] Failed to create threat model:', { event: 'THREAT_MODEL_CREATE_FAILED', ...errorContext(err) });
     throw err;
   }
 };
@@ -63,7 +63,7 @@ export const getThreatModel = async (id: string): Promise<ThreatModel | null> =>
     return toThreatModel(document);
   } catch (err) {
     if (err instanceof Error && (err as { code?: number }).code === 404) return null;
-    logger.error('[Threat Model Service] Failed to get threat model:', err);
+    logger.error('[Threat Model Service] Failed to get threat model:', { event: 'THREAT_MODEL_READ_FAILED', ...errorContext(err) });
     throw err;
   }
 };
@@ -75,7 +75,7 @@ export const listThreatModels = async (userId?: string): Promise<ThreatModel[]> 
     const documents = await threatModelRepository.list(userId);
     return documents.map(toThreatModel);
   } catch (err) {
-    logger.error('[Threat Model Service] Failed to list threat models:', err);
+    logger.error('[Threat Model Service] Failed to list threat models:', { event: 'THREAT_MODEL_LIST_FAILED', ...errorContext(err) });
     throw err;
   }
 };
@@ -112,7 +112,7 @@ export const updateThreatModel = async (
 
     return toThreatModel(document);
   } catch (err) {
-    logger.error('[Threat Model Service] Failed to update threat model:', err);
+    logger.error('[Threat Model Service] Failed to update threat model:', { event: 'THREAT_MODEL_UPDATE_FAILED', ...errorContext(err) });
     throw err;
   }
 };
@@ -137,7 +137,7 @@ export const deleteThreatModel = async (
       details: { name: model?.name }
     });
   } catch (err) {
-    logger.error('[Threat Model Service] Failed to delete threat model:', err);
+    logger.error('[Threat Model Service] Failed to delete threat model:', { event: 'THREAT_MODEL_DELETE_FAILED', ...errorContext(err) });
     throw err;
   }
 };
@@ -167,7 +167,7 @@ export const updateThreats = async (
 
     return toThreatModel(document);
   } catch (err) {
-    logger.error('[Threat Model Service] Failed to update threats:', err);
+    logger.error('[Threat Model Service] Failed to update threats:', { event: 'THREAT_MODEL_THREATS_UPDATE_FAILED', ...errorContext(err) });
     throw err;
   }
 };

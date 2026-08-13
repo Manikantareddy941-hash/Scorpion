@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import { newId } from './docTable';
 import type {
   Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse, TicketLink, TicketLinkType,
@@ -110,7 +110,7 @@ async function getTicket(id: string): Promise<Ticket | undefined> {
     if (res.rows.length === 0) return undefined;
     return rowToTicket(res.rows[0] as TicketRow, await linksFor(id));
   } catch (err) {
-    logger.error('[ticketsPgRepository] getTicket failed:', err);
+    logger.error('[ticketsPgRepository] getTicket failed:', { event: 'TICKET_READ_FAILED', ...errorContext(err) });
     return undefined;
   }
 }
@@ -218,7 +218,7 @@ async function deleteTicket(id: string): Promise<boolean> {
     const res = await getPool().query('DELETE FROM tickets WHERE id = $1', [id]);
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
-    logger.error('[ticketsPgRepository] deleteTicket failed:', err);
+    logger.error('[ticketsPgRepository] deleteTicket failed:', { event: 'TICKET_DELETE_FAILED', ...errorContext(err) });
     return false;
   }
 }
@@ -234,7 +234,7 @@ async function findByLinkedFinding(findingId: string): Promise<Ticket | undefine
     const row = res.rows[0] as TicketRow;
     return rowToTicket(row, await linksFor(row.id));
   } catch (err) {
-    logger.error('[ticketsPgRepository] findByLinkedFinding failed:', err);
+    logger.error('[ticketsPgRepository] findByLinkedFinding failed:', { event: 'TICKET_FINDING_LOOKUP_FAILED', ...errorContext(err) });
     return undefined;
   }
 }
@@ -255,7 +255,7 @@ async function getUnsyncedTickets(): Promise<Ticket[]> {
   try {
     return (await allTickets()).filter(t => !t.jiraKey || t.jiraSyncStatus === 'error');
   } catch (err) {
-    logger.error('[ticketsPgRepository] getUnsyncedTickets failed:', err);
+    logger.error('[ticketsPgRepository] getUnsyncedTickets failed:', { event: 'TICKET_UNSYNCED_LIST_FAILED', ...errorContext(err) });
     return [];
   }
 }
@@ -319,7 +319,7 @@ async function listTickets(filters: TicketFilters, scope?: TenantScope): Promise
     const start = (page - 1) * limit;
     return { data: list.slice(start, start + limit), total, page, totalPages: Math.ceil(total / limit) };
   } catch (err) {
-    logger.error('[ticketsPgRepository] listTickets failed:', err);
+    logger.error('[ticketsPgRepository] listTickets failed:', { event: 'TICKET_LIST_FAILED', ...errorContext(err) });
     return { data: [], total: 0, page, totalPages: 0 };
   }
 }
@@ -403,7 +403,7 @@ async function getStats(scope?: TenantScope) {
       agingTickets: openTickets.slice(0, 5),
     };
   } catch (err) {
-    logger.error('[ticketsPgRepository] getStats failed:', err);
+    logger.error('[ticketsPgRepository] getStats failed:', { event: 'TICKET_STATS_READ_FAILED', ...errorContext(err) });
     return emptyStats;
   }
 }

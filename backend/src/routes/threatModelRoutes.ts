@@ -11,7 +11,7 @@ import {
   ThreatModel
 } from '../services/threatModelService';
 import { generateStrideThreats } from '../services/threatAiService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
@@ -48,7 +48,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
     res.status(201).json(model);
   } catch (err: unknown) {
-    logger.error('[Threat Model Routes] Failed to create threat model:', err);
+    logger.error('[Threat Model Routes] Failed to create threat model:', { event: 'THREAT_MODEL_API_CREATE_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to create threat model' });
   }
 });
@@ -60,7 +60,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     const models = await listThreatModels(userId);
     res.json(models);
   } catch (err: unknown) {
-    logger.error('[Threat Model Routes] Failed to list threat models:', err);
+    logger.error('[Threat Model Routes] Failed to list threat models:', { event: 'THREAT_MODEL_API_LIST_FAILED', ...errorContext(err) });
     res.status(500).json({ error: 'Failed to list threat models' });
   }
 });
@@ -81,7 +81,9 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     res.json(model);
   } catch (err: unknown) {
-    logger.error('[Threat Model Routes] Failed to get threat model:', err);
+    logger.error('[Threat Model Routes] Failed to get threat model:', {
+      event: 'THREAT_MODEL_API_READ_FAILED', modelId: req.params.id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to get threat model' });
   }
 });
@@ -110,7 +112,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response) => {
     const model = await updateThreatModel(id, updates, userId, userEmail);
     res.json(model);
   } catch (err: unknown) {
-    logger.error('[Threat Model Routes] Failed to update threat model:', err);
+    logger.error('[Threat Model Routes] Failed to update threat model:', {
+      event: 'THREAT_MODEL_API_UPDATE_FAILED', modelId: req.params.id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to update threat model' });
   }
 });
@@ -131,7 +135,9 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     await deleteThreatModel(id, userId, userEmail);
     res.json({ success: true, message: 'Threat model deleted successfully' });
   } catch (err: unknown) {
-    logger.error('[Threat Model Routes] Failed to delete threat model:', err);
+    logger.error('[Threat Model Routes] Failed to delete threat model:', {
+      event: 'THREAT_MODEL_API_DELETE_FAILED', modelId: req.params.id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to delete threat model' });
   }
 });
@@ -160,7 +166,9 @@ router.post('/:id/analyze', async (req: AuthenticatedRequest, res: Response) => 
 
     res.json(updatedModel);
   } catch (err: unknown) {
-    logger.error('[Threat Model Routes] Failed to analyze threat model:', err);
+    logger.error('[Threat Model Routes] Failed to analyze threat model:', {
+      event: 'THREAT_MODEL_API_ANALYZE_FAILED', modelId: req.params.id, ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to analyze threat model' });
   }
 });

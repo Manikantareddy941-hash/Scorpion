@@ -2,7 +2,7 @@ import { Models } from 'node-appwrite';
 import { Ticket, TicketComment, TicketActivity, TicketFilters, PaginatedResponse, TicketLink, TicketLinkType } from '../../../shared/types';
 import crypto from 'crypto';
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { isPostgresEnabled } from '../db/pool';
 import { ticketsPgRepository, type TenantScope } from './pg/ticketsPgRepository';
 
@@ -158,7 +158,7 @@ async function getUnsyncedTickets(): Promise<Ticket[]> {
     const tickets = response.documents.map(mapDocumentToTicket);
     return tickets.filter(t => !t.jiraKey || t.jiraSyncStatus === 'error');
   } catch (err) {
-    logger.error('Error getting unsynced tickets:', err);
+    logger.error('Error getting unsynced tickets:', { event: 'TICKET_UNSYNCED_LIST_FAILED', ...errorContext(err) });
     return [];
   }
 }
@@ -225,7 +225,7 @@ async function updateTicket(id: string, updates: Partial<Ticket>, actor: string)
 
     return updatedTicket;
   } catch (err) {
-    logger.error('Error updating ticket in Appwrite:', err);
+    logger.error('Error updating ticket in Appwrite:', { event: 'TICKET_UPDATE_FAILED', ...errorContext(err) });
     throw err;
   }
 }
@@ -237,7 +237,7 @@ async function deleteTicket(id: string): Promise<boolean> {
     activityMap.delete(id);
     return true;
   } catch (err) {
-    logger.error('Error deleting ticket in Appwrite:', err);
+    logger.error('Error deleting ticket in Appwrite:', { event: 'TICKET_DELETE_FAILED', ...errorContext(err) });
     return false;
   }
 }
@@ -324,7 +324,7 @@ async function listTickets(filters: TicketFilters, scope?: TenantScope): Promise
       totalPages
     };
   } catch (err) {
-    logger.error('Error listing tickets from Appwrite:', err);
+    logger.error('Error listing tickets from Appwrite:', { event: 'TICKET_LIST_FAILED', ...errorContext(err) });
     return {
       data: [],
       total: 0,
@@ -428,7 +428,7 @@ async function getStats(scope?: TenantScope) {
 
     return { total, open, critical, resolved, overdue: overdueCount, countsByStatus, countsByPriority, countsByType, agingTickets };
   } catch (err) {
-    logger.error('Error getting ticket stats:', err);
+    logger.error('Error getting ticket stats:', { event: 'TICKET_STATS_READ_FAILED', ...errorContext(err) });
     return emptyStats;
   }
 }
