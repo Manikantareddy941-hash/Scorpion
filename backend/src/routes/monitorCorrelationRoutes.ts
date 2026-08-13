@@ -5,7 +5,7 @@ import { resolveOwnershipScope } from '../services/tenancyService';
 import { correlationRepository } from '../repositories/correlationRepository';
 import { enqueueCorrelationTick } from '../queues/correlationQueue';
 import { CORRELATION_CATALOG, catalogById } from '../monitor/correlationCatalog';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { Severity } from '../monitor/securityEvent.types';
 
 interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
@@ -19,7 +19,7 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
     void enqueueCorrelationTick({ ownerUserId: userId }, 0);
     await resolveOwnershipScope(req, userId);
     res.json(await correlationRepository.listFired('owner', userId));
-  } catch (err) { logger.error('[correlationRoutes] list failed', err); res.status(500).json({ error: 'Internal server error' }); }
+  } catch (err) { logger.error('[correlationRoutes] list failed', { event: 'CORRELATION_LIST_FAILED', ...errorContext(err) }); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 router.get('/rules', verifyUser, async (req: AuthedRequest, res: Response) => {
@@ -32,7 +32,7 @@ router.get('/rules', verifyUser, async (req: AuthedRequest, res: Response) => {
       return { id: r.id, title: r.title, severity: st?.severityOverride ?? r.severity,
         enabled: st ? st.enabled : true, windowMs: r.windowMs };
     }));
-  } catch (err) { logger.error('[correlationRoutes] rules failed', err); res.status(500).json({ error: 'Internal server error' }); }
+  } catch (err) { logger.error('[correlationRoutes] rules failed', { event: 'CORRELATION_RULES_READ_FAILED', ...errorContext(err) }); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 router.put('/rules/:id', verifyUser, async (req: AuthedRequest, res: Response) => {
@@ -43,7 +43,7 @@ router.put('/rules/:id', verifyUser, async (req: AuthedRequest, res: Response) =
     const severityOverride = req.body.severityOverride as Severity | undefined;
     await correlationRepository.upsertRuleState(userId, { id: req.params.id, enabled, severityOverride });
     res.json({ ok: true });
-  } catch (err) { logger.error('[correlationRoutes] toggle failed', err); res.status(500).json({ error: 'Internal server error' }); }
+  } catch (err) { logger.error('[correlationRoutes] toggle failed', { event: 'CORRELATION_RULE_TOGGLE_FAILED', ruleId: req.params.id, ...errorContext(err) }); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 export default router;

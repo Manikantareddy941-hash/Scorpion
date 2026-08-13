@@ -9,7 +9,7 @@ import { logScanCompleted, logCIGateBlocked } from '../services/logEvents';
 import { scansTotal, ciGateDecisions, scanDuration, activeScans } from '../services/metrics';
 import { withSpan } from '../services/tracing';
 import { auditLog } from '../services/auditService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 export interface CIJobOptions {
   owner: string;
@@ -102,7 +102,9 @@ export async function triggerCIScan(options: CIJobOptions) {
           body
         });
       } catch (err) {
-        logger.error(`[PR Comment] Failed for ${options.repo}#${options.prNumber}:`, err);
+        logger.error(`[PR Comment] Failed for ${options.repo}#${options.prNumber}:`, {
+            event: 'CI_PR_COMMENT_FAILED', repo: options.repo, prNumber: options.prNumber, ...errorContext(err),
+        });
       }
     }
 
@@ -171,12 +173,12 @@ export async function triggerCIScan(options: CIJobOptions) {
           await evaluateCompliance(linked.documents[0].user_id);
         }
       } catch (err) {
-        logger.error('[Compliance] Auto-eval failed:', err);
+        logger.error('[Compliance] Auto-eval failed:', { event: 'CI_COMPLIANCE_EVAL_FAILED', repo: options.repo, ...errorContext(err) });
       }
     })();
 
   } catch (err) {
-    logger.error(`[CI] Error during scan for ${options.repo}:`, err);
+    logger.error(`[CI] Error during scan for ${options.repo}:`, { event: 'CI_SCAN_FAILED', repo: options.repo, ...errorContext(err) });
     await setCommitStatus(octokit, {
       owner: options.owner,
       repo: options.repo,

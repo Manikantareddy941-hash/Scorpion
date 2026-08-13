@@ -73,7 +73,9 @@ export async function handleFalcoEvent(event: FalcoEvent) {
       effectiveEvent = { ...event, priority: classification.overridePriority };
     }
   } catch (err) {
-    logger.error('[Falco Handler] Classification failed (event processed unmodified):', err);
+    logger.error('[Falco Handler] Classification failed (event processed unmodified):', {
+      event: 'FALCO_CLASSIFICATION_FAILED', rule: event.rule, ...errorContext(err),
+    });
     effectiveEvent = event;
   }
 
@@ -232,11 +234,15 @@ export async function handleFalcoEvent(event: FalcoEvent) {
     // SOAR dispatch runs LAST so a slow Appwrite write can never delay the
     // time-sensitive Critical/Error alerting above; errors are swallowed here.
     await dispatchSoar(effectiveEvent, incidentDoc.$id, containerImage, ownerUserId || undefined).catch((err) =>
-      logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', err),
+      logger.error('[Falco Handler] SOAR dispatch failed (incident path unaffected):', {
+        event: 'FALCO_SOAR_DISPATCH_FAILED', incidentId: incidentDoc.$id, ...errorContext(err),
+      }),
     );
 
   } catch (error) {
-    logger.error('[Falco Handler] Failed to process runtime event:', error);
+    logger.error('[Falco Handler] Failed to process runtime event:', {
+      event: 'FALCO_EVENT_PROCESSING_FAILED', rule: event.rule, ...errorContext(error),
+    });
   }
 }
 
