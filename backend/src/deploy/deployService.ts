@@ -3,6 +3,7 @@ import { deployRepository, DeployTargetConfig, TrivyReport } from '../repositori
 import { createIncident } from '../services/incidentService';
 import { sendSlackNotification } from '../services/slackService';
 import { verifyImageDigest } from '../services/cosignService';
+import { verifyProvenance, SignedProvenance } from '../services/provenanceService';
 import { signatureEnforcementActive } from '../services/signaturePolicy';
 import { securityRequirementsService } from '../services/securityRequirementsService';
 import { gateService } from '../services/gateService';
@@ -119,6 +120,10 @@ export async function triggerDeploy(
     let imageTag = '';
     let imageDigest: string | undefined;
     let imageSignature: string | undefined;
+    // Read from whichever record resolved, so the statement checked belongs to
+    // the build actually being deployed rather than to whatever happens to be in
+    // the shared imageStore namespace under this digest.
+    let provenanceJson: string | undefined;
 
     // 1. Fetch details from Pipeline Runs or legacy builds
     try {
@@ -127,6 +132,10 @@ export async function triggerDeploy(
       imageTag = `repo-${repoId}:${buildId}`;
       imageDigest = run.imageDigest;
       imageSignature = run.imageSignature;
+      // Narrowed rather than assigned: getDocument returns a loose document type
+      // whose members are `any`, so an unexpected column value would reach
+      // JSON.parse untyped.
+      provenanceJson = typeof run.provenance === 'string' ? run.provenance : undefined;
     } catch {
       try {
         const build = await deployRepository.getBuildPipeline(buildId);
@@ -137,6 +146,7 @@ export async function triggerDeploy(
         imageTag = `repo-${repoId}:${buildId}`;
         imageDigest = build.imageDigest;
         imageSignature = build.imageSignature;
+        provenanceJson = typeof build.provenance === 'string' ? build.provenance : undefined;
       } catch {
         logger.error(`[DeployService] Failed to resolve build/run for ID ${buildId}`);
         throw new Error(`Failed to resolve build/run for ID ${buildId}`);
@@ -314,6 +324,91 @@ export async function triggerDeploy(
 
         return { deploymentId, status: 'failed', reason };
       }
+    }
+
+    // 5b-ii. Provenance gate. The signature above proves the digest was signed
+    // by our key; this proves the signed SLSA statement names THIS digest as its
+    // subject — that the artifact came from the build it claims to.
+    //
+    // Until now nothing read provenance back at all (#186): builds signed
+    // statements into a 1h Redis TTL and no code path ever verified one, so
+    // tampering faced a check that never ran.
+    //
+    // ABSENT IS NOT A FAILURE. Every build produced before this shipped has no
+    // statement, and so does any run from an `upload://` source with no commit.
+    // Blocking on absence would take production down on deploy of anything built
+    // earlier. Absence is recorded and waved through; only a statement that
+    // exists and does not hold blocks.
+    if (imageDigest && provenanceJson && signatureEnforcementActive(environment)) {
+      let provOutcome: 'verified' | 'refuted' | 'unjudgeable';
+      let provBlindReason = '';
+
+      try {
+        // A malformed statement is refuted, not unjudgeable: unparseable JSON in
+        // this column is a fact about the record, not an inability to check it.
+        provOutcome = (await verifyProvenance(imageDigest, JSON.parse(provenanceJson) as SignedProvenance))
+          ? 'verified'
+          : 'refuted';
+      } catch (err) {
+        // verifyProvenance throws only when verification could not be attempted
+        // (no public key, no cosign) — mirrors verifyImageDigest, so the
+        // block-vs-skip distinction survives. A JSON.parse failure lands here
+        // too and is separated below.
+        const message = err instanceof Error ? err.message : String(err);
+        provOutcome = err instanceof SyntaxError ? 'refuted' : 'unjudgeable';
+        provBlindReason = message;
+      }
+
+      if (provOutcome !== 'verified') {
+        const refuted = provOutcome === 'refuted';
+        const reason = refuted
+          ? 'Image provenance verification failed'
+          : 'Image provenance could not be verified';
+        const detail = refuted
+          ? `the recorded SLSA statement does not attest to digest ${imageDigest}, so the image is not the artifact that build produced`
+          : `the recorded SLSA statement for ${imageDigest} could not be checked (${provBlindReason}), leaving its origin unverified rather than trusted`;
+
+        logger.error('[DeployService] deployment blocked on provenance', {
+          event: refuted ? 'DEPLOY_PROVENANCE_REFUTED' : 'DEPLOY_PROVENANCE_UNVERIFIABLE',
+          deploymentId, repoId, environment, imageDigest, actor: triggeredBy,
+          ...(refuted ? {} : { blindReason: provBlindReason }),
+        });
+        await deployRepository.updateDeploymentStatus(deploymentId, { status: 'failed' });
+
+        await createIncident({
+          title: `Deployment Blocked: ${reason} for ${imageTag}`,
+          severity: 'CRITICAL',
+          source: 'ci_pipeline',
+          description: `Deployment ${deploymentId} to ${environment} was blocked: ${detail}.`,
+          repoId
+        });
+
+        // Tamper-audited on the same reasoning as the signature gate: a deploy
+        // stopped by a broken verifier and one stopped by a statement that does
+        // not match are indistinguishable in the deployment record, and only one
+        // is an operator's problem to fix.
+        await logSecureAuditEvent(
+          triggeredBy,
+          refuted ? 'IMAGE_PROVENANCE_REFUTED' : 'IMAGE_PROVENANCE_UNVERIFIABLE',
+          repoId,
+          `Deployment ${deploymentId} of ${imageTag} to ${environment} blocked: ${detail}`,
+        ).catch(err => logger.warn('[DeployService] failed to audit provenance gate block', {
+          event: 'DEPLOY_AUDIT_WRITE_FAILED',
+          auditEvent: refuted ? 'IMAGE_PROVENANCE_REFUTED' : 'IMAGE_PROVENANCE_UNVERIFIABLE',
+          deploymentId, repoId, environment, actor: triggeredBy,
+          ...errorContext(err),
+        }));
+
+        return { deploymentId, status: 'failed', reason };
+      }
+    } else if (imageDigest && !provenanceJson && signatureEnforcementActive(environment)) {
+      // Countable, so "how much of the estate still deploys unattested" is a
+      // query rather than a guess — and so this does not stay invisible the way
+      // the unread signing path did.
+      logger.warn('[DeployService] no provenance recorded for deployed image', {
+        event: 'DEPLOY_PROVENANCE_ABSENT',
+        deploymentId, repoId, environment, imageDigest, actor: triggeredBy,
+      });
     }
 
     // 5c. Compliance gate: block a production deploy when a required security

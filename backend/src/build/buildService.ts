@@ -189,11 +189,39 @@ export async function startBuild(repoId: string, branch: string, triggeredBy: st
             finishedOn: new Date().toISOString(),
           });
           if (provenance) {
-            // Tenant-less: the build pipeline carries no tenant identity yet, so
-            // provenance lands in the shared namespace. Safe today because
-            // provenance is signed and verified rather than trusted by key, but
-            // it must gain a tenant when builds become per-customer.
-            await putProvenance(null, digest, JSON.stringify(provenance));
+            const provenanceJson = JSON.stringify(provenance);
+
+            // Durable copy on the build record, which is what deployService's
+            // gate reads. imageStore below stays as the hot path: it is Redis on
+            // a 1h TTL sized for the CI-build -> admission window, so it cannot
+            // answer for an image deployed later or after a restart.
+            //
+            // Best-effort on purpose. `provenance` is capped at 16KB by the
+            // migration, and Appwrite rejects the whole document write on
+            // oversize — failing a signed, scanned build to save the metadata
+            // about it would be the wrong trade. A gate that finds no statement
+            // reports absent, which is the truthful record.
+            try {
+              await databases.updateDocument(DB_ID, COLLECTIONS.BUILD_PIPELINES, pipelineId, {
+                provenance: provenanceJson,
+              });
+            } catch (provErr) {
+              logger.warn('[BuildService] provenance record write failed', {
+                event: 'BUILD_PROVENANCE_PERSIST_FAILED',
+                pipelineId,
+                imageDigest: digest,
+                ...errorContext(provErr),
+              });
+              logs += `Provenance could not be recorded on the build (deploy will read it as absent).\n`;
+            }
+
+            // Tenant-less HERE ONLY, and no longer load-bearing: this is the
+            // short-lived cache, and the durable copy above lives on a
+            // repo-scoped record. The statement is signed, and deployService now
+            // verifies it against the deployed digest rather than trusting where
+            // it was read from — which is what the old comment claimed and
+            // nothing did (#187).
+            await putProvenance(null, digest, provenanceJson);
             logs += `SLSA provenance attested for ${digest} (commit ${shaOut.trim()}).\n`;
           } else {
             logs += `Provenance attestation skipped (signing not configured).\n`;

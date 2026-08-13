@@ -14,6 +14,8 @@ import { dockerRunnerService } from './dockerRunnerService';
 import { sshService } from './sshService';
 import { containerizedTrivyService } from './containerizedTrivyService';
 import { getImageDigest, signImageDigest, CosignSigningError } from './cosignService';
+import { attestProvenance } from './provenanceService';
+import { putProvenance } from './imageStore';
 import { EnvironmentDocument, PipelineRunDocument, StageUpdate } from '../types/pipeline.types';
 import { GateBlocker } from '../types/gate.types';
 import { isAppwriteError } from '../utils/errorGuards';
@@ -185,10 +187,14 @@ export async function runPipeline(runId: string) {
     // 1. Fetch the pipeline run document
     runDoc = await databases.getDocument<PipelineRunDocument>(DB_ID, 'pipeline_runs', runId);
     
+    // Captured rather than inlined so the SLSA statement's startedOn is the same
+    // instant this run recorded, not a second reading taken later.
+    const runStartedAt = new Date().toISOString();
+
     // Update main status to running
     await databases.updateDocument(DB_ID, 'pipeline_runs', runId, {
       status: 'running',
-      startedAt: new Date().toISOString(),
+      startedAt: runStartedAt,
     });
 
     // A missing repository fails the run rather than conjuring a placeholder.
@@ -275,6 +281,73 @@ export async function runPipeline(runId: string) {
           // Reachable only when COSIGN_KEY_PATH is unset — a configured-but-
           // broken signer throws now rather than reporting itself as skipped.
           await pipeLogger.log('Image signing skipped (COSIGN_KEY_PATH not configured).');
+        }
+
+        // SLSA provenance. This path had none: it recorded imageDigest and
+        // imageSignature and no statement, while buildService attested one.
+        // Since deployService resolves pipeline_runs FIRST and falls back to
+        // build_pipelines, provenance existed only on the path a real deploy
+        // does not take — so a gate reading it back would have answered
+        // "unverifiable" for essentially every deploy (#186, #190).
+        //
+        // repoUrl, never cloneUrl: the clone URL has the access token spliced
+        // into its host, and this statement is signed and stored.
+        //
+        // Resolved in its own try because this path does not always have a git
+        // checkout: an `upload://` source skips cloning entirely, so rev-parse
+        // fails there. Letting that escape would land in the signer catch below
+        // and be reported as PIPELINE_DIGEST_FAILED — a provenance problem
+        // wearing another step's label. No commit means no meaningful SLSA
+        // statement, so the honest outcome is to record none.
+        let commitSha: string | undefined;
+        try {
+          const { stdout: shaOut } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: workspaceDir });
+          commitSha = shaOut.trim();
+        } catch (shaErr) {
+          logger.warn('[PipelineService] no commit resolved; skipping provenance', {
+            event: 'PIPELINE_PROVENANCE_SKIPPED_NO_COMMIT', runId, ...errorContext(shaErr),
+          });
+          await pipeLogger.log('Provenance skipped (no git checkout for this source).');
+        }
+
+        const provenance = commitSha
+          ? await attestProvenance({
+              imageName: imageTag,
+              imageDigest: digest,
+              repoUrl,
+              // Optional on the document, but the clone above passes it to
+              // `git clone --branch`, so a run that reached a docker build from
+              // a git source has one.
+              branch: runDoc.branch ?? '',
+              commitSha,
+              invocationId: runId,
+              startedOn: runStartedAt,
+              finishedOn: new Date().toISOString(),
+            })
+          : null;
+        if (provenance) {
+          const provenanceJson = JSON.stringify(provenance);
+          // Best-effort, same reasoning as buildService: the column is capped at
+          // 16KB and Appwrite rejects the whole document write on oversize.
+          // Losing a signed, scanned run to save the metadata about it would be
+          // the wrong trade; the gate reads a missing statement as absent.
+          try {
+            await databases.updateDocument(DB_ID, 'pipeline_runs', runId, {
+              provenance: provenanceJson,
+            });
+          } catch (provErr) {
+            logger.warn('[PipelineService] provenance record write failed', {
+              event: 'PIPELINE_PROVENANCE_PERSIST_FAILED',
+              runId,
+              imageDigest: digest,
+              ...errorContext(provErr),
+            });
+            await pipeLogger.log('Provenance could not be recorded on the run (deploy will read it as absent).');
+          }
+          await putProvenance(null, digest, provenanceJson);
+          await pipeLogger.log(`SLSA provenance attested for ${digest} (commit ${commitSha}).`);
+        } else if (commitSha) {
+          await pipeLogger.log('Provenance attestation skipped (signing not configured).');
         }
       } catch (signErr) {
         const message = signErr instanceof Error ? signErr.message : String(signErr);
