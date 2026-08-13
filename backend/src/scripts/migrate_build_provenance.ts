@@ -32,8 +32,13 @@
 // would leave the primary path unable to produce what the gate reads, which is
 // the drift #190 warns about.
 //
-// Run (from backend/):
-//   npm run build && node dist/backend/src/scripts/migrate_build_provenance.js
+// Run (from backend/, which is where dotenv resolves .env from):
+//   npm run migrate:build-provenance
+//
+// MUST RUN BEFORE the service image that writes provenance. Until the attribute
+// exists, the write is rejected, the write path swallows it as best-effort, and
+// the deploy gate reads absent — degraded rather than broken, but attesting
+// nothing.
 //
 // Idempotent: an existing attribute is reported as a skip, not an error.
 import * as dotenv from 'dotenv';
