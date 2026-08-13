@@ -69,7 +69,7 @@ export async function checkDeploymentUptime(deployment: any) {
           severity: 'CRITICAL',
           repository: repoId,
           rule: `Uptime SLA check failed. Container URL ${sanitizedUrl} returned error or timed out.`
-        }).catch((e) => logger.error(`[MonitorService] Alert failed:`, e));
+        }).catch((e) => logger.error(`[MonitorService] Alert failed:`, { event: 'MONITOR_ALERT_SEND_FAILED', ...errorContext(e) }));
       }
 
       // Persist status to deployment_status collection (upsert)
@@ -89,7 +89,9 @@ export async function checkDeploymentUptime(deployment: any) {
             lastUpdated: new Date().toISOString()
           });
         } else {
-          logger.error(`[MonitorService] Failed to persist ${status} status:`, e);
+          logger.error(`[MonitorService] Failed to persist ${status} status:`, {
+            event: 'MONITOR_STATUS_PERSIST_FAILED', monitorStatus: status, ...errorContext(e),
+          });
         }
       }
     }
@@ -104,7 +106,7 @@ export async function checkDeploymentUptime(deployment: any) {
           severity: 'LOW',
           repository: repoId,
           rule: `Uptime SLA check passed again. Container URL ${sanitizedUrl} is responding.`
-        }).catch((e) => logger.error(`[MonitorService] Recovery alert failed:`, e));
+        }).catch((e) => logger.error(`[MonitorService] Recovery alert failed:`, { event: 'MONITOR_RECOVERY_ALERT_FAILED', ...errorContext(e) }));
       }
 
       try {
@@ -113,13 +115,13 @@ export async function checkDeploymentUptime(deployment: any) {
           lastUpdated: new Date().toISOString()
         });
       } catch (e) {
-        logger.error(`[MonitorService] Failed to clear stale down status:`, e);
+        logger.error(`[MonitorService] Failed to clear stale down status:`, { event: 'MONITOR_STALE_STATUS_CLEAR_FAILED', ...errorContext(e) });
       }
     }
 
     previousStatus.set(key, status);
   } catch (err) {
-    logger.error(`[MonitorService] Error recording health check:`, err);
+    logger.error(`[MonitorService] Error recording health check:`, { event: 'MONITOR_HEALTH_CHECK_RECORD_FAILED', ...errorContext(err) });
   }
 }
 
