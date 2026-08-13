@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 // Resend's constructor throws synchronously if the key is missing, which would
 // crash the whole process at import time. Initialize lazily so a missing key
@@ -46,7 +46,7 @@ export const sendOtpEmail = async (email: string, otp: string) => {
     logger.info(`[Email] OTP sent to ${email} via Resend. ID: ${data?.id}`);
     return { success: true, data };
   } catch (error) {
-    logger.error(`[Email] Error sending OTP to ${email} via Resend:`, error);
+    logger.error(`[Email] Error sending OTP to ${email} via Resend:`, { event: 'EMAIL_OTP_SEND_FAILED', ...errorContext(error) });
 
     // In development mode, we still log the OTP so testing isn't blocked by API errors (e.g. invalid key)
     if (process.env.NODE_ENV !== 'production') {
@@ -84,7 +84,7 @@ export const sendCriticalAlertEmail = async (email: string, repoName: string, vu
     });
     logger.info(`[Email] Critical alert sent to ${email} for repo ${repoName}`);
   } catch (err) {
-    logger.error(`[Email] Failed to send critical alert:`, err);
+    logger.error(`[Email] Failed to send critical alert:`, { event: 'EMAIL_CRITICAL_ALERT_SEND_FAILED', ...errorContext(err) });
   }
 };
 
@@ -109,7 +109,7 @@ export const sendScanCompletionEmail = async (email: string, repoName: string, s
       `,
     });
   } catch (err) {
-    logger.error(`[Email] Failed to send completion email:`, err);
+    logger.error(`[Email] Failed to send completion email:`, { event: 'EMAIL_COMPLETION_SEND_FAILED', ...errorContext(err) });
   }
 };
 
@@ -137,7 +137,7 @@ export const sendAiReportEmail = async (email: string, reportHtml: string, range
     });
     logger.info(`[Email] AI Report sent to ${email}`);
   } catch (err) {
-    logger.error(`[Email] Failed to send AI Report:`, err);
+    logger.error(`[Email] Failed to send AI Report:`, { event: 'EMAIL_AI_REPORT_SEND_FAILED', ...errorContext(err) });
     throw err;
   }
 };

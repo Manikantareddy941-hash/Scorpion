@@ -329,7 +329,7 @@ const addScanLog = async (scanId: string, log: string) => {
             logs: [...currentLogs, `[${new Date().toLocaleTimeString()}] ${log}`]
         });
     } catch (err) {
-        logger.error('[ScanService] Failed to add log:', err);
+        logger.error('[ScanService] Failed to add log:', { event: 'SCAN_LOG_APPEND_FAILED', scanId, ...errorContext(err) });
     }
 };
 
@@ -433,7 +433,9 @@ export const triggerScan = async (
                 scanPath = tempDir;
                 isTemporary = true;
             } catch (cloneErr) {
-                logger.error('[ScanService] Clone failed:', cloneErr);
+                // No targetPath correlator: it is the clone URL, which can carry
+                // `user:token@` — the same reason the info line above strips it.
+                logger.error('[ScanService] Clone failed:', { event: 'SCAN_CLONE_FAILED', scanId, ...errorContext(cloneErr) });
                 throw new Error(`Failed to clone repository: ${cloneErr instanceof Error ? cloneErr.message : cloneErr}`);
             }
         }
@@ -568,7 +570,7 @@ const dedupedIssues = deduplicateFindings(issues);
                 gateStatus = (policyResult.result === 'PASS' || policyResult.result === 'WARN') ? 'passed' : 'failed';
             }
         } catch (policyErr) {
-            logger.error('[ScanService] Policy evaluation error:', policyErr);
+            logger.error('[ScanService] Policy evaluation error:', { event: 'SCAN_POLICY_EVAL_FAILED', scanId, ...errorContext(policyErr) });
         }
 
         // 1️⃣2️⃣ Finalize scan record
@@ -696,7 +698,7 @@ export const getInsightsSummary = async (userId: string) => {
         const overallScore = scans.length > 0 ? (scans[0].details?.security_score || 0) : 0;
         return { repos, scans, overallScore, totalVulns };
     } catch (err) {
-        logger.error('[ScanService] Error getting insights summary:', err);
+        logger.error('[ScanService] Error getting insights summary:', { event: 'SCAN_INSIGHTS_READ_FAILED', ...errorContext(err) });
         return { repos: [], scans: [], overallScore: 0, totalVulns: 0 };
     }
 };

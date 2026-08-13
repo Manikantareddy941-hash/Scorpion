@@ -63,7 +63,7 @@ router.post('/github', async (req: Request, res: Response) => {
                 case 'ok': return res.json({ message: result.message });
             }
         } catch (err) {
-            logger.error('[Webhook] Error processing workflow_run:', err);
+            logger.error('[Webhook] Error processing workflow_run:', { event: 'WEBHOOK_WORKFLOW_RUN_FAILED', ...errorContext(err) });
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -80,7 +80,7 @@ router.post('/github', async (req: Request, res: Response) => {
             case 'ok': return res.json({ message: `Triggered ${result.runs.length} pipeline run(s)`, runs: result.runs });
         }
     } catch (err) {
-        logger.error('[Webhook] Error processing webhook:', err);
+        logger.error('[Webhook] Error processing webhook:', { event: 'WEBHOOK_PROCESSING_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -150,7 +150,7 @@ router.post('/github/app-install', async (req: Request, res: Response) => {
         }
         res.json({ message: 'Installation processed and repositories synchronized' });
     } catch (err) {
-        logger.error('[Webhook] App installation error:', err);
+        logger.error('[Webhook] App installation error:', { event: 'WEBHOOK_APP_INSTALLATION_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -177,7 +177,7 @@ router.post('/tests/report', async (req: Request, res: Response) => {
         }
         res.json({ message: 'Test report recorded' });
     } catch (err) {
-        logger.error('[Webhook] Error processing test report:', err);
+        logger.error('[Webhook] Error processing test report:', { event: 'WEBHOOK_TEST_REPORT_FAILED', ...errorContext(err) });
         res.status(500).json({ error: 'Internal server error' });
     }
 });

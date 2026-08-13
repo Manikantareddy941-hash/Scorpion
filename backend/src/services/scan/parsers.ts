@@ -1,4 +1,4 @@
-import { logger } from '../logger';
+import { logger, errorContext } from '../logger';
 export interface Finding {
     tool: string;
     severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -25,7 +25,10 @@ export const parseSemgrep = (stdout: string): Finding[] => {
             fixVersion: undefined
         }));
     } catch (e) {
-        logger.error('[Parser] Semgrep error:', e);
+        // One key across all six parsers, discriminated by `tool`. Six separate
+        // keys for "the parser threw" would fragment the query that actually
+        // matters — how often parsing drops findings — across six names.
+        logger.error('[Parser] Semgrep error:', { event: 'SCAN_PARSE_FAILED', tool: 'semgrep', ...errorContext(e) });
         return [];
     }
 };
@@ -55,7 +58,7 @@ export const parseGitleaks = (stdout: string): Finding[] => {
             fixVersion: undefined
         }));
     } catch (e) {
-        logger.error('[Parser] Gitleaks error:', e);
+        logger.error('[Parser] Gitleaks error:', { event: 'SCAN_PARSE_FAILED', tool: 'gitleaks', ...errorContext(e) });
         return [];
     }
 };
@@ -108,7 +111,7 @@ export const parseTrivy = (stdout: string): Finding[] => {
 
         return findings;
     } catch (e) {
-        logger.error('[Parser] Trivy error:', e);
+        logger.error('[Parser] Trivy error:', { event: 'SCAN_PARSE_FAILED', tool: 'trivy', ...errorContext(e) });
         return [];
     }
 };
@@ -135,7 +138,7 @@ export const parseCheckov = (stdout: string): Finding[] => {
 
         return findings;
     } catch (e) {
-        logger.error('[Parser] Checkov error:', e);
+        logger.error('[Parser] Checkov error:', { event: 'SCAN_PARSE_FAILED', tool: 'checkov', ...errorContext(e) });
         return [];
     }
 };
@@ -162,7 +165,7 @@ export const parseBandit = (stdout: string): Finding[] => {
             line_number: r.line_number,
         }));
     } catch (e) {
-        logger.error('[Parser] Bandit error:', e);
+        logger.error('[Parser] Bandit error:', { event: 'SCAN_PARSE_FAILED', tool: 'bandit', ...errorContext(e) });
         return [];
     }
 };
@@ -189,7 +192,7 @@ export const parseHadolint = (stdout: string): Finding[] => {
             line_number: h.line,
         }));
     } catch (e) {
-        logger.error('[Parser] Hadolint error:', e);
+        logger.error('[Parser] Hadolint error:', { event: 'SCAN_PARSE_FAILED', tool: 'hadolint', ...errorContext(e) });
         return [];
     }
 };

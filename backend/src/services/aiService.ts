@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY || 'mock-key',
@@ -52,7 +52,7 @@ export const generateSecuritySummary = async (findings: unknown[], alerts: unkno
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         return text || 'Failed to generate summary';
     } catch (err) {
-        logger.error('[AI Service] summary generation failed:', err);
+        logger.error('[AI Service] summary generation failed:', { event: 'AI_SUMMARY_FAILED', ...errorContext(err) });
         throw err;
     }
 };
@@ -80,7 +80,7 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
                     fileContent = fs.readFileSync(fullPath, 'utf8');
                 }
             } catch (err) {
-                logger.error('[AI Service] Failed to read file context:', err);
+                logger.error('[AI Service] Failed to read file context:', { event: 'AI_FILE_CONTEXT_READ_FAILED', ...errorContext(err) });
             }
         }
 
@@ -177,7 +177,7 @@ export const getRemediationFix = async (vulnerabilityId: string) => {
             confidence
         };
     } catch (err) {
-        logger.error('[AI Service] remediation failed:', err);
+        logger.error('[AI Service] remediation failed:', { event: 'AI_REMEDIATION_FAILED', ...errorContext(err) });
         throw err;
     }
 };
@@ -188,7 +188,7 @@ export const recordFeedback = async (fixId: string, feedback: unknown) => {
             feedback: typeof feedback === 'object' ? JSON.stringify(feedback) : feedback
         });
     } catch (err) {
-        logger.error('[AI Service] Failed to record feedback:', err);
+        logger.error('[AI Service] Failed to record feedback:', { event: 'AI_FEEDBACK_RECORD_FAILED', ...errorContext(err) });
         throw err;
     }
 };
