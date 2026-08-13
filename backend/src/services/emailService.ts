@@ -43,10 +43,17 @@ export const sendOtpEmail = async (email: string, otp: string) => {
       throw error;
     }
 
-    logger.info(`[Email] OTP sent to ${email} via Resend. ID: ${data?.id}`);
+    // No recipient address on either of these. authRoutes deliberately keeps it
+    // out of the password-reset logs — a log naming the account turns the
+    // aggregator into the enumeration oracle the always-success reply exists to
+    // prevent — and this is the same address one call deeper on the same flow.
+    // The success line was the stronger signal of the two: it fired on every
+    // reset request, so the log was a list of addresses that have accounts.
+    // Resend's message id is kept; it identifies the send, not the person.
+    logger.info(`[Email] OTP sent via Resend. ID: ${data?.id}`);
     return { success: true, data };
   } catch (error) {
-    logger.error(`[Email] Error sending OTP to ${email} via Resend:`, { event: 'EMAIL_OTP_SEND_FAILED', ...errorContext(error) });
+    logger.error('[Email] Error sending OTP via Resend:', { event: 'EMAIL_OTP_SEND_FAILED', ...errorContext(error) });
 
     // In development mode, we still log the OTP so testing isn't blocked by API errors (e.g. invalid key)
     if (process.env.NODE_ENV !== 'production') {

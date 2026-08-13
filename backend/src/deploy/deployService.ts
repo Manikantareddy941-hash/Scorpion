@@ -71,7 +71,9 @@ async function executeTargetDeployment(
       return { success: true };
     }
   } catch (err) {
-    logger.error('[DeployService] Target deployment execution failed:', err);
+    logger.error('[DeployService] Target deployment execution failed:', {
+      event: 'DEPLOY_TARGET_EXECUTION_FAILED', repoId, environment, targetType, ...errorContext(err),
+    });
     return { success: false, error: err instanceof Error ? err.message : 'Unknown deployment error' };
   }
 }
@@ -96,7 +98,9 @@ async function resolveDeployTarget(environment: string, createIfMissing: boolean
       await deployRepository.createDeployTarget(environment, `Default Local Docker (${environment})`, 'docker', config);
     }
   } catch (err) {
-    logger.warn('[DeployService] Error resolving deploy targets config:', err);
+    logger.warn('[DeployService] Error resolving deploy targets config:', {
+      event: 'DEPLOY_TARGET_RESOLVE_FAILED', environment, ...errorContext(err),
+    });
   }
 
   return { targetType, config };
@@ -165,7 +169,9 @@ export async function triggerDeploy(
         previousDeploymentId = prevDeploys.documents[0].$id;
       }
     } catch (err) {
-      logger.warn('[DeployService] Previous deployment resolution failed:', err);
+      logger.warn('[DeployService] Previous deployment resolution failed:', {
+        event: 'DEPLOY_PREVIOUS_LOOKUP_FAILED', deploymentId, repoId, environment, ...errorContext(err),
+      });
     }
 
     // 4. Create Deployment Record
@@ -514,7 +520,9 @@ export async function triggerDeploy(
     return { deploymentId, status: 'success' };
 
   } catch (error) {
-    logger.error('[DeployService] Deployment failed', error);
+    logger.error('[DeployService] Deployment failed', {
+      event: 'DEPLOY_FAILED', deploymentId, environment, actor: triggeredBy, ...errorContext(error),
+    });
     try {
       await deployRepository.updateDeploymentStatus(deploymentId, { status: 'failed' });
     } catch { /* best-effort status update */ }
@@ -550,7 +558,9 @@ async function performHealthCheck(deploymentId: string, environment: string, por
       logger.info(`[DeployService] Health check passed for ${deploymentId}`);
     }
   } catch (err) {
-    logger.error('[DeployService] Health check error', err);
+    logger.error('[DeployService] Health check error', {
+      event: 'DEPLOY_HEALTH_CHECK_FAILED', deploymentId, environment, ...errorContext(err),
+    });
   }
 }
 
@@ -601,7 +611,9 @@ export async function rollbackDeploy(deploymentId: string) {
 
     return { deploymentId, status: 'rolled-back' };
   } catch (error) {
-    logger.error(`[DeployService] Rollback failed for ${deploymentId}`, error);
+    logger.error(`[DeployService] Rollback failed for ${deploymentId}`, {
+      event: 'DEPLOY_ROLLBACK_EXECUTION_FAILED', deploymentId, ...errorContext(error),
+    });
     throw error;
   }
 }
