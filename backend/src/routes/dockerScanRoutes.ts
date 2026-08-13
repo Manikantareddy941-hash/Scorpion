@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { sendFindingAlert, FindingDocument } from '../utils/alertDispatcher';
 import { scanTriggerLimiter } from '../middleware/rateLimiters';
-import { logger, errorContext, errorMessage } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,10 +57,15 @@ router.post('/docker', verifyUser, scanTriggerLimiter, async (req: Authenticated
                 image_name
             ], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }));
         } catch (scanErr: unknown) {
-            const details = scanErr && typeof scanErr === 'object' && 'stderr' in scanErr
-                ? String((scanErr as { stderr?: unknown }).stderr)
-                : errorMessage(scanErr);
-            return res.status(500).json({ error: "Trivy scan failed", details });
+            // This was returning the scanner's raw STDERR to the caller. A failed
+            // pull writes registry and auth detail there, so it is the one field
+            // in this sweep that could carry a credential rather than just
+            // internals — and it is deliberately not logged either, for the same
+            // reason the cosign sites log neither stderr nor argv.
+            logger.error('[Docker Scan] trivy scan failed', {
+                event: 'DOCKER_TRIVY_SCAN_FAILED', imageRef: image_name, ...errorContext(scanErr),
+            });
+            return res.status(500).json({ error: 'Trivy scan failed' });
         }
 
         const output = JSON.parse(stdout || '{"Results": []}') as { Results?: { Vulnerabilities?: TrivyVulnerability[] }[] };

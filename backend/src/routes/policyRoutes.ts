@@ -4,7 +4,7 @@ import { databases, DB_ID, ID, Query } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { evaluatePolicy, isOpaAvailable } from '../services/opaService';
-import { logger, errorContext, errorMessage } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: { $id: string };
@@ -141,7 +141,7 @@ router.post('/:id/evaluate', verifyUser, validateBody(evaluateSchema), async (re
     } catch (err) {
         logger.error('[Policy Evaluate Error]', { event: 'POLICY_EVALUATE_FAILED', policyId: req.params.id, ...errorContext(err) });
         if (errorCode(err) === 404) return res.status(404).json({ error: 'Policy not found' });
-        res.status(502).json({ error: 'Policy evaluation failed', details: errorMessage(err) });
+        res.status(502).json({ error: 'Policy evaluation failed' });
     }
 });
 

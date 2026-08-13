@@ -1,7 +1,7 @@
 import express, { Request } from 'express';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query, Models } from 'node-appwrite';
-import { logger, errorMessage } from '../services/logger';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
@@ -78,7 +78,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     res.json(result);
   } catch (err: unknown) {
     logger.error('[IssuesRoute] Error:', err);
-    res.status(500).json({ error: errorMessage(err) });
+    res.status(500).json({ error: 'Failed to list issues' });
   }
 });
 

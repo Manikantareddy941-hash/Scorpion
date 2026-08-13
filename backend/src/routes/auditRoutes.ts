@@ -5,7 +5,7 @@ import { verifyUser } from '../middleware/auth';
 import { requireRole } from '../middleware/requireRole';
 import { auditVerifyLimiter } from '../middleware/rateLimiters';
 import { runFullAuditVerification, isTamperSuspected } from '../utils/auditOrchestrator';
-import { logger, errorContext, errorMessage } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -54,9 +54,8 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
         // another tenant's audit trail through this route.
         res.json(docs);
     } catch (err: unknown) {
-        const message = errorMessage(err);
         logger.error('[Audit API Error]', { event: 'AUDIT_LIST_FAILED', ...errorContext(err) });
-        res.status(500).json({ error: 'Internal server error', message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
@@ -87,18 +86,17 @@ router.post('/', verifyUser, async (req: AuthenticatedRequest, res: Response) =>
 
         res.status(201).json(response);
     } catch (err: unknown) {
-        const message = errorMessage(err);
         const response_ = typeof err === 'object' && err !== null && 'response' in err ? (err as { response?: { message?: string } }).response : undefined;
+        // The Appwrite upstream message stays in the log only. Its old home in
+        // `details` named the collection and the attribute it rejected, which is
+        // schema disclosure, and the 'Check Appwrite collection attributes'
+        // fallback told a caller which backend this runs on.
         logger.error('[Audit Create Error]', {
             event: 'AUDIT_CREATE_FAILED',
             ...(response_?.message ? { upstreamMessage: response_.message } : {}),
             ...errorContext(err),
         });
-        res.status(500).json({
-            error: 'Failed to create audit log',
-            message,
-            details: response_?.message || 'Check Appwrite collection attributes'
-        });
+        res.status(500).json({ error: 'Failed to create audit log' });
     }
 });
 
@@ -155,9 +153,11 @@ router.get('/verify', verifyUser, requireRole('admin', 'security'), auditVerifyL
         // NOT the same as a clean ledger and must never be reported as one.
         logger.error('[Audit Verify] verification could not run', { event: 'AUDIT_VERIFY_FAILED', ...errorContext(err) });
         res.setHeader('X-Audit-Status', 'VERIFICATION_FAILED');
+        // `detail` stays: it is a statement about the verdict's meaning, not
+        // about the failure, and dropping it would let a caller read this 500 as
+        // "ledger fine, request flaky". Only the raw cause goes.
         return res.status(500).json({
             error: 'Audit verification could not be completed',
-            message: errorMessage(err),
             detail: 'The ledger has NOT been verified. This is not a statement that it is intact.',
         });
     }

@@ -211,7 +211,7 @@ router.patch('/:id', requireTicketAccess, validateBody(updateTicketSchema), asyn
     res.json(updated);
   } catch (err) {
     logger.error('Error in PATCH ticket:', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update ticket' });
+    res.status(500).json({ error: 'Failed to update ticket' });
   }
 }));
 

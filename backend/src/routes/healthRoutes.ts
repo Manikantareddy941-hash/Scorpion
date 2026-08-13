@@ -3,6 +3,7 @@ import { databases, DB_ID } from '../lib/appwrite';
 import { checkTool } from '../utils/toolCheck';
 import { isWorkerRunning } from '../workers/scanWorker';
 import { Query } from 'node-appwrite';
+import { logger, errorContext } from '../services/logger';
 
 const router = express.Router();
 
@@ -34,10 +35,13 @@ router.get('/health', async (req: Request, res: Response) => {
     });
     
   } catch (err: unknown) {
+    // Health is typically the most exposed route on a deployment — often
+    // unauthenticated and probed by anything that can reach the host — so the
+    // dependency failure text is exactly what should not be in the body.
+    logger.error('[Health] check failed', { event: 'HEALTH_CHECK_FAILED', ...errorContext(err) });
     res.status(500).json({
         status: 'error',
-        message: 'Health check failed',
-        error: err instanceof Error ? err.message : 'Unknown error'
+        message: 'Health check failed'
     });
   }
 });
