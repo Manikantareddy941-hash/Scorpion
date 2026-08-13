@@ -229,9 +229,13 @@ jobs:
       # already at zero.
       #
       # Lower the number as files are converted; the pass is finished at --max=0.
+      # Unlike the response-leak gate below, 0 IS the destination here — there is
+      # no category of bare second argument that should survive.
+      #
+      # 150 -> 127: tickets and threat-model, 23 sites.
       - name: Logger Call Convention
         working-directory: backend
-        run: node scripts/auditLoggerCalls.js --max=150
+        run: node scripts/auditLoggerCalls.js --max=127
 
       # CWE-209. Counts internal error text reaching a 4xx/5xx response body:
       # errorMessage(err), err.message, String(err), or a local const bound to any
