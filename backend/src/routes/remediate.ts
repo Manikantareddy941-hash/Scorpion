@@ -57,9 +57,8 @@ router.post('/generate', verifyUser, aiLimiter, async (req: AuthenticatedRequest
         });
 
     } catch (err) {
-        const message = err instanceof Error ? err.message : 'unknown error';
         logger.error('[Remediate Generate Error]', { event: 'REMEDIATE_GENERATE_FAILED', ...errorContext(err) });
-        res.status(500).json({ error: 'Failed to generate patch', details: message });
+        res.status(500).json({ error: 'Failed to generate patch' });
     }
 });
 
@@ -151,9 +150,8 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: AuthenticatedR
         });
 
     } catch (err) {
-        const message = err instanceof Error ? err.message : 'unknown error';
         logger.error('[Remediate Apply Error]', { event: 'REMEDIATE_APPLY_FAILED', ...errorContext(err) });
-        res.status(500).json({ error: 'Failed to apply patch', details: message });
+        res.status(500).json({ error: 'Failed to apply patch' });
     }
 });
 
@@ -222,9 +220,8 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Authenticated
         });
 
     } catch (err) {
-        const message = err instanceof Error ? err.message : 'unknown error';
         logger.error('[Remediate Revert Error]', { event: 'REMEDIATE_REVERT_FAILED', ...errorContext(err) });
-        res.status(500).json({ error: 'Failed to revert patch', details: message });
+        res.status(500).json({ error: 'Failed to revert patch' });
     }
 });
 

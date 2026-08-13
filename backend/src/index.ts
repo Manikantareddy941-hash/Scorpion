@@ -413,7 +413,12 @@ app.post('/api/metrics', async (req: Request, res: Response) => {
         });
         res.status(201).json(doc);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to record metrics', details: errorMessage(err) });
+        // repoId read off req.body: it is destructured inside the try, so the
+        // local is not in scope here.
+        logger.error('[Ingest] metrics write failed', {
+            event: 'METRICS_INGEST_FAILED', repoId: req.body?.repoId, ...errorContext(err),
+        });
+        res.status(500).json({ error: 'Failed to record metrics' });
     }
 });
 
@@ -433,7 +438,10 @@ app.post('/api/logs', async (req: Request, res: Response) => {
         });
         res.status(201).json(doc);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to record log', details: errorMessage(err) });
+        logger.error('[Ingest] log write failed', {
+            event: 'LOG_INGEST_FAILED', repoId: req.body?.repoId, ...errorContext(err),
+        });
+        res.status(500).json({ error: 'Failed to record log' });
     }
 });
 

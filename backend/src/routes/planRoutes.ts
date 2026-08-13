@@ -5,6 +5,7 @@ import { AuthenticatedRequest } from '../types/plan.types';
 import { requirePermission, isEnforcing } from '../authz/requirePermission';
 import { listPermissions } from '../authz/authorizationService';
 import { projectAccessService } from '../services/projectAccessService';
+import { logger, errorContext } from '../services/logger';
 
 const router = Router();
 
@@ -314,7 +315,10 @@ router.post('/projects/:projectId/threats/ai-generate', requirePermission('threa
     if (result === 'forbidden') return res.status(403).json({ error: 'You do not have access to this project' });
     res.status(201).json(result.data);
   } catch (err: unknown) {
-    res.status(502).json({ error: 'AI threat generation failed', details: err instanceof Error ? err.message : 'Unknown error' });
+    logger.error('[Plan] AI threat generation failed', {
+      event: 'PLAN_AI_THREAT_GENERATION_FAILED', projectId: req.params.projectId, ...errorContext(err),
+    });
+    res.status(502).json({ error: 'AI threat generation failed' });
   }
 });
 

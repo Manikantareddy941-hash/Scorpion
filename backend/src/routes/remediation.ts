@@ -5,7 +5,7 @@ import simpleGit from 'simple-git';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { logger, errorContext, errorMessage } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { aiLimiter } from '../middleware/rateLimiters';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
@@ -158,9 +158,8 @@ router.post('/create-pr', aiLimiter, async (req: AuthenticatedRequest, res: Resp
     });
 
   } catch (err: unknown) {
-    const message = errorMessage(err);
     logger.error('[SCORPION] PR creation failed:', { event: 'REMEDIATION_PR_CREATE_FAILED', ...errorContext(err) });
-    return res.status(500).json({ error: message });
+    return res.status(500).json({ error: 'Failed to create remediation pull request' });
   } finally {
     // Always clean up the temp clone
     await fs.rm(tmpDir, { recursive: true, force: true });

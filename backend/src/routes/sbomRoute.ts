@@ -3,7 +3,7 @@ import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
 import crypto from 'crypto';
-import { logger, errorMessage } from '../services/logger';
+import { logger } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -169,7 +169,7 @@ router.get('/:repoId', async (req: AuthenticatedRequest, res: Response) => {
 
     } catch (err: unknown) {
         logger.error('[SBOM Route] Error:', err);
-        res.status(500).json({ error: errorMessage(err) || 'Failed to generate SBOM' });
+        res.status(500).json({ error: 'Failed to generate SBOM' });
     }
 });
 

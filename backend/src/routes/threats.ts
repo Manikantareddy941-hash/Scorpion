@@ -41,7 +41,7 @@ router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => 
     });
   } catch (err) {
     logger.error('[Falco Webhook] Failed to process webhook event:', err);
-    res.status(500).json({ error: 'Webhook processing failed', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
@@ -52,7 +52,7 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
     res.json(await threatsService.listThreats(userId));
   } catch (err) {
     logger.error('[GET Threats API] Failed to retrieve threats:', err);
-    res.status(500).json({ error: 'Failed to retrieve threats', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Failed to retrieve threats' });
   }
 });
 
@@ -64,7 +64,7 @@ router.post('/clear', verifyUser, async (req: AuthenticatedRequest, res: Respons
     res.json({ status: 'success', message: 'All pipeline threats cleared and reset.' });
   } catch (err) {
     logger.error('[Clear Threats API] Failed to reset states:', err);
-    res.status(500).json({ error: 'Clear operation failed', details: err instanceof Error ? err.message : 'unknown error' });
+    res.status(500).json({ error: 'Clear operation failed' });
   }
 });
 

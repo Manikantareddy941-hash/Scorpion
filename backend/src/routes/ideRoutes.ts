@@ -188,7 +188,7 @@ router.post('/scan', verifyIdeAccess, async (req: Request, res: Response) => {
 
   } catch (error: unknown) {
     logger.error('[IDE Route] Scan failed:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    res.status(500).json({ error: 'Scan failed' });
   }
 });
 

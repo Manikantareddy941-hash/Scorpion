@@ -239,29 +239,28 @@ jobs:
       # details, jsonwebtoken internals or SMTP hostnames to anyone who can reach
       # the host.
       #
-      # 52 is a MEASURED baseline, not a work queue. 94 before sweep 1 (-21:
-      # projectRoutes, threatModelRoutes, gateRoutes, webhookRoutes), 73 before
-      # sweep 2 (-21: alerts, buildRoutes, deployRoutes, pipelineRoutes,
-      # autotuneRoutes). It includes two categories that are probably fine and
-      # one that is not:
+      # 31 is the TERMINAL baseline — the floor, not a work queue with items left
+      # on it. 94 -> 73 -> 52 -> 31 across three sweeps; every site that returned
+      # internal error text from a 5xx has been converted.
       #
-      #   details: err.message on a 500   the real leak, and the bulk of it
-      #   error: err.message on a 403     usually a deliberate authorization
-      #                                   message thrown by our own code
-      #   parsed.error.issues[0].message  Zod validation feedback on a 400 —
-      #                                   the caller's own input, correct to return
+      # What the remaining 31 are, and why they stay:
       #
-      # The tool cannot tell Zod from Appwrite because both are `.message`, so the
-      # baseline is left un-adjusted rather than pre-subtracted. A number nobody
-      # can reproduce is worse than one that is honestly too high.
+      #   error: err.message on a 403/409   deliberate authorization and state
+      #                                     feedback (TenantAccessError,
+      #                                     CanaryAccessError, CanaryStateError)
+      #                                     thrown by our own code — about the
+      #                                     caller's own access, not internals
+      #   parsed.error.issues[0].message    Zod validation on a 400 — the
+      #                                     caller's own input
       #
-      # The floor is roughly 31, not 0: 19 sites of 403 TenantAccessError /
-      # CanaryAccessError text and 12 of 4xx input validation are deliberate and
-      # must survive. Driving this to 0 would break authorization feedback and
-      # Zod messages both.
+      # The tool cannot tell Zod from Appwrite because both are `.message`, which
+      # is why this number is not 0 and MUST NOT be driven to 0. Lowering it
+      # further means deleting authorization feedback or validation messages the
+      # client legitimately needs. If this fails, the right response is almost
+      # always to fix the new site, never to raise the number.
       - name: Response Error Leak
         working-directory: backend
-        run: node scripts/auditResponseErrorLeaks.js --max=52
+        run: node scripts/auditResponseErrorLeaks.js --max=31
 
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the

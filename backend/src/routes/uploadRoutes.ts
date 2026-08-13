@@ -7,6 +7,7 @@ import { Models } from 'node-appwrite';
 import { Request } from 'express';
 import { ingestZip, cleanupWorkspace } from '../services/ingestionService';
 import { uploadLimiter } from '../middleware/rateLimiters';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -101,7 +102,12 @@ router.post('/zip', uploadLimiter, upload.single('project_zip'), async (req: Aut
         res.json(result);
     } catch (err: unknown) {
         if (req.file) cleanupWorkspace(req.file.path);
-        res.status(500).json({ error: err instanceof Error ? err.message : 'Unknown error' });
+        // No req.file.path as a correlator: it is a server-side temp path, and
+        // the old body handed the caller filesystem layout on any fs error.
+        logger.error('[Upload] processing failed', {
+            event: 'UPLOAD_PROCESSING_FAILED', originalName: req.file?.originalname, ...errorContext(err),
+        });
+        res.status(500).json({ error: 'Failed to process upload' });
     }
 });
 
