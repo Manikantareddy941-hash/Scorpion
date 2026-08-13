@@ -22,8 +22,32 @@
  * test's environment.
  */
 
-/** Environments where a signature requirement is enforced rather than advisory. */
-const ENFORCED_ENVIRONMENTS = ['prod'] as const;
+/**
+ * Environments where a signature requirement is enforced rather than advisory.
+ *
+ * BOTH SPELLINGS, and that is the whole point. The two callers of this module do
+ * not share a vocabulary:
+ *
+ *   k8sAdmission   GateEnv          -> 'prod'
+ *   deployService  DeployEnvironment -> 'production'
+ *
+ * The list held only 'prod', so `signatureEnforcementActive('production')` was
+ * false unconditionally and the deploy path's signature block — and the
+ * provenance gate layered on top of it — never ran. The admission webhook
+ * enforced, the deploy path an operator actually calls did not, which is exactly
+ * the split this module was extracted to end. It drifted anyway, through the
+ * argument's vocabulary rather than the predicate.
+ *
+ * Compared after normalisation so a config that says 'Production' or ' prod '
+ * does not silently disarm the gate either. A gate that fails open on a string
+ * mismatch gives no sign it is off.
+ */
+const ENFORCED_ENVIRONMENTS: readonly string[] = ['prod', 'production'];
+
+/** Trimmed and lower-cased, so casing and stray whitespace cannot disarm a gate. */
+function canonicalEnvironment(environment: string): string {
+    return environment.trim().toLowerCase();
+}
 
 /**
  * True when an unsigned or unverifiable image must be blocked.
@@ -36,7 +60,7 @@ const ENFORCED_ENVIRONMENTS = ['prod'] as const;
 export function signatureEnforcementActive(environment: string): boolean {
     return (
         process.env.REQUIRE_IMAGE_SIGNATURE === 'true' &&
-        (ENFORCED_ENVIRONMENTS as readonly string[]).includes(environment)
+        ENFORCED_ENVIRONMENTS.includes(canonicalEnvironment(environment))
     );
 }
 
