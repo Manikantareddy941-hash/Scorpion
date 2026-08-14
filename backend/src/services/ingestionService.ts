@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import unzipper from 'unzipper';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const MAX_ENTRY_SIZE = 50 * 1024 * 1024;         // 50MB per extracted file
 const MAX_TOTAL_UNCOMPRESSED = 300 * 1024 * 1024; // 300MB total — zip-bomb guard
@@ -93,7 +93,7 @@ export const ingestZip = async (filePath: string, projectId: string, userId: str
         };
 
     } catch (err) {
-        logger.error('[IngestionService] Error:', err);
+        logger.error('[IngestionService] Error:', { event: 'INGESTION_FAILED', ...errorContext(err) });
         throw err;
     }
 };
@@ -105,6 +105,6 @@ export const cleanupWorkspace = (dirPath: string) => {
             logger.info(`[IngestionService] Cleaned up: ${dirPath}`);
         }
     } catch (err) {
-        logger.error('[IngestionService] Cleanup error:', err);
+        logger.error('[IngestionService] Cleanup error:', { event: 'INGESTION_CLEANUP_FAILED', ...errorContext(err) });
     }
 };

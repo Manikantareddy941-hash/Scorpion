@@ -1,7 +1,7 @@
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { sendSlackNotification } from './slackService';
 import { freezeReleaseGateForIncident, isCriticalSeverity } from './incidentActionService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const notifySlack = async (payload: { title: string; severity: string; source: string; incidentId: string }) => {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
@@ -17,7 +17,7 @@ const notifySlack = async (payload: { title: string; severity: string; source: s
       incidentId: payload.incidentId,
     });
   } catch (err) {
-    logger.error('[Incident Service] Failed to send Slack notification:', err);
+    logger.error('[Incident Service] Failed to send Slack notification:', { event: 'INCIDENT_SLACK_NOTIFY_FAILED', ...errorContext(err) });
   }
 };
 
@@ -73,7 +73,7 @@ export async function createIncident(incident: Incident) {
 
     return doc;
   } catch (error) {
-    logger.error('[Incident Service] Failed to create incident:', error);
+    logger.error('[Incident Service] Failed to create incident:', { event: 'INCIDENT_CREATE_FAILED', ...errorContext(error) });
     throw error;
   }
 }

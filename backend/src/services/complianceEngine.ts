@@ -1,6 +1,6 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { fetchAllDocuments } from '../lib/paginate';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const SOC2_CONTROLS = [
   { controlId: 'CC6.1', title: 'Logical access controls', framework: 'SOC2',
@@ -122,7 +122,7 @@ export async function evaluateCompliance(userId: string) {
     
     return results;
   } catch (error) {
-    logger.error('[Compliance Engine] Evaluation failed:', error);
+    logger.error('[Compliance Engine] Evaluation failed:', { event: 'COMPLIANCE_EVALUATION_FAILED', ...errorContext(error) });
     throw error;
   }
 }

@@ -3,7 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { reportQueue } from '../queues/reportQueue';
 import { generateSecuritySummary } from './aiService';
 import { sendAiReportEmail } from './emailService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { marked } from 'marked';
 
 /**
@@ -103,7 +103,9 @@ export const initReportScheduler = () => {
     cron.schedule('* * * * *', () => {
         reconcileReportSchedules().catch(error =>
             // Log safely, the collection might not exist during setup
-            logger.error('[ReportScheduler] Error reconciling report schedules (ensure collection exists):', error)
+            logger.error('[ReportScheduler] Error reconciling report schedules (ensure collection exists):', {
+                event: 'SCHEDULER_REPORT_RECONCILE_FAILED', ...errorContext(error),
+            })
         );
     });
 };

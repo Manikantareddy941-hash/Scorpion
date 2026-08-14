@@ -106,7 +106,9 @@ export const getEffectivePolicy = async (repoId: string) => {
             return response.documents[0];
         }
     } catch (err) {
-        logger.warn(`[PolicyService] Error fetching policy for repo ${repoId}:`, err);
+        logger.warn(`[PolicyService] Error fetching policy for repo ${repoId}:`, {
+            event: 'POLICY_REPO_FETCH_FAILED', repoId, ...errorContext(err),
+        });
     }
 
     // Default policy

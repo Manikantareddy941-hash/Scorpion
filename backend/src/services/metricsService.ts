@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 export interface AIEvent {
     finding_id: string;
@@ -36,7 +36,7 @@ export const recordAIEvent = async (event: AIEvent) => {
             created_at: new Date().toISOString()
         });
     } catch (err) {
-        logger.error('[MetricsService] Failed to record AI event:', err);
+        logger.error('[MetricsService] Failed to record AI event:', { event: 'METRICS_AI_EVENT_RECORD_FAILED', ...errorContext(err) });
         throw err;
     }
 };
@@ -70,7 +70,7 @@ export const getAIAggregates = async (userId: string) => {
             avg_confidence_accepted: avgConfidenceAccepted
         };
     } catch (err) {
-        logger.error('[MetricsService] Failed to get aggregates:', err);
+        logger.error('[MetricsService] Failed to get aggregates:', { event: 'METRICS_AGGREGATE_READ_FAILED', ...errorContext(err) });
         return {
             total_events: 0,
             viewed: 0,
@@ -106,7 +106,7 @@ export const getAITrends = async (userId: string) => {
 
         return Object.values(trendsMap).sort((a, b) => a.date.localeCompare(b.date));
     } catch (err) {
-        logger.error('[MetricsService] Failed to get trends:', err);
+        logger.error('[MetricsService] Failed to get trends:', { event: 'METRICS_TREND_READ_FAILED', ...errorContext(err) });
         return [];
     }
 };

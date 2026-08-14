@@ -76,7 +76,13 @@ export class PipelineLogger {
     const errorDetail = error instanceof Error ? (error.stack || error.message) : (error ? JSON.stringify(error) : '');
     const formatted = `[${new Date().toISOString()}] [ERROR] ${message} ${errorDetail}\n`;
     await fs.appendFile(this.logPath, formatted);
-    logger.error(`[PipelineLogger] ${message}`, error);
+    // Spread only when there IS an error: errorContext(undefined) would stamp
+    // `error: "undefined"` on every call this method makes without one, which
+    // reads as a failure with an unknown cause rather than a message with none.
+    logger.error(`[PipelineLogger] ${message}`, {
+      event: 'PIPELINE_STAGE_ERROR',
+      ...(error !== undefined ? errorContext(error) : {}),
+    });
   }
 
   async getLogs(): Promise<string> {
@@ -646,7 +652,9 @@ export async function triggerPipelineRun(
 
   // 4. Run pipeline asynchronously
   runPipeline(runId).catch(err => {
-    logger.error(`[PipelineTrigger] Async execution failed for run ${runId}:`, err);
+    logger.error(`[PipelineTrigger] Async execution failed for run ${runId}:`, {
+      event: 'PIPELINE_ASYNC_EXECUTION_FAILED', runId, ...errorContext(err),
+    });
   });
 
   return runId;

@@ -1,7 +1,7 @@
 import { webhookRepository } from '../repositories/webhookRepository';
 import { enqueueScan } from '../queues/scanQueue';
 import { triggerPipelineRun } from '../services/pipelineService';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { GithubAppInstallPayload, GithubWebhookPayload, GitlabWebhookPayload, TestReportPayload } from '../types/webhook.types';
 
 export const webhookIngestService = {
@@ -32,12 +32,14 @@ export const webhookIngestService = {
           timestamp: workflowRun.updated_at || workflowRun.created_at || new Date().toISOString()
         });
       } catch (err) {
-        logger.error('[Webhook] Failed to log build:', err);
+        logger.error('[Webhook] Failed to log build:', { event: 'WEBHOOK_BUILD_RECORD_FAILED', ...errorContext(err) });
       }
 
       if (status === 'success') {
         enqueueScan(repo.$id, {}).catch(err => {
-          logger.error(`[Webhook] Failed to enqueue scan for ${repo.$id}:`, err);
+          logger.error(`[Webhook] Failed to enqueue scan for ${repo.$id}:`, {
+            event: 'WEBHOOK_SCAN_ENQUEUE_FAILED', repoId: repo.$id, ...errorContext(err),
+          });
         });
       }
     }
@@ -97,7 +99,7 @@ export const webhookIngestService = {
               is_sensitive: isSensitive
             });
           } catch (err) {
-            logger.error('[Webhook] Failed to log commit:', err);
+            logger.error('[Webhook] Failed to log commit:', { event: 'WEBHOOK_COMMIT_RECORD_FAILED', ...errorContext(err) });
           }
         }
       }

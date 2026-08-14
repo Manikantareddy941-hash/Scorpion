@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const GITHUB_API_URL = 'https://api.github.com';
 
@@ -24,7 +24,9 @@ export const getRepoMetadata = async (repoUrl: string) => {
             last_pushed: data.pushed_at,
         };
     } catch (error) {
-        logger.error(`[GitHub Service] Failed to fetch metadata for ${repoUrl}`, error);
+        logger.error(`[GitHub Service] Failed to fetch metadata for ${repoUrl}`, {
+            event: 'GITHUB_METADATA_FETCH_FAILED', ...errorContext(error),
+        });
         return null;
     }
 };
