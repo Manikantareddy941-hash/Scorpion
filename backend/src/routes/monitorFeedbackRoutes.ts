@@ -7,7 +7,7 @@ import { mttr, reopenRate, escapeByPhase, escapeRecommendations, slaAttainment, 
 
 /** Repo scan cap. Hitting it means the metrics describe a subset — reported as `truncated`. */
 const REPO_SCAN_LIMIT = 500;
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthedRequest extends Request<Record<string, string>> { user?: Models.User<Models.Preferences>; }
 const router = Router();
@@ -99,7 +99,14 @@ router.get('/', verifyUser, async (req: AuthedRequest, res: Response) => {
       byRepo: mttrByRepo(all, repoNames),
       truncated,
     });
-  } catch (err) { logger.error('[feedbackRoutes] failed', err); res.status(500).json({ error: 'Internal server error' }); }
+  } catch (err) {
+    logger.error('[feedbackRoutes] failed', {
+      event: 'FEEDBACK_METRICS_FAILED',
+      userId: req.user?.$id,
+      ...errorContext(err),
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

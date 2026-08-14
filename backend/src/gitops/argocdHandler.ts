@@ -8,7 +8,7 @@ import { withSpan } from '../services/tracing';
 import { createIncident } from '../services/incidentService';
 import axios from 'axios';
 import { auditLog } from '../services/auditService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 export interface ArgoCDSyncPayload {
   app: string;
@@ -134,6 +134,13 @@ export async function handleArgoCDSync(payload: ArgoCDSyncPayload) {
     }
 
   } catch (error) {
-    logger.error(`[ArgoCD Handler] Error processing sync:`, error);
+    logger.error(`[ArgoCD Handler] Error processing sync:`, {
+      event: 'ARGOCD_SYNC_PROCESSING_FAILED',
+      app: payload.app,
+      namespace: payload.namespace,
+      image: payload.image,
+      revision: payload.revision,
+      ...errorContext(error),
+    });
   }
 }

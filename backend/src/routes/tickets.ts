@@ -12,7 +12,7 @@ import {
   addLinkSchema,
   addCommentSchema
 } from '../types/tickets.types';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import {
   canAccessResource,
   resolveOwnershipScope,
@@ -210,7 +210,12 @@ router.patch('/:id', requireTicketAccess, validateBody(updateTicketSchema), asyn
     if (!updated) return res.status(404).json({ error: 'Ticket not found' });
     res.json(updated);
   } catch (err) {
-    logger.error('Error in PATCH ticket:', err);
+    logger.error('Error in PATCH ticket:', {
+      event: 'TICKET_UPDATE_FAILED',
+      userId: req.user?.$id,
+      ticketId: req.params.id,
+      ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to update ticket' });
   }
 }));

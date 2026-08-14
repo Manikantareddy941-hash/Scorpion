@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { handleArgoCDSync } from '../gitops/argocdHandler';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { secretMatches } from '../utils/constantTimeCompare';
 
 const router = Router();
@@ -31,7 +31,14 @@ router.post('/sync', verifyScorpionSecret, async (req: Request, res: Response) =
   
   // Run background scan (fire and forget)
   handleArgoCDSync({ app, image, revision, repo, namespace }).catch(err => {
-    logger.error('[GitOps] Background sync processing failed:', err);
+    logger.error('[GitOps] Background sync processing failed:', {
+      event: 'GITOPS_SYNC_DISPATCH_FAILED',
+      app,
+      namespace,
+      image,
+      revision,
+      ...errorContext(err),
+    });
   });
 });
 

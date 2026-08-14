@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { terminalLimiter } from '../middleware/rateLimiters';
 import { resolveRole } from '../middleware/requireRole';
 import { logSecureAuditEvent } from '../utils/tamperAuditLogger';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { dispatch, listCommands, CommandError, type TerminalContext } from '../services/terminal/commands';
 import { registerBuiltins } from '../services/terminal/builtins';
 import { registerDomainVerbs } from '../services/terminal/domainVerbs';
@@ -49,7 +49,9 @@ router.get('/commands', async (req: AuthedRequest, res: Response) => {
             })),
         });
     } catch (err) {
-        logger.error('[terminal] command list failed:', err);
+        logger.error('[terminal] command list failed:', {
+            event: 'terminal_command_list_failed', userId: req.user?.$id, ...errorContext(err),
+        });
         res.status(500).json({ error: 'Failed to list commands' });
     }
 });
@@ -66,7 +68,9 @@ router.post('/exec', terminalLimiter, async (req: AuthedRequest, res: Response) 
     } catch (err) {
         // resolveRole throws rather than defaulting, so a ROLES outage lands here.
         // Fail closed: no role means no command runs.
-        logger.error('[terminal] role resolution failed — refusing command:', err);
+        logger.error('[terminal] role resolution failed — refusing command:', {
+            event: 'terminal_role_resolution_failed', userId: req.user?.$id, ...errorContext(err),
+        });
         return res.status(503).json({ error: 'Role verification unavailable — command refused' });
     }
 
@@ -117,7 +121,10 @@ router.post('/exec', terminalLimiter, async (req: AuthedRequest, res: Response) 
             outcome = 'error';
             status = 500;
             errorMessage = 'Command failed';
-            logger.error('[terminal] handler fault:', err);
+            logger.error('[terminal] handler fault:', {
+                event: 'terminal_handler_fault', userId: ctx.userId, command: verb, mutating,
+                ...errorContext(err),
+            });
         }
     }
 

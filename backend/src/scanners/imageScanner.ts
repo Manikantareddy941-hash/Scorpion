@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const execFileAsync = promisify(execFile);
 
@@ -25,7 +25,11 @@ export async function scanImage(image: string): Promise<ImageScanResult> {
 
     return { vulnerabilities, raw: result };
   } catch (error) {
-    logger.error(`[Image Scanner] Failed to scan image ${image}:`, error);
+    logger.error(`[Image Scanner] Failed to scan image ${image}:`, {
+      event: 'IMAGE_SCAN_FAILED',
+      image,
+      ...errorContext(error),
+    });
     throw error;
   }
 }

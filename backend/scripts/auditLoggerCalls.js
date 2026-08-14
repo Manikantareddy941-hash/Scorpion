@@ -59,11 +59,12 @@
  * USAGE
  *   node scripts/auditLoggerCalls.js            summary
  *   node scripts/auditLoggerCalls.js --list     every offending site
- *   node scripts/auditLoggerCalls.js --max=150  ratchet: exit 1 above the baseline
+ *   node scripts/auditLoggerCalls.js --max=0    exit 1 above the baseline
  *
- * Ratchet, not cliff: --max lets CI hold the line while the conversion lands
- * incrementally. Lower the number as the count drops; the pass is finished at
- * --max=0.
+ * --max let CI hold the line while the conversion landed incrementally. The
+ * conversion is finished and CI now runs --max=0, so this is a regression guard
+ * rather than a ratchet. A new offending site is a new site, not a higher
+ * baseline: convert the call, do not raise the number.
  *
  * SCOPE, so the number is not misread: isAcceptable() treats a bare
  * `errorContext(err)` call and an object literal as equally acceptable. The

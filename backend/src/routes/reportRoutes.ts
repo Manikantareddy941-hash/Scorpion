@@ -152,7 +152,14 @@ const handleExport = async (req: AuthenticatedRequest, res: Response) => {
 
         res.status(400).json({ error: 'Invalid format' });
     } catch (err: unknown) {
-        logger.error('[Export Error]', err);
+        logger.error('[Export Error]', {
+            event: 'REPORT_EXPORT_FAILED',
+            userId,
+            repoId: repo_id,
+            format,
+            headersSent: res.headersSent,
+            ...errorContext(err),
+        });
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -200,7 +207,13 @@ router.get('/posture', verifyUser, async (req: AuthenticatedRequest, res: Respon
         res.setHeader('Content-Disposition', 'attachment; filename="scorpion-posture-report.pdf"');
         res.send(buffer);
     } catch (err: unknown) {
-        logger.error('[Posture Report Error]', err);
+        logger.error('[Posture Report Error]', {
+            event: 'REPORT_POSTURE_FAILED',
+            userId,
+            scope,
+            scopeId: id,
+            ...errorContext(err),
+        });
         res.status(500).json({ error: 'Failed to generate posture report' });
     }
 });

@@ -1,7 +1,7 @@
 import express, { Request } from 'express';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { Query, Models } from 'node-appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
@@ -77,7 +77,12 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const result = await databases.listDocuments(DB_ID, COLLECTIONS.VULNERABILITIES, filters);
     res.json(result);
   } catch (err: unknown) {
-    logger.error('[IssuesRoute] Error:', err);
+    logger.error('[IssuesRoute] Error:', {
+      event: 'ISSUES_LIST_FAILED',
+      userId: req.user?.$id,
+      repoId: req.query.repoId,
+      ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to list issues' });
   }
 });
