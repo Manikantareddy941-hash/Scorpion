@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 export type Role = 'owner' | 'admin' | 'developer' | 'viewer';
 
@@ -55,7 +55,7 @@ export const getUserEffectiveRole = async (userId: string, repoId: string): Prom
 
         return found ? highestRole : null;
     } catch (err) {
-        logger.error('[RBAC] Error resolving role:', err);
+        logger.error('[RBAC] Error resolving role:', { event: 'RBAC_ROLE_RESOLVE_FAILED', ...errorContext(err) });
         return null;
     }
 };
@@ -88,6 +88,6 @@ export const logRbacAction = async (data: {
             created_at: new Date().toISOString()
         });
     } catch (err) {
-        logger.error('[RBAC] Failed to log action:', err);
+        logger.error('[RBAC] Failed to log action:', { event: 'RBAC_ACTION_AUDIT_FAILED', ...errorContext(err) });
     }
 };

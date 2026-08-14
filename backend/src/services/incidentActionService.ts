@@ -1,5 +1,5 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 import { isAppwriteError } from '../utils/errorGuards';
 
 const CRITICAL_SEVERITIES = new Set(['critical']);
@@ -17,7 +17,9 @@ async function ensurePipelineStateCollection() {
         await databases.createStringAttribute(DB_ID, 'pipeline_state', 'status', 50, true);
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr) {
-        logger.error('[Incident Response] Error creating pipeline_state collection:', createErr);
+        logger.error('[Incident Response] Error creating pipeline_state collection:', {
+            event: 'GATE_STATE_COLLECTION_CREATE_FAILED', ...errorContext(createErr),
+        });
       }
     }
   }
@@ -56,6 +58,7 @@ export async function freezeReleaseGateForIncident(reason: string): Promise<void
   } catch (err) {
     // Containment is best-effort - a failure here must never prevent the
     // incident itself from being recorded/alerted on.
-    logger.error('[Incident Response] Failed to freeze release gate:', err);
+    // A release gate that fails to freeze during an incident keeps shipping.
+    logger.error('[Incident Response] Failed to freeze release gate:', { event: 'INCIDENT_GATE_FREEZE_FAILED', ...errorContext(err) });
   }
 }

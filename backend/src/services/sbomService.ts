@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 const execFileAsync = promisify(execFile);
 const SBOM_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
@@ -79,7 +79,7 @@ export const generateSBOM = async (repoId: string, format: 'json' | 'csv' = 'jso
         const outputPath = `${tempDir}_out.${format}`;
         if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
         
-        logger.error('[SBOM] Error:', err);
+        logger.error('[SBOM] Error:', { event: 'SBOM_GENERATION_FAILED', ...errorContext(err) });
         throw err;
     }
 };

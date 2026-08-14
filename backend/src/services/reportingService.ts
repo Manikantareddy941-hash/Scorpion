@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { fetchAllDocuments } from '../lib/paginate';
-import { logger } from './logger';
+import { logger, errorContext } from './logger';
 
 // Heuristic mapping of tool results to OWASP Top 10 categories
 const MAP_OWASP = (finding: any) => {
@@ -144,7 +144,7 @@ export const getSecurityPostureStats = async (userId: string, scope: 'global' | 
 
         return stats;
     } catch (err) {
-        logger.error('[Reporting] Error generating stats:', err);
+        logger.error('[Reporting] Error generating stats:', { event: 'REPORT_STATS_FAILED', ...errorContext(err) });
         return null;
     }
 };
@@ -171,7 +171,7 @@ export const getTrendData = async (userId: string, repoIds: string[]) => {
             };
         });
     } catch (err) {
-        logger.error('[Reporting] Error getting trend data:', err);
+        logger.error('[Reporting] Error getting trend data:', { event: 'REPORT_TREND_READ_FAILED', ...errorContext(err) });
         return [];
     }
 };
