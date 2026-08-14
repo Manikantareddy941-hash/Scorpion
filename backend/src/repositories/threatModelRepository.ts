@@ -1,6 +1,6 @@
 import { Models } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { isPostgresEnabled } from '../db/pool';
 import { threatModelPgRepository } from './pg/threatModelPgRepository';
 
@@ -39,10 +39,14 @@ const legacyThreatModelRepository = {
           // Wait 3 seconds for attributes to propagate in Appwrite
           await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (createErr) {
-          logger.error('[Threat Model Service] Error creating collection or attributes:', createErr);
+          logger.error('[Threat Model Service] Error creating collection or attributes:', {
+            event: 'THREAT_MODEL_COLLECTION_CREATE_FAILED', ...errorContext(createErr),
+          });
         }
       } else {
-        logger.error('[Threat Model Service] Unexpected error checking threat_models collection:', err);
+        logger.error('[Threat Model Service] Unexpected error checking threat_models collection:', {
+          event: 'THREAT_MODEL_COLLECTION_CHECK_FAILED', ...errorContext(err),
+        });
       }
     }
   },

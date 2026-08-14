@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import { newId } from './docTable';
 
 /**
@@ -114,7 +114,9 @@ export const ciTokenRepository = {
       return { tokenId: row.id, user_id: row.user_id, team_id: row.team_id, scope: row.scope };
     } catch (err) {
       // Fail closed: a storage outage must reject, never admit.
-      logger.error('[ciTokenRepository] verify failed — rejecting', err);
+      // No token, hash or prefix as a correlator: this is the CI credential
+      // verification path, and the value being verified is the secret itself.
+      logger.error('[ciTokenRepository] verify failed — rejecting', { event: 'CI_TOKEN_VERIFY_FAILED', ...errorContext(err) });
       return null;
     }
   },

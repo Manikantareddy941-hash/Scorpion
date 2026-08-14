@@ -1,5 +1,5 @@
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import { newId } from './docTable';
 import type { Correlation, RuleState, Severity } from '../../monitor/securityEvent.types';
 
@@ -32,7 +32,7 @@ export const correlationPgRepository = {
       );
       return res.rows.length > 0;
     } catch (err) {
-      logger.error('[correlationPgRepository] wasFired failed', err);
+      logger.error('[correlationPgRepository] wasFired failed', { event: 'CORRELATION_FIRED_CHECK_FAILED', ...errorContext(err) });
       return true; // fail-secure: assume already fired → don't double-page
     }
   },
@@ -86,7 +86,7 @@ export const correlationPgRepository = {
         severityOverride: row.severity_override ?? undefined,
       }));
     } catch (err) {
-      logger.error('[correlationPgRepository] listRuleStates failed', err);
+      logger.error('[correlationPgRepository] listRuleStates failed', { event: 'CORRELATION_RULE_STATES_READ_FAILED', ...errorContext(err) });
       return []; // no overrides → catalog defaults (all enabled)
     }
   },
