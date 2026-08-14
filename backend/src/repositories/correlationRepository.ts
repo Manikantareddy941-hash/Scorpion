@@ -1,6 +1,6 @@
 import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { Correlation, RuleState, Severity } from '../monitor/securityEvent.types';
 import { isPostgresEnabled } from '../db/pool';
 import { correlationPgRepository } from './pg/correlationPgRepository';
@@ -17,7 +17,7 @@ const legacyCorrelationRepository = {
       ]);
       return res.total > 0;
     } catch (err) {
-      logger.error('[correlationRepository] wasFired failed', err);
+      logger.error('[correlationRepository] wasFired failed', { event: 'CORRELATION_FIRED_CHECK_FAILED', ...errorContext(err) });
       return true; // fail-secure: assume already fired → don't double-page
     }
   },
@@ -53,7 +53,7 @@ const legacyCorrelationRepository = {
         return { id: w.ruleId as string, enabled: w.enabled as boolean, severityOverride: w.severityOverride as Severity | undefined };
       });
     } catch (err) {
-      logger.error('[correlationRepository] listRuleStates failed', err);
+      logger.error('[correlationRepository] listRuleStates failed', { event: 'CORRELATION_RULE_STATES_READ_FAILED', ...errorContext(err) });
       return []; // no overrides → catalog defaults (all enabled)
     }
   },

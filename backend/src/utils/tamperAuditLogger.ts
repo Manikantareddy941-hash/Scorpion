@@ -26,7 +26,9 @@ export async function ensureAuditLogsV2Collection() {
         logger.info('[Audit Logs Setup] audit_logs_v2 collection and attributes created.');
         await new Promise(resolve => setTimeout(resolve, 3000));
       } catch (createErr) {
-        logger.error('[Audit Logs Setup] Error creating collection or attributes:', createErr);
+        logger.error('[Audit Logs Setup] Error creating collection or attributes:', {
+          event: 'AUDIT_COLLECTION_SETUP_FAILED', ...errorContext(createErr),
+        });
       }
     }
   }
@@ -194,7 +196,11 @@ export async function logSecureAuditEvent(
           `could not read the previous ledger block to chain to (${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)})`,
         );
       }
-      logger.error('[Secure Audit Log] Failed to fetch last audit log to chain hash:', fetchErr);
+      // The hash chain is what makes the ledger tamper-evident; a block written
+      // without its predecessor's hash is a seam a verifier will later flag.
+      logger.error('[Secure Audit Log] Failed to fetch last audit log to chain hash:', {
+        event: 'AUDIT_CHAIN_TAIL_READ_FAILED', ...errorContext(fetchErr),
+      });
     }
 
     // 2. Position in the chain. A legacy row (written before this attribute

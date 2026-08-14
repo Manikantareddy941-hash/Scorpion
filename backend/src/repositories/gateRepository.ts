@@ -1,5 +1,5 @@
 import { databases, DB_ID, Query, ID } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { GateBlocker, PipelineGateStatus } from '../types/gate.types';
 
 export const gateRepository = {
@@ -20,7 +20,9 @@ export const gateRepository = {
           logger.info('[Pipeline State Setup] pipeline_state collection created.');
           await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (createErr) {
-          logger.error('[Pipeline State Setup] Error creating pipeline_state collection:', createErr);
+          logger.error('[Pipeline State Setup] Error creating pipeline_state collection:', {
+            event: 'GATE_STATE_COLLECTION_CREATE_FAILED', ...errorContext(createErr),
+          });
         }
       }
     }

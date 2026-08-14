@@ -1,5 +1,5 @@
 import { getPool } from '../../db/pool';
-import { logger } from '../../services/logger';
+import { logger, errorContext } from '../../services/logger';
 import { newId } from './docTable';
 import type { SuppressionRule } from '../../monitor/suppressionMatcher';
 
@@ -32,7 +32,7 @@ export const suppressionPgRepository = {
       );
       return (result.rows as SuppressionRow[]).map(fromRow);
     } catch (err) {
-      logger.error('[suppressionPgRepository] list failed', err);
+      logger.error('[suppressionPgRepository] list failed', { event: 'SUPPRESSION_LIST_FAILED', ...errorContext(err) });
       return [];
     }
   },

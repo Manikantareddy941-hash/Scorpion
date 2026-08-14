@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { databases, DB_ID, COLLECTIONS, Query } from './lib/appwrite';
 import { scanQueue } from './queues/scanQueue';
 import { auditQueue } from './queues/auditQueue';
-import { logger } from './services/logger';
+import { logger, errorContext } from './services/logger';
 
 /**
  * Scheduled repo scans via BullMQ job schedulers (Redis-backed) instead of
@@ -87,7 +87,7 @@ export const initScheduler = () => {
     logger.info('[Scheduler] Initializing scan schedule reconciler...');
     cron.schedule('* * * * *', () => {
         reconcileScanSchedules().catch(error =>
-            logger.error('[Scheduler] Error reconciling scan schedules:', error)
+            logger.error('[Scheduler] Error reconciling scan schedules:', { event: 'SCHEDULER_SCAN_RECONCILE_FAILED', ...errorContext(error) })
         );
     });
 
@@ -98,6 +98,8 @@ export const initScheduler = () => {
         .catch(error =>
             // Loud, because the failure mode is silent: no schedule means no
             // verification, and nothing else would ever mention it again.
-            logger.error('[Scheduler] FAILED to schedule audit verification — the ledger will NOT be checked:', error)
+            logger.error('[Scheduler] FAILED to schedule audit verification — the ledger will NOT be checked:', {
+                event: 'SCHEDULER_AUDIT_VERIFY_SCHEDULE_FAILED', ...errorContext(error),
+            })
         );
 };

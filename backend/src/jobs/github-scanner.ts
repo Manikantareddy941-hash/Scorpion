@@ -1,6 +1,6 @@
 import { triggerScan } from '../services/scanService';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 export const scanRepositories = async () => {
     logger.info('[Scanner] Starting repository scan cycle...');
@@ -32,6 +32,6 @@ export const scanRepositories = async () => {
             }
         }
     } catch (error) {
-        logger.error('[Scanner] Error in repository scan cycle:', error);
+        logger.error('[Scanner] Error in repository scan cycle:', { event: 'GITHUB_SCAN_CYCLE_FAILED', ...errorContext(error) });
     }
 };

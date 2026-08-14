@@ -10,7 +10,7 @@ import { correlationRepository } from '../repositories/correlationRepository';
 import { suppressionRepository } from '../repositories/suppressionRepository';
 import { isSuppressed } from '../monitor/suppressionMatcher';
 import { createIncident } from '../services/incidentService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { Correlation, CorrelationRule } from '../monitor/securityEvent.types';
 
 const MAX_WINDOW = 30 * 60_000;
@@ -107,7 +107,7 @@ export function startCorrelationWorker(): Worker<CorrelationTickPayload> {
   worker = new Worker<CorrelationTickPayload>(CORRELATION_QUEUE_NAME, async (job) => {
     const { ownerUserId } = job.data;
     try { await runCorrelationTick(ownerUserId); }
-    catch (err) { logger.error('[correlationWorker] tick failed', err); }
+    catch (err) { logger.error('[correlationWorker] tick failed', { event: 'CORRELATION_TICK_FAILED', ...errorContext(err) }); }
     finally { await enqueueCorrelationTick({ ownerUserId }, TICK_MS); } // self-re-enqueue
   }, { connection: redisConnection });
   return worker;

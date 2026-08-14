@@ -1,6 +1,6 @@
 import type { Models } from 'node-appwrite';
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { SuppressionRule } from '../monitor/suppressionMatcher';
 import { isPostgresEnabled } from '../db/pool';
 import { suppressionPgRepository } from './pg/suppressionPgRepository';
@@ -19,7 +19,7 @@ const legacySuppressionRepository = {
           reason: (w.reason as string) || undefined,
         };
       });
-    } catch (err) { logger.error('[suppressionRepository] list failed', err); return []; }
+    } catch (err) { logger.error('[suppressionRepository] list failed', { event: 'SUPPRESSION_LIST_FAILED', ...errorContext(err) }); return []; }
   },
 
   async create(owner: string, rule: Omit<SuppressionRule, 'id'>): Promise<SuppressionRule> {

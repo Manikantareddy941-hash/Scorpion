@@ -182,7 +182,7 @@ import { signingConfigBroken } from './services/metrics';
             }
         }
     } catch (err) {
-        logger.error('❌ [Recovery] Failed to run crash recovery:', err);
+        logger.error('❌ [Recovery] Failed to run crash recovery:', { event: 'CRASH_RECOVERY_FAILED', ...errorContext(err) });
     }
 })();
 
@@ -518,7 +518,10 @@ if (isPostgresEnabled()) {
         .query('SELECT 1')
         .then(() => logger.info('[db] Postgres connected — storage driver: postgres'))
         .catch((err: unknown) => {
-            logger.error('[db] DATABASE_URL is set but Postgres is unreachable — refusing to start', err);
+            // No DATABASE_URL as a correlator — it carries the password.
+            logger.error('[db] DATABASE_URL is set but Postgres is unreachable — refusing to start', {
+                event: 'DB_STARTUP_UNREACHABLE', ...errorContext(err),
+            });
             process.exit(1);
         });
 } else {

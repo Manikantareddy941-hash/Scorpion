@@ -1,5 +1,5 @@
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { gateRepository } from './gateRepository';
 import { ThreatStatus } from '../types/threats.types';
 
@@ -15,7 +15,7 @@ async function ensureOwnerUserIdAttribute(): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
   } catch (err) {
-    logger.error('[Threats Setup] Failed to ensure ownerUserId attribute:', err);
+    logger.error('[Threats Setup] Failed to ensure ownerUserId attribute:', { event: 'THREATS_ATTRIBUTE_ENSURE_FAILED', ...errorContext(err) });
   }
 }
 
@@ -46,10 +46,14 @@ export const threatsRepository = {
           // Wait 3 seconds for attributes to propagate in Appwrite
           await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (createErr) {
-          logger.error('[Threats Setup] Error creating collection or attributes:', createErr);
+          logger.error('[Threats Setup] Error creating collection or attributes:', {
+            event: 'THREATS_COLLECTION_CREATE_FAILED', ...errorContext(createErr),
+          });
         }
       } else {
-        logger.error('[Threats Setup] Unexpected error checking threats collection:', err);
+        logger.error('[Threats Setup] Unexpected error checking threats collection:', {
+          event: 'THREATS_COLLECTION_CHECK_FAILED', ...errorContext(err),
+        });
       }
     }
   },

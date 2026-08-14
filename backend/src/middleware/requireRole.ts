@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 /**
  * Role-verification (RBAC) middleware.
@@ -50,7 +50,7 @@ export const requireRole = (...allowed: string[]) => {
 
       next();
     } catch (err) {
-      logger.error('[RBAC] Role lookup failed:', err);
+      logger.error('[RBAC] Role lookup failed:', { event: 'RBAC_ROLE_LOOKUP_FAILED', ...errorContext(err) });
       return res.status(500).json({ error: 'Role verification failed' });
     }
   };
