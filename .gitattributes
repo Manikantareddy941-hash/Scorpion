@@ -31,3 +31,25 @@ Dockerfile text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf
 *.json text eol=lf
+
+# Documentation and config that none of the rules above reach. These were the
+# last source of whole-file churn: 1,279 insertions against 1,279 deletions
+# across 10 files, perfectly symmetric, and `git diff --ignore-all-space` on
+# them is empty — so none of it was a real edit. Left alone it contaminates
+# every `git add -A` and surfaces inside unrelated feature PRs.
+#
+# Same bargain as the .ts/.tsx block above: the commit adding these rules also
+# renormalizes the 10 files, because rules without renormalization leave the
+# rewrites to land one at a time later, and renormalization without rules just
+# lets CRLF come back on the next edit from Windows.
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.js   text eol=lf
+.prettierrc   text eol=lf
+.dockerignore text eol=lf
+
+# PowerShell reads LF without complaint. These two are edited on Windows, which
+# rewrites them CRLF every time. Note this is deliberately NOT a blanket
+# `* text=auto eol=lf`: the repo has a .bat file, and cmd.exe does require CRLF.
+*.ps1 text eol=lf
