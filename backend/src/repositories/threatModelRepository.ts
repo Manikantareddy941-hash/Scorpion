@@ -24,7 +24,7 @@ const legacyThreatModelRepository = {
         (err as { code?: number }).code === 404 || (err as { type?: string }).type === 'collection_not_found'
       );
       if (isMissing) {
-        logger.info('[Threat Model Service] THREAT_MODELS collection not found. Creating it...');
+        logger.info('[Threat Model Repository] THREAT_MODELS collection not found. Creating it...');
         try {
           await databases.createCollection(DB_ID, COLLECTIONS.THREAT_MODELS, 'Threat Models');
 
@@ -35,16 +35,16 @@ const legacyThreatModelRepository = {
           await databases.createStringAttribute(DB_ID, COLLECTIONS.THREAT_MODELS, 'createdBy', 255, true);
           await databases.createStringAttribute(DB_ID, COLLECTIONS.THREAT_MODELS, 'status', 50, true);
 
-          logger.info('[Threat Model Service] THREAT_MODELS collection and attributes created successfully.');
+          logger.info('[Threat Model Repository] THREAT_MODELS collection and attributes created successfully.');
           // Wait 3 seconds for attributes to propagate in Appwrite
           await new Promise(resolve => setTimeout(resolve, 3000));
         } catch (createErr) {
-          logger.error('[Threat Model Service] Error creating collection or attributes:', {
+          logger.error('[Threat Model Repository] Error creating collection or attributes:', {
             event: 'THREAT_MODEL_COLLECTION_CREATE_FAILED', ...errorContext(createErr),
           });
         }
       } else {
-        logger.error('[Threat Model Service] Unexpected error checking threat_models collection:', {
+        logger.error('[Threat Model Repository] Unexpected error checking threat_models collection:', {
           event: 'THREAT_MODEL_COLLECTION_CHECK_FAILED', ...errorContext(err),
         });
       }
