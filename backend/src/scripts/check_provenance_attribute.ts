@@ -95,9 +95,23 @@ async function inspect(collection: string): Promise<void> {
   }
 
   // String attributes are what consume the row-size budget.
+  //
+  // CHARACTERS, NOT BYTES. Appwrite's `size` is a character count. The
+  // underlying column is utf8mb4, where one character costs up to 4 bytes, so
+  // the row cost is up to 4x this figure. Reporting it as bytes would make the
+  // headroom look roughly four times larger than it is — which is the wrong
+  // direction for a number whose only job is to warn.
+  //
+  // The worst case is printed alongside rather than instead: 4x is the ceiling,
+  // not the actual storage of any particular row, and quoting only the ceiling
+  // would overstate the problem as badly as quoting only the character count
+  // understates it.
   const strings = attributes.filter((a) => a.type === 'string');
   const declared = strings.reduce((sum, a) => sum + (a.size ?? 0), 0);
-  console.log(`  string attributes: ${strings.length}, declared total ${declared} bytes`);
+  console.log(
+    `  string attributes: ${strings.length}, declared total ${declared} chars ` +
+      `(up to ${declared * 4} bytes at utf8mb4's 4 bytes/char)`,
+  );
 
   const widest = [...strings].sort((a, b) => (b.size ?? 0) - (a.size ?? 0)).slice(0, 3);
   for (const a of widest) {
