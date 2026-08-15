@@ -22,7 +22,6 @@
         "appwrite": "^26.2.0",
         "axios": "^1.19.0",
         "d3": "^7.9.0",
-        "docx": "^9.7.1",
         "dom-to-image": "^2.6.0",
         "framer-motion": "^12.42.2",
         "html2canvas": "^1.4.1",
