@@ -47,7 +47,7 @@
         "archiver": "^8.0.0",
         "axios": "^1.19.0",
         "bcrypt": "^6.0.0",
-        "better-sqlite3": "^12.6.0",
+        "better-sqlite3": "^13.0.3",
         "bullmq": "^5.81.2",
         "cors": "^2.8.5",
         "dockerode": "^5.0.1",
