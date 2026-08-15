@@ -51,10 +51,23 @@
  *   node scripts/auditResponseErrorLeaks.js            summary
  *   node scripts/auditResponseErrorLeaks.js --list     every site
  *   node scripts/auditResponseErrorLeaks.js --max=N    ratchet: exit 1 above N
+ *   node scripts/auditResponseErrorLeaks.js --min=N    floor:   exit 1 below N
  *
  * Ratchet, not cliff. Do not guess the baseline — run it, then commit the number
  * it prints. A baseline set from an unverified estimate is how the logger gate sat
  * at 177 while the real count was 156.
+ *
+ * WHY THERE IS A FLOOR AS WELL AS A CEILING
+ *
+ * Unlike the logger gate, this count is not finished at 0 and must never be driven
+ * there. What remains at the baseline is deliberate: `TenantAccessError.message`,
+ * which tells a caller about their OWN access, and Zod's `issues[0].message`, which
+ * tells them about their OWN input. Both are the client's information, not ours.
+ *
+ * This tool cannot tell either of those from an Appwrite error, because all three
+ * are `.message`. So the ceiling catches a new leak, and the floor stands in for
+ * the judgement the tool cannot make — without it, deleting a legitimate 403 body
+ * moves the number in the direction CI reads as an improvement, and passes.
  */
 
 const fs = require('fs');
@@ -68,6 +81,8 @@ const args = process.argv.slice(2);
 const wantList = args.includes('--list');
 const maxArg = args.find((a) => a.startsWith('--max='));
 const max = maxArg ? Number(maxArg.slice('--max='.length)) : null;
+const minArg = args.find((a) => a.startsWith('--min='));
+const min = minArg ? Number(minArg.slice('--min='.length)) : null;
 
 const REDUCERS = new Set(['errorMessage', 'toMessage']);
 
@@ -220,14 +235,51 @@ if (wantList) {
     });
 }
 
-if (max !== null) {
-    if (Number.isNaN(max)) {
-        console.error('--max requires a number');
+// Both bounds are validated before either is enforced, so a typo in --min is
+// reported as a typo rather than passing silently behind a --max that held.
+for (const [flag, value] of [['--max', max], ['--min', min]]) {
+    if (value !== null && Number.isNaN(value)) {
+        console.error(`${flag} requires a number`);
         process.exit(2);
     }
-    if (leaks.length > max) {
-        console.error(`\nFAIL: ${leaks.length} sites exceeds the baseline of ${max}.`);
-        process.exit(1);
-    }
-    console.log(`\nOK: at or below the baseline of ${max}.`);
+}
+
+if (min !== null && max !== null && min > max) {
+    console.error(`\nFAIL: --min=${min} is above --max=${max}; no count can satisfy both.`);
+    process.exit(2);
+}
+
+if (max !== null && leaks.length > max) {
+    console.error(`\nFAIL: ${leaks.length} sites exceeds the baseline of ${max}.`);
+    console.error('Fix the new site. Raising the number re-opens the class this gate closed.');
+    process.exit(1);
+}
+
+if (min !== null && leaks.length < min) {
+    console.error(`\nFAIL: ${leaks.length} sites is below the floor of ${min}.`);
+    console.error('');
+    console.error('Going DOWN fails here, which is the opposite of the ceiling above, so');
+    console.error('read this before changing the number.');
+    console.error('');
+    console.error('The sites at the floor are not leaks. They are TenantAccessError.message');
+    console.error("(the caller's own access) and Zod issues[0].message (the caller's own");
+    console.error('input). This tool cannot tell either from an Appwrite error — all three');
+    console.error('are `.message` — so the floor is what stands in for that judgement.');
+    console.error('');
+    console.error('A drop means one of two things:');
+    console.error('  - a legitimate 4xx body was deleted or flattened to a literal, and the');
+    console.error('    caller can no longer tell why they were refused. Restore it.');
+    console.error('  - a route that carried one was genuinely removed. Then lower --min AND');
+    console.error('    --max together, in that commit, and say which route went.');
+    console.error('');
+    console.error('Run with --list to see what is currently counted.');
+    process.exit(1);
+}
+
+if (max !== null || min !== null) {
+    const bounds = [
+        min !== null ? `floor ${min}` : null,
+        max !== null ? `baseline ${max}` : null,
+    ].filter(Boolean).join(', ');
+    console.log(`\nOK: ${leaks.length} sites, within ${bounds}.`);
 }
