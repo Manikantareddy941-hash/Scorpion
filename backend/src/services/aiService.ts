@@ -1,12 +1,22 @@
-import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logger, errorContext } from './logger';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || 'mock-key',
-});
+// NO OPENAI CLIENT HERE, DELIBERATELY. This module used to construct one at
+// import time and never call it: every AI path below goes to Gemini via fetch
+// (generativelanguage.googleapis.com). The client, the `openai` dependency and
+// OPENAI_API_KEY were all left behind when the provider changed.
+//
+// Nothing caught it. There is no aiService.test.ts, and the two suites that
+// touch this module — reportRoutes and scheduleService — both jest.mock() it
+// wholesale, so the real file never loads under test. The only signal was an
+// eslint 'assigned a value but never used' warning sitting inside a baseline of
+// 169 others.
+//
+// If OpenAI is wanted again, add it back at a call site rather than as a
+// module-load side effect, so an unused client cannot survive a provider swap
+// a second time.
 
 export const generateSecuritySummary = async (findings: unknown[], alerts: unknown[]) => {
     try {

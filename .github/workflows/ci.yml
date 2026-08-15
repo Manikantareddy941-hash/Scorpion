@@ -161,11 +161,21 @@ jobs:
         # Warning ceiling frozen at the current count (ratchet). Lower it over
         # time; a NEW warning fails CI. See backend/CLAUDE.md 'no any' standard.
         # 243 -> 169: the ceiling had drifted 74 above the real count, so it was
-        # not holding any line. 169 is `npm run lint` as of this commit.
+        # not holding any line.
+        # 169 -> 168: aiService constructed an OpenAI client it never called, so
+        # deleting it removed exactly one 'assigned a value but never used'. The
+        # ceiling moves in the same commit as the deletion, deliberately -- a
+        # ratchet left at 169 after the count drops to 168 leaves a free slot for
+        # the next warning, which is how it drifted 74 high the first time.
+        #
+        # Only lower this when the count fell because CODE was removed. An eslint
+        # upgrade that happens to report fewer warnings is not the same thing: a
+        # later patch can put them back, and the ceiling would then fail on code
+        # nobody touched.
         # On failure, surface the tail of eslint output as an annotation so it
         # is visible via the checks API without log access.
         run: |
-          npm run lint -- --max-warnings=169 >lint_out.txt 2>&1 || {
+          npm run lint -- --max-warnings=168 >lint_out.txt 2>&1 || {
             echo "::error::LINT-FAIL $(tail -c 800 lint_out.txt | tr '\n' '|')"
             exit 2
           }
