@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 export interface ScanPipelineResult {
   trivy: any;
@@ -61,7 +61,14 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
     };
 
   } catch (error) {
-    logger.error(`[Pipeline] Global failure for ${options.repo}:`, error);
+    logger.error(`[Pipeline] Global failure for ${options.repo}:`, {
+      event: 'SCAN_PIPELINE_FAILED',
+      owner: options.owner,
+      repo: options.repo,
+      branch: options.branch,
+      scanType: options.scanType || 'full',
+      ...errorContext(error),
+    });
     throw error;
   } finally {
     // 4. Always clean up (ONLY if it was a generated temp clone, NEVER a local IDE scan)
@@ -71,7 +78,12 @@ export async function runScanPipeline(options: { owner?: string; repo?: string; 
         await fs.rm(tempDir, { recursive: true, force: true });
         logger.info(`[Pipeline] Cleaned up temp workspace: ${tempDir}`);
       } catch (cleanupErr) {
-        logger.error(`[Pipeline] Failed to clean up ${tempDir}:`, cleanupErr);
+        logger.error(`[Pipeline] Failed to clean up ${tempDir}:`, {
+          event: 'SCAN_PIPELINE_CLEANUP_FAILED',
+          repo: options.repo,
+          tempDir,
+          ...errorContext(cleanupErr),
+        });
       }
     }
   }

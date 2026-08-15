@@ -3,7 +3,7 @@ import { Models } from 'node-appwrite';
 import { getRemediationFix } from '../services/aiService';
 import { databases, DB_ID, COLLECTIONS } from '../lib/appwrite';
 import { canAccessResource } from '../services/tenancyService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
     user?: Models.User<Models.Preferences>;
@@ -36,7 +36,12 @@ router.post('/:id/remediate', async (req: AuthenticatedRequest, res: Response, n
             vulnerability_id: vulnerabilityId
         });
     } catch (err) {
-        logger.error(`[Remediation] Error generating fix:`, err);
+        logger.error(`[Remediation] Error generating fix:`, {
+            event: 'VULN_REMEDIATION_FIX_FAILED',
+            userId: req.user?.$id,
+            vulnerabilityId: req.params.id,
+            ...errorContext(err),
+        });
         next(err);
     }
 });

@@ -40,7 +40,12 @@ router.post('/tasks/:id/ai-blueprint', verifyUser, async (req: AuthenticatedRequ
     if (result.forbidden) return res.status(403).json({ error: 'You do not have access to this finding' });
     res.json({ blueprint: result.blueprint });
   } catch (err) {
-    logger.error('[Dashboard] AI Blueprint error:', err);
+    logger.error('[Dashboard] AI Blueprint error:', {
+      event: 'DASHBOARD_AI_BLUEPRINT_FAILED',
+      userId: req.user?.$id,
+      taskId: req.params.id,
+      ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to generate AI blueprint' });
   }
 });
@@ -56,7 +61,12 @@ router.post('/tasks/:id/github-sync', verifyUser, async (req: AuthenticatedReque
     res.json({ success: true, url: result.url });
   } catch (err) {
     // Surface the real failure instead of silently writing a fake issue URL.
-    logger.error('[Dashboard] GitHub Sync error:', err);
+    logger.error('[Dashboard] GitHub Sync error:', {
+      event: 'DASHBOARD_GITHUB_SYNC_FAILED',
+      userId: req.user?.$id,
+      taskId: req.params.id,
+      ...errorContext(err),
+    });
     res.status(502).json({ error: `Failed to sync with GitHub: ${err instanceof Error ? err.message : 'unknown error'}` });
   }
 });

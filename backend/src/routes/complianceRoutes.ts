@@ -5,7 +5,7 @@ import { Parser } from 'json2csv';
 import { evaluateCompliance } from '../services/complianceEngine';
 import { databases, DB_ID, COLLECTIONS, Query } from '../lib/appwrite';
 import { logAuditEvent } from '../utils/auditLogger';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
   user?: Models.User<Models.Preferences>;
@@ -131,7 +131,13 @@ router.get('/export', async (req: AuthenticatedRequest, res: Response) => {
 
     doc.end();
   } catch (error) {
-    logger.error('[Compliance Export Error]', error);
+    logger.error('[Compliance Export Error]', {
+      event: 'COMPLIANCE_EVIDENCE_EXPORT_FAILED',
+      userId: req.user?.$id,
+      format,
+      headersSent: res.headersSent,
+      ...errorContext(error),
+    });
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to export compliance evidence' });
     }

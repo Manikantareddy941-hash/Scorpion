@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { handleFalcoEvent } from '../runtime/falcoHandler';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { secretMatches } from '../utils/constantTimeCompare';
 
 const router = Router();
@@ -27,7 +27,12 @@ router.post('/event', verifyFalcoSecret, async (req: Request, res: Response) => 
 
   // Process asynchronously
   handleFalcoEvent(event).catch(err => {
-    logger.error('[Falco] Error processing event:', err);
+    logger.error('[Falco] Error processing event:', {
+      event: 'FALCO_EVENT_PROCESSING_FAILED',
+      rule: event?.rule,
+      priority: event?.priority,
+      ...errorContext(err),
+    });
   });
 });
 

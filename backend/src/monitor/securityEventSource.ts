@@ -1,5 +1,5 @@
 import { databases, DB_ID, ID, Query } from '../lib/appwrite';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import type { SecurityEvent, SecurityEventType, Severity } from './securityEvent.types';
 
 const COLLECTION = 'security_events';
@@ -15,7 +15,14 @@ export async function recordSecurityEvent(e: Omit<SecurityEvent, 'id'>): Promise
       severity: e.severity, timestamp: e.timestamp, metadata: JSON.stringify(e.metadata ?? {}),
     });
   } catch (err) {
-    logger.error('[securityEventSource] recordSecurityEvent failed', err);
+    logger.error('[securityEventSource] recordSecurityEvent failed', {
+      event: 'SECURITY_EVENT_RECORD_FAILED',
+      securityEventType: e.type,
+      ownerUserId: e.ownerUserId,
+      repoId: e.repoId,
+      severity: e.severity,
+      ...errorContext(err),
+    });
   }
 }
 
@@ -50,7 +57,12 @@ export async function collect(ownerUserId: string, windowMs: number): Promise<Se
       };
     });
   } catch (err) {
-    logger.error('[securityEventSource] collect failed', err);
+    logger.error('[securityEventSource] collect failed', {
+      event: 'SECURITY_EVENT_COLLECT_FAILED',
+      ownerUserId,
+      windowMs,
+      ...errorContext(err),
+    });
     return [];
   }
 }

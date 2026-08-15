@@ -86,7 +86,13 @@ router.post('/apply', verifyUser, scanTriggerLimiter, async (req: AuthenticatedR
                     localPath = repo.local_path;
                 }
             } catch (err) {
-                logger.warn('[Remediate Apply] Could not fetch repository context, using workspace fallback:', err);
+                logger.warn('[Remediate Apply] Could not fetch repository context, using workspace fallback:', {
+                    event: 'REMEDIATE_REPO_CONTEXT_UNAVAILABLE',
+                    action: 'apply',
+                    vulnerabilityId: vulnerability_id,
+                    repoId: vuln.repo_id,
+                    ...errorContext(err),
+                });
             }
         }
 
@@ -179,7 +185,13 @@ router.post('/revert', verifyUser, scanTriggerLimiter, async (req: Authenticated
                     localPath = repo.local_path;
                 }
             } catch (err) {
-                logger.warn('[Remediate Revert] Could not fetch repository context, using workspace fallback:', err);
+                logger.warn('[Remediate Revert] Could not fetch repository context, using workspace fallback:', {
+                    event: 'REMEDIATE_REPO_CONTEXT_UNAVAILABLE',
+                    action: 'revert',
+                    vulnerabilityId: vulnerability_id,
+                    repoId: vuln.repo_id,
+                    ...errorContext(err),
+                });
             }
         }
 

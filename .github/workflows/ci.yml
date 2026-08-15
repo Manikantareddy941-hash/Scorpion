@@ -228,18 +228,20 @@ jobs:
       # sites that genuinely lost their cause were string arguments, and those are
       # already at zero.
       #
-      # Lower the number as files are converted; the pass is finished at --max=0.
       # Unlike the response-leak gate below, 0 IS the destination here — there is
-      # no category of bare second argument that should survive.
+      # no category of bare second argument that should survive. It is reached:
+      # this gate is now a regression guard, not a ratchet. Do not raise it to
+      # accommodate a new call site; convert the call site instead.
       #
       # 150 -> 127: tickets and threat-model, 23 sites.
       # 127 -> 100: scan parsers, monitor, ai, webhook, email, scan, 27 sites.
       # 100 -> 85: deploy, falco, CI orchestrator, correlation routes, 15 sites.
       # 85 -> 62: repositories and process plumbing, 23 sites.
       # 62 -> 32: src/services, 30 sites — that directory is now at zero.
+      # 32 -> 0: src/routes plus the gitops/scanners/monitor/github tail, 32 sites.
       - name: Logger Call Convention
         working-directory: backend
-        run: node scripts/auditLoggerCalls.js --max=32
+        run: node scripts/auditLoggerCalls.js --max=0
 
       # CWE-209. Counts internal error text reaching a 4xx/5xx response body:
       # errorMessage(err), err.message, String(err), or a local const bound to any

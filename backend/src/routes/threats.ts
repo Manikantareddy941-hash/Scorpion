@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { verifyUser } from '../middleware/auth';
 import { threatsService } from '../services/threatsService';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 import { AuthenticatedRequest, falcoEventSchema } from '../types/threats.types';
 import { secretMatches } from '../utils/constantTimeCompare';
 
@@ -40,7 +40,12 @@ router.post('/falco', verifyFalcoSecret, async (req: Request, res: Response) => 
       nodeStatus: status
     });
   } catch (err) {
-    logger.error('[Falco Webhook] Failed to process webhook event:', err);
+    logger.error('[Falco Webhook] Failed to process webhook event:', {
+      event: 'FALCO_WEBHOOK_INGEST_FAILED',
+      rule: event.rule,
+      priority: event.priority,
+      ...errorContext(err),
+    });
     res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
@@ -51,7 +56,11 @@ router.get('/', verifyUser, async (req: AuthenticatedRequest, res: Response) => 
     const userId = req.user?.$id || '';
     res.json(await threatsService.listThreats(userId));
   } catch (err) {
-    logger.error('[GET Threats API] Failed to retrieve threats:', err);
+    logger.error('[GET Threats API] Failed to retrieve threats:', {
+      event: 'THREATS_LIST_FAILED',
+      userId: req.user?.$id,
+      ...errorContext(err),
+    });
     res.status(500).json({ error: 'Failed to retrieve threats' });
   }
 });
@@ -63,7 +72,13 @@ router.post('/clear', verifyUser, async (req: AuthenticatedRequest, res: Respons
     await threatsService.clearThreats(userId);
     res.json({ status: 'success', message: 'All pipeline threats cleared and reset.' });
   } catch (err) {
-    logger.error('[Clear Threats API] Failed to reset states:', err);
+    // Clearing threats resets pipeline gate state — a failure here leaves the
+    // caller believing the board is clean when it is not.
+    logger.error('[Clear Threats API] Failed to reset states:', {
+      event: 'THREATS_CLEAR_FAILED',
+      userId: req.user?.$id,
+      ...errorContext(err),
+    });
     res.status(500).json({ error: 'Clear operation failed' });
   }
 });

@@ -4,7 +4,7 @@ import { secretMatches } from '../utils/constantTimeCompare';
 import { parseSemgrep, parseGitleaks, parseTrivy } from '../services/scan/parsers';
 import { databases, DB_ID, COLLECTIONS, ID } from '../lib/appwrite';
 import { deduplicateFindings, NormalizedVulnerability } from '../deduplication';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 const IDE_SEVERITIES: IDEFinding['severity'][] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 function toIDESeverity(severity: string): IDEFinding['severity'] {
@@ -187,7 +187,11 @@ router.post('/scan', verifyIdeAccess, async (req: Request, res: Response) => {
 // Duplicate processing block removed – deduplication already performed above
 
   } catch (error: unknown) {
-    logger.error('[IDE Route] Scan failed:', error);
+    logger.error('[IDE Route] Scan failed:', {
+      event: 'IDE_SCAN_FAILED',
+      repoId: repoId || 'local_workspace',
+      ...errorContext(error),
+    });
     res.status(500).json({ error: 'Scan failed' });
   }
 });

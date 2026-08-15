@@ -1,6 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
-import { logger } from '../services/logger';
+import { logger, errorContext } from '../services/logger';
 
 export interface RollbackOptions {
   app: string;
@@ -84,7 +84,14 @@ export async function triggerRollback(options: RollbackOptions) {
     logger.info(`[Rollback] Created PR #${pr.data.number}: ${pr.data.html_url}`);
     return pr.data;
   } catch (error) {
-    logger.error(`[Rollback] Failed to trigger rollback for ${options.app}:`, error);
+    logger.error(`[Rollback] Failed to trigger rollback for ${options.app}:`, {
+      event: 'ROLLBACK_PR_FAILED',
+      app: options.app,
+      image: options.image,
+      revision: options.revision,
+      criticalCount: options.criticalCount,
+      ...errorContext(error),
+    });
     throw error;
   }
 }
