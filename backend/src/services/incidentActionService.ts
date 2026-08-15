@@ -59,6 +59,13 @@ export async function freezeReleaseGateForIncident(reason: string): Promise<void
     // Containment is best-effort - a failure here must never prevent the
     // incident itself from being recorded/alerted on.
     // A release gate that fails to freeze during an incident keeps shipping.
-    logger.error('[Incident Response] Failed to freeze release gate:', { event: 'INCIDENT_GATE_FREEZE_FAILED', ...errorContext(err) });
+    // `reason` is the only identifier this function receives — incidentService
+    // composes it as `<source> incident "<title>" (<id>)`. Without it the alert
+    // says a freeze failed but not which incident is still shipping, which is
+    // the one thing responding to it requires. The success path above already
+    // logs it; only the failure path was missing it.
+    logger.error('[Incident Response] Failed to freeze release gate:', {
+      event: 'INCIDENT_GATE_FREEZE_FAILED', reason, ...errorContext(err),
+    });
   }
 }
