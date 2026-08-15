@@ -63,18 +63,42 @@ if (missingEnv.length > 0) {
 
 /**
  * A signed SLSA statement is the subject array plus the predicate (builder id,
- * invocation id, materials, timestamps) and a base64 cosign signature. Measured
- * against the statements attestProvenance currently produces, that lands in the
- * low single-digit KB; 16KB leaves room for a materials list to grow without a
- * second migration.
+ * invocation id, materials, timestamps) and a base64 cosign signature.
  *
- * Oversize is a real risk worth naming: Appwrite rejects the whole write, and
- * these are written alongside the build record. The write path must treat a
+ * MEASURED, not estimated: a real bundle from attestProvenance is 1,068
+ * characters — 911 for the statement, ~130 for the base64 signature. This was
+ * 16384 on the strength of "lands in the low single-digit KB", which is ~15x
+ * the observed size.
+ *
+ * Nothing in buildProvenanceStatement scales with the build. `subject` and
+ * `resolvedDependencies` are one entry each and there is no materials list, so
+ * the earlier note about leaving "room for a materials list to grow" describes
+ * a shape this builder does not produce. Growing one is a change to
+ * buildProvenanceStatement, and it can carry its own migration then.
+ *
+ * Why not just leave it large. Appwrite validates the collection row-size
+ * budget BEFORE it checks whether an attribute already exists — the trap
+ * documented in scripts/lib/migrationErrors.ts. build_pipelines already carries
+ * `logs`, which buildService truncates to 4,999 characters, so the budget is
+ * shared. Claiming 16KB on two collections brings the ceiling closer for the
+ * next migration, and the error it produces then names neither the attribute
+ * nor the cause. 4096 is ~4x the measured payload.
+ *
+ * ALREADY-PROVISIONED ENVIRONMENTS ARE NOT CHANGED BY THIS. An existing
+ * attribute is reported as a skip (see run() below), so lowering this constant
+ * has no effect anywhere the migration has already run — and Appwrite does not
+ * shrink a string attribute in place. Recovering those means dropping and
+ * recreating the column, which discards any statements stored in it. Check
+ * whether `npm run migrate:build-provenance` has run in each environment
+ * before assuming this value is what is deployed.
+ *
+ * Oversize is still a real risk worth naming: Appwrite rejects the whole write,
+ * and these are written alongside the build record. The write path must treat a
  * provenance write as best-effort for that reason — losing the build record to
  * save the metadata about it would be the wrong trade, the same call
  * migrate_scan_provenance.ts made by truncating.
  */
-const PROVENANCE_SIZE = 16384;
+const PROVENANCE_SIZE = 4096;
 
 const TARGETS: { collection: string; note: string }[] = [
   {
