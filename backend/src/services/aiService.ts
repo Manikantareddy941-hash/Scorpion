@@ -1,12 +1,7 @@
-import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { databases, DB_ID, COLLECTIONS, ID, Query } from '../lib/appwrite';
 import { logger, errorContext } from './logger';
-
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || 'mock-key',
-});
 
 export const generateSecuritySummary = async (findings: unknown[], alerts: unknown[]) => {
     try {
