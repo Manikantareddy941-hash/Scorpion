@@ -266,11 +266,21 @@ jobs:
       # The tool cannot tell Zod from Appwrite because both are `.message`, which
       # is why this number is not 0 and MUST NOT be driven to 0. Lowering it
       # further means deleting authorization feedback or validation messages the
-      # client legitimately needs. If this fails, the right response is almost
+      # client legitimately needs. If --max fails, the right response is almost
       # always to fix the new site, never to raise the number.
+      #
+      # HENCE --min, and this is the half that was missing. The paragraph above
+      # said the count must not be driven to 0, and nothing enforced it: --max
+      # only catches the number going UP. Delete a legitimate 403 body and the
+      # count goes DOWN, which a ceiling-only gate reads as an improvement and
+      # passes. The floor stands in for the judgement the tool cannot make.
+      #
+      # The two numbers move together or not at all. If a route that carried one
+      # of these is genuinely removed, lower BOTH in that commit and name the
+      # route in the message — that is the only legitimate way this number falls.
       - name: Response Error Leak
         working-directory: backend
-        run: node scripts/auditResponseErrorLeaks.js --max=31
+        run: node scripts/auditResponseErrorLeaks.js --max=31 --min=31
 
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the
