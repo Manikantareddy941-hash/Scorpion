@@ -47,6 +47,33 @@ jobs:
       - name: Build Frontend
         run: npm run build
 
+      # Frontend production tree. The backend job has its own audit step scoped
+      # to backend/; this one covers the root package.json, which had never been
+      # audited in CI at all — react-router-dom and everything it pulls sat
+      # outside both gates. Three highs were sitting there unreported.
+      #
+      # No working-directory, deliberately: the root package.json IS the
+      # frontend's, and every step in this job runs there. Adding
+      # `working-directory: backend` here would silently re-audit the tree the
+      # other job already covers and leave this one unwatched again.
+      #
+      # --omit=dev because dev-only trees never reach a runtime image — the same
+      # reasoning as the backend step and its standing picomatch finding via
+      # ts-node-dev -> chokidar.
+      #
+      # Zero-tolerance rather than a ratchet. Every high in a production tree is
+      # a real finding, so nothing legitimate sits at the baseline — unlike the
+      # response-leak gate, which needs a floor precisely because it cannot tell
+      # a Zod message from an Appwrite one. Do not add a --min here.
+      #
+      # The high that lived here was nanoid (GHSA-28wg-ghj8-5hjv), reached
+      # through `docx`. Removed rather than upgraded: nothing in src/ imported
+      # it, so it was a production dependency shipping in the bundle for no
+      # reason. If a nanoid advisory reappears, check what actually imports it
+      # before reintroducing docx.
+      - name: Audit Production Dependencies
+        run: npm audit --omit=dev --audit-level=high
+
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
