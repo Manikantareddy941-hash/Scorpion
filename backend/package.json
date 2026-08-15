@@ -20,6 +20,7 @@
         "migrate:audit-sequence": "ts-node src/scripts/migrate_audit_sequence.ts",
         "migrate:build-provenance": "ts-node src/scripts/migrate_build_provenance.ts",
         "check:provenance-attribute": "ts-node src/scripts/check_provenance_attribute.ts",
+        "check:provenance-rows": "ts-node src/scripts/check_provenance_rows.ts",
         "setup-tools": "bash setup-tools.sh",
         "postinstall": "bash setup-tools.sh"
     },
