@@ -19,11 +19,32 @@
 // Recording the statement on the build/run record instead makes it last as long
 // as the record that references it.
 //
-// IT ALSO FIXES THE TENANCY CLAIM IN #187. buildService writes provenance with a
-// null tenant, into imageStore's shared namespace, justified by a comment saying
-// provenance is "signed and verified rather than trusted by key". Both these
-// collections are already repo-scoped, so a statement stored here inherits the
-// tenancy the shared Redis namespace never had.
+// IT ADDRESSES THE DURABLE HALF OF #187 — and only that half. Read the rest of
+// this paragraph before recording #187 as closed.
+//
+// Both these collections are repo-scoped, so a statement stored here inherits a
+// tenancy the shared Redis namespace never had. But the cache write is still
+// there and still unscoped: buildService and pipelineService both call
+// putProvenance(null, digest, ...), and imageStore's scopedKey() drops the
+// tenant segment entirely on a null tenant. So the durable copy is isolated and
+// the ephemeral copy is global.
+//
+// Why that is currently tolerable, stated so a later reader can re-judge it
+// rather than inherit the conclusion:
+//
+//   - The reader agrees. domainVerbs.ts is the ONLY getProvenance caller and it
+//     also passes null, so the key is consistent and the cache does hit. This
+//     is a shared namespace, not a broken one.
+//   - The deploy gate does not read it. deployService resolves provenance from
+//     pipeline_runs / build_pipelines, not from Redis, so nothing that blocks a
+//     deploy depends on the unscoped copy.
+//   - The entry is a signed statement under a content-addressed key. Reading it
+//     cross-tenant requires already knowing the image digest, and returns
+//     something whose signature is verified before it is trusted.
+//
+// If any of those three stops being true — a second getProvenance caller, a
+// gate that reads the cache, or an unsigned payload — scope the key by tenant
+// and change the readers in the same commit.
 //
 // BOTH COLLECTIONS, not just build_pipelines. deployService resolves a build by
 // reading pipeline_runs FIRST and falling back to build_pipelines, and today only

@@ -68,3 +68,13 @@ k8s/overlays/dev/
 /playwright-report/
 /playwright/.cache/
 strix_runs/
+
+# Per-developer Claude Code settings — local tool permissions and machine paths.
+#
+# This entry is deliberately the single file and NOT the .claude/ directory.
+# 16 files under .claude/ are tracked on purpose: agents/, hooks/, skills/,
+# settings.json and launch.json are shared project tooling. Ignoring the
+# directory would not untrack those, but it WOULD hide newly added ones from
+# git status, so a teammate's new skill or hook would silently never be
+# committed.
+.claude/settings.local.json
