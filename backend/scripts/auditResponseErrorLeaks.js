@@ -51,10 +51,30 @@
  *   node scripts/auditResponseErrorLeaks.js            summary
  *   node scripts/auditResponseErrorLeaks.js --list     every site
  *   node scripts/auditResponseErrorLeaks.js --max=N    ratchet: exit 1 above N
+ *   node scripts/auditResponseErrorLeaks.js --min=N    floor:   exit 1 below N
  *
  * Ratchet, not cliff. Do not guess the baseline — run it, then commit the number
  * it prints. A baseline set from an unverified estimate is how the logger gate sat
  * at 177 while the real count was 156.
+ *
+ * WHY THERE IS A FLOOR AND NOT JUST A CEILING
+ *
+ * Unlike the logger gate next to it in ci.yml, zero is the WRONG answer here. The
+ * surviving sites are two deliberate categories: 403/409 authorization and state
+ * feedback about the caller's own access, and 4xx validation feedback about the
+ * caller's own input. Both tell the caller something they are entitled to know and
+ * that clients act on. A future contributor who runs this tool, reads "leaks", and
+ * sweeps the remainder to zero would break real client behaviour while making a
+ * security tool report success. --min makes that specific mistake fail CI.
+ *
+ * WHAT --min DOES NOT DO. It counts sites; it does not pin WHICH sites. Removing
+ * one legitimate 403 message while introducing one new genuine leak leaves the
+ * count unchanged and passes both bounds. It is a tripwire for the sweep-to-zero
+ * failure mode, which is the realistic one, not a per-site contract.
+ *
+ * A drop below the floor is not automatically a bug — deleting a route legitimately
+ * removes its 403. The floor's job is to make that a decision someone states, by
+ * lowering the number in the same PR, rather than a silent side effect.
  */
 
 const fs = require('fs');
@@ -68,6 +88,8 @@ const args = process.argv.slice(2);
 const wantList = args.includes('--list');
 const maxArg = args.find((a) => a.startsWith('--max='));
 const max = maxArg ? Number(maxArg.slice('--max='.length)) : null;
+const minArg = args.find((a) => a.startsWith('--min='));
+const min = minArg ? Number(minArg.slice('--min='.length)) : null;
 
 const REDUCERS = new Set(['errorMessage', 'toMessage']);
 
@@ -220,14 +242,31 @@ if (wantList) {
     });
 }
 
-if (max !== null) {
-    if (Number.isNaN(max)) {
-        console.error('--max requires a number');
-        process.exit(2);
-    }
-    if (leaks.length > max) {
-        console.error(`\nFAIL: ${leaks.length} sites exceeds the baseline of ${max}.`);
-        process.exit(1);
-    }
-    console.log(`\nOK: at or below the baseline of ${max}.`);
+if (Number.isNaN(max) || Number.isNaN(min)) {
+    console.error('--max and --min require a number');
+    process.exit(2);
+}
+
+if (max !== null && leaks.length > max) {
+    console.error(`\nFAIL: ${leaks.length} sites exceeds the baseline of ${max}.`);
+    process.exit(1);
+}
+
+// Below the floor, so something that was deliberately kept has gone. See the
+// header: the remaining sites are authorization and validation feedback the
+// caller is entitled to, not leaks. Confirm the removal was intended and lower
+// --min in the same PR, or restore the message.
+if (min !== null && leaks.length < min) {
+    console.error(`\nFAIL: ${leaks.length} sites is below the floor of ${min}.`);
+    console.error('A site that was deliberately kept has been removed. These are 403/409');
+    console.error('authorization and 4xx validation messages the caller is entitled to —');
+    console.error('run with --list, confirm the removal was intended, and lower --min in');
+    console.error('the same PR. Do not sweep this count to zero.');
+    process.exit(1);
+}
+
+if (max !== null || min !== null) {
+    const bounds = [min !== null ? `floor ${min}` : null, max !== null ? `baseline ${max}` : null]
+        .filter(Boolean).join(' / ');
+    console.log(`\nOK: ${leaks.length} sites, within ${bounds}.`);
 }

@@ -268,9 +268,20 @@ jobs:
       # further means deleting authorization feedback or validation messages the
       # client legitimately needs. If this fails, the right response is almost
       # always to fix the new site, never to raise the number.
+      #
+      # Hence --min alongside --max: bounded on BOTH sides, unlike every other
+      # gate here. The comment above asked a future contributor to read it and
+      # not sweep to zero; --min is that request expressed as a failing build.
+      # It bounds the count, not the identity of the sites — swapping a kept 403
+      # for a new genuine leak passes both bounds — so it guards the sweep-to-zero
+      # mistake, which is the realistic one, not every possible substitution.
+      #
+      # A drop is not automatically wrong: deleting a route legitimately removes
+      # its 403. Lower --min in that same PR and say why. Silence is what this
+      # blocks, not change.
       - name: Response Error Leak
         working-directory: backend
-        run: node scripts/auditResponseErrorLeaks.js --max=31
+        run: node scripts/auditResponseErrorLeaks.js --max=31 --min=31
 
       # --omit=dev, not --audit-level=critical. The only current HIGH is picomatch
       # via ts-node-dev -> chokidar, which is a devDependency and never reaches the
