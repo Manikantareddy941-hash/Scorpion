@@ -103,9 +103,13 @@ router.post('/request-reset', async (req: Request, res: Response) => {
         logger.error('[Auth] Error in request-reset:', { event: 'AUTH_REQUEST_RESET_FAILED', ...errorContext(error) });
         // Generic body, deliberately. This endpoint is unauthenticated, so the
         // response is readable by anyone who can reach it — and errorMessage()
-        // here is whatever Appwrite, jsonwebtoken or nodemailer said, which has
-        // included connection strings, collection ids and SMTP hostnames. The
-        // full cause is in the log line above under AUTH_REQUEST_RESET_FAILED.
+        // here is whatever Appwrite, jsonwebtoken or the mail provider said,
+        // which has included connection strings, collection ids and hostnames.
+        // The full cause is in the log line above under AUTH_REQUEST_RESET_FAILED.
+        //
+        // Said "nodemailer" until #268 removed it; delivery goes through Resend
+        // (emailService.ts). Naming the provider generically here so the next
+        // swap does not leave the comment describing a package that is gone.
         res.status(500).json({ error: 'An unexpected error occurred processing your request.' });
     }
 });
