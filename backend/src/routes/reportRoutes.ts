@@ -9,6 +9,7 @@ import { generateSecuritySummary } from '../services/aiService';
 import { canAccessResource, resolveOwnershipScope } from '../services/tenancyService';
 import { getSecurityPostureStats, getTrendData, generatePDFReportBuffer } from '../services/reportingService';
 import { PassThrough } from 'stream';
+import { requireEmailVerification } from '../middleware/requireEmailVerification';
 import { logger, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
@@ -171,9 +172,13 @@ router.get('/export', async (req: AuthenticatedRequest, res: Response, next: Nex
         req.headers.authorization = `Bearer ${token}`;
     }
     verifyUser(req, res, next);
-}, handleExport);
+}, requireEmailVerification, handleExport);
 
-router.post('/export', verifyUser, handleExport);
+// Gated on both verbs: bulk extraction of findings and posture data is exactly
+// what a throwaway account would want. The GET form additionally accepts a
+// `?token=` query param for browser downloads, so it must be gated too — a guard
+// on POST alone would leave the easier path open.
+router.post('/export', verifyUser, requireEmailVerification, handleExport);
 
 // GET /api/reports/posture - PDF security posture report (severity/OWASP
 // breakdown + trend), scoped to the caller's own repos/team/project.

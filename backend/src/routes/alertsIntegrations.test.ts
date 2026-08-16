@@ -38,7 +38,9 @@ const buildApp = (userId: string | null = 'user-1') => {
   const app = express();
   app.use(express.json());
   app.use((req: MockAuthRequest, _res, next) => {
-    if (userId) req.user = { $id: userId } as never;
+    // PUT /integrations is gated by requireEmailVerification; the unauthenticated
+    // cases still pass no user at all, so those assertions are unaffected.
+    if (userId) req.user = { $id: userId, emailVerification: true } as never;
     next();
   });
   app.use('/api/alerts', router);

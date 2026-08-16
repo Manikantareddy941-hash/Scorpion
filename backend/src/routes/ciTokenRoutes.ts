@@ -4,6 +4,7 @@ import { verifyUser } from '../middleware/auth';
 import { isPostgresEnabled } from '../db/pool';
 import { ciTokenRepository, type TokenScope } from '../repositories/pg/ciTokenRepository';
 import { resolveCreationOwnership, TenantAccessError } from '../services/tenancyService';
+import { requireEmailVerification } from '../middleware/requireEmailVerification';
 import { logger } from '../services/logger';
 
 /**
@@ -44,7 +45,10 @@ const asyncHandler = (fn: (req: AuthenticatedRequest, res: Response) => Promise<
  * The plaintext is in this response and nowhere else, ever: only its hash is
  * stored. A caller that loses it must issue a new one.
  */
-router.post('/', asyncHandler(async (req, res) => {
+// Gated: an unverified throwaway account should not be able to mint a
+// long-lived headless credential. Revoke (DELETE) is deliberately NOT gated —
+// taking a credential away is never the abusive direction.
+router.post('/', requireEmailVerification, asyncHandler(async (req, res) => {
   const userId = req.user?.$id;
   if (!userId) return res.status(401).json({ error: 'Authentication required' });
 
