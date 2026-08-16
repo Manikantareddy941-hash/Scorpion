@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { JiraConfig, JiraSyncResult, Ticket } from '../../../shared/types';
 import { ticketsRepository } from '../repositories/ticketsRepository';
+import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
 import { logger, errorContext, errorMessage } from './logger';
 
 /**
@@ -36,6 +37,22 @@ async function jiraRequest(method: string, path: string, body?: any) {
 
   const { baseUrl, email, apiToken } = currentJiraConfig;
   const cleanedBaseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
+
+  // baseUrl is supplied by whoever configured the integration, and this function
+  // then makes the server issue a request to it — the same SSRF shape the guard
+  // already blocks for outbound webhooks in routes/alerts.ts. Without it an
+  // authenticated user could point the integration at an internal address or a
+  // cloud metadata endpoint and use the server as a proxy.
+  //
+  // Checked here rather than in setJiraConfig because the config is mutable at
+  // runtime: validating only at set time leaves every later call trusting a
+  // value that may have been replaced since. This is the single choke point all
+  // Jira traffic passes through, so one check covers every call site.
+  //
+  // Note the guard also requires https, which additionally stops the Basic auth
+  // header below — carrying the API token — from going out in cleartext.
+  await assertSafeWebhookUrl(cleanedBaseUrl);
+
   const url = `${cleanedBaseUrl}${path}`;
   const authHeader = Buffer.from(`${email}:${apiToken}`).toString('base64');
 
