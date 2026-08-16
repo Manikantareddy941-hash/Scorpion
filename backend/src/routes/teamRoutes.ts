@@ -2,6 +2,7 @@ import { Router, Response, Request, NextFunction } from 'express';
 import { Models, ID } from 'node-appwrite';
 import { databases, DB_ID, COLLECTIONS, Query, users } from '../lib/appwrite';
 import { verifyUser } from '../middleware/auth';
+import { requireEmailVerification } from '../middleware/requireEmailVerification';
 import { logger, errorMessage, errorContext } from '../services/logger';
 
 interface AuthenticatedRequest extends Request<Record<string, string>> {
@@ -113,7 +114,10 @@ router.get('/:id/members', verifyUser, async (req: AuthenticatedRequest, res: Re
 });
 
 // Invite user to team
-router.post('/:id/invite', verifyUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// Gated: an invite puts mail in a real person's inbox on this account's behalf,
+// which is the classic throwaway-account spam vector. Ordering matters —
+// verifyUser must populate req.user before the verification check reads it.
+router.post('/:id/invite', verifyUser, requireEmailVerification, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
         const teamId = req.params.id;
         const { email, role } = req.body;

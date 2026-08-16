@@ -1,6 +1,8 @@
 jest.mock('../middleware/auth', () => ({
   verifyUser: (req: { user?: unknown }, _res: unknown, next: () => void) => {
-    req.user = { $id: 'user-alice', email: 'alice@acme.test' };
+    // emailVerification is required by requireEmailVerification on POST /,
+    // which gates token creation. Real callers of this route are verified.
+    req.user = { $id: 'user-alice', email: 'alice@acme.test', emailVerification: true };
     next();
   },
 }));

@@ -2,11 +2,12 @@ import request from 'supertest';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 
-type MockAuthRequest = Request & { user?: { $id: string } };
+type MockAuthRequest = Request & { user?: { $id: string; emailVerification?: boolean } };
 
 jest.mock('../middleware/auth', () => ({
     verifyUser: (req: MockAuthRequest, _res: Response, next: NextFunction) => {
-        req.user = { $id: 'user-1' };
+        // Export is gated by requireEmailVerification on both verbs.
+        req.user = { $id: 'user-1', emailVerification: true };
         next();
     },
 }));

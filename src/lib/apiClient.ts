@@ -100,14 +100,20 @@ export async function apiFetch(endpoint: string, options: ApiFetchOptions = {}) 
         if (lastResponse.status === 403) message = 'Forbidden';
         if (lastResponse.status === 500) message = 'Server error';
 
+        // Machine-readable discriminator, kept alongside the prose. Without it a
+        // caller cannot tell EMAIL_VERIFICATION_REQUIRED from any other 403 except
+        // by matching on the message text, which changes whenever the copy does.
+        let code: string | undefined;
+
         try {
             const data = await lastResponse.json();
             message = data.error || data.message || message;
+            if (typeof data.code === 'string') code = data.code;
         } catch (e) {
             // Keep default message from status
         }
 
-        throw { message, status: lastResponse.status };
+        throw { message, status: lastResponse.status, ...(code ? { code } : {}) };
     }
 
     if (!lastResponse) {

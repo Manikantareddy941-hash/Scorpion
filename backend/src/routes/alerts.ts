@@ -3,6 +3,7 @@ import { databases, DB_ID, COLLECTIONS, Query, ID } from '../lib/appwrite';
 import { AlertService } from '../services/alertService';
 import { canAccessResource } from '../services/tenancyService';
 import { assertSafeWebhookUrl } from '../utils/ssrfGuard';
+import { requireEmailVerification } from '../middleware/requireEmailVerification';
 import { Models } from 'node-appwrite';
 import { logger, errorContext, errorMessage } from '../services/logger';
 
@@ -247,7 +248,10 @@ router.get('/integrations', async (req: AuthenticatedRequest, res) => {
     }
 });
 
-router.put('/integrations', async (req: AuthenticatedRequest, res) => {
+// Gated: configuring an integration registers an outbound sink this server will
+// then POST to. Combined with the SSRF guard already on the URL, that keeps an
+// unverified account from pointing the server anywhere at all.
+router.put('/integrations', requireEmailVerification, async (req: AuthenticatedRequest, res) => {
     try {
         const userId = req.user?.$id;
         if (!userId) return res.status(401).json({ error: 'Authentication required' });
