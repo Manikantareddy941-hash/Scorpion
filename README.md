@@ -1,74 +1,87 @@
 <div align="center">
 
-```
-   ██████  ██████ ██████  ██████  ██████  ██  ██████  ██████
-   ██      ██     ██  ██  ██  ██  ██  ██  ██  ██  ██  ██  ██
-   ██████  ██     ██  ██  ██████  ██████  ██  ██  ██  ██  ██
-       ██  ██     ██  ██  ██  ██  ██      ██  ██  ██  ██  ██
-   ██████  ██████ ██████  ██  ██  ██      ██  ██████  ██  ██
-   ─────────────────────────────────────────────────────────
-      DevSecOps orchestration · shift-left → runtime · 🦂
-```
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00F0FF,50:4FACFE,100:FF007F&height=200&section=header&text=SCORPION&fontSize=72&fontColor=0D1117&fontAlignY=35&desc=DevSecOps%20Orchestration%20%C2%B7%20shift-left%20to%20runtime&descAlignY=55&descSize=18" alt="SCORPION" width="100%" />
 
-# 🛡️ SCORPION
+### 🦂 Multi-engine scanning · realtime threat telemetry · policy-gated CI/CD · AI remediation
 
-**Multi-engine scanning · realtime threat telemetry · policy-gated CI/CD · AI remediation**
+**From your VS Code buffer to the prod cluster — zero drift, no cap.**
 
-*From your VS Code buffer to the prod cluster — zero drift, no cap.*
+<br/>
 
-[![CI](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml/badge.svg)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml)
-[![Scorpion Scan](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml/badge.svg)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml)
-![Tests](https://img.shields.io/badge/tests-187%2F187%20suites%20%7C%201763%20green-brightgreen)
-![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![Node](https://img.shields.io/badge/Node.js-24-339933?logo=node.js&logoColor=white)
-![Gemini](https://img.shields.io/badge/AI-Gemini-8E75B2?logo=googlegemini&logoColor=white)
-![Advisories](https://img.shields.io/badge/prod%20advisories-0-brightgreen)
+[![Quickstart](https://img.shields.io/badge/🚀_QUICKSTART-00F0FF?style=for-the-badge&logoColor=0D1117&labelColor=1A1D24)](#-quickstart)
+[![Architecture](https://img.shields.io/badge/🏗️_ARCHITECTURE-FF007F?style=for-the-badge&logoColor=white&labelColor=1A1D24)](#️-architecture)
+[![Hardening](https://img.shields.io/badge/🛡️_HARDENING-39FF14?style=for-the-badge&logoColor=0D1117&labelColor=1A1D24)](#️-hardening-flex)
+[![Runbook](https://img.shields.io/badge/📕_RUNBOOK-FFB199?style=for-the-badge&logoColor=0D1117&labelColor=1A1D24)](./OPERATIONS_RUNBOOK.md)
+
+<br/>
+
+<!-- ── build & quality ── -->
+[![CI](https://img.shields.io/github/actions/workflow/status/Manikantareddy941-hash/Scorpion/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=1A1D24&color=39FF14)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml)
+[![Scan](https://img.shields.io/github/actions/workflow/status/Manikantareddy941-hash/Scorpion/stackpilot-scan.yml?branch=main&style=for-the-badge&label=SECURITY%20SCAN&labelColor=1A1D24&color=39FF14)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml)
+[![Tests](https://img.shields.io/badge/TESTS-187%2F187%20·%201763%20green-39FF14?style=for-the-badge&labelColor=1A1D24)](#-verification--gate-high-scores)
+[![Advisories](https://img.shields.io/badge/PROD%20ADVISORIES-0-39FF14?style=for-the-badge&labelColor=1A1D24)](#-verification--gate-high-scores)
+
+<!-- ── stack ── -->
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-00F0FF?style=for-the-badge&logo=typescript&logoColor=white&labelColor=1A1D24)](#-tech-stack)
+[![React](https://img.shields.io/badge/React-19.2.8-00F0FF?style=for-the-badge&logo=react&logoColor=white&labelColor=1A1D24)](#-tech-stack)
+[![Node](https://img.shields.io/badge/Node.js-24-00F0FF?style=for-the-badge&logo=node.js&logoColor=white&labelColor=1A1D24)](#-tech-stack)
+[![Gemini](https://img.shields.io/badge/AI-Gemini-FF007F?style=for-the-badge&logo=googlegemini&logoColor=white&labelColor=1A1D24)](#-tech-stack)
+[![Cosign](https://img.shields.io/badge/Supply%20Chain-cosign-FF007F?style=for-the-badge&logo=sigstore&logoColor=white&labelColor=1A1D24)](#️-hardening-flex)
+[![OPA](https://img.shields.io/badge/Policy-OPA%20Rego-FF007F?style=for-the-badge&logo=openpolicyagent&logoColor=white&labelColor=1A1D24)](#-core-workflows)
 
 </div>
 
 ---
 
-## 📑 Table of Contents
-
-- [⚡ TL;DR](#-tldr)
-- [🛠️ Features](#️-features)
-- [🏗️ Architecture](#️-architecture)
-- [🔄 Core Workflows](#-core-workflows)
-- [🧰 Tech Stack](#-tech-stack)
-- [🚀 Quickstart](#-quickstart)
-- [🛡️ Hardening Flex](#️-hardening-flex)
-- [🧪 Verification & Gate High-Scores](#-verification--gate-high-scores)
-- [📁 Project Structure](#-project-structure)
-- [🤝 Contributing](#-contributing)
+> [!NOTE]
+> **TL;DR** — SCORPION is a production-grade security control plane covering the whole lifecycle: local VS Code sandbox → GitHub pull requests → production runtime, behind one dashboard.
+>
+> It runs **5 core engines** (SAST · SCA · secrets · IaC · Python) plus **3 dedicated DAST workers** in parallel, gates releases with **OPA/Rego policy-as-code**, and ships **Gemini**-generated patches as reviewable diffs.
+>
+> Every release passes a **cosign signature gate**; every finding lands in a hash-stamped audit ledger. Nothing merges on vibes. 🔒
 
 ---
 
-## ⚡ TL;DR
+## 📑 Contents
 
-SCORPION is a production-grade security control plane that covers the whole lifecycle — local VS Code sandbox, GitHub pull requests, production runtime — behind one dashboard.
+| | | |
+|---|---|---|
+| ⚡ [Differentiators](#-differentiators) | 🛠️ [Features](#️-features) | 🏗️ [Architecture](#️-architecture) |
+| 🔄 [Core Workflows](#-core-workflows) | 🧰 [Tech Stack](#-tech-stack) | 🚀 [Quickstart](#-quickstart) |
+| 🛡️ [Hardening Flex](#️-hardening-flex) | 🧪 [Verification](#-verification--gate-high-scores) | 📁 [Structure](#-project-structure) |
 
-It runs **5 core engines** (SAST, SCA, secrets, IaC, Python) plus **3 dedicated DAST workers** in parallel, gates releases with **OPA/Rego policy-as-code**, and ships **Gemini**-generated patches as reviewable diffs.
+---
 
-Every release passes a **cosign signature gate**; every finding lands in a hash-stamped audit ledger. Nothing merges on vibes. 🔒
+## ⚡ Differentiators
+
+> [!IMPORTANT]
+> **What actually separates this from a scanner wrapper:**
+>
+> 🧊 **Real execution isolation** — `RUNNER_MODE=kubernetes` runs scanners as ephemeral Jobs under `--network none`. It is the **only** isolated mode and is **never auto-selected**, so every boot emits `RUNNER_MODE_SELECTED` with an `isolated` field to make silent fallback alertable.
+>
+> 🔐 **A signature gate that actually blocks** — refuted or missing provenance blocks the deploy, raises an incident, **and** writes a tamper-audit entry. Not a warning log.
+>
+> 🚪 **Policy-as-code, not hardcoded thresholds** — OPA/Rego authored in a Policy Builder UI, enforced at *both* the GitHub PR commit-status gate and the Kubernetes deploy gate.
+>
+> 🧬 **Differential ingestion** — SHA-256 fingerprints diff incoming findings against stored issues, so repeat scans don't spam duplicates.
 
 ---
 
 ## 🛠️ Features
 
-| Category | Capability | Vibe Check |
-|---|---|---|
-| 🔍 **Scanning** | Parallel SAST (Semgrep), SCA (Trivy), secrets (Gitleaks), IaC (Checkov), Python (Bandit) + DAST workers (OWASP ZAP, Nuclei, ffuf) | 8 engines, one verdict 🎯 |
-| 🤖 **AI Remediation** | "TONY" engine — context-aware patches via **Gemini**, delivered as reviewable unified diffs | your vulns are cooked 🔥 |
-| 🚪 **Policy Gates** | OPA/Rego authored in a Policy Builder UI, enforced at the GitHub PR commit-status gate **and** the Kubernetes deploy gate | policy-as-code, not policy-as-hope |
-| 🏢 **Multi-Tenancy** | Team-scoped repos/scans/incidents, fine-grained IAM, Okta/Microsoft SSO via Appwrite OAuth2 | tenants stay in their lane |
-| 🧵 **Async Pipeline** | Redis-backed BullMQ queue, fully decoupled from the request thread | non-blocking, zero stalls |
-| 🧊 **Execution Isolation** | Ephemeral K8s Jobs under `--network none` (`RUNNER_MODE=kubernetes`), Docker + binary fallbacks, each announced via `RUNNER_MODE_SELECTED` | airgapped when it counts |
-| 🧩 **Threat Modeling** | STRIDE modeling with Gemini threat generation → one-click convert to acceptance-criteria security stories | threats become tickets |
-| 🔐 **Supply Chain** | cosign image signing + verification gate, provenance tracking, automated leaked-secret revocation | signed or it doesn't ship |
-| 🚨 **Incident Response** | Slack alerting, automated containment, Falco runtime event ingestion | 3am pager, handled |
-| 📋 **Compliance** | SOC 2 / ISO 27001 / HIPAA / GDPR control evaluation, hash-stamped audit ledger | auditors eat good |
-| 🧰 **Dev Integrations** | VS Code extension with inline diagnostics, GitHub App webhooks | squiggles where you live |
+| Category | Capability | Status |
+|:---|:---|:---:|
+| 🔍 **Scanning** | Parallel SAST `semgrep` · SCA `trivy` · secrets `gitleaks` · IaC `checkov` · Python `bandit` + DAST workers `ZAP` `nuclei` `ffuf` | ⚡ `ACTIVE` |
+| 🤖 **AI Remediation** | "TONY" engine — context-aware patches via **Gemini**, delivered as reviewable unified diffs | ⚡ `ACTIVE` |
+| 🚪 **Policy Gates** | `OPA/Rego` enforced at the GitHub PR commit-status gate **and** the Kubernetes deploy gate | 🔒 `ENFORCED` |
+| 🧊 **Execution Isolation** | Ephemeral K8s Jobs under `--network none`, Docker + binary fallbacks, each announced via `RUNNER_MODE_SELECTED` | 🔒 `ENFORCED` |
+| 🏢 **Multi-Tenancy** | Team-scoped repos/scans/incidents, fine-grained IAM, Okta/Microsoft SSO via Appwrite OAuth2 | 🔒 `ENFORCED` |
+| 🧵 **Async Pipeline** | Redis-backed `BullMQ` queue, fully decoupled from the request thread | ⚡ `ACTIVE` |
+| 🧩 **Threat Modeling** | STRIDE modeling with Gemini threat generation → one-click convert to security stories | ⚡ `ACTIVE` |
+| 🔐 **Supply Chain** | `cosign` signing + verification gate, provenance tracking, automated leaked-secret revocation | 🔒 `ENFORCED` |
+| 🚨 **Incident Response** | Slack alerting, automated containment, Falco runtime event ingestion | ⚡ `ACTIVE` |
+| 📋 **Compliance** | SOC 2 / ISO 27001 / HIPAA / GDPR control evaluation, hash-stamped audit ledger | 🟢 `PASS` |
+| 🧰 **Dev Integrations** | VS Code extension with inline diagnostics, GitHub App webhooks | ⚡ `ACTIVE` |
 
 ---
 
@@ -76,7 +89,8 @@ Every release passes a **cosign signature gate**; every finding lands in a hash-
 
 Decentralized and multi-tiered: React dashboard, Express API gateway, background worker fleet, external integrations (GitHub App, VS Code extension) — all synchronized through an Appwrite Cloud telemetry database.
 
-> 📐 Every diagram here is **native Mermaid**, not an exported PNG. That means it shows up in a pull-request diff and physically cannot drift from the system it describes without someone editing it. Zero drift, enforced by format.
+> [!TIP]
+> Every diagram below is **native Mermaid**, not an exported PNG. It shows up in a pull-request diff and physically cannot drift from the system it describes without someone editing it. **Zero drift, enforced by format.**
 
 ```mermaid
 flowchart TD
@@ -118,7 +132,8 @@ flowchart TD
 ## 🔄 Core Workflows
 
 <details>
-<summary><b>1. ⚡ Parallel Multi-Engine Scan Pipeline</b></summary>
+<summary><b>⚡ 1 · Parallel Multi-Engine Scan Pipeline</b></summary>
+<br/>
 
 Scan service clones the target repo and runs five scanners in parallel under a sandboxed environment, queued via BullMQ.
 
@@ -155,7 +170,8 @@ sequenceDiagram
 </details>
 
 <details>
-<summary><b>2. 🧬 Differential Delta Ingestion</b></summary>
+<summary><b>🧬 2 · Differential Delta Ingestion</b></summary>
+<br/>
 
 SHA-256 fingerprints compare incoming findings against stored issues to avoid duplicate alerts and enable fast writes.
 
@@ -175,7 +191,8 @@ flowchart TD
 </details>
 
 <details>
-<summary><b>3. 🤖 TONY: AI Remediation Engine</b></summary>
+<summary><b>🤖 3 · TONY — AI Remediation Engine</b></summary>
+<br/>
 
 Generates context-aware drop-in patches and git-compliant diffs via Gemini Pro.
 
@@ -193,7 +210,8 @@ flowchart LR
 </details>
 
 <details>
-<summary><b>4. 🚪 GitHub PR Policy Enforcement Gate (OPA)</b></summary>
+<summary><b>🚪 4 · GitHub PR Policy Enforcement Gate (OPA)</b></summary>
+<br/>
 
 Checks repo vulnerabilities against OPA/Rego policy and posts results to GitHub commit status checks.
 
@@ -213,7 +231,8 @@ flowchart TD
 </details>
 
 <details>
-<summary><b>5. 🧰 VS Code Extension Workspace Loop</b></summary>
+<summary><b>🧰 5 · VS Code Extension Workspace Loop</b></summary>
+<br/>
 
 Embeds SCORPION intelligence directly into the local dev environment.
 
@@ -232,7 +251,8 @@ flowchart TD
 </details>
 
 <details>
-<summary><b>6. 🏢 Multi-Tenancy, Threat Modeling & Incident Response</b></summary>
+<summary><b>🏢 6 · Multi-Tenancy, Threat Modeling & Incident Response</b></summary>
+<br/>
 
 Repos/scans/incidents/compliance are team-scoped (closing cross-tenant IDOR); STRIDE threat modeling generates threats with Gemini AI and converts them into acceptance-criteria security stories; critical incidents trigger Slack alerts and automated containment, feeding the hash-stamped Audit Ledger.
 
@@ -253,7 +273,8 @@ flowchart TD
 </details>
 
 <details>
-<summary><b>7. 🔐 Release Gate Flow — auth → scan → policy → signature</b></summary>
+<summary><b>🔐 7 · Release Gate Flow — auth → scan → policy → signature</b></summary>
+<br/>
 
 ```mermaid
 sequenceDiagram
@@ -281,7 +302,8 @@ sequenceDiagram
     end
 ```
 
-> ⚠️ **Ordering is load-bearing.** The signature gate is inert unless `REQUIRE_IMAGE_SIGNATURE` **and** `COSIGN_PUB_KEY_PATH` are both configured — and enabling the former **without** the latter blocks *every* production deploy. Full sequence in [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md); `probeSigningReadiness` catches the mistake at boot instead of mid-release.
+> [!WARNING]
+> **Ordering is load-bearing.** The signature gate is inert unless `REQUIRE_IMAGE_SIGNATURE` **and** `COSIGN_PUB_KEY_PATH` are both configured — and enabling the former **without** the latter blocks *every* production deploy. Full sequence in [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md); `probeSigningReadiness` catches the mistake at boot instead of mid-release.
 
 </details>
 
@@ -290,46 +312,55 @@ sequenceDiagram
 ## 🧰 Tech Stack
 
 <table>
-<tr><td valign="top">
+<tr>
+<td valign="top" width="50%">
 
-**🎨 Frontend**
-- React `19` · Vite `8` · TypeScript `6`
-- Tailwind CSS · Lucide React
-- Appwrite SDK (realtime)
-- Recharts · amCharts 5 · React Markdown · React Flow
-- `@google/generative-ai`
+### 🎨 Frontend
 
-</td><td valign="top">
+| | |
+|---|---|
+| Framework | `React 19.2.8` · `Vite 8` |
+| Language | `TypeScript 6.0.3` |
+| Styling | `Tailwind CSS` · `Lucide React` |
+| Data | `Appwrite SDK` (realtime) |
+| Charts | `Recharts` · `amCharts 5` |
+| Content | `React Markdown` · `React Flow` |
+| AI | `@google/generative-ai` |
 
-**⚙️ Backend**
-- Express · TypeScript `6` · Node.js `24`
-- BullMQ + ioredis · Prisma (Postgres / SQLite adapters)
-- Octokit / `@octokit/auth-app` · simple-git · dockerode
-- zod · helmet · express-rate-limit · bcrypt · jsonwebtoken
-- Resend (email) · pdfkit · json2csv · archiver
-- winston + winston-loki · prom-client · OpenTelemetry
-- cosign CLI · OPA (Rego)
+</td>
+<td valign="top" width="50%">
 
-</td></tr>
+### ⚙️ Backend
+
+| | |
+|---|---|
+| Runtime | `Node.js 24` · `Express` · `TypeScript 6.0.3` |
+| Queue | `BullMQ` + `ioredis` |
+| Data | `Prisma` (Postgres / SQLite adapters) · `Appwrite` |
+| Git/Infra | `Octokit` · `simple-git` · `dockerode` |
+| Validation | `zod` · `helmet` · `express-rate-limit` |
+| Auth | `bcrypt` · `jsonwebtoken` |
+| Observability | `winston` + `winston-loki` · `prom-client` · `OpenTelemetry` |
+| Security | `cosign` CLI · `OPA` (Rego) |
+
+</td>
+</tr>
 </table>
 
-> 🧠 **Gemini only.** `openai` was purged in #268 — it was a dead dependency constructing a client nothing ever called. Both AI paths hit Gemini over `fetch`.
+> [!NOTE]
+> **Gemini only.** `openai` was purged in **#268** — a dead dependency constructing a client nothing ever called. Both AI paths hit Gemini over `fetch`.
 
 ---
 
 ## 🚀 Quickstart
 
-### 0️⃣ Prereqs
-
+**`0 · Install scanner toolchain`**
 ```bash
-# Installs Semgrep, Trivy, Gitleaks, Checkov, Bandit
+# Semgrep · Trivy · Gitleaks · Checkov · Bandit
 npm run install
 ```
 
-### 1️⃣ Configure env
-
-Create `backend/.env`:
-
+**`1 · Configure environment`** — create `backend/.env`
 ```env
 APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
 APPWRITE_PROJECT_ID=your_project_id
@@ -341,7 +372,8 @@ GITHUB_PRIVATE_KEY=your_github_pem_key
 ```
 
 <details>
-<summary><b>🔐 Optional: signing, enforcement & isolation</b></summary>
+<summary><b>🔐 Optional — signing, enforcement & isolation</b></summary>
+<br/>
 
 ```env
 COSIGN_PUB_KEY_PATH=/keys/cosign.pub   # verification — set this FIRST
@@ -351,30 +383,24 @@ REQUIRE_IMAGE_SIGNATURE=true           # ONLY after COSIGN_PUB_KEY_PATH is live
 RUNNER_MODE=kubernetes                 # the only isolated mode; never auto-selected
 ```
 
-Order matters, and getting it wrong is loud: see [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md).
+> [!CAUTION]
+> Setting `REQUIRE_IMAGE_SIGNATURE` before `COSIGN_PUB_KEY_PATH` **blocks every production deploy** — enforcement demands a signature claim with no key to verify it. Order documented in [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md).
 
 </details>
 
-### 2️⃣ Backend
-
+**`2 · Run the backend`**
 ```bash
-cd backend
-npm install
-npm run dev
+cd backend && npm install && npm run dev
 ```
 
-### 3️⃣ Dashboard
-
+**`3 · Run the dashboard`**
 ```bash
-npm install
-npm run dev
+npm install && npm run dev
 ```
 
-### 4️⃣ VS Code extension
-
+**`4 · Run the VS Code extension`**
 ```bash
-cd scorpion-vscode
-npm install
+cd scorpion-vscode && npm install
 # smash F5 to launch the debug extension host
 ```
 
@@ -382,25 +408,27 @@ npm install
 
 ## 🛡️ Hardening Flex
 
-The 10 rules keeping prod untouchable — every one verified against `main`, not vibed:
+> [!IMPORTANT]
+> The 10 rules keeping prod untouchable. Every mechanism verified against `main` — not asserted.
 
-| # | Rule | Mechanism |
-|---|---|---|
-| 1️⃣ | **No shell interpolation** | Every subprocess goes through `execFile` with an **argv array** across 20 modules. No shell is ever spawned, so there's nothing to inject into. |
-| 2️⃣ | **Outbound SSRF blocked** | `assertSafeWebhookUrl` guards alert webhooks **and** the Jira integration's user-supplied `baseUrl` — checked inside the request helper, not at config time, because config is mutable at runtime. |
-| 3️⃣ | **Telemetry auth, fail-closed** | `/api/metrics` + `/api/logs` require an ingest token **or** a session, and the repo is checked against the identity the *credential* carries — never the body's `repoId`. Access check throws → **503**, never a pass-through. |
-| 4️⃣ | **Email verification gate** | CI tokens, team invites, alert integrations and report export require `emailVerification === true` → `403 { code: 'EMAIL_VERIFICATION_REQUIRED' }`. Soft, not hard: an SMTP-less self-host *cannot* verify, so the dashboard stays open. |
-| 5️⃣ | **Dev bypass is opt-in** | `ALLOW_DEV_AUTH_BYPASS`, and it **hard-refuses in `NODE_ENV=production`**. |
-| 6️⃣ | **Tenant isolation** | Repos, scans, vulns, builds, deployments, incidents, compliance and policy entities are team-scoped; IDOR closed across multiple hardening passes. |
-| 7️⃣ | **Request hardening** | Baseline + endpoint-specific rate limiting, correct `trust proxy`, HSTS, structured auth logging, Zod validation on high-risk writes. |
-| 8️⃣ | **Upload defense** | Validated by **content**, not extension, with zip-bomb guards. |
-| 9️⃣ | **Supply chain** | cosign signing + a verification gate that blocks, raises an incident and writes a tamper-audit entry; release gates evaluated via OPA/Rego, not hardcoded thresholds. |
-| 🔟 | **Tamper-proof audit** | Deterministic cryptographic hashing on all scanner inputs feeding the Audit Ledger. |
+| # | Rule | Mechanism | Status |
+|:---:|:---|:---|:---:|
+| `01` | **No shell interpolation** | Every subprocess goes through `execFile` with an **argv array** across 20 modules. No shell is ever spawned, so there is nothing to inject into. | 🔒 `ENFORCED` |
+| `02` | **Outbound SSRF blocked** | `assertSafeWebhookUrl` guards alert webhooks **and** the Jira integration's user-supplied `baseUrl` — checked inside the request helper, not at config time, because config is mutable at runtime. | 🔒 `ENFORCED` |
+| `03` | **Telemetry auth, fail-closed** | `/api/metrics` + `/api/logs` require an ingest token **or** a session, and the repo is checked against the identity the *credential* carries — never the body's `repoId`. Access check throws → **`503`**, never a pass-through. | 🔒 `ENFORCED` |
+| `04` | **Email verification gate** | CI tokens, invites, alert integrations and report export require `emailVerification === true` → `403 { code: 'EMAIL_VERIFICATION_REQUIRED' }`. Soft, not hard: an SMTP-less self-host *cannot* verify, so the dashboard stays open. | 🔒 `ENFORCED` |
+| `05` | **Dev bypass is opt-in** | `ALLOW_DEV_AUTH_BYPASS`, and it **hard-refuses in `NODE_ENV=production`**. | 🔒 `ENFORCED` |
+| `06` | **Tenant isolation** | Repos, scans, vulns, builds, deployments, incidents, compliance and policy entities are team-scoped; IDOR closed across multiple hardening passes. | 🔒 `ENFORCED` |
+| `07` | **Request hardening** | Baseline + endpoint-specific rate limiting, correct `trust proxy`, HSTS, structured auth logging, `zod` validation on high-risk writes. | 🔒 `ENFORCED` |
+| `08` | **Upload defense** | Validated by **content**, not extension, with zip-bomb guards. | 🔒 `ENFORCED` |
+| `09` | **Supply chain** | `cosign` signing + a verification gate that blocks, raises an incident and writes a tamper-audit entry; release gates evaluated via OPA/Rego, not hardcoded thresholds. | 🔒 `ENFORCED` |
+| `10` | **Tamper-proof audit** | Deterministic cryptographic hashing on all scanner inputs feeding the Audit Ledger. | 🔒 `ENFORCED` |
 
 ---
 
 ## 🧪 Verification & Gate High-Scores
 
+**`run the gauntlet`**
 ```bash
 cd backend && npm test          # 187 suites · 1763 green · 98 skipped
 cd backend && npx tsc --noEmit
@@ -411,21 +439,36 @@ npm run typecheck
 ### 📊 Scoreboard
 
 | Metric | Score | Status |
-|---|---|---|
-| 🧪 Backend suites | **187 / 187** | ✅ |
-| ✅ Backend tests | **1,763 green** · 98 skipped | ✅ |
-| 🎨 Frontend | 7 files · **51 green** · Playwright **10** | ✅ |
-| 🔷 TypeScript | **0 errors**, both trees | ✅ |
-| 🚨 Prod advisories | **0** high/critical, both trees | ✅ |
+|:---|:---|:---:|
+| 🧪 Backend suites | **187 / 187** | 🟢 `PASS` |
+| ✅ Backend tests | **1,763 green** · 98 skipped | 🟢 `PASS` |
+| 🎨 Frontend | 7 files · **51 green** · Playwright **10** | 🟢 `PASS` |
+| 🔷 TypeScript | **0 errors**, both trees | 🟢 `PASS` |
+| 🚨 Prod advisories | **0** high/critical, both trees | 🟢 `PASS` |
 
-> 💡 The **12 skipped backend suites are DB integration tests**, gated behind `RUN_DB_IT` + Docker. Skipping is *by design* — not a gap, not a TODO.
+<details>
+<summary><b>📋 Why 98 tests are skipped (it's on purpose)</b></summary>
+<br/>
 
-### 🔒 The Four Gates
+The **12 skipped backend suites** are database integration tests, gated behind `RUN_DB_IT` **plus** a running Docker daemon.
+
+```bash
+RUN_DB_IT=1 npm test    # from backend/, with Docker up
+```
+
+Skipping is **by design** — not a gap, not a TODO. They exercise real Postgres round-trips and would be flaky-by-construction in an environment without a database.
+
+</details>
+
+### 🔒 The Gates
+
+> [!WARNING]
+> The response-leak gate is bounded on **both** sides. Its floor is structural, not laziness — read the row before touching it.
 
 | Gate | Value | Direction |
-|---|---|---|
+|:---|:---|:---|
 | `auditLoggerCalls.js` | `--max=0` | **Regression guard.** 0 is the destination — convert the call site, never raise the number. |
-| `auditResponseErrorLeaks.js` | `--max=31 --min=31` | **Bounded both ways.** ⚠️ The floor is *structural*: 19 authorization + 12 validation messages the caller is entitled to. The tool can't tell those from an Appwrite error (all three are `.message`). Sweeping it to 0 breaks real clients **while making a security tool report success.** Do not touch. |
+| `auditResponseErrorLeaks.js` | `--max=31 --min=31` | **Bounded both ways.** ⚠️ The floor is *structural*: 19 authorization + 12 validation messages the caller is entitled to. The tool can't tell those from an Appwrite error — all three are `.message`. Sweeping it to 0 breaks real clients **while making a security tool report success.** |
 | backend ESLint | `--max-warnings=168` | Ratchet — lowers only. |
 | frontend ESLint | `--max-warnings=23` | Ratchet — **zero headroom**. One new warning fails CI. |
 | `npm audit --omit=dev` | `--audit-level=high` | Zero tolerance, both trees. |
@@ -445,8 +488,11 @@ Scorpion/
 └── scripts/            Tooling install scripts
 ```
 
-📕 Operational config — cosign tiers, runner isolation, provenance migration — lives in **[OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md)**.
-🧠 Repo conventions and the traps that have cost us time live in **[CLAUDE.md](./CLAUDE.md)**.
+| Doc | What's in it |
+|:---|:---|
+| 📕 [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) | cosign tiers, runner isolation, provenance migration — with failure shapes |
+| 🧠 [CLAUDE.md](./CLAUDE.md) | Repo conventions, logging contract, and the traps that have cost us time |
+| 📐 [docs/adr/](./docs/adr/) | Architecture decision records |
 
 ---
 
@@ -459,3 +505,9 @@ npm run lint && npm run typecheck && npm test
 ```
 
 Green across the board or it doesn't ship. 🚦
+
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:FF007F,50:4FACFE,100:00F0FF&height=120&section=footer" alt="" width="100%" />
+
+</div>
