@@ -56,19 +56,40 @@ export async function getRunner(): Promise<RunnerProvider> {
   if (cached) return cached;
 
   const configured = process.env.RUNNER_MODE;
+
+  // Emitted on every path so the selected mode is a queryable field rather than
+  // prose. Only `kubernetes` gives the isolated zero-egress execution the runner
+  // namespace is built for, and it is reachable ONLY by setting RUNNER_MODE
+  // explicitly — the probe below chooses between docker and binary and can never
+  // land on it. Without this event that fallback is invisible: scans keep
+  // succeeding, just outside isolation, and nothing turns red to say so.
+  const announce = (mode: RunnerMode) => {
+    logger.info(`[Runner] mode=${mode}`, {
+      event: 'RUNNER_MODE_SELECTED',
+      mode,
+      configuredMode: configured ?? null,
+      // True whenever the mode was not explicitly requested — an unset
+      // RUNNER_MODE included, since that is precisely the drift worth alerting
+      // on in an environment that is supposed to be isolated.
+      isFallback: mode !== configured,
+      isolated: mode === 'kubernetes',
+      // Binary mode runs scanners as host processes, so the two that require a
+      // container are simply absent. Recorded because a scan that silently skips
+      // them still reports success.
+      zapAvailable: mode !== 'binary',
+      falcoAvailable: mode !== 'binary',
+    });
+  };
+
   if (configured === 'docker' || configured === 'binary' || configured === 'kubernetes') {
     cached = await build(configured);
-    logger.info(`[Runner] mode=${configured} (configured)`);
+    announce(configured);
     return cached;
   }
 
   const mode: RunnerMode = (await dockerAvailable()) ? 'docker' : 'binary';
   cached = await build(mode);
-  logger.info(
-    mode === 'docker'
-      ? '[Runner] mode=docker (daemon detected)'
-      : '[Runner] mode=binary (no Docker daemon — ZAP and Falco are unavailable in this mode)'
-  );
+  announce(mode);
   return cached;
 }
 
