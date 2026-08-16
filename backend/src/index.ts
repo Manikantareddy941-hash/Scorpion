@@ -127,6 +127,7 @@ import { validateTools } from './services/scan/orchestrator';
 import { initToolCache } from './utils/toolCheck';
 import { probeSigningReadiness } from './services/cosignService';
 import { signingConfigBroken } from './services/metrics';
+import { validateIngestionAuth } from './middleware/ingestionAuth';
 
 (async () => {
     logger.info("🛡️  Security Tool Chain Diagnostic:");
@@ -398,7 +399,13 @@ registerTicketRoutes(app);
 app.use('/metrics', metricsRoutes);
 
 // --- Ingestion APIs for Metrics & Logs ---
-app.post('/api/metrics', async (req: Request, res: Response) => {
+//
+// Both are guarded by validateIngestionAuth, which accepts either an ingest
+// token (x-api-key) or an Appwrite session and, in both cases, checks that the
+// body's repoId belongs to whoever the credential identifies. They previously
+// had no authentication at all: /api/logs writes into audit_logs, so an
+// unauthenticated caller could forge audit entries against any repository.
+app.post('/api/metrics', validateIngestionAuth, async (req: Request, res: Response) => {
     try {
         const { repoId, cpu, memory, requestRate, deploymentId } = req.body;
         if (!repoId) return res.status(400).json({ error: 'repoId is required' });
@@ -422,7 +429,7 @@ app.post('/api/metrics', async (req: Request, res: Response) => {
     }
 });
 
-app.post('/api/logs', async (req: Request, res: Response) => {
+app.post('/api/logs', validateIngestionAuth, async (req: Request, res: Response) => {
     try {
         const { repoId, log, level = 'info', deploymentId } = req.body;
         if (!repoId || !log) return res.status(400).json({ error: 'repoId and log are required' });
