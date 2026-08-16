@@ -8,8 +8,9 @@ Unified multi-engine scanning · real-time threat telemetry · policy-driven CI/
 
 [![CI](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml/badge.svg)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/ci.yml)
 [![Scorpion Scan](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml/badge.svg)](https://github.com/Manikantareddy941-hash/Scorpion/actions/workflows/stackpilot-scan.yml)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-187%20suites%20%7C%201763%20passing-brightgreen)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.x-3178C6?logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![Node](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
 
 </div>
@@ -25,6 +26,7 @@ Unified multi-engine scanning · real-time threat telemetry · policy-driven CI/
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
 - [Security Hardening](#security-hardening)
+- [Verification](#verification)
 - [Project Structure](#project-structure)
 - [Contributing](#contributing)
 
@@ -32,7 +34,7 @@ Unified multi-engine scanning · real-time threat telemetry · policy-driven CI/
 
 ## Overview
 
-SCORPION is a production-grade security control plane that protects applications across their entire lifecycle — from a developer's local VS Code sandbox, through GitHub pull requests, to production deployment runtimes. It unifies SAST, SCA, secrets, IaC, and DAST scanning behind one dashboard, gates releases with policy-as-code, and uses Gemini/OpenAI to generate drop-in remediation patches.
+SCORPION is a production-grade security control plane that protects applications across their entire lifecycle — from a developer's local VS Code sandbox, through GitHub pull requests, to production deployment runtimes. It unifies SAST, SCA, secrets, IaC, and DAST scanning behind one dashboard, gates releases with policy-as-code, and uses Gemini to generate drop-in remediation patches.
 
 ## Features
 
@@ -53,7 +55,9 @@ SCORPION is a production-grade security control plane that protects applications
 
 SCORPION is a decentralized, multi-tiered system: a React dashboard, an Express API gateway, a background worker fleet, and external integrations (GitHub App, VS Code extension), all synchronized through an Appwrite Cloud telemetry database.
 
-![SCORPION Platform Architecture](./public/scorpion_platform_architecture.png)
+Rendered inline below rather than as an exported image, so the diagram is
+reviewable in a pull request diff and cannot drift from the system it describes
+without someone editing it.
 
 ```mermaid
 flowchart TD
@@ -135,8 +139,6 @@ sequenceDiagram
 SHA-256 fingerprints compare incoming findings against stored issues to avoid duplicate alerts and enable fast writes.
 
 **File:** [`backend/src/services/scanService.ts#L22`](backend/src/services/scanService.ts) (`ingestVulnerabilitiesDelta`)
-
-![SCORPION Scan & Delta Ingestion](./public/scorpion_scan_and_delta_ingestion.png)
 
 ```mermaid
 flowchart TD
@@ -235,21 +237,22 @@ flowchart TD
 <tr><td valign="top">
 
 **Frontend**
-- React `18` · Vite `8` · TypeScript `5.5`
+- React `19` · Vite `8` · TypeScript `6`
 - Tailwind CSS · Lucide React
 - Appwrite SDK (realtime)
-- Recharts · React Markdown · React Flow
+- Recharts · amCharts 5 · React Markdown · React Flow
 - `@google/generative-ai`
 
 </td><td valign="top">
 
 **Backend**
-- Express · TypeScript · Node.js
-- BullMQ + ioredis
+- Express · TypeScript `6` · Node.js `24`
+- BullMQ + ioredis · Prisma (Postgres / SQLite adapters)
 - Octokit / `@octokit/auth-app` · simple-git · dockerode
 - zod · helmet · express-rate-limit · bcrypt · jsonwebtoken
-- openai · pdfkit · json2csv · archiver
+- Resend (email) · pdfkit · json2csv · archiver
 - winston + winston-loki · prom-client · OpenTelemetry
+- cosign CLI · OPA (Rego)
 
 </td></tr>
 </table>
@@ -302,13 +305,73 @@ npm install
 
 ## Security Hardening
 
-- **Argument sanitization** — all scanner subprocess spawns use arg arrays with `shell: false`, eliminating injection.
+- **No shell interpolation** — every subprocess spawn goes through `execFile` with an argv array (20 modules), so no shell is ever invoked and there is nothing to inject into.
+- **Outbound SSRF** — `assertSafeWebhookUrl` guards both alert webhooks and the Jira integration's user-supplied `baseUrl`, checked inside the request helper rather than at configuration time because the config is mutable at runtime.
+- **Telemetry ingestion** — `/api/metrics` and `/api/logs` require either an ingest token or a session, and in both cases the repository is checked against the identity the *credential* carries, never the `repoId` in the request body. Fails closed with 503 if the access check itself errors.
 - **Tenant isolation** — repos, scans, vulnerabilities, builds, deployments, incidents, compliance, and policy entities are team-scoped; IDOR closed across multiple hardening passes.
-- **Auth & secrets** — dev-auth bypass removed, `RESET_TOKEN_SECRET` fails fast if unset in prod, email verification enforced, webhook secrets never logged, leaked API keys auto-revoked at source.
+- **Auth & secrets** — the dev-auth bypass is opt-in (`ALLOW_DEV_AUTH_BYPASS`, refused in production), `RESET_TOKEN_SECRET` fails fast if unset in prod, webhook secrets never logged, leaked API keys auto-revoked at source.
+- **Email verification** — soft enforcement: the dashboard stays open, but CI token creation, team invites, alert integrations and report export require a verified address and answer `403 { code: 'EMAIL_VERIFICATION_REQUIRED' }`. Soft rather than hard because a self-hosted install with no SMTP cannot produce a verified user at all.
+- **Execution isolation** — `RUNNER_MODE=kubernetes` runs scanners as ephemeral Jobs under `--network none`. It is the only isolated mode and is never auto-selected, so every boot emits `RUNNER_MODE_SELECTED` with an `isolated` field to make the fallback alertable. See [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md).
 - **Request hardening** — baseline + endpoint-specific rate limiting, correct `trust proxy`, HSTS, structured auth logging, Zod validation on high-risk writes.
 - **Upload & SSRF defense** — uploads validated by content (not extension) with zip-bomb guards; outbound webhook URLs checked against SSRF.
 - **Supply chain** — container images signed/verified with cosign; release gates evaluated via OPA/Rego instead of hardcoded thresholds.
 - **Tamper-proof audit trail** — deterministic cryptographic hashing on all scanner inputs feeding the Audit Ledger.
+
+### Release gate flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer / CI
+    participant Gate as API Gateway + Auth Guard
+    participant Scanner as Scan Orchestrator
+    participant OPA as OPA Policy Engine
+    participant Cosign as Signature Gate
+    participant DB as Appwrite
+
+    Dev->>Gate: Trigger scan / PR event
+    Gate->>Gate: Verify session or ingest token (fail-closed 503)
+    Gate->>Scanner: Dispatch SAST / SCA / secrets / IaC jobs
+    Scanner->>DB: Ingest findings delta (SHA-256 fingerprints)
+
+    Dev->>OPA: Evaluate release gate
+    OPA-->>Dev: PASS / FAIL / OVERRIDDEN
+
+    Dev->>Cosign: Verify image signature (COSIGN_PUB_KEY_PATH)
+    alt signature verified
+        Cosign-->>Dev: Allow deployment
+    else missing or refuted
+        Cosign-->>Dev: Block, raise incident, write tamper-audit entry
+    end
+```
+
+> The signature gate is inert unless `REQUIRE_IMAGE_SIGNATURE` **and**
+> `COSIGN_PUB_KEY_PATH` are both configured — and enabling the former without the
+> latter blocks every production deploy. The ordering is documented in
+> [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md); `probeSigningReadiness` catches
+> the mistake at boot rather than mid-release.
+
+## Verification
+
+```bash
+cd backend && npm test          # 187 suites, 1763 passing, 98 skipped
+cd backend && npx tsc --noEmit
+npm test                        # frontend: 7 files, 51 tests
+npm run typecheck
+```
+
+The 12 skipped backend suites are database integration tests, gated behind
+`RUN_DB_IT` plus Docker. Skipping is by design, not a gap.
+
+CI enforces four bounded gates beyond the test suites:
+
+| Gate | Value | Direction |
+|---|---|---|
+| `auditLoggerCalls.js` | `--max=0` | Regression guard — convert the call site, never raise the number |
+| `auditResponseErrorLeaks.js` | `--max=31 --min=31` | **Bounded both ways.** The floor is deliberate: 19 authorization and 12 validation messages the caller is entitled to. Sweeping it to zero breaks clients while making a security tool report success |
+| backend ESLint | `--max-warnings=168` | Ratchet, lowers only |
+| frontend ESLint | `--max-warnings=23` | Ratchet, zero headroom |
+| `npm audit --omit=dev` | `--audit-level=high` | Zero tolerance on both trees |
 
 ## Project Structure
 
