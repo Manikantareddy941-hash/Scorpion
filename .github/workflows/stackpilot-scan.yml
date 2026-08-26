@@ -45,7 +45,7 @@ jobs:
         # p/ci is Semgrep's curated CI ruleset (OWASP + security-audit + secrets).
         run: semgrep scan --config=p/ci --sarif --output=semgrep.sarif || true
       - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
         if: always()
         with:
           sarif_file: semgrep.sarif
@@ -80,7 +80,7 @@ jobs:
           output: trivy-fs.sarif
           ignore-unfixed: true
       - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
         if: always()
         with:
           sarif_file: trivy-fs.sarif
@@ -127,7 +127,7 @@ jobs:
           output-file: hadolint-${{ matrix.id }}.sarif
           no-fail: true
       - name: Upload Hadolint SARIF
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
         if: always()
         with:
           sarif_file: hadolint-${{ matrix.id }}.sarif
@@ -148,7 +148,7 @@ jobs:
           output_format: cli,sarif
           output_file_path: console,checkov.sarif
       - name: Upload Checkov SARIF
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
         if: always()
         with:
           sarif_file: checkov.sarif
